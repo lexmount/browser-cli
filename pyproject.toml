@@ -1,0 +1,31 @@
+[project]
+name = "browser-cli"
+version = "0.1.0"
+description = "Standalone CLI for operating Lexmount browser sessions"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "lex-browser-runtime[skill] @ git+https://github.com/lexmount/website-skills.git@main",
+]
+
+[project.scripts]
+browser-cli = "browser_cli.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["browser_cli*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
