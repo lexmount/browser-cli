@@ -13,10 +13,17 @@ session/action implementation logic.
 pip install browser-cli
 ```
 
-For local development:
+## Development
+
+This project uses `uv` for local Python dependency management and command
+execution.
 
 ```bash
 uv sync --all-groups
+uv run browser-cli --help
+uv run pytest tests -q
+uv run ruff format --check .
+uv run ruff check .
 ```
 
 ## Commands
