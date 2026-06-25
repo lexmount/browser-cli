@@ -37,6 +37,7 @@ CLI for you:
 8. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
 9. 运行下面命令验证：
    browser-cli --help
+   browser-cli doctor --json
    browser-cli direct-url
    browser-cli session list
 10. 如果验证失败，请按顺序排查：
@@ -57,6 +58,7 @@ CLI for you:
 ```bash
 uv tool install git+https://github.com/lexmount/browser-cli.git
 browser-cli --help
+browser-cli doctor --json
 ```
 
 For local development:
@@ -101,6 +103,20 @@ browser-cli session get --session-id <session_id>
 browser-cli session close --session-id <session_id>
 browser-cli session keepalive --session-id <session_id> --duration 60
 ```
+
+Diagnostics:
+
+```bash
+browser-cli doctor
+browser-cli doctor --json
+browser-cli doctor --skip-api
+```
+
+`doctor` checks the local CLI package, Python, `uv`, required Lexmount
+environment variables, direct websocket URL construction, and live Lexmount API
+reachability through a lightweight `session list` call. It exits with code `0`
+when required checks pass and `1` when credentials, configuration, or API access
+are not ready.
 
 Context management:
 
@@ -173,11 +189,23 @@ Failed commands include:
 Agents should parse `ok`, `command`, and `error` first, then use
 command-specific fields.
 
+`doctor` follows the same JSON convention:
+
+```json
+{
+  "ok": true,
+  "command": "doctor",
+  "status": "pass",
+  "checks": []
+}
+```
+
 ## Suggested Agent Workflow
 
 For a new browser task, agents should prefer this sequence:
 
 ```bash
+browser-cli doctor --json
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
@@ -198,6 +226,8 @@ evolve into a Codex skill. The skill stays a thin wrapper around this CLI:
 - `SKILL.md` should teach agents when to use browser sessions, contexts, and
   actions.
 - The skill should install or verify `browser-cli`.
+- The skill should run `browser-cli doctor --json` before browser work when
+  setup may be stale.
 - The skill should never store API keys in the skill directory.
 - The skill should keep using JSON command output instead of importing Python
   internals directly.
@@ -213,7 +243,7 @@ The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
 3. Provide a copyable install block:
    `uv tool install git+https://github.com/lexmount/browser-cli.git`.
 4. Add a "Verify CLI" section that tells users to run
-   `browser-cli session list` after setting env vars.
+   `browser-cli doctor --json` after setting env vars.
 5. Longer term, support device-code or OAuth-style authorization so Codex can
    ask the user to approve access in the browser and then receive a local,
    short-lived token without the user manually copying API keys.

@@ -15,6 +15,7 @@ Check that the CLI is available:
 
 ```bash
 browser-cli --help
+browser-cli doctor --json
 ```
 
 If it is not installed, install it with:
@@ -40,6 +41,7 @@ non-default API endpoint is needed.
 For a one-off task:
 
 ```bash
+browser-cli doctor --json
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
@@ -62,6 +64,7 @@ keep them open.
 Session lifecycle:
 
 ```bash
+browser-cli doctor --json
 browser-cli session create
 browser-cli session list
 browser-cli session get --session-id <session_id>
@@ -107,3 +110,5 @@ Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, and command-specific fields. Do not log revealed API keys. By default,
 browser direct URLs are masked; use reveal flags only for local debugging.
 
+Run `browser-cli doctor --json` before browser work when setup may be stale. If
+`doctor` returns `ok: false`, follow its `next_steps` before creating sessions.

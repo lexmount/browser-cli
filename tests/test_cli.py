@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from types import SimpleNamespace
 from typing import Any
 
@@ -16,6 +17,162 @@ class DummyModel:
     def model_dump(self, *, mode: str) -> dict[str, Any]:
         assert mode == "json"
         return self.payload
+
+
+def _mock_uv(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    path: str | None = "/usr/local/bin/uv",
+    version: str = "uv 0.9.0",
+) -> None:
+    monkeypatch.setattr("browser_cli.cli.shutil.which", lambda name: path)
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout=version)
+
+    monkeypatch.setattr("browser_cli.cli.subprocess.run", fake_run)
+
+
+def test_doctor_reports_missing_credentials_without_api_call(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    _mock_uv(monkeypatch)
+
+    class FakeAdmin:
+        def list_sessions(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError("doctor should not call API without credentials")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--json"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "doctor"
+    assert payload["status"] == "fail"
+    assert payload["configuration"]["environment"]["LEXMOUNT_API_KEY"] == {"set": False}
+    assert payload["configuration"]["environment"]["LEXMOUNT_PROJECT_ID"] == {
+        "set": False
+    }
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["credentials"]["ok"] is False
+    assert checks["credentials"]["missing"] == [
+        "LEXMOUNT_API_KEY",
+        "LEXMOUNT_PROJECT_ID",
+    ]
+    assert checks["api"]["ok"] is False
+    assert checks["api"]["skipped"] is True
+
+
+def test_doctor_success_checks_api_and_masks_direct_url(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    _mock_uv(monkeypatch, version="uv 1.0.0")
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> SimpleNamespace:
+            assert status is None
+            return SimpleNamespace(count=2, pagination=None)
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["ok"] is True
+    assert payload["status"] in {"pass", "warn"}
+    assert payload["api"] == {"session_count": 2, "pagination": None}
+    assert payload["direct_url"] == {
+        "connect_url": "wss://api.lexmount.cn/connection?project_id=project&api_key=***",
+        "masked": True,
+    }
+    assert "secret" not in output
+
+
+def test_doctor_skip_api_does_not_fail_ready_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    _mock_uv(monkeypatch)
+
+    class FakeAdmin:
+        def list_sessions(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError("doctor --skip-api should not call API")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warn"
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["api"]["severity"] == "warning"
+    assert checks["api"]["skipped"] is True
+
+
+def test_doctor_handles_missing_uv_as_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    _mock_uv(monkeypatch, path=None)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warn"
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["uv"]["ok"] is False
+    assert checks["uv"]["severity"] == "warning"
+    assert checks["uv"]["available"] is False
+
+
+def test_doctor_api_failure_is_structured(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    _mock_uv(monkeypatch)
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            raise RuntimeError("network down")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["api"]["ok"] is False
+    assert checks["api"]["error"] == "RuntimeError"
+    assert checks["api"]["exception_message"] == "network down"
 
 
 def test_direct_url_masks_secret_by_default(
