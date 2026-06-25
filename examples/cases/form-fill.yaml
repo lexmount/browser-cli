@@ -1,0 +1,35 @@
+name: form-fill
+description: Build a tiny form in the page, fill it, click submit, and verify state.
+close_created_session: true
+session:
+  create: true
+  browser_mode: light
+steps:
+  - action: open-url
+    url: about:blank
+    wait_until: load
+  - action: eval
+    expression: |
+      () => {
+        document.body.innerHTML = `
+          <label for="q">Query</label>
+          <input id="q" name="q" />
+          <button id="submit" onclick="window.submitted = document.querySelector('#q').value">
+            Submit
+          </button>
+        `;
+        return true;
+      }
+  - action: type
+    selector: "#q"
+    text: lexmount browser
+  - action: click
+    selector: "#submit"
+  - action: eval
+    expression: |
+      () => ({
+        value: document.querySelector("#q").value,
+        submitted: window.submitted
+      })
+  - action: screenshot
+    output: form-filled.png

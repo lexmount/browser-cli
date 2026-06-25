@@ -1,0 +1,19 @@
+name: page-inspection
+description: Create a temporary browser session, inspect example.com, and save artifacts.
+close_created_session: true
+session:
+  create: true
+  browser_mode: light
+steps:
+  - action: open-url
+    url: https://example.com
+    wait_until: load
+  - action: wait-selector
+    selector: h1
+    state: visible
+  - action: snapshot
+    max_chars: 2000
+    output: example-snapshot.json
+  - action: screenshot
+    output: example-page.png
+    full_page: true
