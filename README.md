@@ -1,60 +1,65 @@
 # browser-cli
 
-Standalone CLI for operating Lexmount browser sessions.
+`browser-cli` is a command-line interface for operating Lexmount remote browser
+sessions from local shells, Codex, and other agents.
 
-The CLI surface is extracted from `website-skills/lex_browser_runtime/cli.py`.
-Runtime behavior stays in the `lex-browser-runtime` package, so this repository
-owns command parsing and packaging while avoiding a second copy of browser
-session/action implementation logic.
+It owns command parsing, JSON output, installation docs, and agent-facing
+ergonomics. Browser lifecycle and page action behavior stay in
+`lex-browser-runtime`, so this project does not maintain a second copy of the
+runtime implementation.
 
-## Install
+## Codex Install Prompt
 
-```bash
-pip install browser-cli
-```
-
-## Codex install prompt
-
-Copy the following prompt into the Codex client to install and configure this
-browser operation skill:
+Copy this prompt into Codex when you want Codex to install and configure the
+CLI for you:
 
 ```text
 请帮我安装并配置 Lexmount browser-cli，用于在 Codex 中操作 Lexmount 远程浏览器。
 
-要求：
-1. 不要让我把 API Key 或 Project ID 粘贴到聊天里；只指导我在本机 shell 中设置环境变量。
-2. 先检查本机是否已经安装 uv：
-   - 如果已有 uv，继续下一步。
-   - 如果没有 uv，提示我先安装 uv，并给出官方安装命令。
-3. 使用 uv 安装 browser-cli：
+约束：
+1. 不要让我把 API Key 或 Project ID 粘贴到聊天里。
+2. 只指导我在本机 shell 中设置环境变量，或写入本机 shell 配置文件。
+3. 不要把 API Key 输出到日志、README、提交记录或聊天回复里。
+
+步骤：
+1. 检查本机是否已经安装 uv：
+   uv --version
+2. 如果没有 uv，提示我先安装 uv：
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+3. 安装 browser-cli：
    uv tool install git+https://github.com/lexmount/browser-cli.git
-4. 引导我打开 https://browser.lexmount.cn 登录账号。
-5. 引导我在 browser.lexmount.cn 控制台中找到 API Key 和 Project ID。
-6. 引导我在本机 shell 中设置下面的环境变量：
+4. 引导我打开 https://browser.lexmount.cn 并登录账号。
+5. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
+6. 引导我在本机 shell 中设置：
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-   export LEXMOUNT_BASE_URL="https://api.lexmount.cn"
-7. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 的配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-8. 安装完成后，运行下面命令验证：
+7. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+8. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+9. 运行下面命令验证：
    browser-cli --help
    browser-cli direct-url
-9. 如果验证失败，请根据错误信息排查：
+   browser-cli session list
+10. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - LEXMOUNT_API_KEY 是否已设置
    - LEXMOUNT_PROJECT_ID 是否已设置
-   - LEXMOUNT_BASE_URL 是否正确
+   - 如果设置了 LEXMOUNT_BASE_URL，它是否为正确的 API endpoint
 
 完成后告诉我：
 - browser-cli 的安装路径
 - 验证命令是否通过
-- 我当前还需要手动做什么
+- 我还需要手动做什么
 ```
 
-## Development
+## Manual Install
 
-This project uses `uv` for local Python dependency management and command
-execution.
+```bash
+uv tool install git+https://github.com/lexmount/browser-cli.git
+browser-cli --help
+```
+
+For local development:
 
 ```bash
 uv sync --all-groups
@@ -64,25 +69,151 @@ uv run ruff format --check .
 uv run ruff check .
 ```
 
+## Credentials
+
+`browser-cli` reads the same environment variables as `lex-browser-runtime`:
+
+```bash
+export LEXMOUNT_API_KEY="<api-key>"
+export LEXMOUNT_PROJECT_ID="<project-id>"
+```
+
+Optional:
+
+```bash
+export LEXMOUNT_BASE_URL="https://api.lexmount.cn"
+export LEXMOUNT_REGION="<region>"
+```
+
+Treat API keys as secrets. The CLI masks `api_key` in generated direct browser
+URLs unless you pass an explicit reveal flag.
+
 ## Commands
+
+Session management:
 
 ```bash
 browser-cli session create
-browser-cli session list
+browser-cli session create --create-context
+browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli session list --status active
 browser-cli session get --session-id <session_id>
 browser-cli session close --session-id <session_id>
-browser-cli context list
+browser-cli session keepalive --session-id <session_id> --duration 60
+```
+
+Context management:
+
+```bash
+browser-cli context create
+browser-cli context create --metadata-json '{"purpose":"codex"}'
+browser-cli context list --limit 20
+browser-cli context get --context-id <context_id>
+browser-cli context delete --context-id <context_id>
+```
+
+Browser actions:
+
+```bash
 browser-cli action open-url --session-id <session_id> --url https://example.com
-browser-cli action snapshot --session-id <session_id>
+browser-cli action wait-selector --session-id <session_id> --selector "main"
+browser-cli action click --session-id <session_id> --selector "button[type=submit]"
+browser-cli action type --session-id <session_id> --selector "input[name=q]" --text "hello"
+browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
+browser-cli action eval --session-id <session_id> --script "() => document.title"
+browser-cli action snapshot --session-id <session_id> --max-chars 8000
+```
+
+Each action must receive exactly one browser target:
+
+```bash
+--session-id <session_id>
+--connect-url <cdp_websocket_url>
+--direct-url
+```
+
+By default, action output masks `api_key` inside resolved direct connect URLs.
+Use `--reveal-connect-url` only for local debugging.
+
+Case files and compatibility aliases:
+
+```bash
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
 browser-cli direct-url
+browser-cli prepare
+browser-cli list-contexts
+browser-cli close-session --session-id <session_id>
 ```
 
-The CLI reads Lexmount credentials from the same environment variables used by
-`lex-browser-runtime`:
+## JSON Output
 
-- `LEXMOUNT_API_KEY`
-- `LEXMOUNT_PROJECT_ID`
-- `LEXMOUNT_BASE_URL`
-- `LEXMOUNT_REGION`
+All command output is JSON.
+
+Successful commands include:
+
+```json
+{
+  "ok": true,
+  "command": "session.create"
+}
+```
+
+Failed commands include:
+
+```json
+{
+  "ok": false,
+  "command": "session.create",
+  "error": "configuration_error",
+  "message": "..."
+}
+```
+
+Agents should parse `ok`, `command`, and `error` first, then use
+command-specific fields.
+
+## Suggested Agent Workflow
+
+For a new browser task, agents should prefer this sequence:
+
+```bash
+browser-cli session create
+browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action snapshot --session-id <session_id>
+browser-cli action click --session-id <session_id> --selector <selector>
+browser-cli action type --session-id <session_id> --selector <selector> --text <text>
+browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
+browser-cli session close --session-id <session_id>
+```
+
+Use `context create` plus `session create --context-id <context_id>` when login
+state or cookies should survive between sessions.
+
+## Codex Skill
+
+This repository includes a starter [`SKILL.md`](./SKILL.md) so the project can
+evolve into a Codex skill. The skill stays a thin wrapper around this CLI:
+
+- `SKILL.md` should teach agents when to use browser sessions, contexts, and
+  actions.
+- The skill should install or verify `browser-cli`.
+- The skill should never store API keys in the skill directory.
+- The skill should keep using JSON command output instead of importing Python
+  internals directly.
+
+## Suggestions For browser.lexmount.cn
+
+The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
+
+1. Add a console page that shows the current `Project ID`, API key status, and
+   the exact `export ...` commands for the selected project.
+2. Add a scoped API key wizard for agent use, with clear permissions, optional
+   expiration, and one-click revoke.
+3. Provide a copyable install block:
+   `uv tool install git+https://github.com/lexmount/browser-cli.git`.
+4. Add a "Verify CLI" section that tells users to run
+   `browser-cli session list` after setting env vars.
+5. Longer term, support device-code or OAuth-style authorization so Codex can
+   ask the user to approve access in the browser and then receive a local,
+   short-lived token without the user manually copying API keys.

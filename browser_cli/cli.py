@@ -123,6 +123,20 @@ def _mask_direct_url_secret(connect_url: str) -> str:
     )
 
 
+def _masked_connect_url_payload(
+    connect_url: str,
+    *,
+    reveal_connect_url: bool,
+) -> dict[str, Any]:
+    if reveal_connect_url:
+        return {"connect_url": connect_url, "connect_url_masked": False}
+    masked = _mask_direct_url_secret(connect_url)
+    return {
+        "connect_url": masked,
+        "connect_url_masked": masked != connect_url,
+    }
+
+
 def cmd_session_create(args: argparse.Namespace) -> None:
     command = "session.create"
     try:
@@ -219,6 +233,18 @@ def cmd_context_delete(args: argparse.Namespace) -> None:
 
 
 def _target_from_args(args: argparse.Namespace) -> BrowserActionTarget:
+    target_count = sum(
+        bool(value)
+        for value in (
+            getattr(args, "connect_url", None),
+            getattr(args, "session_id", None),
+            getattr(args, "direct_url", False),
+        )
+    )
+    if target_count != 1:
+        raise BrowserRuntimeError(
+            "Pass exactly one action target: --connect-url, --session-id, or --direct-url."
+        )
     return BrowserActionTarget(
         connect_url=getattr(args, "connect_url", None),
         session_id=getattr(args, "session_id", None),
@@ -245,7 +271,10 @@ def _run_action_command(
     _success(
         command,
         session_id=getattr(args, "session_id", None),
-        connect_url=connect_url,
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
         result=result.result,
     )
 
@@ -379,6 +408,11 @@ def _add_session_target_args(parser: argparse.ArgumentParser) -> None:
         "--direct-url",
         action="store_true",
         help="Use the shared direct websocket URL derived from env",
+    )
+    parser.add_argument(
+        "--reveal-connect-url",
+        action="store_true",
+        help="Print the full resolved connect URL. Default output masks api_key.",
     )
 
 
@@ -530,7 +564,7 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Run a JavaScript expression",
     )
     _add_session_target_args(action_eval)
-    action_eval.add_argument("--expression", required=True)
+    action_eval.add_argument("--expression", "--script", required=True)
     action_eval.set_defaults(func=cmd_action_eval)
 
     action_snapshot = action_subparsers.add_parser(
