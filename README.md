@@ -32,6 +32,8 @@ CLI for you:
    browser-cli auth status
 5. 如果 auth status 显示缺少凭据，运行：
    browser-cli auth login
+   或者在本机浏览器中打开授权页：
+   browser-cli auth login --open
 6. 引导我打开 https://browser.lexmount.cn 并登录账号。
 7. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
 8. 引导我在本机 shell 中设置：
@@ -100,6 +102,7 @@ Auth helpers:
 ```bash
 browser-cli auth status
 browser-cli auth login
+browser-cli auth login --open
 browser-cli auth export-env
 browser-cli auth export-env --reveal-secrets
 browser-cli auth export-env --shell fish
@@ -108,8 +111,9 @@ browser-cli auth export-env --shell powershell
 
 `auth status` reports whether the required env vars are configured without
 printing API keys by default. `auth login` gives browser.lexmount.cn onboarding
-steps. `auth export-env` returns JSON containing shell lines; they are masked by
-default, and become directly usable only with `--reveal-secrets` in a trusted
+steps, and `auth login --open` opens the Connect from Codex page in the local
+browser. `auth export-env` returns JSON containing shell lines; they are masked
+by default, and become directly usable only with `--reveal-secrets` in a trusted
 local shell.
 
 ## Commands
@@ -119,6 +123,7 @@ Auth and credential guidance:
 ```bash
 browser-cli auth status
 browser-cli auth login
+browser-cli auth login --open
 browser-cli auth export-env
 browser-cli auth export-env --include-base-url --reveal-secrets
 ```

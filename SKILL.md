@@ -40,6 +40,7 @@ If credentials are missing, run:
 
 ```bash
 browser-cli auth login
+browser-cli auth login --open
 ```
 
 Use this to generate local shell configuration snippets when credentials are
@@ -51,6 +52,9 @@ browser-cli auth export-env
 
 Only use `browser-cli auth export-env --reveal-secrets` in a trusted local
 shell, and never paste revealed output into chat, logs, docs, or commits.
+Use `auth login --open` only when opening the local browser is appropriate for
+the user; otherwise return the `authorization_url` from JSON and let the user
+open it.
 
 ## Workflow
 

@@ -168,6 +168,10 @@ def test_auth_login_returns_browser_console_guidance(
 ) -> None:
     monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
     monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.webbrowser.open",
+        lambda url: (_ for _ in ()).throw(AssertionError("should not open browser")),
+    )
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["auth", "login"])
@@ -176,6 +180,8 @@ def test_auth_login_returns_browser_console_guidance(
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "auth.login"
     assert payload["console_url"] == "https://browser.lexmount.cn"
+    assert payload["authorization_url"] == "https://browser.lexmount.cn/connect/codex"
+    assert payload["opened"] == {"requested": False, "ok": None}
     assert payload["configured"] is False
     assert payload["required_env"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
     assert payload["future_flow"] == {
@@ -186,6 +192,58 @@ def test_auth_login_returns_browser_console_guidance(
             "Codex access and return scoped local credentials without manual "
             "API key copying."
         ),
+    }
+
+
+def test_auth_login_can_open_authorization_url(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    opened: list[str] = []
+
+    def fake_open(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr("browser_cli.cli.webbrowser.open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login", "--open"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert opened == ["https://browser.lexmount.cn/connect/codex"]
+    assert payload["opened"] == {"requested": True, "ok": True}
+
+
+def test_auth_login_reports_browser_open_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fake_open(url: str) -> bool:
+        raise RuntimeError(f"cannot open {url}")
+
+    monkeypatch.setattr("browser_cli.cli.webbrowser.open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--open",
+                "--authorization-url",
+                "https://browser.lexmount.cn/custom",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["authorization_url"] == "https://browser.lexmount.cn/custom"
+    assert payload["opened"] == {
+        "requested": True,
+        "ok": False,
+        "error": "RuntimeError",
+        "message": "cannot open https://browser.lexmount.cn/custom",
     }
 
 

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import shlex
+import webbrowser
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -34,6 +35,7 @@ from lex_browser_runtime.browser.models import (
 )
 
 DEFAULT_BROWSER_CONSOLE_URL = "https://browser.lexmount.cn"
+DEFAULT_CODEX_AUTHORIZATION_URL = f"{DEFAULT_BROWSER_CONSOLE_URL}/connect/codex"
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 REQUIRED_AUTH_ENV_VARS = ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
 
@@ -325,11 +327,35 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
     )
 
 
+def _open_authorization_url(url: str) -> dict[str, Any]:
+    try:
+        opened = webbrowser.open(url)
+    except Exception as exc:
+        return {
+            "requested": True,
+            "ok": False,
+            "error": exc.__class__.__name__,
+            "message": str(exc),
+        }
+    return {
+        "requested": True,
+        "ok": bool(opened),
+    }
+
+
 def cmd_auth_login(args: argparse.Namespace) -> None:
     status = _auth_status_payload(reveal_secrets=False)
+    authorization_url = args.authorization_url
+    open_result = (
+        _open_authorization_url(authorization_url)
+        if args.open
+        else {"requested": False, "ok": None}
+    )
     _success(
         "auth.login",
         console_url=DEFAULT_BROWSER_CONSOLE_URL,
+        authorization_url=authorization_url,
+        opened=open_result,
         configured=status["configured"],
         missing=status["missing"],
         required_env=list(REQUIRED_AUTH_ENV_VARS),
@@ -339,7 +365,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "browser-cli session list",
         ],
         next_steps=[
-            f"Open {DEFAULT_BROWSER_CONSOLE_URL} and sign in.",
+            f"Open {authorization_url} and sign in.",
             "Select the project Codex should use.",
             "Create or copy a scoped API key for agent/browser automation.",
             "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
@@ -700,6 +726,16 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     auth_login = auth_subparsers.add_parser(
         "login",
         help="Show browser.lexmount.cn login and configuration guidance",
+    )
+    auth_login.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the authorization page in the local default browser.",
+    )
+    auth_login.add_argument(
+        "--authorization-url",
+        default=DEFAULT_CODEX_AUTHORIZATION_URL,
+        help="Authorization page URL. Defaults to browser.lexmount.cn Connect from Codex.",
     )
     auth_login.set_defaults(func=cmd_auth_login)
 
