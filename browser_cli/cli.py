@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -31,18 +32,124 @@ from lex_browser_runtime.browser.models import (
     BrowserRuntimeError,
 )
 
+SENSITIVE_ENV_VARS = (
+    "LEXMOUNT_API_KEY",
+    "LEXMOUNT_ACCESS_TOKEN",
+    "LEXMOUNT_REFRESH_TOKEN",
+    "LEXMOUNT_TOKEN",
+)
+SENSITIVE_FIELD_NAMES = {
+    "access_token",
+    "api_key",
+    "apikey",
+    "authorization",
+    "auth_token",
+    "password",
+    "refresh_token",
+    "secret",
+    "token",
+}
+SENSITIVE_QUERY_PARAMS = {
+    "access_token",
+    "api_key",
+    "apikey",
+    "auth_token",
+    "refresh_token",
+    "token",
+}
 
-def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
+
+def _mask_secret_value(value: str) -> str:
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _configured_secret_values() -> list[str]:
+    return [
+        value
+        for name in SENSITIVE_ENV_VARS
+        if (value := os.environ.get(name)) and len(value) >= 8
+    ]
+
+
+def _mask_url_query_secrets(value: str) -> str:
+    parsed = urlsplit(value)
+    if not parsed.query:
+        return value
+
+    changed = False
+    query: list[tuple[str, str]] = []
+    for key, raw_value in parse_qsl(parsed.query, keep_blank_values=True):
+        if key.lower() in SENSITIVE_QUERY_PARAMS and raw_value:
+            query.append((key, "***"))
+            changed = True
+        else:
+            query.append((key, raw_value))
+
+    if not changed:
+        return value
+    return urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            urlencode(query, safe="*"),
+            parsed.fragment,
+        )
+    )
+
+
+def _redact_string(value: str) -> str:
+    redacted = _mask_url_query_secrets(value)
+    for secret in _configured_secret_values():
+        redacted = redacted.replace(secret, _mask_secret_value(secret))
+    return redacted
+
+
+def _redact_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[Any, Any] = {}
+        for key, item in value.items():
+            if isinstance(key, str) and key.lower() in SENSITIVE_FIELD_NAMES:
+                redacted[key] = (
+                    _mask_secret_value(item) if isinstance(item, str) and item else item
+                )
+            else:
+                redacted[key] = _redact_json_value(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_json_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_json_value(item) for item in value)
+    if isinstance(value, str):
+        return _redact_string(value)
+    return value
+
+
+def _json_dump(
+    payload: dict[str, Any],
+    exit_code: int = 0,
+    *,
+    redact_secrets: bool = True,
+) -> NoReturn:
+    if redact_secrets:
+        payload = _redact_json_value(payload)
     print(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=str)
     )
     raise SystemExit(exit_code)
 
 
-def _success(command: str, **payload: Any) -> NoReturn:
+def _success(
+    command: str,
+    *,
+    redact_secrets: bool = True,
+    **payload: Any,
+) -> NoReturn:
     data = {"ok": True, "command": command}
     data.update(payload)
-    _json_dump(data)
+    _json_dump(data, redact_secrets=redact_secrets)
 
 
 def _failure(
@@ -51,6 +158,7 @@ def _failure(
     message: str,
     *,
     exit_code: int = 1,
+    redact_secrets: bool = True,
     **payload: Any,
 ) -> NoReturn:
     data = {
@@ -60,7 +168,7 @@ def _failure(
         "message": message,
     }
     data.update(payload)
-    _json_dump(data, exit_code=exit_code)
+    _json_dump(data, exit_code=exit_code, redact_secrets=redact_secrets)
 
 
 def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
@@ -268,12 +376,14 @@ def _run_action_command(
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
+    reveal_connect_url = bool(getattr(args, "reveal_connect_url", False))
     _success(
         command,
+        redact_secrets=not reveal_connect_url,
         session_id=getattr(args, "session_id", None),
         **_masked_connect_url_payload(
             connect_url,
-            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+            reveal_connect_url=reveal_connect_url,
         ),
         result=result.result,
     )
@@ -365,6 +475,7 @@ def cmd_direct_url(args: argparse.Namespace) -> None:
     reveal_url = bool(getattr(args, "reveal_url", False))
     _success(
         command,
+        redact_secrets=not reveal_url,
         mode="direct",
         connect_url=connect_url if reveal_url else _mask_direct_url_secret(connect_url),
         masked=not reveal_url,

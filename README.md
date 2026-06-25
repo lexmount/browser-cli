@@ -173,6 +173,10 @@ Failed commands include:
 Agents should parse `ok`, `command`, and `error` first, then use
 command-specific fields.
 
+Before printing JSON, the CLI recursively redacts known secret fields, sensitive
+URL query parameters such as `api_key` and `access_token`, and configured local
+secret env values. Explicit reveal flags are only for trusted local debugging.
+
 ## Suggested Agent Workflow
 
 For a new browser task, agents should prefer this sequence:

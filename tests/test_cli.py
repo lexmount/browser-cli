@@ -40,6 +40,77 @@ def test_direct_url_masks_secret_by_default(
     }
 
 
+def test_failure_output_redacts_configured_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "abcd1234wxyz")
+
+    class FakeAdmin:
+        def list_sessions(
+            self,
+            *,
+            status: str | None,
+        ) -> DummyModel:
+            raise RuntimeError("request used key abcd1234wxyz")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "list"])
+
+    assert exc_info.value.code == 1
+    output = capsys.readouterr().out
+    assert "abcd1234wxyz" not in output
+    payload = json.loads(output)
+    assert payload["ok"] is False
+    assert payload["command"] == "session.list"
+    assert payload["message"] == "request used key abcd...wxyz"
+
+
+def test_success_output_redacts_sensitive_fields_and_url_params(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "env-secret-value")
+
+    class FakeAdmin:
+        def get_session(self, session_id: str) -> DummyModel:
+            return DummyModel(
+                {
+                    "session_id": session_id,
+                    "api_key": "raw-api-key",
+                    "nested": {
+                        "token": "raw-token-value",
+                        "message": "env env-secret-value",
+                    },
+                    "connect_url": (
+                        "wss://api.lexmount.cn/connection?"
+                        "project_id=project&api_key=raw-api-key&access_token=abc"
+                    ),
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "get", "--session-id", "s1"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "raw-api-key" not in output
+    assert "raw-token-value" not in output
+    assert "env-secret-value" not in output
+    payload = json.loads(output)
+    assert payload["session"]["api_key"] == "raw-...-key"
+    assert payload["session"]["nested"]["token"] == "raw-...alue"
+    assert payload["session"]["nested"]["message"] == "env env-...alue"
+    assert payload["session"]["connect_url"] == (
+        "wss://api.lexmount.cn/connection?"
+        "project_id=project&api_key=***&access_token=***"
+    )
+
+
 def test_session_list_passes_status_filter(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
