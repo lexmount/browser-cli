@@ -15,6 +15,7 @@ Check that the CLI is available:
 
 ```bash
 browser-cli --help
+browser-cli auth status
 ```
 
 If it is not installed, install it with:
@@ -34,6 +35,22 @@ Do not ask the user to paste secrets into chat. Direct the user to
 `https://browser.lexmount.cn` for China region credentials. The China region
 defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only when a
 non-default API endpoint is needed.
+
+If credentials are missing, run:
+
+```bash
+browser-cli auth login
+```
+
+Use this to generate local shell configuration snippets when credentials are
+already available in the user's trusted shell:
+
+```bash
+browser-cli auth export-env
+```
+
+Only use `browser-cli auth export-env --reveal-secrets` in a trusted local
+shell, and never paste revealed output into chat, logs, docs, or commits.
 
 ## Workflow
 
@@ -62,6 +79,7 @@ keep them open.
 Session lifecycle:
 
 ```bash
+browser-cli auth status
 browser-cli session create
 browser-cli session list
 browser-cli session get --session-id <session_id>
@@ -106,4 +124,3 @@ the shared direct websocket path.
 Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, and command-specific fields. Do not log revealed API keys. By default,
 browser direct URLs are masked; use reveal flags only for local debugging.
-

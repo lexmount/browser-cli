@@ -28,18 +28,25 @@ CLI for you:
    curl -LsSf https://astral.sh/uv/install.sh | sh
 3. 安装 browser-cli：
    uv tool install git+https://github.com/lexmount/browser-cli.git
-4. 引导我打开 https://browser.lexmount.cn 并登录账号。
-5. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
-6. 引导我在本机 shell 中设置：
+4. 运行：
+   browser-cli auth status
+5. 如果 auth status 显示缺少凭据，运行：
+   browser-cli auth login
+6. 引导我打开 https://browser.lexmount.cn 并登录账号。
+7. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
+8. 引导我在本机 shell 中设置：
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-7. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-8. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-9. 运行下面命令验证：
+9. 可以运行下面命令生成本机 shell 配置片段，但不要把 revealed API Key 粘贴到聊天里：
+   browser-cli auth export-env
+10. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+11. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+12. 运行下面命令验证：
    browser-cli --help
+   browser-cli auth status
    browser-cli direct-url
    browser-cli session list
-10. 如果验证失败，请按顺序排查：
+13. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - LEXMOUNT_API_KEY 是否已设置
@@ -88,7 +95,33 @@ export LEXMOUNT_REGION="<region>"
 Treat API keys as secrets. The CLI masks `api_key` in generated direct browser
 URLs unless you pass an explicit reveal flag.
 
+Auth helpers:
+
+```bash
+browser-cli auth status
+browser-cli auth login
+browser-cli auth export-env
+browser-cli auth export-env --reveal-secrets
+browser-cli auth export-env --shell fish
+browser-cli auth export-env --shell powershell
+```
+
+`auth status` reports whether the required env vars are configured without
+printing API keys by default. `auth login` gives browser.lexmount.cn onboarding
+steps. `auth export-env` returns JSON containing shell lines; they are masked by
+default, and become directly usable only with `--reveal-secrets` in a trusted
+local shell.
+
 ## Commands
+
+Auth and credential guidance:
+
+```bash
+browser-cli auth status
+browser-cli auth login
+browser-cli auth export-env
+browser-cli auth export-env --include-base-url --reveal-secrets
+```
 
 Session management:
 
@@ -178,6 +211,7 @@ command-specific fields.
 For a new browser task, agents should prefer this sequence:
 
 ```bash
+browser-cli auth status
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
@@ -217,3 +251,5 @@ The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
 5. Longer term, support device-code or OAuth-style authorization so Codex can
    ask the user to approve access in the browser and then receive a local,
    short-lived token without the user manually copying API keys.
+6. Once that flow exists, wire `browser-cli auth login` to start the
+   device-code/OAuth authorization instead of only returning manual guidance.

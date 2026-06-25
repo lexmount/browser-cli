@@ -40,6 +40,155 @@ def test_direct_url_masks_secret_by_default(
     }
 
 
+def test_auth_status_masks_secret_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "abcd1234wxyz")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "abcd1234wxyz" not in output
+    payload = json.loads(output)
+    assert payload["ok"] is True
+    assert payload["command"] == "auth.status"
+    assert payload["configured"] is True
+    assert payload["missing"] == []
+    assert payload["environment"]["LEXMOUNT_API_KEY"] == {
+        "set": True,
+        "value": "abcd...wxyz",
+        "masked": True,
+        "default": False,
+    }
+    assert payload["environment"]["LEXMOUNT_PROJECT_ID"] == {
+        "set": True,
+        "value": "project",
+        "masked": False,
+        "default": False,
+    }
+    assert payload["environment"]["LEXMOUNT_BASE_URL"] == {
+        "set": False,
+        "value": "https://api.lexmount.cn",
+        "masked": False,
+        "default": True,
+    }
+
+
+def test_auth_status_reports_missing_required_env(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["configured"] is False
+    assert payload["missing"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+    assert payload["environment"]["LEXMOUNT_API_KEY"]["value"] is None
+    assert payload["environment"]["LEXMOUNT_PROJECT_ID"]["value"] is None
+    assert payload["console_url"] == "https://browser.lexmount.cn"
+
+
+def test_auth_export_env_masks_secret_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "abcd1234wxyz")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "export-env"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "abcd1234wxyz" not in output
+    payload = json.loads(output)
+    assert payload["command"] == "auth.export-env"
+    assert payload["complete"] is True
+    assert payload["masked"] is True
+    assert payload["usable"] is False
+    assert payload["contains_secrets"] is False
+    assert payload["lines"] == [
+        "export LEXMOUNT_API_KEY=abcd...wxyz",
+        "export LEXMOUNT_PROJECT_ID=project",
+    ]
+
+
+def test_auth_export_env_can_reveal_usable_powershell_script(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret-key")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "export-env",
+                "--shell",
+                "powershell",
+                "--include-base-url",
+                "--reveal-secrets",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["complete"] is True
+    assert payload["masked"] is False
+    assert payload["usable"] is True
+    assert payload["contains_secrets"] is True
+    assert payload["lines"] == [
+        "$env:LEXMOUNT_API_KEY = 'secret-key'",
+        "$env:LEXMOUNT_PROJECT_ID = 'project'",
+        "$env:LEXMOUNT_BASE_URL = 'https://api.lexmount.cn'",
+    ]
+
+
+def test_auth_login_returns_browser_console_guidance(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.login"
+    assert payload["console_url"] == "https://browser.lexmount.cn"
+    assert payload["configured"] is False
+    assert payload["required_env"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+    assert payload["future_flow"] == {
+        "name": "Connect from Codex",
+        "needs_browser_lexmount_cn": True,
+        "description": (
+            "A future browser.lexmount.cn flow should let the user approve "
+            "Codex access and return scoped local credentials without manual "
+            "API key copying."
+        ),
+    }
+
+
 def test_session_list_passes_status_filter(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
