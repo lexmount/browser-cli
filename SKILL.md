@@ -36,6 +36,22 @@ Do not ask the user to paste secrets into chat. Direct the user to
 defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only when a
 non-default API endpoint is needed.
 
+## Doctor
+
+Run `browser-cli doctor --json` before the first browser action in a thread,
+after credential changes, or when a session/context/action command fails for an
+unclear reason. Parse the JSON before deciding what to do:
+
+- `status: "pass"`: continue with browser work.
+- `status: "warn"`: continue only when all failed checks have `severity:
+  "warning"` and the warning does not block the requested task.
+- `status: "fail"` or `ok: false`: stop before creating sessions and follow
+  `next_steps`. Ask the user to fix local setup or credentials when needed.
+
+Use `browser-cli doctor --skip-api` only for offline setup checks or when the
+user explicitly asks to avoid a live API call. Do not treat a skipped API check
+as proof that browser sessions will work.
+
 ## Workflow
 
 For a one-off task:
