@@ -344,6 +344,278 @@ def _event_expression(selector: str, body: str) -> str:
     )
 
 
+def _dom_helpers_expression(
+    *,
+    include_hidden: bool = False,
+    max_nodes: int | None = None,
+) -> str:
+    max_nodes_source = "null" if max_nodes is None else _js_literal(max_nodes)
+    return f"""
+  const includeHidden = {_js_literal(include_hidden)};
+  const maxNodes = {max_nodes_source};
+  const interactiveSelector = [
+    "a[href]",
+    "button",
+    "input:not([type=hidden])",
+    "select",
+    "textarea",
+    "summary",
+    "[role]",
+    "[onclick]",
+    "[tabindex]:not([tabindex='-1'])",
+    "[contenteditable='true']"
+  ].join(",");
+
+  const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const visible = (element) => {{
+    if (includeHidden) return true;
+    const style = window.getComputedStyle(element);
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.opacity === "0"
+    ) {{
+      return false;
+    }}
+    return Boolean(
+      element.offsetWidth ||
+      element.offsetHeight ||
+      element.getClientRects().length
+    );
+  }};
+  const textOf = (element) => normalize(element.innerText ?? element.textContent ?? "");
+  const nameFromLabelledBy = (element) => {{
+    const labelledBy = element.getAttribute("aria-labelledby");
+    if (!labelledBy) return "";
+    return normalize(
+      labelledBy
+        .split(/\\s+/)
+        .map((id) => document.getElementById(id)?.innerText ?? "")
+        .join(" ")
+    );
+  }};
+  const accessibleName = (element) => normalize(
+    element.getAttribute("aria-label") ||
+    nameFromLabelledBy(element) ||
+    element.getAttribute("alt") ||
+    element.getAttribute("title") ||
+    element.getAttribute("placeholder") ||
+    element.value ||
+    textOf(element)
+  );
+  const roleOf = (element) => {{
+    const explicitRole = normalize(element.getAttribute("role")).split(" ")[0];
+    if (explicitRole) return explicitRole;
+    const tag = element.tagName.toLowerCase();
+    const type = String(element.getAttribute("type") || "").toLowerCase();
+    if (tag === "a" && element.hasAttribute("href")) return "link";
+    if (tag === "button") return "button";
+    if (tag === "select") return "combobox";
+    if (tag === "textarea") return "textbox";
+    if (tag === "img") return "img";
+    if (tag === "summary") return "button";
+    if (tag === "input") {{
+      if (["button", "submit", "reset"].includes(type)) return "button";
+      if (type === "checkbox") return "checkbox";
+      if (type === "radio") return "radio";
+      if (type === "range") return "slider";
+      if (["email", "password", "search", "tel", "text", "url", ""].includes(type)) {{
+        return "textbox";
+      }}
+      return type || "input";
+    }}
+    if (/^h[1-6]$/.test(tag)) return "heading";
+    return "";
+  }};
+  const cssPath = (element) => {{
+    if (element.id) return `#${{CSS.escape(element.id)}}`;
+    const parts = [];
+    let current = element;
+    while (current && current.nodeType === Node.ELEMENT_NODE && parts.length < 4) {{
+      let part = current.tagName.toLowerCase();
+      if (current.classList.length) {{
+        part += "." + [...current.classList].slice(0, 2).map(CSS.escape).join(".");
+      }}
+      const parent = current.parentElement;
+      if (parent) {{
+        const siblings = [...parent.children].filter((child) => child.tagName === current.tagName);
+        if (siblings.length > 1) {{
+          part += `:nth-of-type(${{siblings.indexOf(current) + 1}})`;
+        }}
+      }}
+      parts.unshift(part);
+      current = parent;
+    }}
+    return parts.join(" > ");
+  }};
+  const nodeInfo = (element) => ({{
+    selector: cssPath(element),
+    tag: element.tagName.toLowerCase(),
+    role: roleOf(element) || null,
+    name: accessibleName(element),
+    text: textOf(element),
+    visible: visible(element)
+  }});
+  const matchesText = (candidate, query, exact, caseSensitive) => {{
+    let haystack = normalize(candidate);
+    let needle = normalize(query);
+    if (!caseSensitive) {{
+      haystack = haystack.toLowerCase();
+      needle = needle.toLowerCase();
+    }}
+    return exact ? haystack === needle : haystack.includes(needle);
+  }};
+  const limited = (nodes) => maxNodes === null ? nodes : nodes.slice(0, maxNodes);
+""".rstrip()
+
+
+def _click_text_expression(
+    *,
+    text: str,
+    selector: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    selector_source = (
+        "interactiveSelector" if selector is None else _js_literal(selector)
+    )
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedText = {_js_literal(text)};
+  const selector = {selector_source};
+  const candidates = [...document.querySelectorAll(selector)].filter(visible);
+  const element = candidates.find((candidate) =>
+    matchesText(accessibleName(candidate), requestedText, {_js_literal(exact)}, {_js_literal(case_sensitive)})
+  );
+  if (!element) {{
+    return {{
+      found: false,
+      clicked: false,
+      text: requestedText,
+      selector,
+      candidate_count: candidates.length,
+      candidates: candidates.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  element.focus?.();
+  element.click();
+  return {{
+    found: true,
+    clicked: true,
+    text: requestedText,
+    selector,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _click_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const candidates = [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+  const element = roleMatches.find((candidate) =>
+    requestedName === null ||
+    matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+  );
+  if (!element) {{
+    return {{
+      found: false,
+      clicked: false,
+      role: requestedRole,
+      name: requestedName,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  element.focus?.();
+  element.click();
+  return {{
+    found: true,
+    clicked: true,
+    role: requestedRole,
+    name: requestedName,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _fill_label_expression(
+    *,
+    label: str,
+    text: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedLabel = {_js_literal(label)};
+  const text = {_js_literal(text)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const fieldSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true']";
+  const labelElements = [...document.querySelectorAll("label")].filter(visible);
+  let element = null;
+  let matchedLabel = null;
+  for (const labelElement of labelElements) {{
+    if (!matchesText(textOf(labelElement), requestedLabel, exact, caseSensitive)) {{
+      continue;
+    }}
+    matchedLabel = nodeInfo(labelElement);
+    if (labelElement.htmlFor) {{
+      element = document.getElementById(labelElement.htmlFor);
+    }}
+    element ||= labelElement.querySelector(fieldSelector);
+    if (element) break;
+  }}
+  if (!element) {{
+    element = [...document.querySelectorAll(fieldSelector)]
+      .filter(visible)
+      .find((candidate) =>
+        matchesText(accessibleName(candidate), requestedLabel, exact, caseSensitive)
+      );
+  }}
+  if (!element) {{
+    return {{ found: false, filled: false, label: requestedLabel, text }};
+  }}
+  const previousValue = element.isContentEditable ? element.textContent : element.value;
+  if (element.isContentEditable) {{
+    element.textContent = text;
+  }} else {{
+    element.value = text;
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  return {{
+    found: true,
+    filled: true,
+    label: requestedLabel,
+    text,
+    previous_value: previousValue,
+    value: element.isContentEditable ? element.textContent : element.value,
+    label_element: matchedLabel,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def cmd_action_open_url(args: argparse.Namespace) -> None:
     _run_action_command(
         args,
@@ -601,6 +873,91 @@ def cmd_action_press(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_click_text(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-text",
+        _click_text_expression(
+            text=args.text,
+            selector=args.selector,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_click_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-role",
+        _click_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_fill_label(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.fill-label",
+        _fill_label_expression(
+            label=args.label,
+            text=args.text,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_accessibility_snapshot(args: argparse.Namespace) -> None:
+    expression = f"""
+() => {{
+{_dom_helpers_expression(include_hidden=args.include_hidden, max_nodes=args.max_nodes)}
+  const root = document.body || document.documentElement;
+  const elements = root ? [...root.querySelectorAll("*")] : [];
+  const interesting = elements.filter((element) => {{
+    if (!visible(element)) return false;
+    const info = nodeInfo(element);
+    return Boolean(info.role || info.name || info.text);
+  }});
+  const nodes = limited(interesting).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "dom-accessibility",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && interesting.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.accessibility-snapshot", expression)
+
+
+def cmd_action_interactive_snapshot(args: argparse.Namespace) -> None:
+    expression = f"""
+() => {{
+{_dom_helpers_expression(include_hidden=args.include_hidden, max_nodes=args.max_nodes)}
+  const elements = [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const nodes = limited(elements).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "interactive",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && elements.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.interactive-snapshot", expression)
+
+
 def cmd_direct_url(args: argparse.Namespace) -> None:
     command = "direct-url"
     try:
@@ -683,6 +1040,28 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         dest="metadata",
         type=_parse_metadata_json,
         help="JSON object used when --create-context creates a context",
+    )
+
+
+def _add_text_match_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--exact",
+        action="store_true",
+        help="Require an exact normalized text match. Default uses contains.",
+    )
+    parser.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match text case-sensitively. Default is case-insensitive.",
+    )
+
+
+def _add_snapshot_filter_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--max-nodes", type=int, default=100)
+    parser.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in the snapshot.",
     )
 
 
@@ -893,6 +1272,55 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_press.add_argument("--selector", required=True)
     action_press.add_argument("--key", required=True)
     action_press.set_defaults(func=cmd_action_press)
+
+    action_click_text = action_subparsers.add_parser(
+        "click-text",
+        help="Click the first visible interactive element matching text",
+    )
+    _add_session_target_args(action_click_text)
+    action_click_text.add_argument("--text", required=True)
+    action_click_text.add_argument(
+        "--selector",
+        help="Optional selector used to scope candidate elements",
+    )
+    _add_text_match_args(action_click_text)
+    action_click_text.set_defaults(func=cmd_action_click_text)
+
+    action_click_role = action_subparsers.add_parser(
+        "click-role",
+        help="Click the first visible element matching role and optional name",
+    )
+    _add_session_target_args(action_click_role)
+    action_click_role.add_argument("--role", required=True)
+    action_click_role.add_argument("--name")
+    _add_text_match_args(action_click_role)
+    action_click_role.set_defaults(func=cmd_action_click_role)
+
+    action_fill_label = action_subparsers.add_parser(
+        "fill-label",
+        help="Fill a form field matched by label, aria-label, or placeholder",
+    )
+    _add_session_target_args(action_fill_label)
+    action_fill_label.add_argument("--label", required=True)
+    action_fill_label.add_argument("--text", required=True)
+    _add_text_match_args(action_fill_label)
+    action_fill_label.set_defaults(func=cmd_action_fill_label)
+
+    action_accessibility_snapshot = action_subparsers.add_parser(
+        "accessibility-snapshot",
+        help="Capture a DOM-backed accessibility-like snapshot",
+    )
+    _add_session_target_args(action_accessibility_snapshot)
+    _add_snapshot_filter_args(action_accessibility_snapshot)
+    action_accessibility_snapshot.set_defaults(func=cmd_action_accessibility_snapshot)
+
+    action_interactive_snapshot = action_subparsers.add_parser(
+        "interactive-snapshot",
+        help="Capture visible interactive elements",
+    )
+    _add_session_target_args(action_interactive_snapshot)
+    _add_snapshot_filter_args(action_interactive_snapshot)
+    action_interactive_snapshot.set_defaults(func=cmd_action_interactive_snapshot)
 
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:

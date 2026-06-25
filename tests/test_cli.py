@@ -735,6 +735,172 @@ def test_eval_backed_action_reports_missing_selector(
     assert payload["result"] == {"found": False, "url": "https://example.test"}
 
 
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "click-text",
+                "--session-id",
+                "s1",
+                "--text",
+                "Save",
+                "--exact",
+            ],
+            "action.click-text",
+            {"found": True, "clicked": True, "text": "Save"},
+            {
+                "found": True,
+                "clicked": True,
+                "text": "Save",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "click-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+            ],
+            "action.click-role",
+            {"found": True, "clicked": True, "role": "button", "name": "Submit"},
+            {
+                "found": True,
+                "clicked": True,
+                "role": "button",
+                "name": "Submit",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "fill-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Email",
+                "--text",
+                "user@example.test",
+            ],
+            "action.fill-label",
+            {
+                "found": True,
+                "filled": True,
+                "label": "Email",
+                "value": "user@example.test",
+            },
+            {
+                "found": True,
+                "filled": True,
+                "label": "Email",
+                "value": "user@example.test",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "accessibility-snapshot",
+                "--session-id",
+                "s1",
+                "--max-nodes",
+                "2",
+            ],
+            "action.accessibility-snapshot",
+            {"kind": "dom-accessibility", "node_count": 2, "nodes": []},
+            {
+                "kind": "dom-accessibility",
+                "node_count": 2,
+                "nodes": [],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "interactive-snapshot",
+                "--session-id",
+                "s1",
+                "--include-hidden",
+            ],
+            "action.interactive-snapshot",
+            {"kind": "interactive", "node_count": 1, "nodes": []},
+            {
+                "kind": "interactive",
+                "node_count": 1,
+                "nodes": [],
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_second_batch_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test",
+                "value": value,
+            }
+        )
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
 def test_direct_url_can_reveal_secret_explicitly(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

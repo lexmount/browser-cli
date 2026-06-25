@@ -131,13 +131,20 @@ browser-cli action check --session-id <session_id> --selector "input[type=checkb
 browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
+browser-cli action click-text --session-id <session_id> --text "Submit"
+browser-cli action click-role --session-id <session_id> --role button --name "Submit"
+browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
+browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
 `get-text`, `exists`, `scroll`, `select-option`, `check`, `uncheck`, `hover`,
-and `press` are implemented as eval-backed DOM actions while the runtime action
-surface catches up. They are intended to reduce agent-written JavaScript for
-common page work. For missing selectors, parse structured fields such as
-`found`, `exists`, `checked`, or `selected` from `result`.
+`press`, `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
+`interactive-snapshot` are implemented as eval-backed DOM actions while the
+runtime action surface catches up. They are intended to reduce agent-written
+JavaScript for common page work. For missing matches, parse structured fields
+such as `found`, `exists`, `checked`, `selected`, `clicked`, or `filled` from
+`result`.
 
 Each action must receive exactly one browser target:
 
