@@ -50,9 +50,14 @@ Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
 ```bash
-browser-cli context create
+browser-cli context resolve --create-if-missing
 browser-cli session create --context-id <context_id> --context-mode read_write
 ```
+
+`context resolve` chooses an `available` context or creates one when requested.
+Do not start a read/write session with a `locked` context. If `resolved` is
+false, follow the returned `next_steps`, usually closing the active session that
+holds the context or creating a new context.
 
 Always close sessions created for temporary automation unless the user asks to
 keep them open.
@@ -75,6 +80,7 @@ Context lifecycle:
 browser-cli context create
 browser-cli context list
 browser-cli context get --context-id <context_id>
+browser-cli context resolve --create-if-missing
 browser-cli context delete --context-id <context_id>
 ```
 
@@ -106,4 +112,3 @@ the shared direct websocket path.
 Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, and command-specific fields. Do not log revealed API keys. By default,
 browser direct URLs are masked; use reveal flags only for local debugging.
-

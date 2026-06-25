@@ -12,6 +12,8 @@ from browser_cli.cli import main as cli_main
 class DummyModel:
     def __init__(self, payload: dict[str, Any]) -> None:
         self.payload = payload
+        for key, value in payload.items():
+            setattr(self, key, value)
 
     def model_dump(self, *, mode: str) -> dict[str, Any]:
         assert mode == "json"
@@ -295,6 +297,156 @@ def test_context_commands_emit_json(
         ("get", {"context_id": "ctx1"}),
         ("delete", {"context_id": "ctx1"}),
     ]
+
+
+def test_context_outputs_include_reuse_hints(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def get_context(self, context_id: str) -> DummyModel:
+            return DummyModel({"context_id": context_id, "status": "locked"})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "get", "--context-id", "ctx1"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["context"]["reuse"] == {
+        "can_reuse_now": False,
+        "reason": "context_locked",
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+        "next_steps": [
+            "Close the active session using this context, then retry.",
+            "Create a new context if the current session must stay open.",
+        ],
+    }
+
+
+def test_context_resolve_selects_available_context(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 2,
+                    "status_filter": status,
+                    "limit": limit,
+                    "contexts": [
+                        {"context_id": "locked_ctx", "status": "locked"},
+                        {"context_id": "available_ctx", "status": "available"},
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "resolve", "--limit", "10"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert calls == [("list", {"status": None, "limit": 10})]
+    assert payload["command"] == "context.resolve"
+    assert payload["resolved"] is True
+    assert payload["created"] is False
+    assert payload["context_id"] == "available_ctx"
+    assert payload["available_count"] == 1
+    assert payload["locked_count"] == 1
+    assert (
+        payload["recommended_session_command"]
+        == "browser-cli session create --context-id available_ctx --context-mode read_write"
+    )
+
+
+def test_context_resolve_creates_when_no_context_is_available(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "status_filter": status,
+                    "limit": limit,
+                    "contexts": [{"context_id": "locked_ctx", "status": "locked"}],
+                }
+            )
+
+        def create_context(
+            self,
+            *,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(("create", {"metadata": metadata}))
+            return DummyModel({"context_id": "new_ctx", "status": "available"})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "resolve",
+                "--create-if-missing",
+                "--metadata-json",
+                '{"purpose":"login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert calls == [
+        ("list", {"status": None, "limit": 20}),
+        ("create", {"metadata": {"purpose": "login"}}),
+    ]
+    assert payload["resolved"] is True
+    assert payload["created"] is True
+    assert payload["context_id"] == "new_ctx"
+    assert payload["locked_count"] == 1
+
+
+def test_context_resolve_reports_explicit_locked_context(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def get_context(self, context_id: str) -> DummyModel:
+            return DummyModel({"context_id": context_id, "status": "locked"})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "resolve", "--context-id", "ctx1"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resolved"] is False
+    assert payload["created"] is False
+    assert payload["context_id"] == "ctx1"
+    assert payload["context"]["reuse"]["reason"] == "context_locked"
 
 
 def test_compatibility_aliases_still_work(

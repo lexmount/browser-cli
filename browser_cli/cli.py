@@ -106,6 +106,59 @@ def _model_payload(value: Any) -> dict[str, Any]:
     return value.model_dump(mode="json")
 
 
+def _context_reuse_payload(context_payload: dict[str, Any]) -> dict[str, Any]:
+    status = context_payload.get("status")
+    normalized_status = str(status or "").lower()
+    context_id = context_payload.get("context_id")
+
+    if normalized_status == "available":
+        command = None
+        if context_id:
+            command = (
+                "browser-cli session create "
+                f"--context-id {context_id} --context-mode read_write"
+            )
+        return {
+            "can_reuse_now": True,
+            "reason": "context_available",
+            "recommended_context_mode": "read_write",
+            "recommended_session_command": command,
+            "next_steps": [
+                "Create a session with this context_id to reuse cookies and storage."
+            ],
+        }
+
+    if normalized_status == "locked":
+        return {
+            "can_reuse_now": False,
+            "reason": "context_locked",
+            "recommended_context_mode": None,
+            "recommended_session_command": None,
+            "next_steps": [
+                "Close the active session using this context, then retry.",
+                "Create a new context if the current session must stay open.",
+            ],
+        }
+
+    return {
+        "can_reuse_now": None,
+        "reason": "context_status_unknown"
+        if status is None
+        else "context_not_available",
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+        "next_steps": [
+            "Inspect the context status before using it for persistent login state."
+        ],
+    }
+
+
+def _context_payload(value: Any) -> dict[str, Any]:
+    payload = dict(value) if isinstance(value, dict) else _model_payload(value)
+    payload["reuse"] = _context_reuse_payload(payload)
+    return payload
+
+
 def _mask_direct_url_secret(connect_url: str) -> str:
     parsed = urlsplit(connect_url)
     query = [
@@ -199,7 +252,7 @@ def cmd_context_create(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().create_context(metadata=args.metadata)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_model_payload(context))
+    _success(command, context=_context_payload(context))
 
 
 def cmd_context_list(args: argparse.Namespace) -> None:
@@ -211,7 +264,10 @@ def cmd_context_list(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, **_model_payload(result))
+    payload = _model_payload(result)
+    contexts = getattr(result, "contexts", payload.get("contexts", []))
+    payload["contexts"] = [_context_payload(context) for context in contexts]
+    _success(command, **payload)
 
 
 def cmd_context_get(args: argparse.Namespace) -> None:
@@ -220,7 +276,7 @@ def cmd_context_get(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().get_context(args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_model_payload(context))
+    _success(command, context=_context_payload(context))
 
 
 def cmd_context_delete(args: argparse.Namespace) -> None:
@@ -230,6 +286,107 @@ def cmd_context_delete(args: argparse.Namespace) -> None:
     except Exception as exc:
         _failure_from_exception(command, exc)
     _success(command, context_id=args.context_id, deleted=True)
+
+
+def _context_resolution_summary(contexts: list[Any]) -> dict[str, Any]:
+    payloads = [_context_payload(context) for context in contexts]
+    available = [
+        payload for payload in payloads if payload["reuse"]["can_reuse_now"] is True
+    ]
+    locked = [
+        payload
+        for payload in payloads
+        if payload.get("status") and str(payload["status"]).lower() == "locked"
+    ]
+    return {
+        "available_count": len(available),
+        "locked_count": len(locked),
+        "considered_count": len(payloads),
+        "considered_contexts": payloads,
+    }
+
+
+def cmd_context_resolve(args: argparse.Namespace) -> None:
+    command = "context.resolve"
+    admin = LexmountBrowserAdmin()
+    try:
+        if args.context_id:
+            context = admin.get_context(args.context_id)
+            context_payload = _context_payload(context)
+            resolved = context_payload["reuse"]["can_reuse_now"] is True
+            _success(
+                command,
+                resolved=resolved,
+                created=False,
+                context=context_payload,
+                context_id=context_payload.get("context_id"),
+                recommended_session_command=context_payload["reuse"][
+                    "recommended_session_command"
+                ],
+                next_steps=context_payload["reuse"]["next_steps"],
+            )
+
+        listed = admin.list_contexts(status=args.status, limit=args.limit)
+        contexts = list(listed.contexts)
+        summary = _context_resolution_summary(contexts)
+        selected = next(
+            (
+                payload
+                for payload in summary["considered_contexts"]
+                if payload["reuse"]["can_reuse_now"] is True
+            ),
+            None,
+        )
+        if selected:
+            _success(
+                command,
+                resolved=True,
+                created=False,
+                context=selected,
+                context_id=selected.get("context_id"),
+                status_filter=args.status,
+                limit=args.limit,
+                recommended_session_command=selected["reuse"][
+                    "recommended_session_command"
+                ],
+                **summary,
+            )
+
+        if args.create_if_missing:
+            context = admin.create_context(metadata=args.metadata)
+            context_payload = _context_payload(context)
+            _success(
+                command,
+                resolved=context_payload["reuse"]["can_reuse_now"] is True,
+                created=True,
+                context=context_payload,
+                context_id=context_payload.get("context_id"),
+                status_filter=args.status,
+                limit=args.limit,
+                recommended_session_command=context_payload["reuse"][
+                    "recommended_session_command"
+                ],
+                **summary,
+            )
+
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    _success(
+        command,
+        resolved=False,
+        created=False,
+        context=None,
+        context_id=None,
+        status_filter=args.status,
+        limit=args.limit,
+        recommended_session_command=None,
+        next_steps=[
+            "Run browser-cli context resolve --create-if-missing to create a reusable context.",
+            "Run browser-cli context list to inspect locked and available contexts.",
+        ],
+        **summary,
+    )
 
 
 def _target_from_args(args: argparse.Namespace) -> BrowserActionTarget:
@@ -499,6 +656,26 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_get = context_subparsers.add_parser("get", help="Get one context")
     context_get.add_argument("--context-id", required=True)
     context_get.set_defaults(func=cmd_context_get)
+
+    context_resolve = context_subparsers.add_parser(
+        "resolve",
+        help="Find or create an available context for persistent state reuse",
+    )
+    context_resolve.add_argument("--context-id", help="Inspect one explicit context")
+    context_resolve.add_argument("--status", help="Optional status filter")
+    context_resolve.add_argument("--limit", type=int, default=20)
+    context_resolve.add_argument(
+        "--create-if-missing",
+        action="store_true",
+        help="Create a new context when no available context is found",
+    )
+    context_resolve.add_argument(
+        "--metadata-json",
+        dest="metadata",
+        type=_parse_metadata_json,
+        help="JSON object used when --create-if-missing creates a context",
+    )
+    context_resolve.set_defaults(func=cmd_context_resolve)
 
     context_delete = context_subparsers.add_parser("delete", help="Delete context")
     context_delete.add_argument("--context-id", required=True)

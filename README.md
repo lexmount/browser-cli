@@ -109,8 +109,24 @@ browser-cli context create
 browser-cli context create --metadata-json '{"purpose":"codex"}'
 browser-cli context list --limit 20
 browser-cli context get --context-id <context_id>
+browser-cli context resolve
+browser-cli context resolve --create-if-missing
+browser-cli context resolve --context-id <context_id>
 browser-cli context delete --context-id <context_id>
 ```
+
+Persistent login context workflow:
+
+```bash
+browser-cli context resolve --create-if-missing --metadata-json '{"purpose":"login"}'
+browser-cli session create --context-id <context_id> --context-mode read_write
+```
+
+`context resolve` only selects contexts whose status is `available`. If a
+context is `locked`, another active session is using it; close that session or
+create a new context before starting a read/write login-state session. Context
+JSON includes a `reuse` object with `can_reuse_now`, `reason`, `next_steps`, and
+`recommended_session_command`.
 
 Browser actions:
 
@@ -189,6 +205,9 @@ browser-cli session close --session-id <session_id>
 
 Use `context create` plus `session create --context-id <context_id>` when login
 state or cookies should survive between sessions.
+Use `context resolve --create-if-missing` when the agent needs a reusable
+context but does not know whether one already exists or whether it is locked by
+an active session.
 
 ## Codex Skill
 
