@@ -88,7 +88,21 @@ browser-cli action type --session-id <session_id> --selector "input[name=q]" --t
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action get-text --session-id <session_id> --selector "main"
+browser-cli action exists --session-id <session_id> --selector "button"
+browser-cli action scroll --session-id <session_id> --y 600
+browser-cli action select-option --session-id <session_id> --selector "select" --value pro
+browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action hover --session-id <session_id> --selector ".menu"
+browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 ```
+
+Prefer these built-in actions over writing custom JavaScript. `get-text`,
+`exists`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, and `press`
+are DOM/eval backed, so always parse their structured `result` fields such as
+`found`, `exists`, `checked`, `selected`, `hovered`, and `pressed` before
+assuming the page changed.
 
 Each action must use exactly one target:
 
@@ -106,4 +120,3 @@ the shared direct websocket path.
 Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, and command-specific fields. Do not log revealed API keys. By default,
 browser direct URLs are masked; use reveal flags only for local debugging.
-

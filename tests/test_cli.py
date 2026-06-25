@@ -488,6 +488,253 @@ def test_action_eval_accepts_script_alias(
     assert payload["result"] == {"value": "Example"}
 
 
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            ["action", "get-text", "--session-id", "s1", "--selector", "main"],
+            "action.get-text",
+            {"selector": "main", "found": True, "text": "Hello"},
+            {
+                "selector": "main",
+                "found": True,
+                "text": "Hello",
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "exists", "--session-id", "s1", "--selector", "#missing"],
+            "action.exists",
+            {"selector": "#missing", "exists": False},
+            {
+                "selector": "#missing",
+                "exists": False,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "scroll", "--session-id", "s1", "--y", "300"],
+            "action.scroll",
+            {
+                "selector": None,
+                "found": True,
+                "scrolled": True,
+                "x": 0,
+                "y": 300,
+                "scroll_x": 0,
+                "scroll_y": 300,
+            },
+            {
+                "selector": None,
+                "found": True,
+                "scrolled": True,
+                "x": 0,
+                "y": 300,
+                "scroll_x": 0,
+                "scroll_y": 300,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "select-option",
+                "--session-id",
+                "s1",
+                "--selector",
+                "select[name=plan]",
+                "--value",
+                "pro",
+            ],
+            "action.select-option",
+            {
+                "selector": "select[name=plan]",
+                "found": True,
+                "selected": True,
+                "value": "pro",
+                "requested_value": "pro",
+                "previous_value": "free",
+            },
+            {
+                "selector": "select[name=plan]",
+                "found": True,
+                "selected": True,
+                "value": "pro",
+                "requested_value": "pro",
+                "previous_value": "free",
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "check", "--session-id", "s1", "--selector", "#agree"],
+            "action.check",
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": True,
+            },
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "uncheck", "--session-id", "s1", "--selector", "#agree"],
+            "action.uncheck",
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": False,
+            },
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": False,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "hover", "--session-id", "s1", "--selector", "button"],
+            "action.hover",
+            {"selector": "button", "found": True, "hovered": True},
+            {
+                "selector": "button",
+                "found": True,
+                "hovered": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "press",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+                "--key",
+                "Enter",
+            ],
+            "action.press",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "key": "Enter",
+                "pressed": True,
+                "keydown_accepted": True,
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "key": "Enter",
+                "pressed": True,
+                "keydown_accepted": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+    ],
+)
+def test_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test",
+                "value": value,
+                "fallback": "cdp",
+            }
+        )
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
+def test_eval_backed_action_reports_missing_selector(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.run_browser_action",
+        lambda **kwargs: SimpleNamespace(
+            result={"url": "https://example.test", "value": {"found": False}}
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "get-text", "--session-id", "s1", "--selector", "#x"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.get-text"
+    assert payload["result"] == {"found": False, "url": "https://example.test"}
+
+
 def test_direct_url_can_reveal_secret_explicitly(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

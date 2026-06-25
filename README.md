@@ -122,7 +122,22 @@ browser-cli action type --session-id <session_id> --selector "input[name=q]" --t
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action get-text --session-id <session_id> --selector "main"
+browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
+browser-cli action scroll --session-id <session_id> --y 600
+browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
+browser-cli action select-option --session-id <session_id> --selector "select" --value pro
+browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action hover --session-id <session_id> --selector ".menu"
+browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 ```
+
+`get-text`, `exists`, `scroll`, `select-option`, `check`, `uncheck`, `hover`,
+and `press` are implemented as eval-backed DOM actions while the runtime action
+surface catches up. They are intended to reduce agent-written JavaScript for
+common page work. For missing selectors, parse structured fields such as
+`found`, `exists`, `checked`, or `selected` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -181,8 +196,10 @@ For a new browser task, agents should prefer this sequence:
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
+browser-cli action exists --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
+browser-cli action get-text --session-id <session_id> --selector <selector>
 browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
 ```

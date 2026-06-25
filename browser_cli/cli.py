@@ -279,6 +279,71 @@ def _run_action_command(
     )
 
 
+def _js_literal(value: Any) -> str:
+    return json.dumps(value)
+
+
+def _eval_backed_result_payload(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {"value": result}
+
+    value = result.get("value")
+    payload = dict(value) if isinstance(value, dict) else {"value": value}
+    for key in ("url", "fallback"):
+        if key in result and key not in payload:
+            payload[key] = result[key]
+    return payload
+
+
+def _run_eval_backed_action_command(
+    args: argparse.Namespace,
+    command: str,
+    expression: str,
+) -> None:
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = run_browser_action(
+            connect_url=connect_url,
+            action="eval",
+            request=EvalRequest(expression=expression),
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=_eval_backed_result_payload(result.result),
+    )
+
+
+def _selector_expression(selector: str, body: str) -> str:
+    return f"""
+() => {{
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false }};
+  }}
+{body}
+}}
+""".strip()
+
+
+def _event_expression(selector: str, body: str) -> str:
+    return _selector_expression(
+        selector,
+        f"""
+  const dispatch = (event) => element.dispatchEvent(event);
+{body}
+""".rstrip(),
+    )
+
+
 def cmd_action_open_url(args: argparse.Namespace) -> None:
     _run_action_command(
         args,
@@ -353,6 +418,186 @@ def cmd_action_snapshot(args: argparse.Namespace) -> None:
         args,
         "action.snapshot",
         SnapshotRequest(timeout_ms=args.timeout_ms, max_chars=args.max_chars),
+    )
+
+
+def cmd_action_get_text(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-text",
+        _selector_expression(
+            args.selector,
+            """
+  const text = element.innerText ?? element.textContent ?? "";
+  return { selector, found: true, text };
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_exists(args: argparse.Namespace) -> None:
+    selector = _js_literal(args.selector)
+    _run_eval_backed_action_command(
+        args,
+        "action.exists",
+        f"""
+() => {{
+  const selector = {selector};
+  return {{ selector, exists: Boolean(document.querySelector(selector)) }};
+}}
+""".strip(),
+    )
+
+
+def cmd_action_scroll(args: argparse.Namespace) -> None:
+    selector = getattr(args, "selector", None)
+    x = _js_literal(args.x)
+    y = _js_literal(args.y)
+    behavior = _js_literal(args.behavior)
+
+    if selector:
+        expression = _selector_expression(
+            selector,
+            f"""
+  element.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
+  return {{ selector, found: true, scrolled: true, x: {x}, y: {y} }};
+""".rstrip(),
+        )
+    else:
+        expression = f"""
+() => {{
+  window.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
+  return {{
+    selector: null,
+    found: true,
+    scrolled: true,
+    x: {x},
+    y: {y},
+    scroll_x: window.scrollX,
+    scroll_y: window.scrollY
+  }};
+}}
+""".strip()
+
+    _run_eval_backed_action_command(args, "action.scroll", expression)
+
+
+def cmd_action_select_option(args: argparse.Namespace) -> None:
+    value = _js_literal(args.value)
+    _run_eval_backed_action_command(
+        args,
+        "action.select-option",
+        _event_expression(
+            args.selector,
+            f"""
+  const requestedValue = {value};
+  const previousValue = element.value;
+  element.value = requestedValue;
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    selected: element.value === requestedValue,
+    value: element.value,
+    requested_value: requestedValue,
+    previous_value: previousValue
+  }};
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_check(args: argparse.Namespace) -> None:
+    _run_checkbox_action(args, checked=True, command="action.check")
+
+
+def cmd_action_uncheck(args: argparse.Namespace) -> None:
+    _run_checkbox_action(args, checked=False, command="action.uncheck")
+
+
+def _run_checkbox_action(
+    args: argparse.Namespace,
+    *,
+    checked: bool,
+    command: str,
+) -> None:
+    checked_literal = _js_literal(checked)
+    _run_eval_backed_action_command(
+        args,
+        command,
+        _event_expression(
+            args.selector,
+            f"""
+  if (!("checked" in element)) {{
+    return {{
+      selector,
+      found: true,
+      checkable: false,
+      checked: Boolean(element.checked)
+    }};
+  }}
+  element.checked = {checked_literal};
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    checkable: true,
+    checked: Boolean(element.checked)
+  }};
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_hover(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.hover",
+        _event_expression(
+            args.selector,
+            """
+  const init = {
+    view: window,
+    bubbles: true,
+    cancelable: true,
+    clientX: element.getBoundingClientRect().left,
+    clientY: element.getBoundingClientRect().top
+  };
+  for (const type of ["mouseover", "mouseenter", "mousemove"]) {
+    dispatch(new MouseEvent(type, init));
+  }
+  return { selector, found: true, hovered: true };
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_press(args: argparse.Namespace) -> None:
+    key = _js_literal(args.key)
+    _run_eval_backed_action_command(
+        args,
+        "action.press",
+        _event_expression(
+            args.selector,
+            f"""
+  const key = {key};
+  element.focus();
+  const init = {{ key, code: key, bubbles: true, cancelable: true }};
+  const keydownAccepted = dispatch(new KeyboardEvent("keydown", init));
+  dispatch(new KeyboardEvent("keypress", init));
+  dispatch(new KeyboardEvent("keyup", init));
+  return {{
+    selector,
+    found: true,
+    focused: document.activeElement === element,
+    key,
+    pressed: true,
+    keydown_accepted: keydownAccepted
+  }};
+""".rstrip(),
+        ),
     )
 
 
@@ -575,6 +820,79 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_snapshot.add_argument("--timeout-ms", type=float, default=30000)
     action_snapshot.add_argument("--max-chars", type=int, default=8000)
     action_snapshot.set_defaults(func=cmd_action_snapshot)
+
+    action_get_text = action_subparsers.add_parser(
+        "get-text",
+        help="Read visible text from a selector",
+    )
+    _add_session_target_args(action_get_text)
+    action_get_text.add_argument("--selector", required=True)
+    action_get_text.set_defaults(func=cmd_action_get_text)
+
+    action_exists = action_subparsers.add_parser(
+        "exists",
+        help="Check whether a selector exists",
+    )
+    _add_session_target_args(action_exists)
+    action_exists.add_argument("--selector", required=True)
+    action_exists.set_defaults(func=cmd_action_exists)
+
+    action_scroll = action_subparsers.add_parser(
+        "scroll",
+        help="Scroll the page or one scrollable selector",
+    )
+    _add_session_target_args(action_scroll)
+    action_scroll.add_argument("--selector")
+    action_scroll.add_argument("--x", type=float, default=0)
+    action_scroll.add_argument("--y", type=float, default=600)
+    action_scroll.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+    )
+    action_scroll.set_defaults(func=cmd_action_scroll)
+
+    action_select_option = action_subparsers.add_parser(
+        "select-option",
+        help="Set the value of a select-like element",
+    )
+    _add_session_target_args(action_select_option)
+    action_select_option.add_argument("--selector", required=True)
+    action_select_option.add_argument("--value", required=True)
+    action_select_option.set_defaults(func=cmd_action_select_option)
+
+    action_check = action_subparsers.add_parser(
+        "check",
+        help="Check a checkbox-like element",
+    )
+    _add_session_target_args(action_check)
+    action_check.add_argument("--selector", required=True)
+    action_check.set_defaults(func=cmd_action_check)
+
+    action_uncheck = action_subparsers.add_parser(
+        "uncheck",
+        help="Uncheck a checkbox-like element",
+    )
+    _add_session_target_args(action_uncheck)
+    action_uncheck.add_argument("--selector", required=True)
+    action_uncheck.set_defaults(func=cmd_action_uncheck)
+
+    action_hover = action_subparsers.add_parser(
+        "hover",
+        help="Dispatch hover events for a selector",
+    )
+    _add_session_target_args(action_hover)
+    action_hover.add_argument("--selector", required=True)
+    action_hover.set_defaults(func=cmd_action_hover)
+
+    action_press = action_subparsers.add_parser(
+        "press",
+        help="Focus a selector and dispatch key events",
+    )
+    _add_session_target_args(action_press)
+    action_press.add_argument("--selector", required=True)
+    action_press.add_argument("--key", required=True)
+    action_press.set_defaults(func=cmd_action_press)
 
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
