@@ -170,6 +170,18 @@ Failed commands include:
 }
 ```
 
+Argument parsing errors also use JSON and exit with code `2`:
+
+```json
+{
+  "ok": false,
+  "command": "session.create",
+  "error": "argument_error",
+  "message": "...",
+  "usage": "usage: ..."
+}
+```
+
 Agents should parse `ok`, `command`, and `error` first, then use
 command-specific fields.
 

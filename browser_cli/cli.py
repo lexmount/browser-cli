@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -57,6 +58,15 @@ SENSITIVE_QUERY_PARAMS = {
     "refresh_token",
     "token",
 }
+SUBCOMMAND_GROUPS = {"action", "auth", "case", "context", "session"}
+TOP_LEVEL_COMMANDS = SUBCOMMAND_GROUPS | {
+    "close-session",
+    "direct-url",
+    "doctor",
+    "list-contexts",
+    "prepare",
+}
+_current_parse_argv: list[str] = []
 
 
 def _mask_secret_value(value: str) -> str:
@@ -169,6 +179,31 @@ def _failure(
     }
     data.update(payload)
     _json_dump(data, exit_code=exit_code, redact_secrets=redact_secrets)
+
+
+def _command_from_argv(argv: list[str]) -> str:
+    if not argv or argv[0].startswith("-"):
+        return "browser-cli"
+
+    root = argv[0]
+    if root not in TOP_LEVEL_COMMANDS:
+        return "browser-cli"
+    if root in SUBCOMMAND_GROUPS:
+        if len(argv) > 1 and not argv[1].startswith("-"):
+            return f"{root}.{argv[1]}"
+        return root
+    return root
+
+
+class BrowserCliArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        _failure(
+            _command_from_argv(_current_parse_argv),
+            "argument_error",
+            message,
+            exit_code=2,
+            usage=self.format_usage().strip(),
+        )
 
 
 def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
@@ -557,6 +592,7 @@ def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     session_subparsers = session.add_subparsers(
         dest="session_command",
         required=True,
+        parser_class=BrowserCliArgumentParser,
     )
 
     session_create = session_subparsers.add_parser("create", help="Create a session")
@@ -591,6 +627,7 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_subparsers = context.add_subparsers(
         dest="context_command",
         required=True,
+        parser_class=BrowserCliArgumentParser,
     )
 
     context_create = context_subparsers.add_parser("create", help="Create a context")
@@ -618,7 +655,11 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
 def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action = subparsers.add_parser("action", help="Run browser actions")
-    action_subparsers = action.add_subparsers(dest="action_command", required=True)
+    action_subparsers = action.add_subparsers(
+        dest="action_command",
+        required=True,
+        parser_class=BrowserCliArgumentParser,
+    )
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)
@@ -690,7 +731,11 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case = subparsers.add_parser("case", help="Validate or run a browser case file")
-    case_subparsers = case.add_subparsers(dest="case_command", required=True)
+    case_subparsers = case.add_subparsers(
+        dest="case_command",
+        required=True,
+        parser_class=BrowserCliArgumentParser,
+    )
 
     case_validate = case_subparsers.add_parser("validate", help="Validate a case file")
     case_validate.add_argument(
@@ -749,8 +794,12 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build the browser-cli parser."""
 
-    parser = argparse.ArgumentParser(description="Lexmount browser operation CLI")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = BrowserCliArgumentParser(description="Lexmount browser operation CLI")
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        parser_class=BrowserCliArgumentParser,
+    )
 
     _add_session_commands(subparsers)
     _add_context_commands(subparsers)
@@ -764,6 +813,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     """Run the Lexmount browser operation CLI."""
 
+    global _current_parse_argv
+    _current_parse_argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)

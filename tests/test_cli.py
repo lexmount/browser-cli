@@ -111,6 +111,40 @@ def test_success_output_redacts_sensitive_fields_and_url_params(
     )
 
 
+def test_unknown_command_error_is_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["not-a-command"])
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["command"] == "browser-cli"
+    assert payload["error"] == "argument_error"
+    assert "invalid choice" in payload["message"]
+    assert payload["usage"].startswith("usage: ")
+
+
+def test_subcommand_argument_error_is_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "create", "--metadata-json", "not-json"])
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 2
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["command"] == "session.create"
+    assert payload["error"] == "argument_error"
+    assert "invalid metadata JSON" in payload["message"]
+    assert payload["usage"].startswith("usage: ")
+
+
 def test_session_list_passes_status_filter(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
