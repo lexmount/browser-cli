@@ -11,15 +11,18 @@ runtime implementation.
 ## Codex Install Prompt
 
 Copy this prompt into Codex when you want Codex to install and configure the
-CLI for you:
+CLI for you. Keep API keys and Project IDs in your local shell; do not paste
+them into chat.
 
 ```text
 请帮我安装并配置 Lexmount browser-cli，用于在 Codex 中操作 Lexmount 远程浏览器。
 
 约束：
 1. 不要让我把 API Key 或 Project ID 粘贴到聊天里。
-2. 只指导我在本机 shell 中设置环境变量，或写入本机 shell 配置文件。
-3. 不要把 API Key 输出到日志、README、提交记录或聊天回复里。
+2. 不要在聊天回复、日志、README、测试、提交记录或 PR 描述里输出 API Key。
+3. 所有 secret 只能让我在本机 shell 或本机 shell 配置文件中处理。
+4. 如果命令输出中出现 masked/revealed/contains_secrets/usable 字段，请按这些字段判断是否可以复制到聊天里；revealed secret 永远不要复制到聊天。
+5. 除非我明确要求，否则不要创建、提交或推送任何包含凭据的文件。
 
 步骤：
 1. 检查本机是否已经安装 uv：
@@ -28,35 +31,43 @@ CLI for you:
    curl -LsSf https://astral.sh/uv/install.sh | sh
 3. 安装 browser-cli：
    uv tool install git+https://github.com/lexmount/browser-cli.git
-4. 运行：
+4. 确认 CLI 可用：
+   browser-cli --help
+5. 运行本地认证状态检查，并解析 JSON：
    browser-cli auth status
-5. 如果 auth status 显示缺少凭据，运行：
+6. 如果 auth status 显示 missing 包含 LEXMOUNT_API_KEY 或 LEXMOUNT_PROJECT_ID，运行：
    browser-cli auth login
-6. 引导我打开 https://browser.lexmount.cn 并登录账号。
-7. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
-8. 引导我在本机 shell 中设置：
+7. 引导我打开 https://browser.lexmount.cn 并登录账号。
+8. 引导我在 browser.lexmount.cn 中选择要给 Codex 使用的 Project。
+9. 引导我复制该 Project 的 Project ID，并创建或复制一个给 agent/browser automation 使用的 API Key。
+10. 引导我只在本机 shell 中设置：
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-9. 可以运行下面命令生成本机 shell 配置片段，但不要把 revealed API Key 粘贴到聊天里：
+11. 可以运行下面命令生成 shell 配置片段，但默认输出是 masked，不能直接当作可用凭据：
    browser-cli auth export-env
-10. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-11. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-12. 运行下面命令验证：
-   browser-cli --help
+12. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
+   browser-cli auth export-env --reveal-secrets
+   并提醒我不要把该输出粘贴到聊天里。
+13. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+14. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+15. 运行下面命令验证：
    browser-cli auth status
    browser-cli direct-url
    browser-cli session list
-13. 如果验证失败，请按顺序排查：
+16. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - LEXMOUNT_API_KEY 是否已设置
    - LEXMOUNT_PROJECT_ID 是否已设置
    - 如果设置了 LEXMOUNT_BASE_URL，它是否为正确的 API endpoint
+   - browser.lexmount.cn 中选择的 Project 是否和 LEXMOUNT_PROJECT_ID 一致
+   - API Key 是否已过期、被 revoke，或缺少 browser session/context/action 权限
 
 完成后告诉我：
 - browser-cli 的安装路径
 - 验证命令是否通过
 - 我还需要手动做什么
+- 不要复述任何 secret 的真实值
 ```
 
 ## Manual Install
