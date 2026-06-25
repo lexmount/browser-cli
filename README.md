@@ -110,6 +110,7 @@ Diagnostics:
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --skip-api
+browser-cli doctor --smoke-session
 ```
 
 `doctor` checks the local CLI package, Python, `uv`, required Lexmount
@@ -117,6 +118,11 @@ environment variables, direct websocket URL construction, and live Lexmount API
 reachability through a lightweight `session list` call. It exits with code `0`
 when required checks pass and `1` when credentials, configuration, or API access
 are not ready.
+
+Use `doctor --smoke-session` when onboarding or debugging deeper failures. It
+creates a temporary `light` browser session and closes it immediately, proving
+session lifecycle permissions and quota. The smoke check is opt-in so routine
+doctor runs do not consume browser session capacity.
 
 Context management:
 

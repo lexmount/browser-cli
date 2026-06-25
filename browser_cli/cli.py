@@ -233,6 +233,80 @@ def _doctor_status(checks: list[dict[str, Any]]) -> str:
     return "pass"
 
 
+def _doctor_session_payload(session: Any) -> dict[str, Any]:
+    payload = session.model_dump(mode="json")
+    return {
+        key: payload.get(key)
+        for key in (
+            "session_id",
+            "status",
+            "browser_mode",
+            "project_id",
+            "created_at",
+            "inspect_url",
+        )
+        if payload.get(key) is not None
+    }
+
+
+def _doctor_session_smoke(
+    admin: LexmountBrowserAdmin,
+    *,
+    browser_mode: str,
+) -> tuple[bool, str, dict[str, Any]]:
+    session_id: str | None = None
+    payload: dict[str, Any] = {
+        "browser_mode": browser_mode,
+        "created": False,
+        "closed": False,
+    }
+    try:
+        result = admin.create_session(
+            context_id=None,
+            create_context=False,
+            context_mode="read_write",
+            browser_mode=browser_mode,
+            metadata=None,
+        )
+        session = result.session
+        session_id = session.session_id
+        payload.update(
+            {
+                "created": True,
+                "session": _doctor_session_payload(session),
+                "session_id": session_id,
+            }
+        )
+    except Exception as exc:
+        payload.update(_exception_brief(exc))
+        return False, "Browser session smoke test failed to create a session.", payload
+
+    if not session_id:
+        return (
+            False,
+            "Browser session smoke test created a session without a session_id.",
+            payload,
+        )
+
+    try:
+        admin.close_session(session_id)
+    except Exception as exc:
+        payload.update(
+            {
+                "closed": False,
+                "close_error": _exception_brief(exc),
+            }
+        )
+        return (
+            False,
+            "Browser session smoke test created a session but failed to close it.",
+            payload,
+        )
+
+    payload["closed"] = True
+    return True, "Browser session smoke test created and closed a session.", payload
+
+
 def cmd_doctor(args: argparse.Namespace) -> None:
     command = "doctor"
     checks: list[dict[str, Any]] = []
@@ -393,6 +467,39 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 "Check credentials, project access, network connectivity, and LEXMOUNT_BASE_URL."
             )
 
+    session_smoke_payload: dict[str, Any] | None = None
+    if args.smoke_session:
+        if missing_required:
+            session_smoke_payload = {
+                "skipped": True,
+                "reason": "missing_credentials",
+            }
+            _doctor_check(
+                checks,
+                name="session-smoke",
+                ok=False,
+                severity="error",
+                message="Browser session smoke test skipped because credentials are missing.",
+                **session_smoke_payload,
+            )
+        else:
+            smoke_ok, smoke_message, session_smoke_payload = _doctor_session_smoke(
+                LexmountBrowserAdmin(),
+                browser_mode=args.smoke_browser_mode,
+            )
+            _doctor_check(
+                checks,
+                name="session-smoke",
+                ok=smoke_ok,
+                severity="error",
+                message=smoke_message,
+                **session_smoke_payload,
+            )
+            if not smoke_ok:
+                next_steps.append(
+                    "Check browser quota, project access, active sessions, and whether any smoke-test session needs manual cleanup."
+                )
+
     ok = _doctor_overall_ok(checks)
     data = {
         "ok": ok,
@@ -407,6 +514,8 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         data["direct_url"] = direct_url_payload
     if api_payload is not None:
         data["api"] = api_payload
+    if session_smoke_payload is not None:
+        data["session_smoke"] = session_smoke_payload
     _json_dump(data, exit_code=0 if ok else 1)
 
 
@@ -887,6 +996,17 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--skip-api",
         action="store_true",
         help="Skip the live Lexmount API connectivity check.",
+    )
+    doctor.add_argument(
+        "--smoke-session",
+        action="store_true",
+        help="Create and close a light browser session to verify session lifecycle.",
+    )
+    doctor.add_argument(
+        "--smoke-browser-mode",
+        default="light",
+        type=_normalize_browser_mode,
+        help="Browser mode used by --smoke-session. Default: light.",
     )
     doctor.set_defaults(func=cmd_doctor)
 
