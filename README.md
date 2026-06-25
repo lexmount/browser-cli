@@ -37,6 +37,7 @@ CLI for you:
 8. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
 9. 运行下面命令验证：
    browser-cli --help
+   browser-cli --version
    browser-cli direct-url
    browser-cli session list
 10. 如果验证失败，请按顺序排查：
@@ -57,6 +58,7 @@ CLI for you:
 ```bash
 uv tool install git+https://github.com/lexmount/browser-cli.git
 browser-cli --help
+browser-cli --version
 ```
 
 For local development:
