@@ -16,6 +16,7 @@ Check that the CLI is available:
 ```bash
 browser-cli --help
 browser-cli commands --names-only
+browser-cli commands --workflows-only
 ```
 
 If it is not installed, install it with:
@@ -48,6 +49,13 @@ browser-cli auth login
 browser-cli auth login --open
 browser-cli auth login --device-code
 browser-cli auth export-env
+```
+
+When setup or auth is unclear, inspect the installed workflow contract first:
+
+```bash
+browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow connect_from_codex_auth
 ```
 
 When `auth login` returns `handoff`, use it as the setup contract: open
@@ -118,19 +126,29 @@ Use `browser-cli doctor --skip-api` only for offline setup checks or when the
 user explicitly asks to avoid a live API call. Do not treat a skipped API check
 as proof that browser sessions will work.
 
-Run `browser-cli commands --names-only` or `browser-cli commands --group action`
+Run `browser-cli commands --workflows-only` for a compact agent workflow map,
+`browser-cli commands --workflow <id>` for one task path, and
+`browser-cli commands --names-only` or `browser-cli commands --group action`
 when the installed CLI version is uncertain or before writing custom JavaScript.
 Use the catalog's `browser_target.exactly_one_of`, `required_options`,
-`required_one_of`, `json_output`, `secret_policy`, and `agent_entrypoints`
-fields instead of parsing `--help` text.
+`required_one_of`, `json_output`, `secret_policy`, `agent_entrypoints`, and
+`agent_workflows` fields instead of parsing `--help` text.
 
 ## Workflow
 
-If setup is uncertain, run `browser-cli auth status`, then `browser-cli doctor --json`
-before creating a session. If credentials are missing, run
+If setup is uncertain, run `browser-cli commands --workflow setup_and_verify`,
+then `browser-cli auth status` and `browser-cli doctor --json` before creating a
+session. If credentials are missing, run
+`browser-cli commands --workflow connect_from_codex_auth`, then
 `browser-cli auth login` and guide the user to set local environment variables.
 
 For a one-off task:
+
+```bash
+browser-cli commands --workflow one_off_page_task
+```
+
+Then follow the returned steps, typically:
 
 ```bash
 browser-cli session create
@@ -142,6 +160,12 @@ browser-cli session close --session-id <session_id>
 
 Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
+
+```bash
+browser-cli commands --workflow persistent_login_state
+```
+
+Then use the returned context-selection steps, typically:
 
 ```bash
 browser-cli context create
@@ -201,6 +225,11 @@ Diagnostics:
 browser-cli commands
 browser-cli commands --names-only
 browser-cli commands --group action
+browser-cli commands --workflows-only
+browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow persistent_login_state
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session
@@ -507,8 +536,9 @@ Parse command output as JSON. Check `ok` first, then inspect `command`,
 It is safe to include `--json` at the top level or after subcommands because it
 does not change output.
 For `commands`, use the parser-backed catalog to discover installed commands and
-options before guessing. Prefer `--names-only` for quick availability checks and
-`--group action` before choosing browser actions.
+options before guessing. Prefer `--workflows-only` or `--workflow <id>` for
+agent task flows, `--names-only` for quick availability checks, and `--group action`
+before choosing browser actions.
 Do not paste API keys, Project IDs, or full direct connect URLs into chat, docs,
 commits, screenshots, or test fixtures. By default, browser direct URLs are
 masked. Use reveal flags only for local debugging in a trusted shell.

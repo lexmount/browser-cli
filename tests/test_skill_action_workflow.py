@@ -43,12 +43,21 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
         in normalized
     )
     assert "browser-cli doctor" in normalized
+    assert "browser-cli commands --workflows-only" in normalized
+    assert "browser-cli commands --workflow setup_and_verify" in normalized
+    assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
     assert "browser-cli commands --names-only" in normalized
     assert "browser-cli commands --group action" in normalized
     assert "`browser_target.exactly_one_of`" in normalized
     assert "browser-cli doctor --smoke-session" in normalized
     assert "browser-cli doctor --skip-api" in normalized
-    assert "If setup is uncertain, run `browser-cli auth status`, then" in normalized
+    assert (
+        "If setup is uncertain, run `browser-cli commands --workflow setup_and_verify`"
+        in normalized
+    )
+    assert (
+        "then `browser-cli auth status` and `browser-cli doctor --json`" in normalized
+    )
     assert "`--json` is accepted as a no-op compatibility flag" in normalized
     assert "at the top level and after subcommands" in normalized
     assert "`ok: true` and `failed: 0`" in normalized
@@ -73,6 +82,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli auth login" in normalized
     assert "browser-cli auth export-env" in normalized
     assert "browser-cli auth login --device-code" in normalized
+    assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"
         in normalized
@@ -105,6 +115,7 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     normalized = _normalized_skill_text()
 
     assert "pick reusable contexts, or detect locked contexts" in normalized
+    assert "browser-cli commands --workflow persistent_login_state" in normalized
     assert "browser-cli session create --context-metadata-json" in normalized
     assert "--create-context-if-missing" in normalized
     assert "Parse `context_reuse` from the session result" in normalized
@@ -135,6 +146,14 @@ def test_skill_uses_json_argument_errors_for_command_repairs() -> None:
     assert "`argument_error`" in normalized
     assert "read the JSON `usage` field" in normalized
     assert "do not parse stderr" in normalized
+
+
+def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "For a one-off task" in normalized
+    assert "browser-cli commands --workflow one_off_page_task" in normalized
+    assert "Then follow the returned steps" in normalized
 
 
 def test_skill_documents_failure_payload_masking() -> None:

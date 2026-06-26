@@ -13,6 +13,8 @@ def _normalized_skill_text() -> str:
 def test_skill_has_doctor_first_workflow() -> None:
     text = SKILL_MD.read_text()
 
+    assert "browser-cli commands --workflows-only" in text
+    assert "browser-cli commands --workflow setup_and_verify" in text
     assert "browser-cli doctor --json" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "before the first browser action" in text
@@ -62,3 +64,18 @@ def test_skill_limits_skip_api_to_non_proof_checks() -> None:
         "Use `browser-cli doctor --smoke-session` only when you need proof"
         in normalized
     )
+
+
+def test_skill_documents_agent_workflow_discovery() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "browser-cli commands --workflows-only" in normalized
+    assert "browser-cli commands --workflow setup_and_verify" in normalized
+    assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
+    assert "browser-cli commands --workflow one_off_page_task" in normalized
+    assert "browser-cli commands --workflow persistent_login_state" in normalized
+    assert (
+        "Run `browser-cli commands --workflows-only` for a compact agent workflow map"
+        in normalized
+    )
+    assert "`agent_workflows` fields instead of parsing `--help` text" in normalized

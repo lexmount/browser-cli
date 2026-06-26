@@ -39,6 +39,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "login" in prompt
     assert "doctor --json" in prompt
     assert "commands" in prompt
+    assert "commands --workflow" in prompt
     assert "custom JavaScript" in prompt
     assert "dry-run" in prompt
     assert "persistent contexts" in prompt
