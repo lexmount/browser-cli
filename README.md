@@ -118,7 +118,10 @@ browser-cli auth export-env --shell powershell
 ```
 
 `auth status` reports whether the required env vars are configured without
-printing API keys by default. `auth login` gives browser.lexmount.cn onboarding
+printing API keys by default. It also returns a `decision` object: use
+`decision.action: verify_access` to continue with `decision.next_command`, and
+use `decision.action: login` to run `browser-cli auth login` before browser
+work. `auth login` gives browser.lexmount.cn onboarding
 steps, and `auth login --open` opens the Connect from Codex page in the local
 browser. `auth device-code` returns a machine-readable future device-code/OAuth
 contract. Until browser.lexmount.cn implements the required endpoints, it reports

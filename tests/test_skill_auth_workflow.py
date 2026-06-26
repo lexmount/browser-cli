@@ -16,8 +16,12 @@ def test_skill_auth_flow_starts_with_status_json() -> None:
 
     assert "browser-cli auth status" in text
     assert "parse JSON" in normalized
-    assert "If `configured` is true" in text
-    assert "`missing` includes `LEXMOUNT_API_KEY` or `LEXMOUNT_PROJECT_ID`" in text
+    assert "If `decision.action` is `verify_access`" in text
+    assert "run `decision.next_command` before browser work" in normalized
+    assert "If `decision.action` is `login`" in text
+    assert (
+        "`missing` includes `LEXMOUNT_API_KEY` or `LEXMOUNT_PROJECT_ID`" in normalized
+    )
 
 
 def test_skill_auth_flow_handles_login_open_safely() -> None:

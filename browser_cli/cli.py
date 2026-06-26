@@ -189,11 +189,37 @@ def _auth_env_var_payload(
     }
 
 
+def _auth_status_decision(missing: list[str]) -> dict[str, Any]:
+    if not missing:
+        return {
+            "action": "verify_access",
+            "reason": "credentials_configured",
+            "can_attempt_api": True,
+            "can_start_browser_work": True,
+            "should_open_browser": False,
+            "missing": [],
+            "next_command": "browser-cli session list",
+            "fallback_command": "browser-cli doctor --json",
+        }
+
+    return {
+        "action": "login",
+        "reason": "missing_credentials",
+        "can_attempt_api": False,
+        "can_start_browser_work": False,
+        "should_open_browser": False,
+        "missing": missing,
+        "next_command": "browser-cli auth login",
+        "optional_open_command": "browser-cli auth login --open",
+    }
+
+
 def _auth_status_payload(*, reveal_secrets: bool) -> dict[str, Any]:
     missing = [name for name in REQUIRED_AUTH_ENV_VARS if _env_value(name) is None]
     return {
         "configured": not missing,
         "missing": missing,
+        "decision": _auth_status_decision(missing),
         "console_url": DEFAULT_BROWSER_CONSOLE_URL,
         "environment": {
             "LEXMOUNT_API_KEY": _auth_env_var_payload(

@@ -47,11 +47,12 @@ browser-cli auth device-code
 For credential setup, use this decision flow:
 
 1. Run `browser-cli auth status` and parse JSON.
-2. If `configured` is true, continue to browser work.
-3. If `missing` includes `LEXMOUNT_API_KEY` or `LEXMOUNT_PROJECT_ID`, run
-   `browser-cli auth login`. Use `browser-cli auth login --open` only when it is
-   appropriate to open the user's local browser; otherwise show the returned
-   `authorization_url`.
+2. If `decision.action` is `verify_access`, run `decision.next_command` before
+   browser work.
+3. If `decision.action` is `login` or `missing` includes `LEXMOUNT_API_KEY` or
+   `LEXMOUNT_PROJECT_ID`, run `browser-cli auth login`. Use
+   `browser-cli auth login --open` only when it is appropriate to open the
+   user's local browser; otherwise show the returned `authorization_url`.
 4. Use `browser-cli auth device-code` only to inspect or integrate the future
    Connect from Codex device-code/OAuth contract. If it returns
    `available: false`, fall back to `browser-cli auth login`.

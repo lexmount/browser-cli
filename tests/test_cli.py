@@ -60,6 +60,16 @@ def test_auth_status_masks_secret_by_default(
     assert payload["command"] == "auth.status"
     assert payload["configured"] is True
     assert payload["missing"] == []
+    assert payload["decision"] == {
+        "action": "verify_access",
+        "reason": "credentials_configured",
+        "can_attempt_api": True,
+        "can_start_browser_work": True,
+        "should_open_browser": False,
+        "missing": [],
+        "next_command": "browser-cli session list",
+        "fallback_command": "browser-cli doctor --json",
+    }
     assert payload["environment"]["LEXMOUNT_API_KEY"] == {
         "set": True,
         "value": "abcd...wxyz",
@@ -96,6 +106,16 @@ def test_auth_status_reports_missing_required_env(
     payload = json.loads(capsys.readouterr().out)
     assert payload["configured"] is False
     assert payload["missing"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+    assert payload["decision"] == {
+        "action": "login",
+        "reason": "missing_credentials",
+        "can_attempt_api": False,
+        "can_start_browser_work": False,
+        "should_open_browser": False,
+        "missing": ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"],
+        "next_command": "browser-cli auth login",
+        "optional_open_command": "browser-cli auth login --open",
+    }
     assert payload["environment"]["LEXMOUNT_API_KEY"]["value"] is None
     assert payload["environment"]["LEXMOUNT_PROJECT_ID"]["value"] is None
     assert payload["console_url"] == "https://browser.lexmount.cn"
