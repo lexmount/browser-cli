@@ -30,31 +30,38 @@ CLI for you:
    curl -LsSf https://astral.sh/uv/install.sh | sh
 3. 安装 browser-cli：
    uv tool install git+https://github.com/lexmount/browser-cli.git
-4. 运行下面命令查看本机是否已经配置凭证：
+4. 先读取当前安装版本提供给 agent 的 workflow 契约，后续按 JSON 中的 workflow.steps 执行，不要解析 --help 文本：
+   browser-cli commands --workflows-only
+   browser-cli commands --workflow setup_and_verify
+   browser-cli commands --workflow connect_from_codex_auth
+5. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
-5. 如果未配置，引导我运行：
+6. 如果未配置，引导我运行：
    browser-cli auth login
-6. 如果我希望直接打开本机浏览器，可以让我运行：
+7. 如果我希望直接打开本机浏览器，可以让我运行：
    browser-cli auth login --open
-7. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
-8. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
-9. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
+8. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
+9. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
+10. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
    browser-cli auth export-env
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-10. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
+11. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
    browser-cli auth export-env --from-current --reveal-secrets
    browser-cli auth export-env --reveal-secrets
    并提醒我不要把该输出粘贴到聊天里。
-11. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-12. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-13. 运行下面命令验证：
+12. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+13. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+14. 运行下面命令验证：
    browser-cli --help
    browser-cli doctor --json
    browser-cli doctor --smoke-session
    browser-cli session list
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
-14. 如果验证失败，请按顺序排查：
+15. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约：
+   browser-cli commands --workflow one_off_page_task
+   browser-cli commands --workflow persistent_login_state
+16. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - browser-cli auth status 是否显示 configured 为 true
@@ -79,6 +86,7 @@ CLI for you:
 uv tool install git+https://github.com/lexmount/browser-cli.git
 browser-cli --help
 browser-cli commands --names-only
+browser-cli commands --workflows-only
 ```
 
 For local development:
@@ -166,12 +174,18 @@ For machine-readable command discovery, run:
 browser-cli commands
 browser-cli commands --names-only
 browser-cli commands --group action
+browser-cli commands --workflows-only
+browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow persistent_login_state
 ```
 
 `commands` returns the current parser-backed command catalog, option metadata,
 browser target requirements, JSON/secret policies, and agent entrypoint recipes.
-Agents should use it when deciding whether a first-class action exists before
-writing custom JavaScript.
+Agents should use `--workflows-only` for compact setup/task flow discovery,
+`--workflow <id>` for one concrete task path, and the command catalog when
+deciding whether a first-class action exists before writing custom JavaScript.
 
 ## Commands
 
@@ -227,6 +241,11 @@ Diagnostics:
 browser-cli commands
 browser-cli commands --names-only
 browser-cli commands --group action
+browser-cli commands --workflows-only
+browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow persistent_login_state
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session

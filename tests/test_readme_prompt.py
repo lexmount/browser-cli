@@ -31,6 +31,12 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "https://browser.lexmount.cn/connect/codex" in prompt
     assert "browser-cli auth status" in prompt
     assert "browser-cli auth login" in prompt
+    assert "browser-cli commands --workflows-only" in prompt
+    assert "browser-cli commands --workflow setup_and_verify" in prompt
+    assert "browser-cli commands --workflow connect_from_codex_auth" in prompt
+    assert "browser-cli commands --workflow one_off_page_task" in prompt
+    assert "browser-cli commands --workflow persistent_login_state" in prompt
+    assert "workflow.steps" in prompt
     assert "connect_from_codex.url" in prompt
     assert "browser-cli auth export-env" in prompt
     assert "browser-cli auth export-env --reveal-secrets" in prompt

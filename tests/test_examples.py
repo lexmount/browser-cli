@@ -22,8 +22,14 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
 
     assert "browser-cli doctor --json" in text
     assert "browser-cli commands --names-only" in text
+    assert "browser-cli commands --workflows-only" in text
+    assert "browser-cli commands --workflow setup_and_verify" in text
+    assert "browser-cli commands --workflow connect_from_codex_auth" in text
+    assert "browser-cli commands --workflow one_off_page_task" in text
+    assert "browser-cli commands --workflow persistent_login_state" in text
     assert "browser-cli commands --group action" in text
     assert "browser-cli commands --group action --names-only" in text
+    assert "agent_workflows" in text
     assert "browser-cli auth login" in text
     assert "browser-cli auth export-env" in text
     assert "handoff.connect_from_codex_url" in text

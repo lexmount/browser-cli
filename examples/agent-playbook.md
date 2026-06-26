@@ -10,6 +10,8 @@ Prefer local auth and doctor checks before writing browser code:
 ```bash
 browser-cli --help
 browser-cli commands --names-only
+browser-cli commands --workflows-only
+browser-cli commands --workflow setup_and_verify
 browser-cli auth status
 browser-cli auth login
 browser-cli auth export-env
@@ -18,8 +20,10 @@ browser-cli doctor --json
 
 If credentials are missing, parse the `auth login` JSON and guide the user
 through `handoff.connect_from_codex_url`, `handoff.copyable_commands`, and
-`verification.doctor_command`. Keep `LEXMOUNT_API_KEY`, revealed export output,
-and full direct browser URLs out of chat.
+`verification.doctor_command`; use
+`browser-cli commands --workflow connect_from_codex_auth` as the machine-readable
+auth setup path. Keep `LEXMOUNT_API_KEY`, revealed export output, and full
+direct browser URLs out of chat.
 
 Run doctor before the first browser action, after credential changes, and when
 session, context, or action commands fail for unclear reasons:
@@ -36,12 +40,13 @@ instead of guessing setup repairs from raw error text.
 Use command discovery before guessing new action names:
 
 ```bash
+browser-cli commands --workflows-only
 browser-cli commands --group action
 browser-cli commands --group action --names-only
 ```
 
-Read `required_options`, `required_one_of`, and `browser_target.exactly_one_of`
-from the catalog instead of parsing help text.
+Read `agent_workflows`, `required_options`, `required_one_of`, and
+`browser_target.exactly_one_of` from the catalog instead of parsing help text.
 
 When validating a fresh local setup, run the stronger live check:
 
@@ -66,6 +71,7 @@ wants to proceed.
 Use a temporary session and close it when finished:
 
 ```bash
+browser-cli commands --workflow one_off_page_task
 browser-cli session create --browser-mode light
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
@@ -78,6 +84,7 @@ browser-cli session close --session-id <session_id>
 Use a context only when cookies, local storage, or login state should survive:
 
 ```bash
+browser-cli commands --workflow persistent_login_state
 browser-cli context create --metadata-json '{"purpose":"login"}'
 browser-cli session create --context-id <context_id> --context-mode read_write
 ```
