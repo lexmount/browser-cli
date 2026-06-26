@@ -211,6 +211,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.press-key",
         "action.click-role",
         "action.fill-label",
+        "action.link-snapshot",
         "action.interactive-snapshot",
         "direct-url",
     ):
@@ -248,6 +249,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.page-info" in payload["commands"]
     assert "action.wait-title" in payload["commands"]
     assert "action.press-key" in payload["commands"]
+    assert "action.link-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
     assert all(command.startswith("action.") for command in payload["commands"])
@@ -3619,6 +3621,56 @@ def test_sensitive_value_action_expressions_emit_masking_metadata(
     assert payload["ok"] is True
 
 
+def test_action_link_snapshot_expression_masks_sensitive_url_parts(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "links", "links": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "link-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--include-empty",
+                "--same-origin-only",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert 'const rootSelector = "main"' in expression
+    assert "const includeEmpty = true" in expression
+    assert "const sameOriginOnly = true" in expression
+    assert "sensitiveUrlParamName" in expression
+    assert "sensitiveUrlParamPattern" in expression
+    assert "absolute_url_masked" in expression
+    assert "href_masked" in expression
+    assert "same_origin: parsed.origin === location.origin" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.link-snapshot"
+
+
 @pytest.mark.parametrize(
     ("argv", "command", "value", "expected_result"),
     [
@@ -3740,6 +3792,63 @@ def test_sensitive_value_action_expressions_emit_masking_metadata(
                 "kind": "dom-accessibility",
                 "node_count": 2,
                 "nodes": [],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "link-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "nav",
+                "--same-origin-only",
+                "--max-nodes",
+                "2",
+            ],
+            "action.link-snapshot",
+            {
+                "kind": "links",
+                "selector": "nav",
+                "link_count": 1,
+                "node_count": 1,
+                "links": [
+                    {
+                        "selector": "#settings-link",
+                        "tag": "a",
+                        "role": "link",
+                        "name": "Settings",
+                        "text": "Settings",
+                        "href": "/settings?token=***",
+                        "href_masked": True,
+                        "absolute_url": "https://example.test/settings?token=***",
+                        "absolute_url_masked": True,
+                        "same_origin": True,
+                        "external": False,
+                    }
+                ],
+            },
+            {
+                "kind": "links",
+                "selector": "nav",
+                "link_count": 1,
+                "node_count": 1,
+                "links": [
+                    {
+                        "selector": "#settings-link",
+                        "tag": "a",
+                        "role": "link",
+                        "name": "Settings",
+                        "text": "Settings",
+                        "href": "/settings?token=***",
+                        "href_masked": True,
+                        "absolute_url": "https://example.test/settings?token=***",
+                        "absolute_url_masked": True,
+                        "same_origin": True,
+                        "external": False,
+                    }
+                ],
                 "url": "https://example.test",
             },
         ),

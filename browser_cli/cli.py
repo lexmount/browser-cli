@@ -2414,6 +2414,150 @@ def _form_snapshot_expression(
 """.strip()
 
 
+def _link_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    include_empty: bool,
+    same_origin_only: bool,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const includeEmpty = {_js_literal(include_empty)};
+  const sameOriginOnly = {_js_literal(same_origin_only)};
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allLinks = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(linkSelector) ? [root] : []),
+      ...root.querySelectorAll(linkSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allLinks.push(candidate);
+      }}
+    }}
+  }}
+  const visibleLinks = allLinks.filter(visible);
+  const candidateLinks = includeHidden ? allLinks : visibleLinks;
+  const linkInfo = (element) => {{
+    const rawHref = element.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    const parsed = maskedParsedUrl(rawHref);
+    const info = nodeInfo(element);
+    return {{
+      ...info,
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...parsed,
+      external: parsed.same_origin === null ? null : !parsed.same_origin,
+      target: element.getAttribute("target"),
+      rel: element.getAttribute("rel"),
+      download: element.hasAttribute("download")
+        ? element.getAttribute("download") || true
+        : null,
+      hreflang: element.getAttribute("hreflang"),
+      type: element.getAttribute("type")
+    }};
+  }};
+  const usefulLinks = candidateLinks
+    .map(linkInfo)
+    .filter((link) => includeEmpty || link.name || link.text);
+  const filteredLinks = sameOriginOnly
+    ? usefulLinks.filter((link) => link.same_origin === true)
+    : usefulLinks;
+  const nodes = limited(filteredLinks);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "links",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    include_empty: includeEmpty,
+    same_origin_only: sameOriginOnly,
+    link_count: filteredLinks.length,
+    node_count: nodes.length,
+    total_count: allLinks.length,
+    visible_count: visibleLinks.length,
+    truncated: maxNodes !== null && filteredLinks.length > nodes.length,
+    links: nodes
+  }};
+}}
+""".strip()
+
+
 def _wait_text_expression(
     *,
     text: str,
@@ -5842,6 +5986,17 @@ def cmd_action_form_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.form-snapshot", expression)
 
 
+def cmd_action_link_snapshot(args: argparse.Namespace) -> None:
+    expression = _link_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        include_empty=args.include_empty,
+        same_origin_only=args.same_origin_only,
+    )
+    _run_eval_backed_action_command(args, "action.link-snapshot", expression)
+
+
 def cmd_action_accessibility_snapshot(args: argparse.Namespace) -> None:
     expression = f"""
 () => {{
@@ -7844,6 +7999,28 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Reveal password and hidden field values. Default masks them.",
     )
     action_form_snapshot.set_defaults(func=cmd_action_form_snapshot)
+
+    action_link_snapshot = action_subparsers.add_parser(
+        "link-snapshot",
+        help="Capture page links with text, href, absolute URL, and target metadata",
+    )
+    _add_session_target_args(action_link_snapshot)
+    action_link_snapshot.add_argument(
+        "--selector",
+        help="Optional link or container selector used to scope links.",
+    )
+    _add_snapshot_filter_args(action_link_snapshot)
+    action_link_snapshot.add_argument(
+        "--include-empty",
+        action="store_true",
+        help="Include links without visible text or accessible name.",
+    )
+    action_link_snapshot.add_argument(
+        "--same-origin-only",
+        action="store_true",
+        help="Only return links whose resolved URL has the same origin as the current page.",
+    )
+    action_link_snapshot.set_defaults(func=cmd_action_link_snapshot)
 
     action_accessibility_snapshot = action_subparsers.add_parser(
         "accessibility-snapshot",

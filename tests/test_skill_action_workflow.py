@@ -182,6 +182,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`check-label`",
         "`uncheck-label`",
         "`press-key`",
+        "`link-snapshot`",
         "`form-snapshot`",
         "`click-index`",
     ):
@@ -226,6 +227,13 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`requested_checked`" in normalized
     assert "`previous_checked`" in normalized
     assert "`changed`" in normalized
+    assert "`links`" in normalized
+    assert "`link_count`" in normalized
+    assert "`href_masked`" in normalized
+    assert "`absolute_url_masked`" in normalized
+    assert "`same_origin`" in normalized
+    assert "`external`" in normalized
+    assert "`download`" in normalized
     assert "`code`" in normalized
     assert "`target`" in normalized
     assert "`target_info`" in normalized
@@ -270,6 +278,10 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
     assert "use `wait-role` when the control appears asynchronously" in normalized
+    assert (
+        "`link-snapshot` when the task is to choose, inspect, or report navigation URLs"
+        in normalized
+    )
     assert (
         "prefer `click-role`, then `click-text`, then `scroll-into-view`" in normalized
     )

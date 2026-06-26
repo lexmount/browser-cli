@@ -317,6 +317,7 @@ browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
@@ -332,7 +333,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -344,7 +345,9 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `value_masked`, `file_input`, `file_count`, `requested_files`, `bounding_box`,
 `in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
 `option_found`, `option_label`, `requested_checked`, `previous_checked`,
-`changed`, `total_candidate_count`, `ready_state`, `visibility_state`,
+`changed`, `links`, `link_count`, `href`, `href_masked`, `absolute_url`,
+`absolute_url_masked`, `same_origin`, `external`, `download`,
+`total_candidate_count`, `ready_state`, `visibility_state`,
 `viewport`, `scroll`, `body_text_length`, `html_length`, `language`,
 `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
 `target_info`, `modifiers`, `events`, `keydown_accepted`, or
@@ -355,6 +358,9 @@ When `value`, `previous_value`, `requested_value`, or `text` is `***`, inspect
 `value_masked`, `previous_value_masked`, `requested_value_masked`,
 `text_masked`, and related `*_length` fields before deciding whether the page
 state is correct.
+For `link-snapshot`, URL query parameters that look like API keys, access
+tokens, authorization codes, passwords, or secrets are masked by default. Use
+`href_masked` and `absolute_url_masked` before copying or reporting URLs.
 
 Each action must receive exactly one browser target:
 
@@ -500,8 +506,10 @@ Common agent recipes:
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: `wait-role` when the control appears asynchronously,
-  then `click-role`, then `click-text`, then `scroll-into-view` and selector
-  `click` after `exists`, `inspect`, or `bounding-box` confirms a stable selector.
+  then `click-role`, then `click-text`; run `link-snapshot` when the task is to
+  choose, inspect, or report navigation URLs, then use `scroll-into-view` and
+  selector `click` after `exists`, `inspect`, or `bounding-box` confirms a
+  stable selector.
 - Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
   `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized

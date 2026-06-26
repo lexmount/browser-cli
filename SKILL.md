@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -285,6 +285,7 @@ browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
@@ -300,7 +301,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
-`click-index`, `fill-label`, `form-snapshot`,
+`click-index`, `fill-label`, `link-snapshot`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
@@ -310,7 +311,9 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `dispatched_events`, `fields`, `value_masked`, `file_input`, `file_count`,
 `requested_files`, `bounding_box`, `in_viewport`, `index`, `attributes`,
 `html_truncated`, `total_candidate_count`, `requested_option_label`, `option_found`, `option_label`,
-`requested_checked`, `previous_checked`, `changed`, `ready_state`,
+`requested_checked`, `previous_checked`, `changed`, `links`, `link_count`,
+`href`, `href_masked`, `absolute_url`, `absolute_url_masked`, `same_origin`,
+`external`, `download`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
 `language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
 `target_info`, `modifiers`, `events`, `keydown_accepted`, and `navigation_requested`
@@ -321,6 +324,9 @@ authorization, or API-key controls are masked by default. If `value`,
 `value_masked`, `previous_value_masked`, `requested_value_masked`,
 `text_masked`, and related `*_length` fields; do not ask the user to paste the
 real value into chat.
+For `link-snapshot`, URL query parameters that look like API keys, access
+tokens, authorization codes, passwords, or secrets are masked by default. Use
+`href_masked` and `absolute_url_masked` before copying or reporting URLs.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
 `body_text_length`, `html_length`, `language`, and `referrer` before taking a
 larger `snapshot`.
@@ -331,8 +337,9 @@ For page work, choose actions in this order:
    are unclear; use `form-snapshot` before filling complex forms.
 2. Prefer semantic actions: `wait-role` for async roles/names, `click-role` for known roles/names, `click-text` for
    visible text, `click-index` for a chosen repeated selector match,
-   `fill-label` for labeled text fields, `select-label` for labeled native
-   selects, and `check-label` for labeled checkbox or switch controls.
+   `link-snapshot` for choosing or reporting navigation URLs, `fill-label` for
+   labeled text fields, `select-label` for labeled native selects, and
+   `check-label` for labeled checkbox or switch controls.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
    `wait-count`, `wait-state`, `query`, `inspect`, `get-attribute`, `wait-attribute`, `wait-text`,
    `get-text`, `wait-selector`, `click`, `type`, `focus`, `get-value`,
@@ -370,9 +377,10 @@ Common task recipes:
    events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: use `wait-role` when the control appears asynchronously,
+   use `link-snapshot` when the task is to choose, inspect, or report navigation URLs,
    prefer `click-role`, then `click-text`, then `scroll-into-view` and selector
-   `click` after `exists`, `inspect`, or `bounding-box` confirms a stable selector. For repeated matches, run `query` and then
-   `click-index --index <n>`.
+   `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
+   selector. For repeated matches, run `query` and then `click-index --index <n>`.
 3. Navigate page history or async refresh: use `reload`, `go-back`, or
    `go-forward`, then confirm with `page-info`, `wait-url`, `wait-title`,
    `wait-load-state`, `wait-network-idle`, `wait-text`, or `snapshot`.
