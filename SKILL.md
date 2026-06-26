@@ -59,6 +59,19 @@ Do not start a read/write session with a `locked` context. If `resolved` is
 false, follow the returned `next_steps`, usually closing the active session that
 holds the context or creating a new context.
 
+For persistent-login tasks, prefer this decision flow:
+
+1. Run `browser-cli context resolve --create-if-missing`.
+2. If `resolved` is true and `reuse.can_reuse_now` is true, use the returned
+   `context_id` or `recommended_session_command`.
+3. If `reuse.reason` is `context_locked`, do not reuse it for a new read/write
+   session. Close the active session only when it belongs to this task; otherwise
+   create a new context.
+4. Use `--context-mode read_write` while logging in or changing cookies/storage.
+   Use `--context-mode read_only` for inspection when the login state must not
+   change.
+5. Do not delete contexts that may hold user login state unless the user asks.
+
 Always close sessions created for temporary automation unless the user asks to
 keep them open.
 
