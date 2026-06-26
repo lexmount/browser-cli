@@ -173,6 +173,16 @@ def _normalize_browser_mode(value: str) -> str:
     return value
 
 
+def _non_negative_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("value must be an integer") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return parsed
+
+
 def _model_payload(value: Any) -> dict[str, Any]:
     return value.model_dump(mode="json")
 
@@ -1132,6 +1142,51 @@ def _fill_label_expression(
     previous_value: previousValue,
     value: element.isContentEditable ? element.textContent : element.value,
     label_element: matchedLabel,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _click_index_expression(
+    *,
+    selector: str,
+    index: int,
+    include_hidden: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const selector = {_js_literal(selector)};
+  const index = {_js_literal(index)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const candidates = includeHidden ? all : visibleNodes;
+  const element = candidates[index] || null;
+  if (!element) {{
+    return {{
+      selector,
+      index,
+      include_hidden: includeHidden,
+      found: false,
+      clicked: false,
+      count: candidates.length,
+      total_count: all.length,
+      visible_count: visibleNodes.length,
+      candidates: candidates.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  element.focus?.();
+  element.click();
+  return {{
+    selector,
+    index,
+    include_hidden: includeHidden,
+    found: true,
+    clicked: true,
+    count: candidates.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length,
     element: nodeInfo(element)
   }};
 }}
@@ -3732,6 +3787,18 @@ def cmd_action_click_role(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_click_index(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-index",
+        _click_index_expression(
+            selector=args.selector,
+            index=args.index,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
 def cmd_action_fill_label(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -5114,6 +5181,20 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_click_role.add_argument("--name")
     _add_text_match_args(action_click_role)
     action_click_role.set_defaults(func=cmd_action_click_role)
+
+    action_click_index = action_subparsers.add_parser(
+        "click-index",
+        help="Click the visible selector match at a zero-based index",
+    )
+    _add_session_target_args(action_click_index)
+    action_click_index.add_argument("--selector", required=True)
+    action_click_index.add_argument("--index", required=True, type=_non_negative_int)
+    action_click_index.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Allow hidden DOM nodes to be counted and clicked.",
+    )
+    action_click_index.set_defaults(func=cmd_action_click_index)
 
     action_fill_label = action_subparsers.add_parser(
         "fill-label",

@@ -18,6 +18,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "Prefer semantic actions" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
+    assert "`click-index` for a chosen repeated selector match" in normalized
     assert "`fill-label` for labeled form fields" in normalized
     assert (
         "Use `eval` only for page-local work not covered by a first-class action"
@@ -121,6 +122,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`check`",
         "`uncheck`",
         "`form-snapshot`",
+        "`click-index`",
     ):
         assert action in normalized
 
@@ -148,6 +150,7 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`value_masked`" in normalized
     assert "`bounding_box`" in normalized
     assert "`in_viewport`" in normalized
+    assert "`index`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -169,6 +172,8 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Click a visible control" in normalized
     assert "`click-role`, then `click-text`, then `scroll-into-view`" in normalized
     assert "after `exists` or `bounding-box` confirms a stable selector" in normalized
+    assert "For repeated matches, run `query` and then" in normalized
+    assert "`click-index --index <n>`" in normalized
     assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
     assert (

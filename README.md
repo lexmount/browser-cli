@@ -222,6 +222,7 @@ browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
+browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -235,7 +236,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `select-option`,
-`check`, `uncheck`, `hover`, `press`, `click-text`, `click-role`,
+`check`, `uncheck`, `hover`, `press`, `click-text`, `click-role`, `click-index`,
 `fill-label`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -245,7 +246,7 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
 `dispatched`, `dispatched_events`, `fields`, `value_masked`, `bounding_box`,
-`in_viewport`, or `navigation_requested` from `result`.
+`in_viewport`, `index`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -368,6 +369,7 @@ Common agent recipes:
 - Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`
   and selector `click` after `exists` or `bounding-box` confirms a stable
   selector.
+- Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
   confirm with `wait-url`, `wait-load-state`, `wait-network-idle`, `wait-text`,
   or `snapshot`.
