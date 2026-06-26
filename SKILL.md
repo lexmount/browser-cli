@@ -110,6 +110,20 @@ plus `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
 `result` fields such as `found`, `exists`, `checked`, `selected`, `clicked`,
 `filled`, `hovered`, and `pressed` before assuming the page changed.
 
+For page work, choose actions in this order:
+
+1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
+   are unclear.
+2. Prefer semantic actions: `click-role` for known roles/names, `click-text` for
+   visible text, and `fill-label` for labeled form fields.
+3. Use selector actions when a stable selector is known: `exists`, `get-text`,
+   `wait-selector`, `click`, `type`, `select-option`, `check`, and `uncheck`.
+4. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
+5. Use `eval` only for page-local work not covered by a first-class action, and
+   keep the expression small.
+6. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
+   false, inspect again before trying a different action.
+
 Each action must use exactly one target:
 
 ```bash
