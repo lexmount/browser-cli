@@ -81,3 +81,5 @@ def test_skill_documents_agent_workflow_discovery() -> None:
         in normalized
     )
     assert "`agent_workflows` fields instead of parsing `--help` text" in normalized
+    assert "Follow each workflow step's `read` array first" in normalized
+    assert "auth availability, export usability, and context reuse fields" in normalized

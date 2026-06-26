@@ -518,7 +518,9 @@ action. Use `--workflows-only` when you only need the structured setup,
 Connect from Codex auth, one-off page task, and persistent login state workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
-commands. Action catalog entries include `browser_target.exactly_one_of` so
+commands. The `read` arrays include auth flow availability, export usability,
+and context reuse availability fields when those values decide the next step.
+Action catalog entries include `browser_target.exactly_one_of` so
 agents can supply exactly one of `--session-id`, `--connect-url`, or
 `--direct-url`.
 

@@ -508,6 +508,10 @@ def _command_catalog() -> dict[str, Any]:
                         "id": "auth_login",
                         "command": "browser-cli auth login",
                         "read": [
+                            "selected_flow",
+                            "available",
+                            "manual_env_available",
+                            "device_code_available",
                             "connect_from_codex.url",
                             "connect_from_codex.requested_scope_details",
                             "handoff.setup_blocks",
@@ -519,6 +523,10 @@ def _command_catalog() -> dict[str, Any]:
                         "id": "export_env",
                         "command": "browser-cli auth export-env",
                         "local_shell_only": True,
+                        "read": [
+                            "usable",
+                            "unusable_exports",
+                        ],
                         "secret_handling": "Do not paste revealed API keys into chat, logs, docs, or commits.",
                     },
                     {
@@ -570,6 +578,10 @@ def _command_catalog() -> dict[str, Any]:
                         "id": "dry_run_context_pick",
                         "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
                         "read": [
+                            "availability",
+                            "reusable",
+                            "locked",
+                            "reuse_reason",
                             "selection_summary.recommended_next_action",
                             "selection_summary.decision_reason",
                             "selection_summary.locked_matches",
@@ -583,6 +595,10 @@ def _command_catalog() -> dict[str, Any]:
                             "session_id",
                             "context_reuse.selected",
                             "context_reuse.created",
+                            "context_reuse.availability",
+                            "context_reuse.reusable",
+                            "context_reuse.locked",
+                            "context_reuse.reuse_reason",
                             "context_reuse.selection_summary.recommended_next_action",
                         ],
                     },

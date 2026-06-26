@@ -47,6 +47,8 @@ browser-cli commands --group action --names-only
 
 Read `agent_workflows`, `required_options`, `required_one_of`, and
 `browser_target.exactly_one_of` from the catalog instead of parsing help text.
+For each workflow step, follow its `read` array first; it names auth availability,
+export usability, and context reuse fields that decide the next safe action.
 
 When validating a fresh local setup, run the stronger live check:
 

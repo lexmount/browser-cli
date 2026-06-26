@@ -265,7 +265,12 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert workflows["setup_and_verify"]["steps"][2]["optional"] is True
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[1]["command"] == "browser-cli auth login"
+    assert "selected_flow" in auth_steps[1]["read"]
+    assert "manual_env_available" in auth_steps[1]["read"]
+    assert "device_code_available" in auth_steps[1]["read"]
     assert "connect_from_codex.url" in auth_steps[1]["read"]
+    assert "usable" in auth_steps[2]["read"]
+    assert "unusable_exports" in auth_steps[2]["read"]
     assert auth_steps[2]["local_shell_only"] is True
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
@@ -275,7 +280,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "cleanup": True,
     }
     context_steps = workflows["persistent_login_state"]["steps"]
+    assert "availability" in context_steps[0]["read"]
+    assert "reusable" in context_steps[0]["read"]
+    assert "locked" in context_steps[0]["read"]
+    assert "reuse_reason" in context_steps[0]["read"]
     assert "selection_summary.recommended_next_action" in context_steps[0]["read"]
+    assert "context_reuse.availability" in context_steps[1]["read"]
+    assert "context_reuse.reusable" in context_steps[1]["read"]
+    assert "context_reuse.locked" in context_steps[1]["read"]
+    assert "context_reuse.reuse_reason" in context_steps[1]["read"]
     assert (
         "context_reuse.selection_summary.recommended_next_action"
         in (context_steps[1]["read"])
@@ -368,6 +381,14 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "selection_summary.recommended_next_action"
         in payload["agent_workflows"]["persistent_login_state"]["steps"][0]["read"]
+    )
+    assert (
+        "context_reuse.availability"
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
+    )
+    assert (
+        "unusable_exports"
+        in payload["agent_workflows"]["connect_from_codex_auth"]["steps"][2]["read"]
     )
     assert "browser-cli auth login" in payload["agent_entrypoints"]["setup"]
     assert payload["json_output"]["always_json"] is True

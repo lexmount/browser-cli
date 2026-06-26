@@ -30,6 +30,11 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --group action" in text
     assert "browser-cli commands --group action --names-only" in text
     assert "agent_workflows" in text
+    assert "workflow step" in text
+    assert "`read` array" in text
+    assert "auth availability" in text
+    assert "export usability" in text
+    assert "context reuse fields" in text
     assert "browser-cli auth login" in text
     assert "browser-cli auth export-env" in text
     assert "handoff.connect_from_codex_url" in text

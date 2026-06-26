@@ -138,7 +138,9 @@ Run `browser-cli commands --workflows-only` for a compact agent workflow map,
 when the installed CLI version is uncertain or before writing custom JavaScript.
 Use the catalog's `browser_target.exactly_one_of`, `required_options`,
 `required_one_of`, `json_output`, `secret_policy`, `agent_entrypoints`, and
-`agent_workflows` fields instead of parsing `--help` text.
+`agent_workflows` fields instead of parsing `--help` text. Follow each
+workflow step's `read` array first; it names the auth availability, export
+usability, and context reuse fields that drive the next decision.
 
 ## Workflow
 

@@ -61,6 +61,9 @@ page, and persistent login state steps with `command`, `read`,
 expose `aliases` on canonical commands plus `alias_of` and `canonical_name` on
 alias commands, so agents can map user-facing phrasing back to the preferred
 action without parsing help text.
+Workflow `read` arrays include current auth availability fields, export
+usability fields, and context reuse availability fields when those values drive
+the next agent decision.
 
 `context pick` and session context reuse return `selection_summary` with stable
 counts such as `checked`, `metadata_matches`, `metadata_mismatches`,

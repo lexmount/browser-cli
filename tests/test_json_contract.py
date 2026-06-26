@@ -161,6 +161,9 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`available_workflows`" in text
     assert "`error=unknown_workflow`" in text
     assert "commands for inspecting valid workflows" in normalized
+    assert "auth availability fields" in normalized
+    assert "export usability fields" in normalized
+    assert "context reuse availability fields" in normalized
     assert "`success_condition`" in text
     assert "`on_failure_read`" in text
     assert "`cleanup`" in text
