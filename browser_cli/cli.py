@@ -304,6 +304,71 @@ def _package_version() -> str:
     return "unknown"
 
 
+def _context_reuse_payload(context_payload: dict[str, Any]) -> dict[str, Any]:
+    status = context_payload.get("status")
+    normalized_status = str(status or "").lower()
+    context_id = context_payload.get("context_id")
+
+    if normalized_status == "available":
+        command = None
+        if context_id:
+            command = (
+                "browser-cli session create "
+                f"--context-id {context_id} --context-mode read_write"
+            )
+        return {
+            "can_reuse_now": True,
+            "reason": "context_available",
+            "recommended_context_mode": "read_write",
+            "recommended_session_command": command,
+            "next_steps": [
+                "Create a session with this context_id to reuse cookies and storage."
+            ],
+        }
+
+    if normalized_status == "locked":
+        return {
+            "can_reuse_now": False,
+            "reason": "context_locked",
+            "recommended_context_mode": None,
+            "recommended_session_command": None,
+            "next_steps": [
+                "Close the active session using this context, then retry.",
+                "Create a new context if the current session must stay open.",
+            ],
+        }
+
+    return {
+        "can_reuse_now": None,
+        "reason": "context_status_unknown"
+        if status is None
+        else "context_not_available",
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+        "next_steps": [
+            "Inspect the context status before using it for persistent login state."
+        ],
+    }
+
+
+def _context_payload(value: Any) -> dict[str, Any]:
+    payload = dict(value) if isinstance(value, dict) else _model_payload(value)
+    payload["reuse"] = _context_reuse_payload(payload)
+    return payload
+
+
+def _metadata_matches(
+    context_payload: dict[str, Any],
+    metadata_match: dict[str, Any] | None,
+) -> bool:
+    if not metadata_match:
+        return True
+    metadata = context_payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return all(metadata.get(key) == value for key, value in metadata_match.items())
+
+
 def _mask_direct_url_secret(connect_url: str) -> str:
     parsed = urlsplit(connect_url)
     query = [
@@ -804,17 +869,52 @@ def cmd_doctor(args: argparse.Namespace) -> None:
 
 def cmd_session_create(args: argparse.Namespace) -> None:
     command = "session.create"
+    if not args.resolve_context and args.metadata_match:
+        _failure(
+            command,
+            "invalid_arguments",
+            "--metadata-match-json requires --resolve-context.",
+        )
+    if not args.resolve_context and args.context_status:
+        _failure(
+            command,
+            "invalid_arguments",
+            "--context-status requires --resolve-context.",
+        )
+    if not args.resolve_context and args.context_limit != 20:
+        _failure(
+            command,
+            "invalid_arguments",
+            "--context-limit requires --resolve-context.",
+        )
     try:
-        result = LexmountBrowserAdmin().create_session(
-            context_id=args.context_id,
-            create_context=args.create_context,
+        admin = LexmountBrowserAdmin()
+        context_id = args.context_id
+        create_context = args.create_context
+        metadata = args.metadata
+        context_resolution = None
+        if args.resolve_context:
+            context_id, context_resolution = _resolve_context_for_session(
+                command,
+                admin,
+                args,
+            )
+            create_context = False
+            metadata = None
+
+        result = admin.create_session(
+            context_id=context_id,
+            create_context=create_context,
             context_mode=args.context_mode,
             browser_mode=args.browser_mode,
-            metadata=args.metadata,
+            metadata=metadata,
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, **_model_payload(result))
+    payload = _model_payload(result)
+    if context_resolution is not None:
+        payload["context_resolution"] = context_resolution
+    _success(command, **payload)
 
 
 def cmd_session_list(args: argparse.Namespace) -> None:
@@ -864,7 +964,7 @@ def cmd_context_create(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().create_context(metadata=args.metadata)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_model_payload(context))
+    _success(command, context=_context_payload(context))
 
 
 def cmd_context_list(args: argparse.Namespace) -> None:
@@ -876,7 +976,10 @@ def cmd_context_list(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, **_model_payload(result))
+    payload = _model_payload(result)
+    contexts = getattr(result, "contexts", payload.get("contexts", []))
+    payload["contexts"] = [_context_payload(context) for context in contexts]
+    _success(command, **payload)
 
 
 def cmd_context_get(args: argparse.Namespace) -> None:
@@ -885,7 +988,7 @@ def cmd_context_get(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().get_context(args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_model_payload(context))
+    _success(command, context=_context_payload(context))
 
 
 def cmd_context_delete(args: argparse.Namespace) -> None:
@@ -895,6 +998,419 @@ def cmd_context_delete(args: argparse.Namespace) -> None:
     except Exception as exc:
         _failure_from_exception(command, exc)
     _success(command, context_id=args.context_id, deleted=True)
+
+
+def _context_resolution_summary(
+    contexts: list[Any],
+    *,
+    metadata_match: dict[str, Any] | None,
+) -> dict[str, Any]:
+    all_payloads = [_context_payload(context) for context in contexts]
+    payloads = [
+        payload
+        for payload in all_payloads
+        if _metadata_matches(payload, metadata_match)
+    ]
+    available = [
+        payload for payload in payloads if payload["reuse"]["can_reuse_now"] is True
+    ]
+    locked = [
+        payload
+        for payload in payloads
+        if payload.get("status") and str(payload["status"]).lower() == "locked"
+    ]
+    return {
+        "available_count": len(available),
+        "locked_count": len(locked),
+        "considered_count": len(payloads),
+        "considered_contexts": payloads,
+        "metadata_match": metadata_match,
+        "matched_count": len(payloads),
+        "total_count": len(all_payloads),
+        "unmatched_count": len(all_payloads) - len(payloads),
+    }
+
+
+def _context_reuse_decision(
+    context_payload: dict[str, Any],
+    *,
+    created: bool,
+) -> dict[str, Any]:
+    reuse = context_payload["reuse"]
+    can_reuse = reuse["can_reuse_now"] is True
+    reason = "context_created" if created and can_reuse else reuse["reason"]
+
+    if can_reuse:
+        action = "start_session"
+        should_create_context = False
+        should_close_session = False
+        selected_context_id = context_payload.get("context_id")
+    elif reuse["reason"] == "context_locked":
+        action = "close_or_create_context"
+        should_create_context = True
+        should_close_session = True
+        selected_context_id = None
+    elif reuse["reason"] == "context_not_available":
+        action = "create_context"
+        should_create_context = True
+        should_close_session = False
+        selected_context_id = None
+    else:
+        action = "inspect_context"
+        should_create_context = False
+        should_close_session = False
+        selected_context_id = None
+
+    return {
+        "action": action,
+        "reason": reason,
+        "can_start_session": can_reuse,
+        "should_create_context": should_create_context,
+        "should_close_session": should_close_session,
+        "selected_context_id": selected_context_id,
+        "recommended_context_mode": reuse["recommended_context_mode"],
+        "recommended_session_command": reuse["recommended_session_command"],
+    }
+
+
+def _context_missing_decision(summary: dict[str, Any]) -> dict[str, Any]:
+    locked_count = summary["locked_count"]
+    considered_count = summary["considered_count"]
+
+    if locked_count:
+        action = "close_or_create_context"
+        reason = (
+            "only_locked_contexts"
+            if locked_count == considered_count
+            else "no_available_context"
+        )
+    else:
+        action = "create_context"
+        if considered_count == 0 and summary.get("total_count", 0) == 0:
+            reason = "no_contexts_found"
+        elif considered_count == 0 and summary.get("metadata_match"):
+            reason = "no_matching_contexts"
+        else:
+            reason = "no_available_context"
+
+    return {
+        "action": action,
+        "reason": reason,
+        "can_start_session": False,
+        "should_create_context": True,
+        "should_close_session": bool(locked_count),
+        "selected_context_id": None,
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+    }
+
+
+def _context_metadata_mismatch_decision() -> dict[str, Any]:
+    return {
+        "action": "create_context",
+        "reason": "metadata_mismatch",
+        "can_start_session": False,
+        "should_create_context": True,
+        "should_close_session": False,
+        "selected_context_id": None,
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+    }
+
+
+def _context_resolution_failure(
+    command: str,
+    message: str,
+    *,
+    decision: dict[str, Any],
+    context: dict[str, Any] | None = None,
+    **payload: Any,
+) -> NoReturn:
+    _failure(
+        command,
+        "context_not_reusable",
+        message,
+        context_resolution={
+            "resolved": False,
+            "created": False,
+            "decision": decision,
+            "context": context,
+            "context_id": context.get("context_id") if context else None,
+            **payload,
+        },
+    )
+
+
+def _resolved_context_payload(
+    context_payload: dict[str, Any],
+    *,
+    created: bool,
+    metadata_match: dict[str, Any] | None,
+    **payload: Any,
+) -> dict[str, Any]:
+    return {
+        "resolved": context_payload["reuse"]["can_reuse_now"] is True,
+        "created": created,
+        "decision": _context_reuse_decision(context_payload, created=created),
+        "context": context_payload,
+        "context_id": context_payload.get("context_id"),
+        "metadata_match": metadata_match,
+        "recommended_session_command": context_payload["reuse"][
+            "recommended_session_command"
+        ],
+        "next_steps": context_payload["reuse"]["next_steps"],
+        **payload,
+    }
+
+
+def _resolve_context_for_session(
+    command: str,
+    admin: LexmountBrowserAdmin,
+    args: argparse.Namespace,
+) -> tuple[str | None, dict[str, Any]]:
+    create_metadata = (
+        args.metadata if args.metadata is not None else args.metadata_match
+    )
+    if (
+        args.create_context
+        and args.metadata_match
+        and not _metadata_matches({"metadata": create_metadata}, args.metadata_match)
+    ):
+        _failure(
+            command,
+            "metadata_mismatch",
+            "--metadata-json must contain every key and value from --metadata-match-json.",
+            metadata_match=args.metadata_match,
+            metadata=create_metadata,
+        )
+
+    if args.context_id:
+        context_payload = _context_payload(admin.get_context(args.context_id))
+        metadata_matches = _metadata_matches(context_payload, args.metadata_match)
+        if not metadata_matches:
+            _context_resolution_failure(
+                command,
+                "The explicit context metadata does not match --metadata-match-json.",
+                decision=_context_metadata_mismatch_decision(),
+                context=context_payload,
+                metadata_match=args.metadata_match,
+                metadata_matches=False,
+                next_steps=[
+                    "Use a context whose metadata matches the requested persistent login state.",
+                    "Pass --create-context with --resolve-context to create a matching context.",
+                ],
+            )
+        resolution = _resolved_context_payload(
+            context_payload,
+            created=False,
+            metadata_match=args.metadata_match,
+            metadata_matches=True,
+        )
+        if resolution["decision"]["can_start_session"] is not True:
+            _context_resolution_failure(
+                command,
+                "The explicit context is not available for a new read/write session.",
+                decision=resolution["decision"],
+                context=context_payload,
+                metadata_match=args.metadata_match,
+                metadata_matches=True,
+                next_steps=context_payload["reuse"]["next_steps"],
+            )
+        return context_payload.get("context_id"), resolution
+
+    listed = admin.list_contexts(status=args.context_status, limit=args.context_limit)
+    contexts = list(listed.contexts)
+    summary = _context_resolution_summary(
+        contexts,
+        metadata_match=args.metadata_match,
+    )
+    resolution_summary = {key: value for key, value in summary.items()}
+    resolution_summary.pop("metadata_match", None)
+    selected = next(
+        (
+            payload
+            for payload in summary["considered_contexts"]
+            if payload["reuse"]["can_reuse_now"] is True
+        ),
+        None,
+    )
+    if selected:
+        return selected.get("context_id"), _resolved_context_payload(
+            selected,
+            created=False,
+            metadata_match=args.metadata_match,
+            status_filter=args.context_status,
+            limit=args.context_limit,
+            **resolution_summary,
+        )
+
+    if args.create_context:
+        context_payload = _context_payload(
+            admin.create_context(metadata=create_metadata)
+        )
+        resolution = _resolved_context_payload(
+            context_payload,
+            created=True,
+            metadata_match=args.metadata_match,
+            status_filter=args.context_status,
+            limit=args.context_limit,
+            **resolution_summary,
+        )
+        if resolution["decision"]["can_start_session"] is not True:
+            _context_resolution_failure(
+                command,
+                "The newly created context is not available for a new session.",
+                decision=resolution["decision"],
+                context=context_payload,
+                status_filter=args.context_status,
+                limit=args.context_limit,
+                next_steps=context_payload["reuse"]["next_steps"],
+                **summary,
+            )
+        return context_payload.get("context_id"), resolution
+
+    decision = _context_missing_decision(summary)
+    _context_resolution_failure(
+        command,
+        "No available context matched the requested persistent login state.",
+        decision=decision,
+        status_filter=args.context_status,
+        limit=args.context_limit,
+        next_steps=[
+            "Pass --create-context with --resolve-context to create a reusable context.",
+            "Run browser-cli context list to inspect locked and available contexts.",
+        ],
+        **summary,
+    )
+
+
+def cmd_context_resolve(args: argparse.Namespace) -> None:
+    command = "context.resolve"
+    admin = LexmountBrowserAdmin()
+    create_metadata = (
+        args.metadata if args.metadata is not None else args.metadata_match
+    )
+    if (
+        args.create_if_missing
+        and args.metadata_match
+        and not _metadata_matches({"metadata": create_metadata}, args.metadata_match)
+    ):
+        _failure(
+            command,
+            "metadata_mismatch",
+            "--metadata-json must contain every key and value from --metadata-match-json.",
+            metadata_match=args.metadata_match,
+            metadata=create_metadata,
+        )
+    try:
+        if args.context_id:
+            context = admin.get_context(args.context_id)
+            context_payload = _context_payload(context)
+            metadata_matches = _metadata_matches(context_payload, args.metadata_match)
+            if not metadata_matches:
+                _success(
+                    command,
+                    resolved=False,
+                    created=False,
+                    decision=_context_metadata_mismatch_decision(),
+                    context=context_payload,
+                    context_id=context_payload.get("context_id"),
+                    metadata_match=args.metadata_match,
+                    metadata_matches=False,
+                    recommended_session_command=None,
+                    next_steps=[
+                        "Use a context whose metadata matches the requested persistent login state.",
+                        "Run browser-cli context resolve --create-if-missing with the same --metadata-match-json.",
+                    ],
+                )
+            resolved = context_payload["reuse"]["can_reuse_now"] is True
+            decision = _context_reuse_decision(context_payload, created=False)
+            _success(
+                command,
+                resolved=resolved,
+                created=False,
+                decision=decision,
+                context=context_payload,
+                context_id=context_payload.get("context_id"),
+                metadata_match=args.metadata_match,
+                metadata_matches=True,
+                recommended_session_command=context_payload["reuse"][
+                    "recommended_session_command"
+                ],
+                next_steps=context_payload["reuse"]["next_steps"],
+            )
+
+        listed = admin.list_contexts(status=args.status, limit=args.limit)
+        contexts = list(listed.contexts)
+        summary = _context_resolution_summary(
+            contexts,
+            metadata_match=args.metadata_match,
+        )
+        selected = next(
+            (
+                payload
+                for payload in summary["considered_contexts"]
+                if payload["reuse"]["can_reuse_now"] is True
+            ),
+            None,
+        )
+        if selected:
+            decision = _context_reuse_decision(selected, created=False)
+            _success(
+                command,
+                resolved=True,
+                created=False,
+                decision=decision,
+                context=selected,
+                context_id=selected.get("context_id"),
+                status_filter=args.status,
+                limit=args.limit,
+                recommended_session_command=selected["reuse"][
+                    "recommended_session_command"
+                ],
+                next_steps=selected["reuse"]["next_steps"],
+                **summary,
+            )
+
+        if args.create_if_missing:
+            context = admin.create_context(metadata=create_metadata)
+            context_payload = _context_payload(context)
+            decision = _context_reuse_decision(context_payload, created=True)
+            _success(
+                command,
+                resolved=context_payload["reuse"]["can_reuse_now"] is True,
+                created=True,
+                decision=decision,
+                context=context_payload,
+                context_id=context_payload.get("context_id"),
+                status_filter=args.status,
+                limit=args.limit,
+                recommended_session_command=context_payload["reuse"][
+                    "recommended_session_command"
+                ],
+                next_steps=context_payload["reuse"]["next_steps"],
+                **summary,
+            )
+
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    _success(
+        command,
+        resolved=False,
+        created=False,
+        decision=_context_missing_decision(summary),
+        context=None,
+        context_id=None,
+        status_filter=args.status,
+        limit=args.limit,
+        recommended_session_command=None,
+        next_steps=[
+            "Run browser-cli context resolve --create-if-missing to create a reusable context.",
+            "Run browser-cli context list to inspect locked and available contexts.",
+        ],
+        **summary,
+    )
 
 
 def _target_from_args(args: argparse.Namespace) -> BrowserActionTarget:
@@ -1107,6 +1623,30 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         type=_parse_metadata_json,
         help="JSON object used when --create-context creates a context",
     )
+    parser.add_argument(
+        "--resolve-context",
+        action="store_true",
+        help=(
+            "Resolve an available context before creating the session. "
+            "With --create-context, create one when no match is available."
+        ),
+    )
+    parser.add_argument(
+        "--metadata-match-json",
+        dest="metadata_match",
+        type=_parse_metadata_json,
+        help="JSON object that resolved context metadata must contain",
+    )
+    parser.add_argument(
+        "--context-status",
+        help="Optional context status filter used with --resolve-context",
+    )
+    parser.add_argument(
+        "--context-limit",
+        type=int,
+        default=20,
+        help="Maximum contexts to inspect when --resolve-context lists contexts",
+    )
 
 
 def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
@@ -1212,6 +1752,32 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_get = context_subparsers.add_parser("get", help="Get one context")
     context_get.add_argument("--context-id", required=True)
     context_get.set_defaults(func=cmd_context_get)
+
+    context_resolve = context_subparsers.add_parser(
+        "resolve",
+        help="Find or create an available context for persistent state reuse",
+    )
+    context_resolve.add_argument("--context-id", help="Inspect one explicit context")
+    context_resolve.add_argument("--status", help="Optional status filter")
+    context_resolve.add_argument("--limit", type=int, default=20)
+    context_resolve.add_argument(
+        "--create-if-missing",
+        action="store_true",
+        help="Create a new context when no available context is found",
+    )
+    context_resolve.add_argument(
+        "--metadata-json",
+        dest="metadata",
+        type=_parse_metadata_json,
+        help="JSON object used when --create-if-missing creates a context",
+    )
+    context_resolve.add_argument(
+        "--metadata-match-json",
+        dest="metadata_match",
+        type=_parse_metadata_json,
+        help="JSON object that candidate context metadata must contain",
+    )
+    context_resolve.set_defaults(func=cmd_context_resolve)
 
     context_delete = context_subparsers.add_parser("delete", help="Delete context")
     context_delete.add_argument("--context-id", required=True)
