@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, inspect form fields, set form values, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, inspect form fields, inspect element geometry, set form values, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -171,6 +171,8 @@ browser-cli action set-value --session-id <session_id> --selector "input[name=q]
 browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
+browser-cli action scroll-into-view --session-id <session_id> --selector "button"
+browser-cli action bounding-box --session-id <session_id> --selector "button"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
@@ -191,7 +193,8 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
 `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`,
 `wait-cookie`, `clear`, `set-value`, `dispatch-event`, `submit`, `scroll`,
-`select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`, `click-role`,
+`scroll-into-view`, `bounding-box`, `select-option`, `check`, `uncheck`,
+`hover`, and `press` plus `click-text`, `click-role`,
 `fill-label`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
@@ -199,7 +202,8 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `removed`, `deleted`, `cleared`, `items`, `cleared_count`, `requested_count`,
 `state`, `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`,
 `submitted`, `hovered`, `pressed`, `dispatched`, `dispatched_events`, `fields`,
-`value_masked`, and `navigation_requested` before assuming the page changed.
+`value_masked`, `bounding_box`, `in_viewport`, and `navigation_requested`
+before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -220,8 +224,9 @@ For page work, choose actions in this order:
 6. Use `cookie-get`, `cookie-set`, `cookie-delete`, and `cookie-clear` for
    document.cookie-visible cookies. Use `wait-cookie` after consent/login flows;
    do not expect HttpOnly cookies here.
-7. Use `scroll`, `hover`, `press`, or `dispatch-event` for viewport, menu,
-   keyboard, and event-triggered UI flows.
+7. Use `scroll`, `scroll-into-view`, `bounding-box`, `hover`, `press`, or
+   `dispatch-event` for viewport, menu, keyboard, geometry, and event-triggered
+   UI flows.
 8. Use `eval` only for page-local work not covered by a first-class action, and
    keep the expression small.
 9. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
@@ -239,7 +244,8 @@ Common task recipes:
    events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: prefer `click-role`, then `click-text`, then
-   selector `click` after `exists` confirms a stable selector.
+   `scroll-into-view` and selector `click` after `exists` or `bounding-box`
+   confirms a stable selector.
 3. Navigate page history or async refresh: use `reload`, `go-back`, or
    `go-forward`, then confirm with `wait-url`, `wait-load-state`,
    `wait-network-idle`, `wait-text`, or `snapshot`.

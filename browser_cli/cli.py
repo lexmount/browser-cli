@@ -2942,6 +2942,109 @@ def _submit_expression(*, selector: str, skip_validation: bool) -> str:
 """.strip()
 
 
+def _rect_object_expression(variable_name: str) -> str:
+    return (
+        "{ "
+        f"x: {variable_name}.x, "
+        f"y: {variable_name}.y, "
+        f"top: {variable_name}.top, "
+        f"right: {variable_name}.right, "
+        f"bottom: {variable_name}.bottom, "
+        f"left: {variable_name}.left, "
+        f"width: {variable_name}.width, "
+        f"height: {variable_name}.height "
+        "}"
+    )
+
+
+def _bounding_box_expression(selector: str) -> str:
+    rect_object = _rect_object_expression("rect")
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, visible: false, bounding_box: null }};
+  }}
+  const rect = element.getBoundingClientRect();
+  const center = {{
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  }};
+  const inViewport = rect.bottom >= 0 &&
+    rect.right >= 0 &&
+    rect.top <= window.innerHeight &&
+    rect.left <= window.innerWidth;
+  return {{
+    selector,
+    found: true,
+    visible: visible(element),
+    in_viewport: inViewport,
+    bounding_box: {rect_object},
+    center,
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _scroll_into_view_expression(
+    *,
+    selector: str,
+    block: str,
+    inline: str,
+    behavior: str,
+) -> str:
+    before_rect = _rect_object_expression("before")
+    after_rect = _rect_object_expression("after")
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const block = {_js_literal(block)};
+  const inline = {_js_literal(inline)};
+  const behavior = {_js_literal(behavior)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, scrolled: false }};
+  }}
+  const before = element.getBoundingClientRect();
+  element.scrollIntoView({{ block, inline, behavior }});
+  const after = element.getBoundingClientRect();
+  const inViewport = after.bottom >= 0 &&
+    after.right >= 0 &&
+    after.top <= window.innerHeight &&
+    after.left <= window.innerWidth;
+  return {{
+    selector,
+    found: true,
+    scrolled: true,
+    block,
+    inline,
+    behavior,
+    before: {before_rect},
+    after: {after_rect},
+    in_viewport: inViewport,
+    visible: visible(element),
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def cmd_action_open_url(args: argparse.Namespace) -> None:
     _run_action_command(
         args,
@@ -3461,6 +3564,27 @@ def cmd_action_scroll(args: argparse.Namespace) -> None:
 """.strip()
 
     _run_eval_backed_action_command(args, "action.scroll", expression)
+
+
+def cmd_action_bounding_box(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.bounding-box",
+        _bounding_box_expression(args.selector),
+    )
+
+
+def cmd_action_scroll_into_view(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.scroll-into-view",
+        _scroll_into_view_expression(
+            selector=args.selector,
+            block=args.block,
+            inline=args.inline,
+            behavior=args.behavior,
+        ),
+    )
 
 
 def cmd_action_select_option(args: argparse.Namespace) -> None:
@@ -4892,6 +5016,39 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         default="auto",
     )
     action_scroll.set_defaults(func=cmd_action_scroll)
+
+    action_bounding_box = action_subparsers.add_parser(
+        "bounding-box",
+        help="Read selector geometry and viewport position",
+    )
+    _add_session_target_args(action_bounding_box)
+    action_bounding_box.add_argument("--selector", required=True)
+    action_bounding_box.set_defaults(func=cmd_action_bounding_box)
+
+    action_scroll_into_view = action_subparsers.add_parser(
+        "scroll-into-view",
+        help="Scroll one selector into the viewport",
+    )
+    _add_session_target_args(action_scroll_into_view)
+    action_scroll_into_view.add_argument("--selector", required=True)
+    action_scroll_into_view.add_argument(
+        "--block",
+        choices=["start", "center", "end", "nearest"],
+        default="center",
+        help="Vertical alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view.add_argument(
+        "--inline",
+        choices=["start", "center", "end", "nearest"],
+        default="nearest",
+        help="Horizontal alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+    )
+    action_scroll_into_view.set_defaults(func=cmd_action_scroll_into_view)
 
     action_select_option = action_subparsers.add_parser(
         "select-option",

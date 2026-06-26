@@ -115,6 +115,8 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`set-value`",
         "`dispatch-event`",
         "`submit`",
+        "`scroll-into-view`",
+        "`bounding-box`",
         "`select-option`",
         "`check`",
         "`uncheck`",
@@ -144,6 +146,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`dispatched_events`" in normalized
     assert "`fields`" in normalized
     assert "`value_masked`" in normalized
+    assert "`bounding_box`" in normalized
+    assert "`in_viewport`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -163,7 +167,8 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "then use `submit`" in normalized
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
-    assert "`click-role`, then `click-text`, then selector `click`" in normalized
+    assert "`click-role`, then `click-text`, then `scroll-into-view`" in normalized
+    assert "after `exists` or `bounding-box` confirms a stable selector" in normalized
     assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
     assert (

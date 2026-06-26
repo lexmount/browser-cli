@@ -213,6 +213,8 @@ browser-cli action dispatch-event --session-id <session_id> --selector "input[na
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
+browser-cli action scroll-into-view --session-id <session_id> --selector "button[type=submit]"
+browser-cli action bounding-box --session-id <session_id> --selector "button[type=submit]"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
@@ -232,8 +234,8 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
-`submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, `press`,
-`click-text`, `click-role`,
+`submit`, `scroll`, `scroll-into-view`, `bounding-box`, `select-option`,
+`check`, `uncheck`, `hover`, `press`, `click-text`, `click-role`,
 `fill-label`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -242,8 +244,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
-`dispatched`, `dispatched_events`, `fields`, `value_masked`, or
-`navigation_requested` from `result`.
+`dispatched`, `dispatched_events`, `fields`, `value_masked`, `bounding_box`,
+`in_viewport`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -363,8 +365,9 @@ Common agent recipes:
   `input`/`change` is needed -> `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
-- Visible button/link: `click-role`, then `click-text`, then selector `click`
-  after `exists` confirms a stable selector.
+- Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`
+  and selector `click` after `exists` or `bounding-box` confirms a stable
+  selector.
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
   confirm with `wait-url`, `wait-load-state`, `wait-network-idle`, `wait-text`,
   or `snapshot`.
