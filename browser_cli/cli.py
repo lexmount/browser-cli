@@ -12,6 +12,7 @@ import shutil
 import shlex
 import sys
 import webbrowser
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, NoReturn
@@ -51,6 +52,8 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
+DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
+DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
 COMMON_DOM_EVENT_NAMES = (
     "input",
     "change",
@@ -578,11 +581,192 @@ def _env_value_status(
     return payload
 
 
-def _auth_next_steps(*, configured: bool) -> list[str]:
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _device_token_credentials_path(raw_path: str | None = None) -> tuple[Path, str]:
+    if raw_path:
+        return Path(raw_path).expanduser(), "argument"
+    env_path = os.environ.get(DEVICE_TOKEN_CREDENTIALS_FILE_ENV)
+    if env_path:
+        return Path(env_path).expanduser(), "env"
+    return (
+        Path.home() / ".config" / "lexmount" / "browser-cli" / "credentials.json",
+        "default",
+    )
+
+
+def _parse_datetime_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _posix_file_mode(path: Path) -> tuple[str | None, bool | None]:
+    if os.name != "posix":
+        return None, None
+    try:
+        mode = path.stat().st_mode & 0o777
+    except OSError:
+        return None, None
+    return oct(mode), mode == 0o600
+
+
+def _local_device_token_status(raw_path: str | None = None) -> dict[str, Any]:
+    path, path_source = _device_token_credentials_path(raw_path)
+    status: dict[str, Any] = {
+        "present": False,
+        "path": str(path),
+        "path_source": path_source,
+        "kind": None,
+        "valid": False,
+        "expired": None,
+        "refresh_needed": None,
+        "usable_for_runtime": False,
+        "warnings": [],
+    }
+    if not path.exists():
+        return status
+
+    status["present"] = True
+    file_mode, file_mode_ok = _posix_file_mode(path)
+    if file_mode is not None:
+        status["file_mode"] = file_mode
+        status["file_mode_ok"] = file_mode_ok
+        if file_mode_ok is False:
+            status["warnings"].append(
+                "Credential file permissions should be 0600 on POSIX systems."
+            )
+
+    try:
+        raw_data = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        status.update({"readable": False, "error": "read_error", "message": str(exc)})
+        return status
+
+    status["readable"] = True
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError as exc:
+        status.update(
+            {
+                "error": "invalid_json",
+                "message": f"Invalid credentials JSON: {exc}",
+            }
+        )
+        return status
+    if not isinstance(data, dict):
+        status.update(
+            {
+                "error": "invalid_credentials",
+                "message": "Credentials JSON must contain an object.",
+            }
+        )
+        return status
+
+    kind = data.get("kind")
+    access_token = data.get("access_token")
+    refresh_token = data.get("refresh_token")
+    expires_at = data.get("expires_at")
+    expires_at_dt = _parse_datetime_utc(expires_at)
+    expires_in_seconds: int | None = None
+    expired: bool | None = None
+    refresh_needed: bool | None = None
+    if expires_at_dt is not None:
+        expires_in_seconds = int((expires_at_dt - _now_utc()).total_seconds())
+        expired = expires_in_seconds <= 0
+        refresh_needed = (
+            expired or expires_in_seconds <= DEVICE_TOKEN_REFRESH_WINDOW_SECONDS
+        )
+    scopes = data.get("scopes")
+    if not isinstance(scopes, list):
+        scopes = []
+    scopes = [str(scope) for scope in scopes]
+
+    status.update(
+        {
+            "kind": kind,
+            "valid": (
+                kind == "device_token"
+                and isinstance(access_token, str)
+                and bool(access_token)
+                and isinstance(data.get("project_id"), str)
+                and bool(data.get("project_id"))
+                and expires_at_dt is not None
+                and expired is False
+            ),
+            "expired": expired,
+            "refresh_needed": refresh_needed,
+            "expires_at": expires_at,
+            "expires_in_seconds": expires_in_seconds,
+            "project_id": data.get("project_id"),
+            "api_base_url": data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+            "scopes": scopes,
+            "scope_count": len(scopes),
+            "token_id": data.get("token_id"),
+            "has_access_token": isinstance(access_token, str) and bool(access_token),
+            "has_refresh_token": isinstance(refresh_token, str) and bool(refresh_token),
+        }
+    )
+    if kind != "device_token":
+        status["warnings"].append("Unsupported credential kind.")
+    if not status["has_access_token"]:
+        status["warnings"].append("Device token is missing access_token.")
+    if not status.get("project_id"):
+        status["warnings"].append("Device token is missing project_id.")
+    if expires_at_dt is None:
+        status["warnings"].append("Device token expires_at is missing or invalid.")
+    elif expired:
+        status["warnings"].append("Device token is expired.")
+    status["usable_for_runtime"] = False
+    status["runtime_note"] = (
+        "Device-token bearer auth is not enabled in browser-cli runtime yet; "
+        "use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions."
+    )
+    return status
+
+
+def _auth_source(
+    *,
+    env_configured: bool,
+    device_token_status: dict[str, Any],
+) -> str:
+    if env_configured:
+        return "env"
+    if device_token_status.get("present"):
+        return "device_token"
+    return "missing"
+
+
+def _auth_next_steps(
+    *,
+    configured: bool,
+    device_token_status: dict[str, Any] | None = None,
+) -> list[str]:
     if configured:
         return [
             "Run `browser-cli doctor` to verify live API connectivity.",
             "Create a session with `browser-cli session create`.",
+        ]
+    if device_token_status and device_token_status.get("present"):
+        if device_token_status.get("valid"):
+            return [
+                "Device token metadata is present, but browser actions still require env API-key credentials until bearer-token support lands.",
+                "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+                "Run `browser-cli doctor` after setting credentials.",
+            ]
+        return [
+            "Local device-token metadata is present but not currently valid.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
         ]
     return [
         "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
@@ -4942,6 +5126,14 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
     base_url = os.environ.get("LEXMOUNT_BASE_URL")
     region = os.environ.get("LEXMOUNT_REGION")
+    env_configured = bool(api_key and project_id)
+    device_token_status = _local_device_token_status(
+        getattr(args, "credentials_file", None)
+    )
+    auth_source = _auth_source(
+        env_configured=env_configured,
+        device_token_status=device_token_status,
+    )
 
     checks.append(
         _doctor_check(
@@ -4990,6 +5182,56 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             value=region,
         )
     )
+    if device_token_status.get("present"):
+        device_token_check_status = (
+            "pass"
+            if device_token_status.get("valid")
+            and not device_token_status.get("warnings")
+            else "warn"
+        )
+        checks.append(
+            _doctor_check(
+                "local_device_token",
+                device_token_check_status,
+                (
+                    "Local device token metadata is valid but bearer-token runtime auth is pending."
+                    if device_token_check_status == "pass"
+                    else "Local device token metadata needs attention."
+                ),
+                device_token=device_token_status,
+                fix=_doctor_fix(
+                    "use_env_credentials_until_bearer_auth_lands",
+                    commands=[
+                        "browser-cli auth status",
+                        "browser-cli auth login",
+                        "browser-cli auth export-env",
+                    ],
+                    guidance=[
+                        "Device-token status is reported for forward compatibility.",
+                        "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support is enabled.",
+                    ],
+                ),
+            )
+        )
+    elif getattr(args, "credentials_file", None):
+        checks.append(
+            _doctor_check(
+                "local_device_token",
+                "warn",
+                "Requested local device token credentials file was not found.",
+                device_token=device_token_status,
+                fix=_doctor_fix(
+                    "run_auth_login_or_use_env_credentials",
+                    commands=[
+                        "browser-cli auth login",
+                        "browser-cli auth export-env",
+                    ],
+                    guidance=[
+                        "Use env API-key credentials today, or rerun once device-code login is available."
+                    ],
+                ),
+            )
+        )
 
     try:
         connect_url = build_direct_connect_url()
@@ -5117,6 +5359,9 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "failed_checks": _doctor_check_names(checks, status="fail"),
         "warning_checks": _doctor_check_names(checks, status="warn"),
         "skipped_checks": _doctor_check_names(checks, status="skipped"),
+        "auth_source": auth_source,
+        "runtime_auth_usable": env_configured,
+        "device_token": device_token_status,
         "ready_for_browser_actions": (
             not failed
             and isinstance(api_connectivity, dict)
@@ -5140,10 +5385,17 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
     configured = bool(api_key and project_id)
+    device_token_status = _local_device_token_status(args.credentials_file)
+    auth_source = _auth_source(
+        env_configured=configured,
+        device_token_status=device_token_status,
+    )
 
     _success(
         command,
         configured=configured,
+        auth_source=auth_source,
+        runtime_auth_usable=configured,
         api_key=_env_value_status("LEXMOUNT_API_KEY", secret=True),
         project_id=_env_value_status("LEXMOUNT_PROJECT_ID"),
         base_url=_env_value_status(
@@ -5151,7 +5403,11 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
             default=DEFAULT_LEXMOUNT_BASE_URL,
         ),
         region=_env_value_status("LEXMOUNT_REGION"),
-        next_steps=_auth_next_steps(configured=configured),
+        device_token=device_token_status,
+        next_steps=_auth_next_steps(
+            configured=configured,
+            device_token_status=device_token_status,
+        ),
     )
 
 
@@ -6482,6 +6738,13 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "status",
         help="Show local Lexmount credential environment status without secrets",
     )
+    auth_status.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
     auth_status.set_defaults(func=cmd_auth_status)
 
     auth_export_env = auth_subparsers.add_parser(
@@ -6567,6 +6830,13 @@ def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--reveal-connect-url",
         action="store_true",
         help="Print the full direct URL including api_key. Default output masks secrets.",
+    )
+    doctor.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
     )
     doctor.set_defaults(func=cmd_doctor)
 

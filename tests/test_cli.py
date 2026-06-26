@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -9,6 +10,17 @@ import pytest
 
 from browser_cli import cli as cli_module
 from browser_cli.cli import main as cli_main
+
+
+@pytest.fixture(autouse=True)
+def isolate_device_token_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    monkeypatch.setenv(
+        "LEXMOUNT_BROWSER_CREDENTIALS_FILE",
+        str(tmp_path / "missing-credentials.json"),
+    )
 
 
 class DummyModel:
@@ -323,6 +335,65 @@ def test_doctor_fails_missing_required_env(
     assert checks["api_connectivity"]["fix"]["code"] == "run_live_api_check"
 
 
+def test_doctor_reports_device_token_without_treating_it_as_runtime_auth(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "api_base_url": "https://api.lexmount.cn",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+                "scopes": ["browser.sessions:create"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "doctor",
+                "--skip-api",
+                "--credentials-file",
+                str(credentials_file),
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert payload["auth_source"] == "device_token"
+    assert payload["runtime_auth_usable"] is False
+    assert payload["ready_for_browser_actions"] is False
+    assert payload["device_token"]["valid"] is True
+    checks = _checks_by_name(payload)
+    assert checks["local_device_token"]["status"] == "pass"
+    assert checks["local_device_token"]["device_token"]["token_id"] == "tok_123"
+    assert (
+        "bearer-token runtime auth is pending"
+        in checks["local_device_token"]["message"]
+    )
+    assert "env.LEXMOUNT_API_KEY" in payload["failed_checks"]
+    assert "direct_url" in payload["failed_checks"]
+
+
 def test_doctor_skip_api_does_not_call_admin(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -520,6 +591,117 @@ def test_auth_status_reports_env_without_revealing_api_key(
     }
     assert payload["region"]["value"] == "cn"
     assert "browser-cli doctor" in payload["next_steps"][0]
+
+
+def test_auth_status_reports_device_token_file_without_revealing_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "api_base_url": "https://api.lexmount.cn",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+                "scopes": ["browser.sessions:create"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert payload["configured"] is False
+    assert payload["auth_source"] == "device_token"
+    assert payload["runtime_auth_usable"] is False
+    token = payload["device_token"]
+    assert token["present"] is True
+    assert token["path"] == str(credentials_file)
+    assert token["path_source"] == "argument"
+    assert token["kind"] == "device_token"
+    assert token["valid"] is True
+    assert token["expired"] is False
+    assert token["refresh_needed"] is False
+    assert token["expires_in_seconds"] == 3600
+    assert token["project_id"] == "project"
+    assert token["api_base_url"] == "https://api.lexmount.cn"
+    assert token["scopes"] == ["browser.sessions:create"]
+    assert token["scope_count"] == 1
+    assert token["token_id"] == "tok_123"
+    assert token["has_access_token"] is True
+    assert token["has_refresh_token"] is True
+    assert token["usable_for_runtime"] is False
+    assert token["warnings"] == []
+    if "file_mode_ok" in token:
+        assert token["file_mode"] == "0o600"
+        assert token["file_mode_ok"] is True
+    assert (
+        "browser actions still require env API-key credentials"
+        in payload["next_steps"][0]
+    )
+
+
+def test_auth_status_reports_expired_device_token(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "secret-access-token",
+                "expires_at": "2026-06-25T23:59:00Z",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert payload["auth_source"] == "device_token"
+    token = payload["device_token"]
+    assert token["valid"] is False
+    assert token["expired"] is True
+    assert token["refresh_needed"] is True
+    assert token["expires_in_seconds"] == -60
+    assert "Device token is expired." in token["warnings"]
+    assert payload["next_steps"][0] == (
+        "Local device-token metadata is present but not currently valid."
+    )
 
 
 def test_auth_export_env_emits_safe_placeholders(

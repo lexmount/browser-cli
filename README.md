@@ -110,6 +110,7 @@ Use these local auth helpers:
 
 ```bash
 browser-cli auth status
+browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth login --project-id <project-id> --scope browser:actions --expires-in 24h
@@ -121,6 +122,11 @@ browser-cli auth export-env --from-current
 `--from-current`, it reuses current environment values but still masks
 `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly passed in a trusted
 local terminal.
+`auth status` also reports local device-token metadata from
+`~/.config/lexmount/browser-cli/credentials.json`,
+`LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or `--credentials-file` without printing
+access or refresh token values. Until bearer-token runtime support lands,
+`runtime_auth_usable` is true only when env API-key credentials are configured.
 
 After credentials are configured, run the self-check:
 
@@ -139,6 +145,7 @@ Authentication:
 
 ```bash
 browser-cli auth status
+browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth login --project-id <project-id> --scope browser:sessions --scope browser:actions --expires-in 24h
@@ -164,6 +171,7 @@ Diagnostics:
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --skip-api
+browser-cli doctor --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 ```
 
 Session management:

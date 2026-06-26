@@ -67,6 +67,9 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli auth login --open" in normalized
     assert "inspect `open_result`" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
+    assert "`auth status` reports `auth_source`, `runtime_auth_usable`" in normalized
+    assert "`device_token.valid`, `device_token.expired`" in normalized
+    assert "Do not start browser actions from a device token" in normalized
     assert "do not report API key values" in normalized
 
 

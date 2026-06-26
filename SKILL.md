@@ -39,6 +39,7 @@ Use local auth helpers instead of handling secrets in chat:
 
 ```bash
 browser-cli auth status
+browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -55,6 +56,12 @@ revealed export output, or full direct URLs into chat.
 `auth export-env` prints placeholders by default. With `--from-current`, it
 still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
 a trusted local terminal.
+
+`auth status` reports `auth_source`, `runtime_auth_usable`, and safe
+`device_token` metadata when a local scoped-token credentials file exists or
+`--credentials-file` is passed. It never reports access or refresh token values.
+Until bearer-token runtime support lands, continue to require env API-key
+credentials for browser actions when `runtime_auth_usable` is false.
 
 After credentials are configured, run:
 
@@ -137,6 +144,7 @@ Authentication:
 
 ```bash
 browser-cli auth status
+browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -365,6 +373,11 @@ not report API key values. For `auth login`, prefer the `handoff` object's
 `secret_policy` fields. If `--open` was used, inspect `open_result`; if
 `opened` is false, show the returned URL or fallback login guidance without
 blocking on the local browser.
+For device-token metadata in `auth status` or `doctor`, report `auth_source`,
+`runtime_auth_usable`, `device_token.valid`, `device_token.expired`,
+`device_token.refresh_needed`, and `device_token.scopes`; do not report token
+values. Do not start browser actions from a device token while
+`runtime_auth_usable` is false.
 For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
