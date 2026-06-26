@@ -13,6 +13,7 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "Current CLI support" in text
     assert "browser-cli auth status" in text
     assert "browser-cli auth token-info" in text
+    assert "browser-cli auth refresh" in text
     assert "browser-cli auth logout" in text
     assert "browser-cli doctor" in text
     assert "browser-cli doctor --smoke-session" in text
@@ -25,6 +26,9 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "scope_check.required_scopes" in text
     assert "scope_check.missing_scopes" in text
     assert "scope_check.satisfied" in text
+    assert "has_refresh_token" in text
+    assert "refresh_available=false" in text
+    assert "refreshed" in text
     assert "deleted" in text
     assert "present_before" in text
     assert "present_after" in text

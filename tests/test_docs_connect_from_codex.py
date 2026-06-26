@@ -13,9 +13,12 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "browser-cli auth login" in text
     assert "browser-cli auth login --open" in text
     assert "browser-cli auth token-info" in text
+    assert "browser-cli auth refresh" in text
     assert "browser-cli auth logout" in text
     assert "open_result" in text
     assert "revoke_available=false" in text
+    assert "refresh_available=false" in text
+    assert "refreshed=false" in text
     assert "browser-cli auth export-env" in text
     assert "browser-cli doctor --json" in text
     assert "browser-cli doctor --smoke-session" in text

@@ -116,6 +116,7 @@ Use these local auth helpers:
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth token-info --required-scope browser:actions
+browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
@@ -134,6 +135,10 @@ local terminal.
 access or refresh token values. Until bearer-token runtime support lands,
 `runtime_auth_usable` is true only when env API-key credentials are configured.
 Use `auth token-info --required-scope <scope>` to check scoped-token coverage.
+Use `auth refresh --credentials-file <path>` to inspect whether local
+device-token metadata needs refresh. It currently reports `refresh_available:
+false` and `refreshed: false` until browser.lexmount.cn exposes the refresh
+endpoint; it never prints access or refresh token values.
 Use `auth logout --credentials-file <path>` to remove local device-token
 metadata without changing environment variables. `auth logout --revoke`
 currently reports `revoke_available: false` and reminds you to revoke from
@@ -175,6 +180,7 @@ Authentication:
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth token-info --required-scope browser:sessions --required-scope browser:actions
+browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
@@ -182,6 +188,11 @@ browser-cli auth login --project-id <project-id> --scope browser:sessions --scop
 browser-cli auth export-env
 browser-cli auth export-env --from-current --include-base-url
 ```
+
+`auth refresh` reports local refresh state, including `refresh_needed`,
+`has_refresh_token`, `refresh_available`, `refreshed`, and `reason`. Remote
+refresh is not implemented yet, so agents should use its `next_steps` and keep
+using env API-key credentials for browser actions today.
 
 `auth login` returns both the currently available `manual_env` flow and a
 machine-readable `handoff` plus `connect_from_codex` contract. `handoff`

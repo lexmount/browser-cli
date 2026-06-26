@@ -345,6 +345,7 @@ def _command_catalog() -> dict[str, Any]:
         "agent_entrypoints": {
             "setup": [
                 "browser-cli auth status",
+                "browser-cli auth refresh",
                 "browser-cli auth login",
                 "browser-cli auth export-env",
                 "browser-cli doctor --json",
@@ -1102,6 +1103,62 @@ def _auth_token_info_next_steps(
         "Local device-token metadata is valid for the requested scope check.",
         "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
     ]
+
+
+def _auth_refresh_reason(
+    device_token_status: dict[str, Any],
+    *,
+    force: bool,
+) -> str:
+    if not device_token_status.get("present"):
+        return "missing_credentials_file"
+    if device_token_status.get("error"):
+        return "invalid_credentials_file"
+    if device_token_status.get("kind") != "device_token":
+        return "unsupported_credentials_kind"
+    if not device_token_status.get("has_refresh_token"):
+        return "missing_refresh_token"
+    if not force and device_token_status.get("refresh_needed") is False:
+        return "refresh_not_needed"
+    return "remote_refresh_unavailable"
+
+
+def _auth_refresh_next_steps(
+    *,
+    reason: str,
+    device_token_status: dict[str, Any],
+) -> list[str]:
+    if reason == "missing_credentials_file":
+        return [
+            "No local device-token metadata was found.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+            "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support lands.",
+        ]
+    if reason in {"invalid_credentials_file", "unsupported_credentials_kind"}:
+        return [
+            "Local token metadata cannot be refreshed in its current form.",
+            "Run `browser-cli auth logout` to remove local metadata if it is stale.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+        ]
+    if reason == "missing_refresh_token":
+        return [
+            "Local device-token metadata does not include a refresh token.",
+            "Run `browser-cli auth login` to request fresh credentials when device-code login is available.",
+            "Use env API-key credentials for browser actions today.",
+        ]
+    if reason == "refresh_not_needed":
+        return [
+            "Local device-token metadata does not currently need refresh.",
+            "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
+        ]
+    steps = [
+        "Remote token refresh is not implemented in browser-cli yet.",
+        "Run `browser-cli auth login` to request fresh credentials when browser.lexmount.cn supports device-code login.",
+        "Use env API-key credentials for browser actions today.",
+    ]
+    if device_token_status.get("expired"):
+        steps.insert(0, "Local device-token metadata is expired.")
+    return steps
 
 
 def _auth_logout_next_steps(*, deleted: bool, revoke_requested: bool) -> list[str]:
@@ -5834,6 +5891,40 @@ def cmd_auth_token_info(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_auth_refresh(args: argparse.Namespace) -> None:
+    command = "auth.refresh"
+    device_token_status = _local_device_token_status(args.credentials_file)
+    reason = _auth_refresh_reason(device_token_status, force=bool(args.force))
+    warnings = list(device_token_status.get("warnings", []))
+    if reason == "remote_refresh_unavailable":
+        warnings.append(
+            "Remote token refresh is not implemented yet; request fresh credentials from browser.lexmount.cn when device-code login is available."
+        )
+
+    _success(
+        command,
+        credentials_file=device_token_status.get("path"),
+        path_source=device_token_status.get("path_source"),
+        present=device_token_status.get("present", False),
+        valid=device_token_status.get("valid", False),
+        expired=device_token_status.get("expired"),
+        refresh_needed=device_token_status.get("refresh_needed"),
+        has_refresh_token=device_token_status.get("has_refresh_token", False),
+        force_requested=bool(args.force),
+        refresh_requested=reason != "refresh_not_needed" or bool(args.force),
+        refresh_available=False,
+        refreshed=False,
+        reason=reason,
+        runtime_auth_usable=False,
+        warnings=warnings,
+        device_token=device_token_status,
+        next_steps=_auth_refresh_next_steps(
+            reason=reason,
+            device_token_status=device_token_status,
+        ),
+    )
+
+
 def cmd_auth_logout(args: argparse.Namespace) -> None:
     command = "auth.logout"
     path, path_source = _device_token_credentials_path(args.credentials_file)
@@ -7267,6 +7358,24 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Scope that should be present in the local device token. May be repeated.",
     )
     auth_token_info.set_defaults(func=cmd_auth_token_info)
+
+    auth_refresh = auth_subparsers.add_parser(
+        "refresh",
+        help="Inspect local device-token refresh state without revealing token values",
+    )
+    auth_refresh.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
+    auth_refresh.add_argument(
+        "--force",
+        action="store_true",
+        help="Request refresh even when local metadata does not need it. Current implementation reports remote refresh as pending.",
+    )
+    auth_refresh.set_defaults(func=cmd_auth_refresh)
 
     auth_logout = auth_subparsers.add_parser(
         "logout",

@@ -187,6 +187,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "doctor" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
+    assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
     assert (
         "browser-cli context pick"
@@ -196,6 +197,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     for name in (
         "commands",
         "auth.login",
+        "auth.refresh",
         "doctor",
         "session.create",
         "context.pick",
@@ -1034,6 +1036,131 @@ def test_auth_token_info_reports_missing_credentials_file(
         "missing_scopes": [],
         "satisfied": True,
     }
+    assert payload["next_steps"][0] == "No local device-token metadata was found."
+
+
+def test_auth_refresh_reports_remote_refresh_pending_without_revealing_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "api_base_url": "https://api.lexmount.cn",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-25T23:59:00Z",
+                "scopes": ["browser.sessions:create"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "refresh", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert payload["command"] == "auth.refresh"
+    assert payload["credentials_file"] == str(credentials_file)
+    assert payload["path_source"] == "argument"
+    assert payload["present"] is True
+    assert payload["valid"] is False
+    assert payload["expired"] is True
+    assert payload["refresh_needed"] is True
+    assert payload["has_refresh_token"] is True
+    assert payload["force_requested"] is False
+    assert payload["refresh_requested"] is True
+    assert payload["refresh_available"] is False
+    assert payload["refreshed"] is False
+    assert payload["reason"] == "remote_refresh_unavailable"
+    assert payload["runtime_auth_usable"] is False
+    assert "Device token is expired." in payload["warnings"]
+    assert "Remote token refresh is not implemented yet" in payload["warnings"][-1]
+    assert payload["device_token"]["token_id"] == "tok_123"
+    assert payload["next_steps"][0] == "Local device-token metadata is expired."
+
+
+def test_auth_refresh_reports_not_needed_without_force(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "refresh", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert payload["valid"] is True
+    assert payload["refresh_needed"] is False
+    assert payload["refresh_requested"] is False
+    assert payload["refresh_available"] is False
+    assert payload["refreshed"] is False
+    assert payload["reason"] == "refresh_not_needed"
+    assert payload["warnings"] == []
+    assert "does not currently need refresh" in payload["next_steps"][0]
+
+
+def test_auth_refresh_missing_credentials_file_is_actionable(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    credentials_file = tmp_path / "missing.json"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "refresh", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.refresh"
+    assert payload["credentials_file"] == str(credentials_file)
+    assert payload["path_source"] == "argument"
+    assert payload["present"] is False
+    assert payload["valid"] is False
+    assert payload["expired"] is None
+    assert payload["refresh_needed"] is None
+    assert payload["has_refresh_token"] is False
+    assert payload["refresh_requested"] is True
+    assert payload["refresh_available"] is False
+    assert payload["refreshed"] is False
+    assert payload["reason"] == "missing_credentials_file"
+    assert payload["warnings"] == []
+    assert payload["device_token"]["present"] is False
     assert payload["next_steps"][0] == "No local device-token metadata was found."
 
 

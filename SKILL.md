@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/logout/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, states, roles, URLs, load state, network idle, text, or form values, click selectors or indexed matches, type, focus, blur, clear, inspect form fields, inspect element state and geometry, set form/file values, check or uncheck labeled controls, dispatch DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -42,6 +42,7 @@ Use local auth helpers instead of handling secrets in chat:
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth token-info --required-scope browser:actions
+browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
@@ -63,12 +64,15 @@ a trusted local terminal.
 `auth status` reports `auth_source`, `runtime_auth_usable`, and safe
 `device_token` metadata when a local scoped-token credentials file exists or
 `--credentials-file` is passed. Use `auth token-info --required-scope <scope>`
-to check scoped-token coverage. Use `auth logout --credentials-file <path>` to
-remove local device-token metadata without changing environment variables;
-`--revoke` only reports remote revoke pending until browser.lexmount.cn exposes
-the revoke API. These commands never report access or refresh token values.
-Until bearer-token runtime support lands, continue to require env API-key
-credentials for browser actions when `runtime_auth_usable` is false.
+to check scoped-token coverage. Use `auth refresh --credentials-file <path>` to
+inspect `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`,
+and `reason`; remote refresh is pending until browser.lexmount.cn exposes the
+refresh API. Use `auth logout --credentials-file <path>` to remove local
+device-token metadata without changing environment variables; `--revoke` only
+reports remote revoke pending until browser.lexmount.cn exposes the revoke API.
+These commands never report access or refresh token values. Until bearer-token
+runtime support lands, continue to require env API-key credentials for browser
+actions when `runtime_auth_usable` is false.
 
 After credentials are configured, run:
 
@@ -167,6 +171,7 @@ Authentication:
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth token-info --required-scope browser:actions
+browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
@@ -403,11 +408,14 @@ not report API key values. For `auth login`, prefer the `handoff` object's
 `secret_policy` fields. If `--open` was used, inspect `open_result`; if
 `opened` is false, show the returned URL or fallback login guidance without
 blocking on the local browser.
-For device-token metadata in `auth status`, `auth token-info`, `auth logout`,
-or `doctor`, report `auth_source`, `runtime_auth_usable`,
+For device-token metadata in `auth status`, `auth token-info`, `auth refresh`,
+`auth logout`, or `doctor`, report `auth_source`, `runtime_auth_usable`,
 `device_token.valid`, `device_token.expired`, `device_token.refresh_needed`,
 `device_token.scopes`, and `scope_check`; do not report token values. For
-`auth logout`, report `deleted`, `present_before`, `present_after`,
+`auth refresh`, report `refresh_needed`, `has_refresh_token`,
+`refresh_available`, `refreshed`, and `reason`; it does not call a remote
+refresh endpoint yet. For `auth logout`, report `deleted`, `present_before`,
+`present_after`,
 `revoke_requested`, `revoke_available`, and `warnings`; it does not unset env
 vars. Do not start browser actions from a device token while
 `runtime_auth_usable` is false.

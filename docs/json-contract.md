@@ -59,10 +59,14 @@ Default behavior:
   `api_key`.
 - Diagnostic and auth commands should report whether credentials exist without
   printing secret values by default.
-- `auth status`, `auth token-info`, `auth logout`, and `doctor` may report
-  local `device_token` metadata such as project id, token id, scopes,
+- `auth status`, `auth token-info`, `auth refresh`, `auth logout`, and `doctor`
+  may report local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh
   token values.
+- `auth refresh` may report `refresh_needed`, `has_refresh_token`,
+  `refresh_available`, `refreshed`, and `reason`, but must not print token
+  values. Until the remote refresh endpoint exists, it reports
+  `refresh_available=false`.
 - `doctor --smoke-session` may report a temporary `session_id` and cleanup
   status, but must not print direct connect URLs or token values.
 - `auth logout` may report local credential file deletion metadata, but must
