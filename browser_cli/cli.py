@@ -37,6 +37,8 @@ from lex_browser_runtime.browser.models import (
 
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
+CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle"}
+CONTEXT_LOCKED_STATUSES = {"locked", "busy", "in_use", "in-use", "active", "running"}
 
 
 def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
@@ -93,6 +95,11 @@ def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         raise argparse.ArgumentTypeError("metadata JSON must decode to an object")
     return value
+
+
+def _parse_filter_metadata_json(raw: str | None) -> dict[str, Any]:
+    parsed = _parse_metadata_json(raw)
+    return parsed or {}
 
 
 def _normalize_context_mode(value: str) -> str:
@@ -168,6 +175,70 @@ def _doctor_check(
     check = {"name": name, "status": status, "message": message}
     check.update(details)
     return check
+
+
+def _normalize_status(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value).strip().lower()
+
+
+def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
+    status = _normalize_status(context.get("status"))
+    if status in CONTEXT_REUSABLE_STATUSES:
+        return {
+            "status": context.get("status"),
+            "reusable": True,
+            "locked": False,
+            "reason": "status_reusable",
+        }
+    if status in CONTEXT_LOCKED_STATUSES:
+        return {
+            "status": context.get("status"),
+            "reusable": False,
+            "locked": True,
+            "reason": "status_locked",
+        }
+    if status is None:
+        return {
+            "status": None,
+            "reusable": False,
+            "locked": False,
+            "reason": "status_missing",
+        }
+    return {
+        "status": context.get("status"),
+        "reusable": False,
+        "locked": False,
+        "reason": "status_not_reusable",
+    }
+
+
+def _metadata_matches(
+    metadata: dict[str, Any] | None,
+    expected: dict[str, Any],
+) -> bool:
+    if not expected:
+        return True
+    if not isinstance(metadata, dict):
+        return False
+    return all(metadata.get(key) == value for key, value in expected.items())
+
+
+def _context_pick_candidate(
+    context: dict[str, Any],
+    metadata_filter: dict[str, Any],
+) -> dict[str, Any]:
+    reuse = _context_reuse_state(context)
+    metadata_match = _metadata_matches(context.get("metadata"), metadata_filter)
+    return {
+        "context_id": context.get("context_id"),
+        "status": context.get("status"),
+        "metadata_match": metadata_match,
+        "reusable": reuse["reusable"],
+        "locked": reuse["locked"],
+        "reason": reuse["reason"] if metadata_match else "metadata_mismatch",
+    }
 
 
 def _env_value_status(
@@ -308,6 +379,90 @@ def cmd_context_get(args: argparse.Namespace) -> None:
     except Exception as exc:
         _failure_from_exception(command, exc)
     _success(command, context=_model_payload(context))
+
+
+def cmd_context_status(args: argparse.Namespace) -> None:
+    command = "context.status"
+    try:
+        context = LexmountBrowserAdmin().get_context(args.context_id)
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    payload = _model_payload(context)
+    reuse = _context_reuse_state(payload)
+    _success(
+        command,
+        context_id=payload.get("context_id") or args.context_id,
+        reusable=reuse["reusable"],
+        locked=reuse["locked"],
+        reuse=reuse,
+        context=payload,
+    )
+
+
+def cmd_context_pick(args: argparse.Namespace) -> None:
+    command = "context.pick"
+    metadata_filter = args.metadata_filter
+    admin = LexmountBrowserAdmin()
+    try:
+        result = admin.list_contexts(
+            status=args.status,
+            limit=args.limit,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    payload = _model_payload(result)
+    contexts = payload.get("contexts", [])
+    candidates = [
+        _context_pick_candidate(context, metadata_filter) for context in contexts
+    ]
+    selected_context: dict[str, Any] | None = None
+    for context, candidate in zip(contexts, candidates, strict=True):
+        if candidate["metadata_match"] and candidate["reusable"]:
+            selected_context = context
+            break
+
+    if selected_context is not None:
+        _success(
+            command,
+            selected=True,
+            created=False,
+            context_id=selected_context.get("context_id"),
+            context=selected_context,
+            reuse=_context_reuse_state(selected_context),
+            checked=len(contexts),
+            candidates=candidates,
+            metadata_filter=metadata_filter,
+        )
+
+    if args.create_if_missing:
+        try:
+            context = admin.create_context(metadata=metadata_filter or None)
+        except Exception as exc:
+            _failure_from_exception(command, exc)
+        created_context = _model_payload(context)
+        _success(
+            command,
+            selected=True,
+            created=True,
+            context_id=created_context.get("context_id"),
+            context=created_context,
+            reuse=_context_reuse_state(created_context),
+            checked=len(contexts),
+            candidates=candidates,
+            metadata_filter=metadata_filter,
+        )
+
+    _failure(
+        command,
+        "no_available_context",
+        "No reusable context matched the requested filters.",
+        selected=False,
+        created=False,
+        checked=len(contexts),
+        candidates=candidates,
+        metadata_filter=metadata_filter,
+    )
 
 
 def cmd_context_delete(args: argparse.Namespace) -> None:
@@ -3510,6 +3665,36 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_get = context_subparsers.add_parser("get", help="Get one context")
     context_get.add_argument("--context-id", required=True)
     context_get.set_defaults(func=cmd_context_get)
+
+    context_status = context_subparsers.add_parser(
+        "status",
+        help="Check whether one context is reusable or locked",
+    )
+    context_status.add_argument("--context-id", required=True)
+    context_status.set_defaults(func=cmd_context_status)
+
+    context_pick = context_subparsers.add_parser(
+        "pick",
+        help="Pick the first reusable context, optionally creating one",
+    )
+    context_pick.add_argument(
+        "--status",
+        help="Optional server-side status filter before local reusable checks",
+    )
+    context_pick.add_argument("--limit", type=int, default=20)
+    context_pick.add_argument(
+        "--metadata-json",
+        dest="metadata_filter",
+        type=_parse_filter_metadata_json,
+        default={},
+        help="JSON object that must match top-level context metadata fields",
+    )
+    context_pick.add_argument(
+        "--create-if-missing",
+        action="store_true",
+        help="Create a context with the metadata filter when none is reusable.",
+    )
+    context_pick.set_defaults(func=cmd_context_pick)
 
     context_delete = context_subparsers.add_parser("delete", help="Delete context")
     context_delete.add_argument("--context-id", required=True)

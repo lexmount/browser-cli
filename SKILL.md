@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -76,9 +76,13 @@ Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
 ```bash
-browser-cli context create
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
 browser-cli session create --context-id <context_id> --context-mode read_write
 ```
+
+Use `context status --context-id <context_id>` before reuse when the context id
+came from older notes. Reuse only when `reusable` is true; if `locked` is true,
+pick or create a different context.
 
 Always close sessions created for temporary automation unless the user asks to
 keep them open.
@@ -117,6 +121,9 @@ Context lifecycle:
 browser-cli context create
 browser-cli context list
 browser-cli context get --context-id <context_id>
+browser-cli context status --context-id <context_id>
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
 browser-cli context delete --context-id <context_id>
 ```
 

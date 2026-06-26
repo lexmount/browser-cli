@@ -48,6 +48,16 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "do not report API key values" in normalized
 
 
+def test_skill_uses_context_pick_for_persistent_login_state() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "pick reusable contexts, or detect locked contexts" in normalized
+    assert "browser-cli context pick --metadata-json" in normalized
+    assert "browser-cli context status --context-id <context_id>" in normalized
+    assert "Reuse only when `reusable` is true" in normalized
+    assert "if `locked` is true, pick or create a different context" in normalized
+
+
 def test_skill_lists_selector_and_input_actions() -> None:
     normalized = _normalized_skill_text()
 

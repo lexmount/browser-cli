@@ -565,6 +565,222 @@ def test_context_commands_emit_json(
     ]
 
 
+def test_context_status_reports_reusable_and_locked_state(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def get_context(self, context_id: str) -> DummyModel:
+            return DummyModel({"context_id": context_id, "status": "locked"})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "status", "--context-id", "ctx1"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "context.status"
+    assert payload["context_id"] == "ctx1"
+    assert payload["reusable"] is False
+    assert payload["locked"] is True
+    assert payload["reuse"] == {
+        "status": "locked",
+        "reusable": False,
+        "locked": True,
+        "reason": "status_locked",
+    }
+
+
+def test_context_pick_selects_first_available_metadata_match(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            observed.update({"status": status, "limit": limit})
+            return DummyModel(
+                {
+                    "count": 3,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-locked",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex"},
+                        },
+                        {
+                            "context_id": "ctx-other",
+                            "status": "available",
+                            "metadata": {"purpose": "manual"},
+                        },
+                        {
+                            "context_id": "ctx-ready",
+                            "status": "available",
+                            "metadata": {"purpose": "codex"},
+                        },
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--limit",
+                "10",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed == {"status": None, "limit": 10}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "context.pick"
+    assert payload["selected"] is True
+    assert payload["created"] is False
+    assert payload["context_id"] == "ctx-ready"
+    assert payload["reuse"]["reusable"] is True
+    assert payload["metadata_filter"] == {"purpose": "codex"}
+    assert payload["candidates"] == [
+        {
+            "context_id": "ctx-locked",
+            "status": "locked",
+            "metadata_match": True,
+            "reusable": False,
+            "locked": True,
+            "reason": "status_locked",
+        },
+        {
+            "context_id": "ctx-other",
+            "status": "available",
+            "metadata_match": False,
+            "reusable": True,
+            "locked": False,
+            "reason": "metadata_mismatch",
+        },
+        {
+            "context_id": "ctx-ready",
+            "status": "available",
+            "metadata_match": True,
+            "reusable": True,
+            "locked": False,
+            "reason": "status_reusable",
+        },
+    ]
+
+
+def test_context_pick_can_create_when_no_reusable_context_matches(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex"},
+                        }
+                    ],
+                }
+            )
+
+        def create_context(self, *, metadata: dict[str, Any] | None) -> DummyModel:
+            calls.append(("create", {"metadata": metadata}))
+            return DummyModel(
+                {
+                    "context_id": "ctx-new",
+                    "status": "available",
+                    "metadata": metadata,
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+                "--create-if-missing",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["selected"] is True
+    assert payload["created"] is True
+    assert payload["context_id"] == "ctx-new"
+    assert payload["reuse"]["reusable"] is True
+    assert calls == [
+        ("list", {"status": None, "limit": 20}),
+        ("create", {"metadata": {"purpose": "codex"}}),
+    ]
+
+
+def test_context_pick_fails_when_no_reusable_context_matches(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex"},
+                        }
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "pick", "--metadata-json", '{"purpose":"codex"}'])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "context.pick"
+    assert payload["error"] == "no_available_context"
+    assert payload["selected"] is False
+    assert payload["checked"] == 1
+    assert payload["candidates"][0]["reason"] == "status_locked"
+
+
 def test_compatibility_aliases_still_work(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

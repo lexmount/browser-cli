@@ -153,6 +153,9 @@ browser-cli context create
 browser-cli context create --metadata-json '{"purpose":"codex"}'
 browser-cli context list --limit 20
 browser-cli context get --context-id <context_id>
+browser-cli context status --context-id <context_id>
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
 browser-cli context delete --context-id <context_id>
 ```
 
@@ -347,8 +350,12 @@ Common agent recipes:
 - Final evidence: `screenshot`, then close the session unless it should stay
   open.
 
-Use `context create` plus `session create --context-id <context_id>` when login
-state or cookies should survive between sessions.
+Use `context pick --metadata-json '{"purpose":"codex-login"}'` plus
+`session create --context-id <context_id> --context-mode read_write` when login
+state or cookies should survive between sessions. `context pick` evaluates
+candidate contexts and only selects reusable statuses such as `available`; it
+reports `locked: true` for locked/busy/in-use contexts. Use
+`--create-if-missing` when a new persistent context should be created.
 
 ## Codex Skill
 
