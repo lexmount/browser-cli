@@ -180,7 +180,9 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
 def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     text = JSON_CONTRACT.read_text()
 
+    assert "`missing_env`" in text
     assert "`repair_plan`" in text
+    assert "`fix` object" in text
     assert "`connect_from_codex`" in text
     assert "`open_command`" in text
 

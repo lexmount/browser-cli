@@ -113,6 +113,9 @@ Default behavior:
   may report local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh
   token values.
+- When env API-key credentials are incomplete, `auth status` reports
+  `missing_env` plus a `fix` object with safe Connect from Codex setup commands
+  and no API key values.
 - `auth refresh` may report `refresh_needed`, `has_refresh_token`,
   `refresh_available`, `refreshed`, and `reason`, but must not print token
   values. Until the remote refresh endpoint exists, it reports

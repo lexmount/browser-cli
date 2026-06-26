@@ -147,6 +147,9 @@ local terminal.
 `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or `--credentials-file` without printing
 access or refresh token values. Until bearer-token runtime support lands,
 `runtime_auth_usable` is true only when env API-key credentials are configured.
+When env credentials are incomplete, `auth status` also reports `missing_env`
+and a `fix` object with safe `browser-cli auth login` / Connect from Codex setup
+commands.
 Use `auth token-info --required-scope <scope>` to check scoped-token coverage.
 Use `auth refresh --credentials-file <path>` to inspect whether local
 device-token metadata needs refresh. It currently reports `refresh_available:

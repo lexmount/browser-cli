@@ -1326,6 +1326,8 @@ def test_auth_status_reports_env_without_revealing_api_key(
     assert payload["ok"] is True
     assert payload["command"] == "auth.status"
     assert payload["configured"] is True
+    assert payload["missing_env"] == []
+    assert "fix" not in payload
     assert payload["api_key"] == {
         "present": True,
         "masked_value": "***",
@@ -1341,6 +1343,44 @@ def test_auth_status_reports_env_without_revealing_api_key(
     }
     assert payload["region"]["value"] == "cn"
     assert "browser-cli doctor --json" in payload["next_steps"][0]
+
+
+def test_auth_status_reports_connect_from_codex_fix_when_env_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "status-project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert payload["ok"] is True
+    assert payload["configured"] is False
+    assert payload["runtime_auth_usable"] is False
+    assert payload["missing_env"] == ["LEXMOUNT_API_KEY"]
+    assert payload["auth_source"] == "missing"
+    assert "status-project" in serialized
+    assert "api_key=" not in serialized
+    fix = payload["fix"]
+    assert fix["code"] == "configure_credentials"
+    assert fix["env"] == ["LEXMOUNT_API_KEY"]
+    assert fix["commands"] == [
+        "browser-cli auth login",
+        "browser-cli auth export-env",
+        "browser-cli auth status",
+        "browser-cli doctor --json",
+    ]
+    connect = fix["connect_from_codex"]
+    assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
+    assert connect["project_id"] == "status-project"
+    assert connect["project_id_source"] == "env"
+    assert connect["open_command"] == "browser-cli auth login --open"
+    assert connect["verification"]["doctor_command"] == "browser-cli doctor --json"
 
 
 def test_auth_status_reports_device_token_file_without_revealing_tokens(

@@ -9636,30 +9636,41 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
     configured = bool(api_key and project_id)
+    missing_env = [
+        name
+        for name, value in (
+            ("LEXMOUNT_API_KEY", api_key),
+            ("LEXMOUNT_PROJECT_ID", project_id),
+        )
+        if not value
+    ]
     device_token_status = _local_device_token_status(args.credentials_file)
     auth_source = _auth_source(
         env_configured=configured,
         device_token_status=device_token_status,
     )
 
-    _success(
-        command,
-        configured=configured,
-        auth_source=auth_source,
-        runtime_auth_usable=configured,
-        api_key=_env_value_status("LEXMOUNT_API_KEY", secret=True),
-        project_id=_env_value_status("LEXMOUNT_PROJECT_ID"),
-        base_url=_env_value_status(
+    payload: dict[str, Any] = {
+        "configured": configured,
+        "auth_source": auth_source,
+        "runtime_auth_usable": configured,
+        "missing_env": missing_env,
+        "api_key": _env_value_status("LEXMOUNT_API_KEY", secret=True),
+        "project_id": _env_value_status("LEXMOUNT_PROJECT_ID"),
+        "base_url": _env_value_status(
             "LEXMOUNT_BASE_URL",
             default=DEFAULT_LEXMOUNT_BASE_URL,
         ),
-        region=_env_value_status("LEXMOUNT_REGION"),
-        device_token=device_token_status,
-        next_steps=_auth_next_steps(
+        "region": _env_value_status("LEXMOUNT_REGION"),
+        "device_token": device_token_status,
+        "next_steps": _auth_next_steps(
             configured=configured,
             device_token_status=device_token_status,
         ),
-    )
+    }
+    if missing_env:
+        payload["fix"] = _credential_doctor_fix(*missing_env)
+    _success(command, **payload)
 
 
 def cmd_auth_token_info(args: argparse.Namespace) -> None:

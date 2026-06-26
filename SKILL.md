@@ -77,8 +77,10 @@ a trusted local terminal.
 
 `auth status` reports `auth_source`, `runtime_auth_usable`, and safe
 `device_token` metadata when a local scoped-token credentials file exists or
-`--credentials-file` is passed. Use `auth token-info --required-scope <scope>`
-to check scoped-token coverage. Use `auth refresh --credentials-file <path>` to
+`--credentials-file` is passed. When env credentials are incomplete, read
+`missing_env` and the `fix` object instead of inventing setup steps. Use
+`auth token-info --required-scope <scope>` to check scoped-token coverage. Use
+`auth refresh --credentials-file <path>` to
 inspect `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`,
 and `reason`; remote refresh is pending until browser.lexmount.cn exposes the
 refresh API. Use `auth logout --credentials-file <path>` to remove local
