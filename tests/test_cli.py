@@ -169,6 +169,78 @@ def test_json_compatibility_flag_is_accepted_after_subcommands(
         assert payload["command"] == command
 
 
+def test_commands_catalog_lists_machine_readable_agent_entrypoints(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    commands = {command["name"]: command for command in payload["commands"]}
+    assert payload["ok"] is True
+    assert payload["command"] == "commands"
+    assert payload["schema_version"] == 1
+    assert payload["command_count"] == len(payload["commands"])
+    assert "action" in payload["groups"]
+    assert "auth" in payload["groups"]
+    assert "doctor" in payload["groups"]
+    assert payload["json_output"]["always_json"] is True
+    assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
+    assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
+    assert (
+        "browser-cli context pick"
+        in payload["agent_entrypoints"]["persistent_login_state"][0]
+    )
+
+    for name in (
+        "commands",
+        "auth.login",
+        "doctor",
+        "session.create",
+        "context.pick",
+        "action.open-url",
+        "action.click-role",
+        "action.fill-label",
+        "action.interactive-snapshot",
+        "direct-url",
+    ):
+        assert name in commands
+
+    open_url = commands["action.open-url"]
+    assert open_url["browser_target"] == {
+        "required": True,
+        "exactly_one_of": ["--connect-url", "--direct-url", "--session-id"],
+    }
+    assert "--url" in open_url["required_options"]
+    assert any(
+        "--smoke-session" in option["flags"] for option in commands["doctor"]["options"]
+    )
+    assert "super-secret-key" not in json.dumps(payload)
+
+
+def test_commands_catalog_filters_group_and_names_only(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--group", "action", "--names-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": "commands",
+        "schema_version": 1,
+        "group": "action",
+        "command_count": len(payload["commands"]),
+        "commands": payload["commands"],
+    }
+    assert "action.open-url" in payload["commands"]
+    assert "action.interactive-snapshot" in payload["commands"]
+    assert "auth.login" not in payload["commands"]
+    assert all(command.startswith("action.") for command in payload["commands"])
+
+
 def _checks_by_name(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {check["name"]: check for check in payload["checks"]}
 

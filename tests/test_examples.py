@@ -21,6 +21,9 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     text = (REPO_ROOT / "examples" / "agent-playbook.md").read_text()
 
     assert "browser-cli doctor --json" in text
+    assert "browser-cli commands --names-only" in text
+    assert "browser-cli commands --group action" in text
+    assert "browser_target.exactly_one_of" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "ready_for_browser_actions" in text
     assert "browser_smoke_session.status" in text

@@ -37,6 +37,11 @@ Stable fields:
 Command-specific fields may be added over time. Agents should check `ok` and
 `command` first, then inspect command-specific fields.
 
+`browser-cli commands` is the machine-readable command discovery surface. It
+returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
+`secret_policy`, and `agent_entrypoints`; `--names-only` returns compact command
+names, and `--group <name>` filters by command group.
+
 ## Exit Codes
 
 - Successful commands exit with code `0`.
@@ -97,6 +102,8 @@ Browser actions must receive exactly one target:
 
 Passing none or more than one target returns a JSON error. Prefer `--session-id`
 for normal workflows because it avoids printing direct browser URLs.
+The `commands` catalog marks action entries with `browser_target.exactly_one_of`
+so agents can discover this requirement without parsing help text.
 
 ## Compatibility
 

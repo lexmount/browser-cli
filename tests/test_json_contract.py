@@ -71,6 +71,35 @@ def test_success_output_contract_for_session_list(
     assert output.endswith("}\n")
 
 
+def test_commands_catalog_output_contract(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code, payload, _output = run_cli_json(
+        ["commands", "--group", "action"], capsys
+    )
+
+    assert exit_code == 0
+    assert payload["command"] == "commands"
+    assert payload["schema_version"] == 1
+    assert payload["group"] == "action"
+    assert payload["command_count"] == len(payload["commands"])
+    assert payload["json_output"]["always_json"] is True
+    assert "secret_policy" in payload
+    assert "agent_entrypoints" in payload
+    assert all(command["group"] == "action" for command in payload["commands"])
+    open_url = next(
+        command
+        for command in payload["commands"]
+        if command["name"] == "action.open-url"
+    )
+    assert open_url["browser_target"]["exactly_one_of"] == [
+        "--connect-url",
+        "--direct-url",
+        "--session-id",
+    ]
+    assert "--url" in open_url["required_options"]
+
+
 def test_error_output_contract_for_configuration_errors(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

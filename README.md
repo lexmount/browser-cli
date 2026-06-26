@@ -78,6 +78,7 @@ CLI for you:
 ```bash
 uv tool install git+https://github.com/lexmount/browser-cli.git
 browser-cli --help
+browser-cli commands --names-only
 ```
 
 For local development:
@@ -153,6 +154,19 @@ Use `browser-cli doctor --smoke-session` when you need stronger proof that the
 credentials can create and close a temporary browser session, not just reach the
 API.
 
+For machine-readable command discovery, run:
+
+```bash
+browser-cli commands
+browser-cli commands --names-only
+browser-cli commands --group action
+```
+
+`commands` returns the current parser-backed command catalog, option metadata,
+browser target requirements, JSON/secret policies, and agent entrypoint recipes.
+Agents should use it when deciding whether a first-class action exists before
+writing custom JavaScript.
+
 ## Commands
 
 Authentication:
@@ -184,6 +198,9 @@ or fall back to copying the URL when the browser cannot be opened.
 Diagnostics:
 
 ```bash
+browser-cli commands
+browser-cli commands --names-only
+browser-cli commands --group action
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session
@@ -324,6 +341,7 @@ Diagnostics, case files, and compatibility aliases:
 ```bash
 browser-cli auth status
 browser-cli auth export-env
+browser-cli commands
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
 browser-cli doctor
@@ -367,6 +385,13 @@ command-specific fields. Failure messages and payload fields are sanitized befor
 printing: `api_key`, token-like query parameters, and the current
 `LEXMOUNT_API_KEY` value are masked unless a success command explicitly uses a
 local reveal flag.
+
+`browser-cli commands` returns a parser-backed command catalog with
+`schema_version`, `groups`, `command_count`, `commands`, `json_output`,
+`secret_policy`, and `agent_entrypoints`. Use `--names-only` for compact command
+discovery and `--group action` when choosing a browser action. Action catalog
+entries include `browser_target.exactly_one_of` so agents can supply exactly one
+of `--session-id`, `--connect-url`, or `--direct-url`.
 
 Argument parsing errors also return JSON on stdout with exit code `2`:
 

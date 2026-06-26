@@ -37,6 +37,9 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
         in normalized
     )
     assert "browser-cli doctor" in normalized
+    assert "browser-cli commands --names-only" in normalized
+    assert "browser-cli commands --group action" in normalized
+    assert "`browser_target.exactly_one_of`" in normalized
     assert "browser-cli doctor --smoke-session" in normalized
     assert "browser-cli doctor --skip-api" in normalized
     assert "If setup is uncertain, run `browser-cli auth status`, then" in normalized

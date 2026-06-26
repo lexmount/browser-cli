@@ -15,6 +15,7 @@ Check that the CLI is available:
 
 ```bash
 browser-cli --help
+browser-cli commands --names-only
 ```
 
 If it is not installed, install it with:
@@ -105,6 +106,12 @@ Use `browser-cli doctor --skip-api` only for offline setup checks or when the
 user explicitly asks to avoid a live API call. Do not treat a skipped API check
 as proof that browser sessions will work.
 
+Run `browser-cli commands --names-only` or `browser-cli commands --group action`
+when the installed CLI version is uncertain or before writing custom JavaScript.
+Use the catalog's `browser_target.exactly_one_of`, `required_options`,
+`required_one_of`, `json_output`, `secret_policy`, and `agent_entrypoints`
+fields instead of parsing `--help` text.
+
 ## Workflow
 
 If setup is uncertain, run `browser-cli auth status`, then `browser-cli doctor --json`
@@ -170,6 +177,9 @@ browser-cli auth export-env --from-current --include-base-url
 Diagnostics:
 
 ```bash
+browser-cli commands
+browser-cli commands --names-only
+browser-cli commands --group action
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session
@@ -377,6 +387,9 @@ Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, `message`, and command-specific fields. Do not log revealed API keys.
 It is safe to include `--json` at the top level or after subcommands because it
 does not change output.
+For `commands`, use the parser-backed catalog to discover installed commands and
+options before guessing. Prefer `--names-only` for quick availability checks and
+`--group action` before choosing browser actions.
 Do not paste API keys, Project IDs, or full direct connect URLs into chat, docs,
 commits, screenshots, or test fixtures. By default, browser direct URLs are
 masked. Use reveal flags only for local debugging in a trusted shell.

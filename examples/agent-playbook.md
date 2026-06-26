@@ -9,6 +9,7 @@ Prefer CLI checks before writing browser code:
 
 ```bash
 browser-cli --help
+browser-cli commands --names-only
 browser-cli direct-url
 browser-cli session list
 ```
@@ -23,6 +24,15 @@ browser-cli doctor --json
 Use `ready_for_browser_actions` before starting browser work. If it is false,
 follow `repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance`
 instead of guessing setup repairs from raw error text.
+
+Use command discovery before guessing new action names:
+
+```bash
+browser-cli commands --group action
+```
+
+Read `required_options`, `required_one_of`, and `browser_target.exactly_one_of`
+from the catalog instead of parsing help text.
 
 When validating a fresh local setup, run the stronger live check:
 

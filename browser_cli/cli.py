@@ -191,6 +191,179 @@ def _add_json_compatibility_flag(parser: argparse.ArgumentParser) -> None:
                 _add_json_compatibility_flag(subparser)
 
 
+def _subparser_actions(
+    parser: argparse.ArgumentParser,
+) -> list[argparse._SubParsersAction[Any]]:
+    return [
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    ]
+
+
+def _preferred_option(action: argparse.Action) -> str | None:
+    if not action.option_strings or action.help is argparse.SUPPRESS:
+        return None
+    for option in action.option_strings:
+        if option.startswith("--"):
+            return option
+    return action.option_strings[0]
+
+
+def _catalog_default(value: Any) -> Any:
+    if value is argparse.SUPPRESS:
+        return None
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    return str(value)
+
+
+def _catalog_option(action: argparse.Action) -> dict[str, Any] | None:
+    if not action.option_strings or action.help is argparse.SUPPRESS:
+        return None
+    if isinstance(action, argparse._HelpAction):
+        return None
+
+    takes_value = not isinstance(
+        action,
+        argparse._StoreTrueAction | argparse._StoreFalseAction,
+    )
+    option: dict[str, Any] = {
+        "flags": list(action.option_strings),
+        "dest": action.dest,
+        "required": bool(getattr(action, "required", False)),
+        "takes_value": takes_value,
+    }
+    if action.help:
+        option["help"] = str(action.help)
+    choices = getattr(action, "choices", None)
+    if choices is not None:
+        option["choices"] = [str(choice) for choice in choices]
+    default = _catalog_default(getattr(action, "default", None))
+    if default is not None:
+        option["default"] = default
+    nargs = getattr(action, "nargs", None)
+    if nargs not in (None, 0):
+        option["nargs"] = nargs
+    if isinstance(action, argparse._AppendAction):
+        option["repeatable"] = True
+    return option
+
+
+def _catalog_required_one_of(
+    parser: argparse.ArgumentParser,
+) -> list[list[str]]:
+    groups: list[list[str]] = []
+    for group in parser._mutually_exclusive_groups:
+        if not group.required:
+            continue
+        options = [
+            option
+            for action in group._group_actions
+            if (option := _preferred_option(action)) is not None
+        ]
+        if options:
+            groups.append(options)
+    return groups
+
+
+def _catalog_leaf_commands(
+    parser: argparse.ArgumentParser,
+) -> list[dict[str, Any]]:
+    subparser_actions = _subparser_actions(parser)
+    if subparser_actions:
+        commands: list[dict[str, Any]] = []
+        for subparser_action in subparser_actions:
+            for subparser in subparser_action.choices.values():
+                commands.extend(_catalog_leaf_commands(subparser))
+        return commands
+
+    name = _command_from_prog(parser.prog)
+    path = name.split(".")
+    options = [
+        option
+        for action in parser._actions
+        if (option := _catalog_option(action)) is not None
+    ]
+    required_options = [
+        option
+        for action in parser._actions
+        if getattr(action, "required", False)
+        and (option := _preferred_option(action)) is not None
+    ]
+    target_options = {
+        "--session-id",
+        "--connect-url",
+        "--direct-url",
+    }
+    option_flags = {
+        flag
+        for option in options
+        for flag in option.get("flags", [])
+        if isinstance(flag, str)
+    }
+    command: dict[str, Any] = {
+        "name": name,
+        "path": path,
+        "group": path[0],
+        "usage": parser.format_usage().strip(),
+        "options": options,
+        "required_options": required_options,
+        "required_one_of": _catalog_required_one_of(parser),
+    }
+    if target_options.intersection(option_flags):
+        command["browser_target"] = {
+            "required": True,
+            "exactly_one_of": sorted(target_options.intersection(option_flags)),
+        }
+    return [command]
+
+
+def _command_catalog() -> dict[str, Any]:
+    parser = build_parser()
+    commands = _catalog_leaf_commands(parser)
+    groups = _dedupe_preserving_order([str(command["group"]) for command in commands])
+    return {
+        "schema_version": 1,
+        "groups": groups,
+        "command_count": len(commands),
+        "commands": commands,
+        "json_output": {
+            "always_json": True,
+            "json_flag": "accepted as a compatibility no-op at the top level and after subcommands",
+            "argument_errors": "emit JSON with error=argument_error and usage",
+        },
+        "secret_policy": {
+            "default_masking": True,
+            "never_paste": [
+                "LEXMOUNT_API_KEY",
+                "access_token",
+                "refresh_token",
+                "full direct connect URLs containing api_key",
+            ],
+        },
+        "agent_entrypoints": {
+            "setup": [
+                "browser-cli auth status",
+                "browser-cli auth login",
+                "browser-cli auth export-env",
+                "browser-cli doctor --json",
+                "browser-cli doctor --smoke-session",
+            ],
+            "one_off_page_task": [
+                "browser-cli session create",
+                "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action interactive-snapshot --session-id <session_id>",
+                "browser-cli session close --session-id <session_id>",
+            ],
+            "persistent_login_state": [
+                'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing',
+                'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
+            ],
+        },
+    }
+
+
 def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
     if not raw:
         return None
@@ -5936,6 +6109,32 @@ def cmd_direct_url(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_commands(args: argparse.Namespace) -> None:
+    command = "commands"
+    catalog = _command_catalog()
+    commands = catalog["commands"]
+    if args.group:
+        commands = [
+            item for item in commands if str(item.get("group")) == str(args.group)
+        ]
+        catalog["groups"] = _dedupe_preserving_order(
+            [str(item["group"]) for item in commands]
+        )
+    catalog["commands"] = commands
+    catalog["command_count"] = len(commands)
+
+    if args.names_only:
+        _success(
+            command,
+            schema_version=catalog["schema_version"],
+            group=args.group,
+            command_count=len(commands),
+            commands=[str(item["name"]) for item in commands],
+        )
+
+    _success(command, group=args.group, **catalog)
+
+
 def cmd_case_validate(args: argparse.Namespace) -> None:
     command = "case.validate"
     try:
@@ -7186,6 +7385,23 @@ def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     doctor.set_defaults(func=cmd_doctor)
 
 
+def _add_commands_command(subparsers: argparse._SubParsersAction[Any]) -> None:
+    commands = subparsers.add_parser(
+        "commands",
+        help="Print a machine-readable browser-cli command catalog",
+    )
+    commands.add_argument(
+        "--group",
+        help="Only include commands from one group, such as action, auth, or session.",
+    )
+    commands.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Return only command names for compact agent discovery.",
+    )
+    commands.set_defaults(func=cmd_commands)
+
+
 def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     prepare = subparsers.add_parser(
         "prepare",
@@ -7241,6 +7457,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_case_commands(subparsers)
     _add_auth_commands(subparsers)
     _add_doctor_command(subparsers)
+    _add_commands_command(subparsers)
     _add_alias_commands(subparsers)
     _add_json_compatibility_flag(parser)
 
