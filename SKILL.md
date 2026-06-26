@@ -115,3 +115,15 @@ Run `browser-cli doctor --json` before browser work when setup may be stale. If
 Use `browser-cli doctor --smoke-session --json` only when onboarding or
 debugging session lifecycle issues; it creates and closes a temporary browser
 session.
+
+For smoke-session checks:
+
+1. Prefer plain `browser-cli doctor --json` for routine readiness checks.
+2. Use `browser-cli doctor --smoke-session --json` only to prove session create
+   and close permissions, quota, and project access.
+3. If the smoke check fails after creating a session, inspect `session_smoke` and
+   follow `next_steps`; there may be a temporary session that needs cleanup.
+4. Do not run smoke checks in tight loops or before every action because they
+   consume browser session capacity.
+5. Use `--smoke-browser-mode light` unless the user explicitly needs another
+   browser mode verified.
