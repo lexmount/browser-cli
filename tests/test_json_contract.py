@@ -149,6 +149,8 @@ def test_json_contract_documents_agent_workflows() -> None:
 
     assert "`--workflows-only`" in text
     assert "`--workflow <id>`" in text
+    assert "`error=unknown_group`" in text
+    assert "`available_groups`" in text
     assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
     assert "Connect from Codex auth" in text

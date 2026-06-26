@@ -10095,6 +10095,15 @@ def cmd_commands(args: argparse.Namespace) -> None:
     catalog = _command_catalog()
     commands = catalog["commands"]
     if args.group:
+        available_groups = [str(group) for group in catalog["groups"]]
+        if str(args.group) not in available_groups:
+            _failure(
+                command,
+                "unknown_group",
+                f"Unknown command group: {args.group}",
+                group=args.group,
+                available_groups=available_groups,
+            )
         commands = [
             item for item in commands if str(item.get("group")) == str(args.group)
         ]

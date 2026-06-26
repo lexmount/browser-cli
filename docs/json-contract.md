@@ -47,6 +47,8 @@ without parsing text output.
 returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`; `--names-only`
 returns compact command names, and `--group <name>` filters by command group.
+Unknown command groups fail as JSON with `error=unknown_group` and
+`available_groups`.
 `--workflows-only` returns a compact payload with `workflow_count`,
 `agent_workflows`, and `agent_entrypoints` without the large `commands` array.
 `--workflow <id>` returns one workflow as `workflow_id` and `workflow`; unknown

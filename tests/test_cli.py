@@ -419,6 +419,23 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     ]
 
 
+def test_commands_catalog_fails_unknown_group_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--group", "missing"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "commands"
+    assert payload["error"] == "unknown_group"
+    assert payload["group"] == "missing"
+    assert "action" in payload["available_groups"]
+    assert "auth" in payload["available_groups"]
+    assert "version" in payload["available_groups"]
+
+
 def test_commands_catalog_filters_group_and_names_only(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
