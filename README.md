@@ -126,7 +126,10 @@ browser-cli session create --context-id <context_id> --context-mode read_write
 context is `locked`, another active session is using it; close that session or
 create a new context before starting a read/write login-state session. Context
 JSON includes a `reuse` object with `can_reuse_now`, `reason`, `next_steps`, and
-`recommended_session_command`.
+`recommended_session_command`. `context resolve` also returns a top-level
+`decision` object with `action`, `reason`, `can_start_session`,
+`should_create_context`, `should_close_session`, and `selected_context_id` so
+agents can branch without inferring from free-form text.
 
 Browser actions:
 

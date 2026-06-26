@@ -57,16 +57,20 @@ browser-cli session create --context-id <context_id> --context-mode read_write
 `context resolve` chooses an `available` context or creates one when requested.
 Do not start a read/write session with a `locked` context. If `resolved` is
 false, follow the returned `next_steps`, usually closing the active session that
-holds the context or creating a new context.
+holds the context or creating a new context. Parse the top-level `decision`
+object first: start a session only when `decision.can_start_session` is true;
+create a context when `decision.should_create_context` is true; close a session
+only when `decision.should_close_session` is true and it belongs to the current
+task.
 
 For persistent-login tasks, prefer this decision flow:
 
 1. Run `browser-cli context resolve --create-if-missing`.
-2. If `resolved` is true and `reuse.can_reuse_now` is true, use the returned
-   `context_id` or `recommended_session_command`.
-3. If `reuse.reason` is `context_locked`, do not reuse it for a new read/write
-   session. Close the active session only when it belongs to this task; otherwise
-   create a new context.
+2. If `decision.action` is `start_session`, use `decision.selected_context_id`,
+   the returned `context_id`, or `recommended_session_command`.
+3. If `decision.action` is `close_or_create_context`, do not reuse it for a new
+   read/write session. Close the active session only when it belongs to this
+   task; otherwise create a new context.
 4. Use `--context-mode read_write` while logging in or changing cookies/storage.
    Use `--context-mode read_only` for inspection when the login state must not
    change.

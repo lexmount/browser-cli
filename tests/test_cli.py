@@ -366,6 +366,19 @@ def test_context_resolve_selects_available_context(
     assert payload["context_id"] == "available_ctx"
     assert payload["available_count"] == 1
     assert payload["locked_count"] == 1
+    assert payload["decision"] == {
+        "action": "start_session",
+        "reason": "context_available",
+        "can_start_session": True,
+        "should_create_context": False,
+        "should_close_session": False,
+        "selected_context_id": "available_ctx",
+        "recommended_context_mode": "read_write",
+        "recommended_session_command": (
+            "browser-cli session create "
+            "--context-id available_ctx --context-mode read_write"
+        ),
+    }
     assert (
         payload["recommended_session_command"]
         == "browser-cli session create --context-id available_ctx --context-mode read_write"
@@ -426,6 +439,18 @@ def test_context_resolve_creates_when_no_context_is_available(
     assert payload["created"] is True
     assert payload["context_id"] == "new_ctx"
     assert payload["locked_count"] == 1
+    assert payload["decision"] == {
+        "action": "start_session",
+        "reason": "context_created",
+        "can_start_session": True,
+        "should_create_context": False,
+        "should_close_session": False,
+        "selected_context_id": "new_ctx",
+        "recommended_context_mode": "read_write",
+        "recommended_session_command": (
+            "browser-cli session create --context-id new_ctx --context-mode read_write"
+        ),
+    }
 
 
 def test_context_resolve_reports_explicit_locked_context(
@@ -447,6 +472,59 @@ def test_context_resolve_reports_explicit_locked_context(
     assert payload["created"] is False
     assert payload["context_id"] == "ctx1"
     assert payload["context"]["reuse"]["reason"] == "context_locked"
+    assert payload["decision"] == {
+        "action": "close_or_create_context",
+        "reason": "context_locked",
+        "can_start_session": False,
+        "should_create_context": True,
+        "should_close_session": True,
+        "selected_context_id": None,
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+    }
+
+
+def test_context_resolve_returns_decision_when_only_locked_contexts_exist(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            assert status is None
+            assert limit == 20
+            return DummyModel(
+                {
+                    "count": 1,
+                    "status_filter": status,
+                    "limit": limit,
+                    "contexts": [{"context_id": "locked_ctx", "status": "locked"}],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "resolve"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resolved"] is False
+    assert payload["context_id"] is None
+    assert payload["decision"] == {
+        "action": "close_or_create_context",
+        "reason": "only_locked_contexts",
+        "can_start_session": False,
+        "should_create_context": True,
+        "should_close_session": True,
+        "selected_context_id": None,
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+    }
 
 
 def test_compatibility_aliases_still_work(

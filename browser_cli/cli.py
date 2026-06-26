@@ -306,6 +306,77 @@ def _context_resolution_summary(contexts: list[Any]) -> dict[str, Any]:
     }
 
 
+def _context_reuse_decision(
+    context_payload: dict[str, Any],
+    *,
+    created: bool,
+) -> dict[str, Any]:
+    reuse = context_payload["reuse"]
+    can_reuse = reuse["can_reuse_now"] is True
+    reason = "context_created" if created and can_reuse else reuse["reason"]
+
+    if can_reuse:
+        action = "start_session"
+        should_create_context = False
+        should_close_session = False
+        selected_context_id = context_payload.get("context_id")
+    elif reuse["reason"] == "context_locked":
+        action = "close_or_create_context"
+        should_create_context = True
+        should_close_session = True
+        selected_context_id = None
+    elif reuse["reason"] == "context_not_available":
+        action = "create_context"
+        should_create_context = True
+        should_close_session = False
+        selected_context_id = None
+    else:
+        action = "inspect_context"
+        should_create_context = False
+        should_close_session = False
+        selected_context_id = None
+
+    return {
+        "action": action,
+        "reason": reason,
+        "can_start_session": can_reuse,
+        "should_create_context": should_create_context,
+        "should_close_session": should_close_session,
+        "selected_context_id": selected_context_id,
+        "recommended_context_mode": reuse["recommended_context_mode"],
+        "recommended_session_command": reuse["recommended_session_command"],
+    }
+
+
+def _context_missing_decision(summary: dict[str, Any]) -> dict[str, Any]:
+    locked_count = summary["locked_count"]
+    considered_count = summary["considered_count"]
+
+    if locked_count:
+        action = "close_or_create_context"
+        reason = (
+            "only_locked_contexts"
+            if locked_count == considered_count
+            else "no_available_context"
+        )
+    else:
+        action = "create_context"
+        reason = (
+            "no_contexts_found" if considered_count == 0 else "no_available_context"
+        )
+
+    return {
+        "action": action,
+        "reason": reason,
+        "can_start_session": False,
+        "should_create_context": True,
+        "should_close_session": bool(locked_count),
+        "selected_context_id": None,
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+    }
+
+
 def cmd_context_resolve(args: argparse.Namespace) -> None:
     command = "context.resolve"
     admin = LexmountBrowserAdmin()
@@ -314,10 +385,12 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
             context = admin.get_context(args.context_id)
             context_payload = _context_payload(context)
             resolved = context_payload["reuse"]["can_reuse_now"] is True
+            decision = _context_reuse_decision(context_payload, created=False)
             _success(
                 command,
                 resolved=resolved,
                 created=False,
+                decision=decision,
                 context=context_payload,
                 context_id=context_payload.get("context_id"),
                 recommended_session_command=context_payload["reuse"][
@@ -338,10 +411,12 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
             None,
         )
         if selected:
+            decision = _context_reuse_decision(selected, created=False)
             _success(
                 command,
                 resolved=True,
                 created=False,
+                decision=decision,
                 context=selected,
                 context_id=selected.get("context_id"),
                 status_filter=args.status,
@@ -349,16 +424,19 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
                 recommended_session_command=selected["reuse"][
                     "recommended_session_command"
                 ],
+                next_steps=selected["reuse"]["next_steps"],
                 **summary,
             )
 
         if args.create_if_missing:
             context = admin.create_context(metadata=args.metadata)
             context_payload = _context_payload(context)
+            decision = _context_reuse_decision(context_payload, created=True)
             _success(
                 command,
                 resolved=context_payload["reuse"]["can_reuse_now"] is True,
                 created=True,
+                decision=decision,
                 context=context_payload,
                 context_id=context_payload.get("context_id"),
                 status_filter=args.status,
@@ -366,6 +444,7 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
                 recommended_session_command=context_payload["reuse"][
                     "recommended_session_command"
                 ],
+                next_steps=context_payload["reuse"]["next_steps"],
                 **summary,
             )
 
@@ -376,6 +455,7 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
         command,
         resolved=False,
         created=False,
+        decision=_context_missing_decision(summary),
         context=None,
         context_id=None,
         status_filter=args.status,
