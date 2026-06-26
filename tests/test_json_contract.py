@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -8,6 +9,8 @@ import pytest
 
 from browser_cli.cli import main as cli_main
 from lex_browser_runtime.browser.models import BrowserConfigError
+
+JSON_CONTRACT = Path(__file__).resolve().parents[1] / "docs" / "json-contract.md"
 
 
 class DummyModel:
@@ -98,6 +101,14 @@ def test_commands_catalog_output_contract(
         "--session-id",
     ]
     assert "--url" in open_url["required_options"]
+
+
+def test_json_contract_documents_command_alias_metadata() -> None:
+    text = JSON_CONTRACT.read_text()
+
+    assert "`aliases`" in text
+    assert "`alias_of`" in text
+    assert "`canonical_name`" in text
 
 
 def test_error_output_contract_for_configuration_errors(

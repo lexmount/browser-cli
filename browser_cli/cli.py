@@ -79,6 +79,9 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.console-snapshot",
     "action.wait-console",
 )
+COMMAND_ALIASES = {
+    "action.interactive-only-snapshot": "action.interactive-snapshot",
+}
 COMMON_DOM_EVENT_NAMES = (
     "input",
     "change",
@@ -341,6 +344,14 @@ def _catalog_leaf_commands(
             "required": True,
             "exactly_one_of": sorted(target_options.intersection(option_flags)),
         }
+    if name in COMMAND_ALIASES:
+        command["alias_of"] = COMMAND_ALIASES[name]
+        command["canonical_name"] = COMMAND_ALIASES[name]
+    aliases = sorted(
+        alias for alias, canonical in COMMAND_ALIASES.items() if canonical == name
+    )
+    if aliases:
+        command["aliases"] = aliases
     return [command]
 
 

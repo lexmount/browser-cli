@@ -239,6 +239,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "exactly_one_of": ["--connect-url", "--direct-url", "--session-id"],
     }
     assert "--url" in open_url["required_options"]
+    interactive = commands["action.interactive-snapshot"]
+    interactive_only = commands["action.interactive-only-snapshot"]
+    assert interactive["aliases"] == ["action.interactive-only-snapshot"]
+    assert interactive_only["alias_of"] == "action.interactive-snapshot"
+    assert interactive_only["canonical_name"] == "action.interactive-snapshot"
     assert any(
         "--smoke-session" in option["flags"] for option in commands["doctor"]["options"]
     )
