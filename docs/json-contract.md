@@ -58,6 +58,8 @@ Default behavior:
   local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh
   token values.
+- `doctor --smoke-session` may report a temporary `session_id` and cleanup
+  status, but must not print direct connect URLs or token values.
 - `auth logout` may report local credential file deletion metadata, but must
   not print token values or unset environment variables.
 

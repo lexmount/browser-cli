@@ -241,6 +241,9 @@ Current CLI support:
 - Until browser API bearer-token support lands, `runtime_auth_usable` remains
   false for device tokens and browser actions still require env API-key
   credentials.
+- `browser-cli doctor --smoke-session` currently validates env API-key browser
+  runtime access by creating and closing a temporary session after API
+  connectivity passes.
 
 ## CLI Commands
 
@@ -288,8 +291,9 @@ When a device token is active, doctor should check:
 - API reachable
 - project id matches token project
 
-`doctor --smoke-session` may validate the token by creating and closing a
-temporary browser session.
+`doctor --smoke-session` currently validates env API-key credentials by
+creating and closing a temporary browser session. Once bearer-token runtime
+support lands, it should validate device-code tokens the same way.
 
 ## API Compatibility
 

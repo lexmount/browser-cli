@@ -15,6 +15,7 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "browser-cli auth token-info" in text
     assert "browser-cli auth logout" in text
     assert "browser-cli doctor" in text
+    assert "browser-cli doctor --smoke-session" in text
     assert "LEXMOUNT_BROWSER_CREDENTIALS_FILE" in text
     assert "--credentials-file" in text
     assert "auth_source" in text
@@ -28,5 +29,6 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "present_before" in text
     assert "present_after" in text
     assert "revoke_available=false" in text
+    assert "creating and closing a temporary session" in text
     assert "Output never includes access or refresh token values" in text
     assert "browser actions still require env API-key credentials" in normalized

@@ -73,16 +73,24 @@ After credentials are configured, run:
 
 ```bash
 browser-cli doctor --json
+browser-cli doctor --smoke-session
 ```
 
 Run `browser-cli doctor --json` before the first browser action in a thread,
 after credential changes, or when a session/context/action command fails for an
-unclear reason. `--json` is accepted as a no-op compatibility flag at the top
-level and after subcommands; browser-cli output is always JSON. Parse the JSON
-before deciding what to do:
+unclear reason. Use `browser-cli doctor --smoke-session` only when you need
+proof that credentials can create and close a temporary browser session. `--json`
+is accepted as a no-op compatibility flag at the top level and after
+subcommands; browser-cli output is always JSON. Parse the JSON before deciding
+what to do:
 
 - `ok: true` and `failed: 0`: continue with browser work.
 - `ready_for_browser_actions: true`: browser sessions/actions can be attempted.
+- `browser_smoke_session` with `status: "pass"`: a temporary browser session was
+  created and closed.
+- `browser_smoke_session` with `status: "fail"`: follow its `fix` commands,
+  especially a manual `session close` command when `created` is true and
+  `closed` is false.
 - `repair_plan`: prefer its aggregated `commands`, `env`, `guidance`, and
   `fixes` when explaining setup repair steps.
 - `warnings > 0` or a check with `status: "warn"`: continue only after
@@ -164,6 +172,7 @@ Diagnostics:
 ```bash
 browser-cli doctor
 browser-cli doctor --json
+browser-cli doctor --smoke-session
 browser-cli doctor --skip-api
 ```
 
@@ -393,6 +402,8 @@ For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
 `warning_checks`, `skipped_checks`, and `repair_plan` first. Report failed or
-warning check names without revealing API keys. Prefer `repair_plan.commands`,
+warning check names without revealing API keys. If `browser_smoke_session`
+exists, report whether it created and closed the temporary session and follow
+its manual close command when cleanup failed. Prefer `repair_plan.commands`,
 `repair_plan.env`, and `repair_plan.guidance`; fall back to per-check `fix`
 objects only when needed.

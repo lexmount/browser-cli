@@ -120,6 +120,7 @@ browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
 browser-cli doctor --json
+browser-cli doctor --smoke-session
 ```
 
 Expected behavior after the website page exists:
@@ -137,6 +138,8 @@ Expected behavior after the website page exists:
 - `browser-cli auth export-env` remains local and masks secrets by default.
 - `browser-cli doctor --json` checks local env, package availability, API
   connectivity, and optionally session creation when the user opts in.
+- `browser-cli doctor --smoke-session` creates and closes a temporary browser
+  session after API connectivity passes and reports `browser_smoke_session`.
 
 The page should display the same command names so users and agents follow one
 workflow.
@@ -183,6 +186,7 @@ The Connect from Codex page should include a "Verify CLI" section with:
 
 ```bash
 browser-cli doctor --json
+browser-cli doctor --smoke-session
 ```
 
 The page can explain expected success criteria:
@@ -195,7 +199,8 @@ The page can explain expected success criteria:
 - API connectivity succeeds
 - Project ID matches the selected project
 - API key has required scopes
-- Optional browser smoke test can create and close a session
+- Optional browser smoke test reports `browser_smoke_session.status=pass` after
+  creating and closing a session
 
 If doctor fails, the page and support docs should point users to
 `repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance` instead of

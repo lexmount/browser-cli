@@ -383,6 +383,114 @@ def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _doctor_error_name(exc: Exception) -> str:
+    info = getattr(exc, "lexmount_error_info", None)
+    if isinstance(info, LexmountErrorInfo):
+        error = info.payload().get("error")
+        if error:
+            return str(error)
+    return exc.__class__.__name__
+
+
+def _doctor_session_id(payload: dict[str, Any]) -> str | None:
+    session_id = payload.get("session_id")
+    if session_id:
+        return str(session_id)
+    session = payload.get("session")
+    if isinstance(session, dict) and session.get("session_id"):
+        return str(session["session_id"])
+    return None
+
+
+def _doctor_smoke_session_check(admin: Any) -> dict[str, Any]:
+    session_id: str | None = None
+    try:
+        result = admin.create_session(
+            context_id=None,
+            create_context=False,
+            context_mode="read_write",
+            browser_mode="normal",
+            metadata={"purpose": "browser-cli-doctor-smoke"},
+        )
+    except Exception as exc:
+        return _doctor_check(
+            "browser_smoke_session",
+            "fail",
+            _mask_sensitive_text(str(exc)),
+            stage="create",
+            created=False,
+            closed=False,
+            error=_doctor_error_name(exc),
+            fix=_doctor_fix(
+                "verify_browser_session_creation",
+                commands=[
+                    "browser-cli auth status",
+                    "browser-cli doctor --smoke-session",
+                ],
+                guidance=[
+                    "Confirm the API key can create browser sessions for this project.",
+                    "Check project session quotas and key scopes in browser.lexmount.cn.",
+                ],
+            ),
+        )
+
+    payload = _model_payload(result)
+    session_id = _doctor_session_id(payload)
+    if not session_id:
+        return _doctor_check(
+            "browser_smoke_session",
+            "fail",
+            "Smoke session was created, but the response did not include a session_id to close.",
+            stage="response",
+            created=True,
+            closed=False,
+            session=_sanitize_failure_value(payload.get("session")),
+            fix=_doctor_fix(
+                "verify_browser_session_response",
+                commands=[
+                    "browser-cli doctor --smoke-session",
+                ],
+                guidance=[
+                    "Confirm the browser session API response includes session.session_id.",
+                ],
+            ),
+        )
+
+    try:
+        admin.close_session(session_id)
+    except Exception as exc:
+        return _doctor_check(
+            "browser_smoke_session",
+            "fail",
+            f"Smoke session was created but could not be closed automatically: {_mask_sensitive_text(str(exc))}",
+            stage="close",
+            created=True,
+            closed=False,
+            session_id=session_id,
+            error=_doctor_error_name(exc),
+            fix=_doctor_fix(
+                "close_smoke_session",
+                commands=[
+                    f"browser-cli session close --session-id {session_id}",
+                    "browser-cli doctor --smoke-session",
+                ],
+                guidance=[
+                    "Close the temporary smoke-test session manually, then rerun doctor.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "browser_smoke_session",
+        "pass",
+        "Temporary browser session can be created and closed",
+        stage="closed",
+        created=True,
+        closed=True,
+        session_id=session_id,
+    )
+
+
 def _credential_doctor_fix(*env: str) -> dict[str, Any]:
     return _doctor_fix(
         "configure_credentials",
@@ -5191,6 +5299,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     base_url = os.environ.get("LEXMOUNT_BASE_URL")
     region = os.environ.get("LEXMOUNT_REGION")
     env_configured = bool(api_key and project_id)
+    api_admin: Any | None = None
     device_token_status = _local_device_token_status(
         getattr(args, "credentials_file", None)
     )
@@ -5367,20 +5476,15 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         )
     else:
         try:
-            result = LexmountBrowserAdmin().list_sessions(status=None)
+            api_admin = LexmountBrowserAdmin()
+            result = api_admin.list_sessions(status=None)
         except Exception as exc:
-            info = getattr(exc, "lexmount_error_info", None)
-            error = (
-                info.payload().get("error")
-                if isinstance(info, LexmountErrorInfo)
-                else exc.__class__.__name__
-            )
             checks.append(
                 _doctor_check(
                     "api_connectivity",
                     "fail",
                     _mask_sensitive_text(str(exc)),
-                    error=error,
+                    error=_doctor_error_name(exc),
                     fix=_doctor_fix(
                         "verify_api_connectivity",
                         commands=[
@@ -5406,6 +5510,64 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                     status_filter=payload.get("status_filter"),
                 )
             )
+
+    api_connectivity = next(
+        (check for check in checks if check.get("name") == "api_connectivity"),
+        None,
+    )
+    if args.smoke_session:
+        if args.skip_api:
+            checks.append(
+                _doctor_check(
+                    "browser_smoke_session",
+                    "skipped",
+                    "Browser smoke session skipped by --skip-api",
+                    fix=_doctor_fix(
+                        "run_browser_smoke_session",
+                        commands=["browser-cli doctor --smoke-session"],
+                        guidance=[
+                            "Rerun doctor with --smoke-session and without --skip-api when live browser session creation can be tested."
+                        ],
+                    ),
+                )
+            )
+        elif not api_key or not project_id:
+            checks.append(
+                _doctor_check(
+                    "browser_smoke_session",
+                    "skipped",
+                    "Browser smoke session requires LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID",
+                    fix=_credential_doctor_fix(
+                        "LEXMOUNT_API_KEY",
+                        "LEXMOUNT_PROJECT_ID",
+                    ),
+                )
+            )
+        elif not (
+            isinstance(api_connectivity, dict)
+            and api_connectivity.get("status") == "pass"
+            and api_admin is not None
+        ):
+            checks.append(
+                _doctor_check(
+                    "browser_smoke_session",
+                    "skipped",
+                    "Browser smoke session requires a passing API connectivity check",
+                    fix=_doctor_fix(
+                        "fix_api_connectivity_before_smoke_session",
+                        commands=[
+                            "browser-cli auth status",
+                            "browser-cli doctor",
+                            "browser-cli doctor --smoke-session",
+                        ],
+                        guidance=[
+                            "Repair API connectivity before validating browser session creation."
+                        ],
+                    ),
+                )
+            )
+        else:
+            checks.append(_doctor_smoke_session_check(api_admin))
 
     failed = [check for check in checks if check["status"] == "fail"]
     warnings = [check for check in checks if check["status"] == "warn"]
@@ -7003,6 +7165,11 @@ def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--skip-api",
         action="store_true",
         help="Skip the live Lexmount API connectivity check.",
+    )
+    doctor.add_argument(
+        "--smoke-session",
+        action="store_true",
+        help="Create and close a temporary browser session after API connectivity passes.",
     )
     doctor.add_argument(
         "--reveal-connect-url",

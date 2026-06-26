@@ -255,6 +255,175 @@ def test_doctor_checks_install_env_direct_url_and_api(
     }
 
 
+def test_doctor_smoke_session_creates_and_closes_temp_session(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            calls.append(("list_sessions", {"status": status}))
+            return DummyModel({"count": 0, "status_filter": status, "sessions": []})
+
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(
+                (
+                    "create_session",
+                    {
+                        "context_id": context_id,
+                        "create_context": create_context,
+                        "context_mode": context_mode,
+                        "browser_mode": browser_mode,
+                        "metadata": metadata,
+                    },
+                )
+            )
+            return DummyModel(
+                {
+                    "session": {"session_id": "smoke-1", "status": "active"},
+                }
+            )
+
+        def close_session(self, session_id: str) -> None:
+            calls.append(("close_session", {"session_id": session_id}))
+
+    admin = FakeAdmin()
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: admin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--smoke-session"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["ready_for_browser_actions"] is True
+    assert payload["failed_checks"] == []
+    assert payload["skipped_checks"] == []
+    checks = _checks_by_name(payload)
+    assert checks["api_connectivity"]["status"] == "pass"
+    assert checks["browser_smoke_session"] == {
+        "name": "browser_smoke_session",
+        "status": "pass",
+        "message": "Temporary browser session can be created and closed",
+        "stage": "closed",
+        "created": True,
+        "closed": True,
+        "session_id": "smoke-1",
+    }
+    assert calls == [
+        ("list_sessions", {"status": None}),
+        (
+            "create_session",
+            {
+                "context_id": None,
+                "create_context": False,
+                "context_mode": "read_write",
+                "browser_mode": "normal",
+                "metadata": {"purpose": "browser-cli-doctor-smoke"},
+            },
+        ),
+        ("close_session", {"session_id": "smoke-1"}),
+    ]
+
+
+def test_doctor_smoke_session_is_skipped_with_skip_api(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            raise AssertionError("doctor --skip-api should not call API")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api", "--smoke-session"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["ready_for_browser_actions"] is False
+    assert payload["failed_checks"] == []
+    assert payload["skipped_checks"] == [
+        "api_connectivity",
+        "browser_smoke_session",
+    ]
+    assert "browser-cli doctor --smoke-session" in payload["repair_plan"]["commands"]
+    checks = _checks_by_name(payload)
+    assert checks["browser_smoke_session"]["status"] == "skipped"
+    assert checks["browser_smoke_session"]["fix"]["code"] == (
+        "run_browser_smoke_session"
+    )
+
+
+def test_doctor_smoke_session_close_failure_is_masked_and_actionable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "very-secret-key")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            return DummyModel({"count": 0, "status_filter": status, "sessions": []})
+
+        def create_session(self, **kwargs: Any) -> DummyModel:
+            return DummyModel(
+                {
+                    "session": {"session_id": "smoke-1", "status": "active"},
+                }
+            )
+
+        def close_session(self, session_id: str) -> None:
+            raise RuntimeError(
+                f"close failed token=abc raw very-secret-key {session_id}"
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--smoke-session"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "very-secret-key" not in serialized
+    assert "token=***" in serialized
+    assert payload["ok"] is False
+    assert payload["ready_for_browser_actions"] is False
+    assert "browser_smoke_session" in payload["failed_checks"]
+    checks = _checks_by_name(payload)
+    assert checks["browser_smoke_session"]["status"] == "fail"
+    assert checks["browser_smoke_session"]["stage"] == "close"
+    assert checks["browser_smoke_session"]["created"] is True
+    assert checks["browser_smoke_session"]["closed"] is False
+    assert checks["browser_smoke_session"]["session_id"] == "smoke-1"
+    assert checks["browser_smoke_session"]["fix"]["commands"][0] == (
+        "browser-cli session close --session-id smoke-1"
+    )
+
+
 def test_doctor_warns_when_executable_is_not_on_path(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

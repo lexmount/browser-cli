@@ -140,11 +140,15 @@ After credentials are configured, run the self-check:
 ```bash
 browser-cli doctor
 browser-cli doctor --json
+browser-cli doctor --smoke-session
 ```
 
 `browser-cli` output is always JSON; `--json` is accepted as an agent
 compatibility no-op at the top level and after subcommands. Use
 `browser-cli doctor --skip-api` only when the live API should not be called.
+Use `browser-cli doctor --smoke-session` when you need stronger proof that the
+credentials can create and close a temporary browser session, not just reach the
+API.
 
 ## Commands
 
@@ -179,6 +183,7 @@ Diagnostics:
 ```bash
 browser-cli doctor
 browser-cli doctor --json
+browser-cli doctor --smoke-session
 browser-cli doctor --skip-api
 browser-cli doctor --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 ```
@@ -319,6 +324,7 @@ browser-cli auth export-env
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
 browser-cli doctor
+browser-cli doctor --smoke-session
 browser-cli direct-url
 browser-cli prepare
 browser-cli list-contexts
@@ -378,12 +384,16 @@ parsing stderr.
 `ready_for_browser_actions`, check-name arrays, and a `repair_plan` that
 aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
 `fail`, or `skipped` statuses for Python/runtime, install path, version,
-environment, direct URL, and API connectivity checks. It masks `api_key` in
-direct URLs and diagnostic error messages by default. Failed, warning, or
-skipped checks may include a `fix` object with a stable `code`, recommended
-`commands`, relevant `env` names, and concise `guidance`; agents should prefer
-`repair_plan` when telling the user how to repair setup. `doctor --json` is a
-no-op compatibility form because JSON is already the only output format.
+environment, direct URL, API connectivity, and optional browser smoke-session
+checks. It masks `api_key` in direct URLs and diagnostic error messages by
+default. `doctor --smoke-session` creates and closes a temporary session after
+API connectivity passes, then reports the `browser_smoke_session` check with
+`created`, `closed`, `session_id`, and actionable close guidance if cleanup
+fails. Failed, warning, or skipped checks may include a `fix` object with a
+stable `code`, recommended `commands`, relevant `env` names, and concise
+`guidance`; agents should prefer `repair_plan` when telling the user how to
+repair setup. `doctor --json` is a no-op compatibility form because JSON is
+already the only output format.
 
 `browser-cli auth status` reports local credential presence without revealing
 the API key. `browser-cli auth export-env` returns `commands` and `script`
