@@ -96,6 +96,8 @@ Session management:
 browser-cli session create
 browser-cli session create --create-context
 browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli session create --resolve-context --metadata-match-json '{"site":"example.com","purpose":"login"}'
+browser-cli session create --resolve-context --create-context --metadata-match-json '{"site":"example.com","purpose":"login"}'
 browser-cli session list --status active
 browser-cli session get --session-id <session_id>
 browser-cli session close --session-id <session_id>
@@ -119,9 +121,16 @@ browser-cli context delete --context-id <context_id>
 Persistent login context workflow:
 
 ```bash
-browser-cli context resolve --create-if-missing --metadata-match-json '{"site":"example.com","purpose":"login"}'
-browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli session create --resolve-context --create-context --metadata-match-json '{"site":"example.com","purpose":"login"}'
 ```
+
+`session create --resolve-context` first resolves an `available` context and only
+then starts the session. When used with `--create-context`, it creates a
+matching context if none is available. If the matching context is `locked`,
+metadata does not match, or no matching context exists without
+`--create-context`, the command returns `ok:false` with `error:
+context_not_reusable` and a `context_resolution.decision` object. This is the
+safest one-command path for agents handling persistent login state.
 
 `context resolve` only selects contexts whose status is `available`. If a
 context is `locked`, another active session is using it; close that session or
@@ -212,10 +221,11 @@ browser-cli session close --session-id <session_id>
 
 Use `context create` plus `session create --context-id <context_id>` when login
 state or cookies should survive between sessions.
-Use `context resolve --create-if-missing` when the agent needs a reusable
-context but does not know whether one already exists or whether it is locked by
-an active session. Add `--metadata-match-json` for persistent login state tied to
-a specific site, account, or task.
+Use `session create --resolve-context --create-context` when the agent needs a
+reusable context but does not know whether one already exists or whether it is
+locked by an active session. Add `--metadata-match-json` for persistent login
+state tied to a specific site, account, or task. Use `context resolve` when the
+agent needs to inspect the decision before starting a session.
 
 ## Codex Skill
 

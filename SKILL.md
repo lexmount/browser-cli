@@ -50,11 +50,18 @@ Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
 ```bash
-browser-cli context resolve --create-if-missing --metadata-match-json '{"site":"example.com","purpose":"login"}'
-browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli session create --resolve-context --create-context --metadata-match-json '{"site":"example.com","purpose":"login"}'
 ```
 
-`context resolve` chooses an `available` context or creates one when requested.
+`session create --resolve-context` chooses an `available` context and only then
+starts a session. With `--create-context`, it creates a matching context when no
+available context exists. If it returns `ok:false` with
+`error: context_not_reusable`, parse `context_resolution.decision` and
+`recommended_session_command` before retrying. Treat `context_not_reusable` as
+a signal to create a matching context or close a task-owned session first.
+
+`context resolve` inspects the same decision without starting a session. It
+chooses an `available` context or creates one when requested.
 Do not start a read/write session with a `locked` context. If `resolved` is
 false, follow the returned `next_steps`, usually closing the active session that
 holds the context or creating a new context. Parse the top-level `decision`
@@ -65,10 +72,10 @@ task.
 
 For persistent-login tasks, prefer this decision flow:
 
-1. Run `browser-cli context resolve --create-if-missing` with
+1. Run `browser-cli session create --resolve-context --create-context` with
    `--metadata-match-json` describing the site, account, or purpose when known.
-2. If `decision.action` is `start_session`, use `decision.selected_context_id`,
-   the returned `context_id`, or `recommended_session_command`.
+2. If the command succeeds, use the returned `session.session_id` and parse
+   `context_resolution.decision` for the selected context.
 3. If `decision.action` is `close_or_create_context`, do not reuse it for a new
    read/write session. Close the active session only when it belongs to this
    task; otherwise create a new context.
@@ -103,6 +110,13 @@ browser-cli context get --context-id <context_id>
 browser-cli context resolve --create-if-missing
 browser-cli context resolve --metadata-match-json '{"site":"example.com"}'
 browser-cli context delete --context-id <context_id>
+```
+
+Context-aware session creation:
+
+```bash
+browser-cli session create --resolve-context --metadata-match-json '{"site":"example.com"}'
+browser-cli session create --resolve-context --create-context --metadata-match-json '{"site":"example.com"}'
 ```
 
 Browser actions:

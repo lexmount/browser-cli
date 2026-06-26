@@ -13,11 +13,29 @@ def _normalized_skill_text() -> str:
 def test_skill_uses_context_resolve_for_persistent_login_state() -> None:
     text = SKILL_MD.read_text()
 
+    assert "browser-cli session create --resolve-context --create-context" in text
     assert "browser-cli context resolve --create-if-missing" in text
     assert "--metadata-match-json" in text
     assert "cookies, login state, or storage" in text
-    assert "decision.selected_context_id" in text
+    assert "context_resolution.decision" in text
     assert "`recommended_session_command`" in text
+
+
+def test_skill_prefers_context_aware_session_create() -> None:
+    normalized = _normalized_skill_text()
+
+    assert (
+        "Run `browser-cli session create --resolve-context --create-context`"
+        in normalized
+    )
+    assert (
+        "If the command succeeds, use the returned `session.session_id`" in normalized
+    )
+    assert "`context_not_reusable`" in normalized
+    assert (
+        "`context resolve` inspects the same decision without starting a session"
+        in normalized
+    )
 
 
 def test_skill_explains_locked_context_handling() -> None:
