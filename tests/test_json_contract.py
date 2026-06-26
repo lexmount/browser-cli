@@ -196,6 +196,10 @@ def test_json_contract_documents_context_selection_decision_fields() -> None:
 
     assert "`recommended_next_action`" in text
     assert "`decision_reason`" in text
+    assert "`availability`" in text
+    assert "`reusable`" in text
+    assert "`locked`" in text
+    assert "`reuse_reason`" in text
 
 
 def test_json_contract_documents_doctor_required_action_surface() -> None:

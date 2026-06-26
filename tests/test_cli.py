@@ -2560,6 +2560,10 @@ def test_session_create_can_reuse_context_by_metadata(
     assert payload["context_reuse"]["selected"] is True
     assert payload["context_reuse"]["created"] is False
     assert payload["context_reuse"]["context_id"] == "ctx-ready"
+    assert payload["context_reuse"]["availability"] == "available"
+    assert payload["context_reuse"]["reusable"] is True
+    assert payload["context_reuse"]["locked"] is False
+    assert payload["context_reuse"]["reuse_reason"] == "status_reusable"
     assert payload["context_reuse"]["reuse"]["reusable"] is True
     assert payload["context_reuse"]["checked"] == 2
     assert payload["context_reuse"]["metadata_filter"] == {"purpose": "codex-login"}
@@ -2658,6 +2662,10 @@ def test_session_create_can_create_context_when_no_reusable_metadata_match(
     assert payload["context_reuse"]["selected"] is True
     assert payload["context_reuse"]["created"] is True
     assert payload["context_reuse"]["context_id"] == "ctx-new"
+    assert payload["context_reuse"]["availability"] == "available"
+    assert payload["context_reuse"]["reusable"] is True
+    assert payload["context_reuse"]["locked"] is False
+    assert payload["context_reuse"]["reuse_reason"] == "status_reusable"
     assert payload["context_reuse"]["candidates"][0]["locked"] is True
     assert calls == [
         ("list_contexts", {"status": None, "limit": 20}),
@@ -2946,8 +2954,11 @@ def test_context_status_reports_reusable_and_locked_state(
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "context.status"
     assert payload["context_id"] == "ctx1"
+    assert payload["normalized_status"] == "locked"
+    assert payload["availability"] == "locked"
     assert payload["reusable"] is False
     assert payload["locked"] is True
+    assert payload["reuse_reason"] == "status_locked"
     assert payload["reuse"] == {
         "status": "locked",
         "normalized_status": "locked",
@@ -3016,6 +3027,11 @@ def test_context_pick_selects_first_available_metadata_match(
     assert payload["selected"] is True
     assert payload["created"] is False
     assert payload["context_id"] == "ctx-ready"
+    assert payload["normalized_status"] == "available"
+    assert payload["availability"] == "available"
+    assert payload["reusable"] is True
+    assert payload["locked"] is False
+    assert payload["reuse_reason"] == "status_reusable"
     assert payload["reuse"]["reusable"] is True
     assert payload["metadata_filter"] == {"purpose": "codex"}
     assert payload["selection_summary"] == {
@@ -3128,6 +3144,10 @@ def test_context_pick_can_create_when_no_reusable_context_matches(
     assert payload["selected"] is True
     assert payload["created"] is True
     assert payload["context_id"] == "ctx-new"
+    assert payload["availability"] == "available"
+    assert payload["reusable"] is True
+    assert payload["locked"] is False
+    assert payload["reuse_reason"] == "status_reusable"
     assert payload["reuse"]["reusable"] is True
     assert payload["selection_summary"]["checked"] == 1
     assert payload["selection_summary"]["locked_matches"] == 1

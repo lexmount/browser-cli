@@ -185,13 +185,15 @@ Use `read_write` for login/setup work that should update cookies or storage. Use
 confirm that the task no longer needs its login state.
 
 Parse `context_reuse` from the session result. Reuse only when
-`context_reuse.selected` is true. Prefer `availability` over raw status strings:
-`available` can be reused, `locked` means busy, and `unavailable` needs a
-different context. If candidates include `locked: true`, report that a busy
-context was skipped. Inspect `selection_summary` for `locked_matches`,
-`metadata_mismatches`, `reusable_matches`, `recommended_next_action`,
-`decision_reason`, and `would_create`. Prefer `recommended_next_action` when
-deciding whether to reuse, create, wait, or adjust filters. Use
+`context_reuse.selected` is true. Read top-level `availability`, `reusable`,
+`locked`, `normalized_status`, and `reuse_reason`. Prefer `availability` over
+raw status strings: `available` can be reused, `locked` means busy, and
+`unavailable` needs a different context. If candidates include `locked: true`,
+report that a busy context was skipped. Inspect `selection_summary` for
+`locked_matches`, `metadata_mismatches`, `reusable_matches`,
+`recommended_next_action`, `decision_reason`, and `would_create`. Prefer
+`recommended_next_action` when deciding whether to reuse, create, wait, or
+adjust filters. Use
 `context pick --metadata-json <json> --dry-run` before creating a session when
 you need to explain context reuse or avoid mutating persistent login state. Use
 `context status --context-id <context_id>` before reuse when the context id came

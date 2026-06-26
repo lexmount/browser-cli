@@ -124,6 +124,8 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "--create-context-if-missing" in normalized
     assert "Parse `context_reuse` from the session result" in normalized
     assert "`context_reuse.selected` is true" in normalized
+    assert "Read top-level `availability`, `reusable`" in normalized
+    assert "`normalized_status`, and `reuse_reason`" in normalized
     assert "Prefer `availability` over raw status strings" in normalized
     assert "`available` can be reused" in normalized
     assert "`locked` means busy" in normalized

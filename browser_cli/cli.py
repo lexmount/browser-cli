@@ -1226,12 +1226,18 @@ def _select_or_create_context_for_session(
     for context, candidate in zip(contexts, candidates, strict=True):
         if candidate["metadata_match"] and candidate["reusable"]:
             context_id = context.get("context_id")
+            reuse = _context_reuse_state(context)
             return {
                 "selected": True,
                 "created": False,
                 "context_id": context_id,
                 "context": context,
-                "reuse": _context_reuse_state(context),
+                "normalized_status": reuse["normalized_status"],
+                "availability": reuse["availability"],
+                "reusable": reuse["reusable"],
+                "locked": reuse["locked"],
+                "reuse_reason": reuse["reason"],
+                "reuse": reuse,
                 "checked": len(contexts),
                 "candidates": candidates,
                 "selection_summary": _context_selection_summary(
@@ -1250,12 +1256,18 @@ def _select_or_create_context_for_session(
         except Exception as exc:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
+        reuse = _context_reuse_state(created_context)
         return {
             "selected": True,
             "created": True,
             "context_id": created_context.get("context_id"),
             "context": created_context,
-            "reuse": _context_reuse_state(created_context),
+            "normalized_status": reuse["normalized_status"],
+            "availability": reuse["availability"],
+            "reusable": reuse["reusable"],
+            "locked": reuse["locked"],
+            "reuse_reason": reuse["reason"],
+            "reuse": reuse,
             "checked": len(contexts),
             "candidates": candidates,
             "selection_summary": _context_selection_summary(
@@ -2132,8 +2144,11 @@ def cmd_context_status(args: argparse.Namespace) -> None:
     _success(
         command,
         context_id=payload.get("context_id") or args.context_id,
+        normalized_status=reuse["normalized_status"],
+        availability=reuse["availability"],
         reusable=reuse["reusable"],
         locked=reuse["locked"],
+        reuse_reason=reuse["reason"],
         reuse=reuse,
         context=payload,
     )
@@ -2172,6 +2187,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
     )
 
     if selected_context is not None:
+        reuse = _context_reuse_state(selected_context)
         _success(
             command,
             selected=True,
@@ -2179,7 +2195,12 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             dry_run=args.dry_run,
             context_id=selected_context.get("context_id"),
             context=selected_context,
-            reuse=_context_reuse_state(selected_context),
+            normalized_status=reuse["normalized_status"],
+            availability=reuse["availability"],
+            reusable=reuse["reusable"],
+            locked=reuse["locked"],
+            reuse_reason=reuse["reason"],
+            reuse=reuse,
             checked=len(contexts),
             candidates=candidates,
             selection_summary=selection_summary,
@@ -2215,6 +2236,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
         created_context_id = created_context.get("context_id")
+        reuse = _context_reuse_state(created_context)
         _success(
             command,
             selected=True,
@@ -2222,7 +2244,12 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             dry_run=False,
             context_id=created_context_id,
             context=created_context,
-            reuse=_context_reuse_state(created_context),
+            normalized_status=reuse["normalized_status"],
+            availability=reuse["availability"],
+            reusable=reuse["reusable"],
+            locked=reuse["locked"],
+            reuse_reason=reuse["reason"],
+            reuse=reuse,
             checked=len(contexts),
             candidates=candidates,
             selection_summary=_context_selection_summary(

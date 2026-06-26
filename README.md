@@ -700,7 +700,8 @@ Use `session create --context-metadata-json '{"purpose":"codex-login"}'
 cookies should survive between sessions. The command picks the first reusable
 matching context, creates one if requested, then returns `context_reuse` with
 candidate contexts, `created`, `selected`, `normalized_status`, `availability`,
-`selection_summary`, and locked/reusable details. Treat
+top-level `reusable`, `locked`, `reuse_reason`, `selection_summary`, and
+locked/reusable details. Treat
 `availability: "available"` as reusable, `availability: "locked"` as busy, and
 `availability: "unavailable"` as a state that needs a different context. Use
 `context pick --metadata-json '{"purpose":"codex-login"}' --dry-run` when you
