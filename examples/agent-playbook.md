@@ -20,6 +20,10 @@ browser-cli auth status
 browser-cli doctor --json
 ```
 
+Use `ready_for_browser_actions` before starting browser work. If it is false,
+follow `repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance`
+instead of guessing setup repairs from raw error text.
+
 Do not ask the user to paste API keys into chat. Direct them to
 `https://browser.lexmount.cn` and keep secrets in the local shell.
 
@@ -44,15 +48,16 @@ browser-cli context create --metadata-json '{"purpose":"login"}'
 browser-cli session create --context-id <context_id> --context-mode read_write
 ```
 
-When `context resolve` is available, prefer it:
+When reusing persistent login state by metadata, prefer:
 
 ```bash
-browser-cli context resolve --create-if-missing
-browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli context pick --metadata-json '{"purpose":"login"}' --create-if-missing
+browser-cli session create --context-metadata-json '{"purpose":"login"}' --create-context-if-missing --context-mode read_write
 ```
 
-Do not reuse a locked context for a new read/write session. Close the session
-that holds it, or create a new context.
+Do not reuse a context whose `availability` is `locked` or `unavailable` for a
+new read/write session. Close the session that holds it, or create a new
+context.
 
 ## Case Files
 
@@ -81,6 +86,10 @@ browser-cli action snapshot --session-id <session_id>
 When expanded action commands are available, use them for common browser
 operations such as checking existence, reading text, scrolling, selecting
 options, checking boxes, hovering, and pressing keys.
+
+Prefer semantic actions such as `click-role`, `click-text`, `fill-label`,
+`select-label`, `check-label`, `interactive-snapshot`, and
+`accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as
 a command.

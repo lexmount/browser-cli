@@ -66,7 +66,8 @@ Recommended sections:
    - `browser-cli session list`
 6. Persistent Login Contexts
    - Link to context docs
-   - `browser-cli context resolve --create-if-missing`
+   - `browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing`
+   - `browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write`
    - Explain `available` versus `locked`
 
 ## Scoped Agent API Keys
@@ -177,11 +178,19 @@ browser-cli doctor --json
 
 The page can explain expected success criteria:
 
-- `environment.configured` is true
+- top-level `ok` is true
+- `ready_for_browser_actions` is true for live browser work
+- `failed_checks` and `warning_checks` are empty, or warning checks have been
+  acknowledged
+- `repair_plan.required` is false
 - API connectivity succeeds
 - Project ID matches the selected project
 - API key has required scopes
 - Optional browser smoke test can create and close a session
+
+If doctor fails, the page and support docs should point users to
+`repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance` instead of
+asking them to interpret raw check details.
 
 For copy/paste UX, keep doctor output in the terminal. The page should not ask
 users to upload doctor JSON unless an explicit support flow sanitizes secrets.
@@ -191,14 +200,15 @@ users to upload doctor JSON unless an explicit support flow sanitizes secrets.
 For persistent login state, the page should explain:
 
 ```bash
-browser-cli context resolve --create-if-missing
-browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
 ```
 
 If the website can show contexts, it should distinguish:
 
-- `available`: can be reused now
-- `locked`: currently attached to an active session
+- `availability: "available"`: can be reused now
+- `availability: "locked"`: currently attached to an active session
+- `availability: "unavailable"`: select or create a different context
 - deleted or expired states, if the API supports them later
 
 Useful actions:
@@ -237,10 +247,11 @@ Useful actions:
    - scopes
 3. Doctor-aware setup
    - page text aligned with `browser-cli doctor --json`
-   - troubleshooting table for missing env, auth failure, and quota/parallel limit
+   - troubleshooting table driven by `repair_plan` for missing env, auth
+     failure, executable PATH warnings, and quota/parallel limit
 4. Context reuse support
-   - explain `context resolve`
-   - show available/locked contexts if backend exposes them
+   - explain `context pick` and metadata-based `session create`
+   - show available/locked/unavailable contexts if backend exposes them
 5. Device-code/OAuth
    - CLI starts auth flow
    - browser approval page
