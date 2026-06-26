@@ -220,12 +220,16 @@ Suggested local credential shape:
 
 Current CLI support:
 
-- `browser-cli auth status` and `browser-cli doctor` read the fallback
-  credentials file, `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or
+- `browser-cli auth status`, `browser-cli auth token-info`, and
+  `browser-cli doctor` read the fallback credentials file,
+  `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or
   `--credentials-file`.
 - Output includes safe metadata such as `auth_source`, `runtime_auth_usable`,
   `device_token.valid`, `device_token.expired`, `device_token.refresh_needed`,
   `device_token.scopes`, and `device_token.token_id`.
+- `browser-cli auth token-info --required-scope <scope>` reports
+  `scope_check.required_scopes`, `scope_check.missing_scopes`, and
+  `scope_check.satisfied`.
 - Output never includes access or refresh token values.
 - Until browser API bearer-token support lands, `runtime_auth_usable` remains
   false for device tokens and browser actions still require env API-key
@@ -238,8 +242,8 @@ Future command behavior:
 ```bash
 browser-cli auth login --open
 browser-cli auth status
-browser-cli auth logout
 browser-cli auth token-info
+browser-cli auth logout
 browser-cli auth refresh
 ```
 

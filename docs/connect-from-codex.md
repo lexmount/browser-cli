@@ -114,6 +114,7 @@ Current short-term CLI commands:
 
 ```bash
 browser-cli auth status
+browser-cli auth token-info
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -127,6 +128,8 @@ Expected behavior after the website page exists:
   opens it in the local default browser and reports `open_result`.
 - `browser-cli auth status` remains local and never calls the website unless a
   token-based flow is configured.
+- `browser-cli auth token-info` remains local and reports safe scoped-token
+  metadata plus scope checks without printing token values.
 - `browser-cli auth export-env` remains local and masks secrets by default.
 - `browser-cli doctor --json` checks local env, package availability, API
   connectivity, and optionally session creation when the user opts in.

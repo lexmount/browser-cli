@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, states, roles, URLs, load state, network idle, text, or form values, click selectors or indexed matches, type, focus, blur, clear, inspect form fields, inspect element state and geometry, set form/file values, check or uncheck labeled controls, dispatch DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, states, roles, URLs, load state, network idle, text, or form values, click selectors or indexed matches, type, focus, blur, clear, inspect form fields, inspect element state and geometry, set form/file values, check or uncheck labeled controls, dispatch DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -40,6 +40,7 @@ Use local auth helpers instead of handling secrets in chat:
 ```bash
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth token-info --required-scope browser:actions
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -59,9 +60,10 @@ a trusted local terminal.
 
 `auth status` reports `auth_source`, `runtime_auth_usable`, and safe
 `device_token` metadata when a local scoped-token credentials file exists or
-`--credentials-file` is passed. It never reports access or refresh token values.
-Until bearer-token runtime support lands, continue to require env API-key
-credentials for browser actions when `runtime_auth_usable` is false.
+`--credentials-file` is passed. Use `auth token-info --required-scope <scope>`
+to check scoped-token coverage. These commands never report access or refresh
+token values. Until bearer-token runtime support lands, continue to require env
+API-key credentials for browser actions when `runtime_auth_usable` is false.
 
 After credentials are configured, run:
 
@@ -145,6 +147,7 @@ Authentication:
 ```bash
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth token-info --required-scope browser:actions
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -373,11 +376,11 @@ not report API key values. For `auth login`, prefer the `handoff` object's
 `secret_policy` fields. If `--open` was used, inspect `open_result`; if
 `opened` is false, show the returned URL or fallback login guidance without
 blocking on the local browser.
-For device-token metadata in `auth status` or `doctor`, report `auth_source`,
-`runtime_auth_usable`, `device_token.valid`, `device_token.expired`,
-`device_token.refresh_needed`, and `device_token.scopes`; do not report token
-values. Do not start browser actions from a device token while
-`runtime_auth_usable` is false.
+For device-token metadata in `auth status`, `auth token-info`, or `doctor`,
+report `auth_source`, `runtime_auth_usable`, `device_token.valid`,
+`device_token.expired`, `device_token.refresh_needed`, `device_token.scopes`,
+and `scope_check`; do not report token values. Do not start browser actions
+from a device token while `runtime_auth_usable` is false.
 For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,

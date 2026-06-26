@@ -746,6 +746,25 @@ def _auth_source(
     return "missing"
 
 
+def _device_token_scope_check(
+    device_token_status: dict[str, Any],
+    required_scopes: list[str] | None,
+) -> dict[str, Any]:
+    required = _dedupe_preserving_order(required_scopes or [])
+    available = [
+        str(scope)
+        for scope in device_token_status.get("scopes", [])
+        if isinstance(scope, str)
+    ]
+    missing = [scope for scope in required if scope not in available]
+    return {
+        "required_scopes": required,
+        "available_scopes": available,
+        "missing_scopes": missing,
+        "satisfied": not missing,
+    }
+
+
 def _auth_next_steps(
     *,
     configured: bool,
@@ -772,6 +791,35 @@ def _auth_next_steps(
         "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
         "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
         "Run `browser-cli doctor` after setting credentials.",
+    ]
+
+
+def _auth_token_info_next_steps(
+    *,
+    device_token_status: dict[str, Any],
+    scope_check: dict[str, Any],
+) -> list[str]:
+    if not device_token_status.get("present"):
+        return [
+            "No local device-token metadata was found.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+            "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support lands.",
+        ]
+    if not device_token_status.get("valid"):
+        return [
+            "Local device-token metadata is present but not currently valid.",
+            "Run `browser-cli auth login` to request fresh credentials when device-code login is available.",
+            "Use env API-key credentials for browser actions today.",
+        ]
+    if not scope_check.get("satisfied"):
+        return [
+            "Local device-token metadata is valid but missing one or more requested scopes.",
+            "Request a scoped credential that includes the missing scopes.",
+            "Use env API-key credentials for browser actions today.",
+        ]
+    return [
+        "Local device-token metadata is valid for the requested scope check.",
+        "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
     ]
 
 
@@ -5411,6 +5459,30 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_auth_token_info(args: argparse.Namespace) -> None:
+    command = "auth.token-info"
+    device_token_status = _local_device_token_status(args.credentials_file)
+    scope_check = _device_token_scope_check(
+        device_token_status,
+        args.required_scope,
+    )
+
+    _success(
+        command,
+        present=device_token_status.get("present", False),
+        valid=device_token_status.get("valid", False),
+        expired=device_token_status.get("expired"),
+        refresh_needed=device_token_status.get("refresh_needed"),
+        runtime_auth_usable=False,
+        device_token=device_token_status,
+        scope_check=scope_check,
+        next_steps=_auth_token_info_next_steps(
+            device_token_status=device_token_status,
+            scope_check=scope_check,
+        ),
+    )
+
+
 def cmd_auth_export_env(args: argparse.Namespace) -> None:
     command = "auth.export-env"
     warnings: list[str] = []
@@ -6746,6 +6818,24 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         ),
     )
     auth_status.set_defaults(func=cmd_auth_status)
+
+    auth_token_info = auth_subparsers.add_parser(
+        "token-info",
+        help="Inspect local device-token metadata without revealing token values",
+    )
+    auth_token_info.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
+    auth_token_info.add_argument(
+        "--required-scope",
+        action="append",
+        help="Scope that should be present in the local device token. May be repeated.",
+    )
+    auth_token_info.set_defaults(func=cmd_auth_token_info)
 
     auth_export_env = auth_subparsers.add_parser(
         "export-env",

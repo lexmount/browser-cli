@@ -51,8 +51,12 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
 def test_skill_uses_auth_helpers_for_setup() -> None:
     normalized = _normalized_skill_text()
 
-    assert "guide authentication with auth status/export-env/login" in normalized
+    assert (
+        "guide authentication with auth status/token-info/export-env/login"
+        in normalized
+    )
     assert "browser-cli auth status" in normalized
+    assert "browser-cli auth token-info" in normalized
     assert "browser-cli auth login" in normalized
     assert "browser-cli auth export-env" in normalized
     assert (
@@ -68,7 +72,9 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "inspect `open_result`" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "`auth status` reports `auth_source`, `runtime_auth_usable`" in normalized
+    assert "Use `auth token-info --required-scope <scope>`" in normalized
     assert "`device_token.valid`, `device_token.expired`" in normalized
+    assert "and `scope_check`" in normalized
     assert "Do not start browser actions from a device token" in normalized
     assert "do not report API key values" in normalized
 

@@ -704,6 +704,98 @@ def test_auth_status_reports_expired_device_token(
     )
 
 
+def test_auth_token_info_reports_scope_check_without_revealing_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "api_base_url": "https://api.lexmount.cn",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+                "scopes": ["browser.sessions:create", "browser.actions:run"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "token-info",
+                "--credentials-file",
+                str(credentials_file),
+                "--required-scope",
+                "browser.actions:run",
+                "--required-scope",
+                "browser.contexts:create",
+                "--required-scope",
+                "browser.actions:run",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert payload["command"] == "auth.token-info"
+    assert payload["present"] is True
+    assert payload["valid"] is True
+    assert payload["expired"] is False
+    assert payload["refresh_needed"] is False
+    assert payload["runtime_auth_usable"] is False
+    assert payload["device_token"]["token_id"] == "tok_123"
+    assert payload["scope_check"] == {
+        "required_scopes": ["browser.actions:run", "browser.contexts:create"],
+        "available_scopes": ["browser.sessions:create", "browser.actions:run"],
+        "missing_scopes": ["browser.contexts:create"],
+        "satisfied": False,
+    }
+    assert "missing one or more requested scopes" in payload["next_steps"][0]
+
+
+def test_auth_token_info_reports_missing_credentials_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    credentials_file = tmp_path / "missing.json"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "token-info", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.token-info"
+    assert payload["present"] is False
+    assert payload["valid"] is False
+    assert payload["expired"] is None
+    assert payload["refresh_needed"] is None
+    assert payload["runtime_auth_usable"] is False
+    assert payload["device_token"]["path"] == str(credentials_file)
+    assert payload["device_token"]["path_source"] == "argument"
+    assert payload["scope_check"] == {
+        "required_scopes": [],
+        "available_scopes": [],
+        "missing_scopes": [],
+        "satisfied": True,
+    }
+    assert payload["next_steps"][0] == "No local device-token metadata was found."
+
+
 def test_auth_export_env_emits_safe_placeholders(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
