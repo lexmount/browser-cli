@@ -220,6 +220,7 @@ browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
 browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "hello"
+browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./avatar.png
 browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
@@ -249,8 +250,8 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `focus`, `get-value`,
 `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
-`cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
-`submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
+`cookie-clear`, `wait-cookie`, `clear`, `set-value`, `set-file-input`,
+`dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `click-text`, `click-role`, `click-index`,
 `fill-label`,
@@ -263,10 +264,10 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `matched`, `state_values`, `attribute_found`, `requested_value`, `network_idle`,
 `quiet_ms`, `submitted`, `dispatched`, `dispatched_events`, `fields`,
-`value_masked`, `bounding_box`, `in_viewport`, `index`, `attributes`,
-`html_truncated`, `requested_option_label`, `option_found`, `option_label`,
-`requested_checked`, `previous_checked`, `changed`, or `navigation_requested`
-from `result`.
+`value_masked`, `file_input`, `file_count`, `requested_files`, `bounding_box`,
+`in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
+`option_found`, `option_label`, `requested_checked`, `previous_checked`,
+`changed`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -381,10 +382,11 @@ browser-cli session close --session-id <session_id>
 Common agent recipes:
 
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`,
-  `set-value`, or `clear` -> `wait-value` or `get-value` -> `blur` if validation is
-  focus-driven -> `select-label`, `select-option`, `check-label`, or `check` ->
-  `wait-state --state enabled` for async submit buttons -> `dispatch-event` if
-  explicit `input`/`change` is needed -> `submit --selector <form-or-field>`,
+  `set-value`, `set-file-input`, or `clear` -> `wait-value` or `get-value` ->
+  `blur` if validation is focus-driven -> `select-label`, `select-option`,
+  `check-label`, or `check` -> `wait-state --state enabled` for async submit
+  buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
+  `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`

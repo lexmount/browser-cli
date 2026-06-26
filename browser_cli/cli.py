@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import mimetypes
 import os
 import re
 import shlex
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -44,6 +47,7 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
     "browser:actions",
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
+DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 COMMON_DOM_EVENT_NAMES = (
     "input",
     "change",
@@ -813,6 +817,67 @@ def _run_action_command(
 
 def _js_literal(value: Any) -> str:
     return json.dumps(value)
+
+
+def _read_file_input_payloads(
+    *,
+    command: str,
+    files: list[str],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    if max_bytes < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--max-bytes must be zero or greater.",
+            exit_code=2,
+            max_bytes=max_bytes,
+        )
+
+    payloads: list[dict[str, Any]] = []
+    total_bytes = 0
+    for raw_file in files:
+        path = Path(raw_file).expanduser()
+        if not path.is_file():
+            _failure(
+                command,
+                "file_not_found",
+                "File input path does not exist or is not a file.",
+                exit_code=2,
+                file=raw_file,
+            )
+        try:
+            data = path.read_bytes()
+            stat = path.stat()
+        except OSError as exc:
+            _failure(
+                command,
+                "file_read_error",
+                str(exc),
+                exit_code=2,
+                file=raw_file,
+            )
+        total_bytes += len(data)
+        if total_bytes > max_bytes:
+            _failure(
+                command,
+                "file_payload_too_large",
+                "Total file input payload exceeds --max-bytes.",
+                exit_code=2,
+                max_bytes=max_bytes,
+                total_bytes=total_bytes,
+            )
+        mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        payloads.append(
+            {
+                "name": path.name,
+                "type": mime_type,
+                "size": len(data),
+                "last_modified": int(stat.st_mtime * 1000),
+                "data_base64": base64.b64encode(data).decode("ascii"),
+            }
+        )
+    return payloads
 
 
 def _eval_backed_result_payload(result: Any) -> dict[str, Any]:
@@ -3335,6 +3400,171 @@ def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -
     )
 
 
+def _set_file_input_expression(
+    *,
+    selector: str,
+    files: list[dict[str, Any]],
+    dispatch_events: bool,
+) -> str:
+    file_payloads = [
+        {
+            "name": file["name"],
+            "type": file["type"],
+            "size": file["size"],
+            "last_modified": file["last_modified"],
+            "data_base64": file["data_base64"],
+        }
+        for file in files
+    ]
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const requestedFiles = {_js_literal(file_payloads)};
+  const dispatchEvents = {_js_literal(dispatch_events)};
+  const element = document.querySelector(selector);
+  const publicFileInfo = (file) => ({{
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    last_modified: file.lastModified ?? null
+  }});
+  const requestedFileInfo = requestedFiles.map((file) => ({{
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    last_modified: file.last_modified
+  }}));
+  if (!element) {{
+    return {{
+      selector,
+      found: false,
+      file_input: false,
+      set: false,
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      files: []
+    }};
+  }}
+  const fileInput = element.tagName.toLowerCase() === "input" &&
+    String(element.type || "").toLowerCase() === "file";
+  if (!fileInput) {{
+    return {{
+      selector,
+      found: true,
+      file_input: false,
+      set: false,
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      files: [],
+      element: nodeInfo(element)
+    }};
+  }}
+  if (requestedFiles.length > 1 && !element.multiple) {{
+    return {{
+      selector,
+      found: true,
+      file_input: true,
+      set: false,
+      multiple: Boolean(element.multiple),
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      previous_count: element.files?.length ?? 0,
+      file_count: element.files?.length ?? 0,
+      files: [...(element.files || [])].map(publicFileInfo),
+      error: "multiple_not_allowed",
+      message: "Input does not allow multiple files."
+    }};
+  }}
+  if (typeof DataTransfer !== "function" || typeof File !== "function") {{
+    return {{
+      selector,
+      found: true,
+      file_input: true,
+      set: false,
+      multiple: Boolean(element.multiple),
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      previous_count: element.files?.length ?? 0,
+      file_count: element.files?.length ?? 0,
+      files: [...(element.files || [])].map(publicFileInfo),
+      error: "file_api_unavailable",
+      message: "DataTransfer or File constructor is unavailable in this page."
+    }};
+  }}
+  const decodeBase64 = (value) => {{
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {{
+      bytes[index] = binary.charCodeAt(index);
+    }}
+    return bytes;
+  }};
+  const previousCount = element.files?.length ?? 0;
+  try {{
+    const transfer = new DataTransfer();
+    for (const payload of requestedFiles) {{
+      const file = new File(
+        [decodeBase64(payload.data_base64)],
+        payload.name,
+        {{
+          type: payload.type || "application/octet-stream",
+          lastModified: payload.last_modified || Date.now()
+        }}
+      );
+      transfer.items.add(file);
+    }}
+    element.files = transfer.files;
+  }} catch (error) {{
+    return {{
+      selector,
+      found: true,
+      file_input: true,
+      set: false,
+      multiple: Boolean(element.multiple),
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      previous_count: previousCount,
+      file_count: element.files?.length ?? 0,
+      files: [...(element.files || [])].map(publicFileInfo),
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+  const dispatchedEvents = [];
+  if (dispatchEvents) {{
+    for (const type of ["input", "change"]) {{
+      element.dispatchEvent(new Event(type, {{ bubbles: true }}));
+      dispatchedEvents.push(type);
+    }}
+  }}
+  const files = [...(element.files || [])].map(publicFileInfo);
+  const set = files.length === requestedFiles.length &&
+    files.every((file, index) =>
+      file.name === requestedFiles[index].name &&
+      file.size === requestedFiles[index].size &&
+      file.type === (requestedFiles[index].type || "")
+    );
+  return {{
+    selector,
+    found: true,
+    file_input: true,
+    set,
+    multiple: Boolean(element.multiple),
+    requested_count: requestedFiles.length,
+    requested_files: requestedFileInfo,
+    previous_count: previousCount,
+    file_count: files.length,
+    files,
+    value: element.value ? "***" : "",
+    value_masked: Boolean(element.value),
+    dispatched_events: dispatchedEvents,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _dispatch_event_expression(
     *,
     selector: str,
@@ -4017,6 +4247,24 @@ def cmd_action_set_value(args: argparse.Namespace) -> None:
         _set_value_expression(
             args.selector,
             args.value,
+            dispatch_events=not args.no_events,
+        ),
+    )
+
+
+def cmd_action_set_file_input(args: argparse.Namespace) -> None:
+    command = "action.set-file-input"
+    files = _read_file_input_payloads(
+        command=command,
+        files=args.file,
+        max_bytes=args.max_bytes,
+    )
+    _run_eval_backed_action_command(
+        args,
+        command,
+        _set_file_input_expression(
+            selector=args.selector,
+            files=files,
             dispatch_events=not args.no_events,
         ),
     )
@@ -5576,6 +5824,31 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Do not dispatch input/change after setting the value.",
     )
     action_set_value.set_defaults(func=cmd_action_set_value)
+
+    action_set_file_input = action_subparsers.add_parser(
+        "set-file-input",
+        help="Set local files on an input[type=file] without opening a file picker",
+    )
+    _add_session_target_args(action_set_file_input)
+    action_set_file_input.add_argument("--selector", required=True)
+    action_set_file_input.add_argument(
+        "--file",
+        action="append",
+        required=True,
+        help="Local file path to attach. May be repeated for multiple file inputs.",
+    )
+    action_set_file_input.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_FILE_INPUT_MAX_BYTES,
+        help="Maximum total bytes to embed in the browser action payload.",
+    )
+    action_set_file_input.add_argument(
+        "--no-events",
+        action="store_true",
+        help="Do not dispatch input/change after setting files.",
+    )
+    action_set_file_input.set_defaults(func=cmd_action_set_file_input)
 
     action_dispatch_event = action_subparsers.add_parser(
         "dispatch-event",

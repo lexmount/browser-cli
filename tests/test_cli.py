@@ -1488,6 +1488,118 @@ def test_action_eval_accepts_script_alias(
     assert payload["result"] == {"value": "Example"}
 
 
+def test_action_set_file_input_embeds_local_file_payload(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Any,
+) -> None:
+    upload = tmp_path / "upload.txt"
+    upload.write_text("Hello", encoding="utf-8")
+    observed: dict[str, Any] = {}
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return "wss://example.test/devtools"
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test/upload",
+                "value": {
+                    "selector": "input[type=file]",
+                    "found": True,
+                    "file_input": True,
+                    "set": True,
+                    "requested_count": 1,
+                    "file_count": 1,
+                    "files": [
+                        {
+                            "name": "upload.txt",
+                            "type": "text/plain",
+                            "size": 5,
+                        }
+                    ],
+                    "value": "***",
+                    "value_masked": True,
+                    "dispatched_events": ["input", "change"],
+                },
+            }
+        )
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "set-file-input",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[type=file]",
+                "--file",
+                str(upload),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == "wss://example.test/devtools"
+    assert observed["action"] == "eval"
+    assert '"name": "upload.txt"' in observed["expression"]
+    assert '"type": "text/plain"' in observed["expression"]
+    assert '"size": 5' in observed["expression"]
+    assert '"data_base64": "SGVsbG8="' in observed["expression"]
+    assert "DataTransfer" in observed["expression"]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.set-file-input"
+    assert payload["result"]["set"] is True
+    assert payload["result"]["files"][0]["name"] == "upload.txt"
+    assert payload["result"]["value_masked"] is True
+
+
+def test_action_set_file_input_missing_file_is_json(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Any,
+) -> None:
+    missing = tmp_path / "missing.txt"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "set-file-input",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[type=file]",
+                "--file",
+                str(missing),
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "action.set-file-input"
+    assert payload["error"] == "file_not_found"
+    assert payload["file"] == str(missing)
+
+
 @pytest.mark.parametrize(
     ("argv", "command", "value", "expected_result"),
     [

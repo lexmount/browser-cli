@@ -118,6 +118,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`wait-cookie`",
         "`clear`",
         "`set-value`",
+        "`set-file-input`",
         "`dispatch-event`",
         "`submit`",
         "`scroll-into-view`",
@@ -157,6 +158,9 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`dispatched_events`" in normalized
     assert "`fields`" in normalized
     assert "`value_masked`" in normalized
+    assert "`file_input`" in normalized
+    assert "`file_count`" in normalized
+    assert "`requested_files`" in normalized
     assert "`bounding_box`" in normalized
     assert "`in_viewport`" in normalized
     assert "`index`" in normalized
@@ -179,6 +183,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
     assert "`fill-label` for labeled fields" in normalized
     assert "`set-value` for stable selectors" in normalized
+    assert "`set-file-input` for upload controls" in normalized
     assert "`clear` before replacement text" in normalized
     assert "`get-value` or `wait-value` to confirm form state" in normalized
     assert "use `blur` for focus-driven validation" in normalized

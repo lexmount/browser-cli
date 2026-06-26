@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, states, URLs, load state, network idle, text, or form values, click, click indexed selector matches, type, focus, blur, clear, inspect form fields, inspect element state and geometry, set form values, check or uncheck labeled controls, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, states, URLs, load state, network idle, text, or form values, click selectors or indexed matches, type, focus, blur, clear, inspect form fields, inspect element state and geometry, set form/file values, check or uncheck labeled controls, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -195,6 +195,7 @@ browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
 browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "query"
+browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./avatar.png
 browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
@@ -224,20 +225,22 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `wait-state`, `wait-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`, `blur`,
 `storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
 `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`,
-`wait-cookie`, `clear`, `set-value`, `dispatch-event`, `submit`, `scroll`,
-`scroll-into-view`, `bounding-box`, `inspect`, `select-option`, `select-label`,
-`check`, `uncheck`, `check-label`, `uncheck-label`, `hover`, and `press` plus
-`click-text`, `click-role`, `click-index`, `fill-label`, `form-snapshot`,
+`wait-cookie`, `clear`, `set-value`, `set-file-input`, `dispatch-event`,
+`submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
+`select-option`, `select-label`, `check`, `uncheck`, `check-label`,
+`uncheck-label`, `hover`, and `press` plus `click-text`, `click-role`,
+`click-index`, `fill-label`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
 `removed`, `deleted`, `cleared`, `items`, `cleared_count`, `requested_count`,
 `state`, `matched`, `state_values`, `attribute_found`, `requested_value`,
 `network_idle`, `quiet_ms`, `submitted`, `hovered`, `pressed`, `dispatched`,
-`dispatched_events`, `fields`, `value_masked`, `bounding_box`, `in_viewport`, `index`,
-`attributes`, `html_truncated`, `requested_option_label`, `option_found`,
-`option_label`, `requested_checked`, `previous_checked`, `changed`, and
-`navigation_requested` before assuming the page changed.
+`dispatched_events`, `fields`, `value_masked`, `file_input`, `file_count`,
+`requested_files`, `bounding_box`, `in_viewport`, `index`, `attributes`,
+`html_truncated`, `requested_option_label`, `option_found`, `option_label`,
+`requested_checked`, `previous_checked`, `changed`, and `navigation_requested`
+before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -272,9 +275,10 @@ For page work, choose actions in this order:
 Common task recipes:
 
 1. Fill and submit a form: run `form-snapshot` or `interactive-snapshot`, use
-   `fill-label` for labeled fields and `set-value` for stable selectors,
-   `clear` before replacement text when needed, use `get-value` or `wait-value`
-   to confirm form state, use `blur` for focus-driven validation, use
+   `fill-label` for labeled fields, `set-value` for stable selectors, and
+   `set-file-input` for upload controls; `clear` before replacement text when
+   needed, use `get-value` or `wait-value` to confirm form state, use
+   `blur` for focus-driven validation, use
    `select-label` for labeled selects, `select-option` or `check` for stable
    selector controls, prefer `check-label` for labeled controls, use
    `wait-state --state enabled` for async submit buttons, use
