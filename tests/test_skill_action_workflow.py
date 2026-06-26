@@ -42,7 +42,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "at the top level and after subcommands" in normalized
     assert "`ok: true` and `failed: 0`" in normalized
     assert "`ok: false`: stop before creating sessions" in normalized
-    assert "inspect `checks` and report failed check names" in normalized
+    assert "inspect `checks` and report failed or warning check names" in normalized
     assert "When a check includes `fix`" in normalized
     assert "use its `commands`, `env`, and `guidance` fields" in normalized
 

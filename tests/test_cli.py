@@ -176,6 +176,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
             "lex-browser-runtime": "1.2.3",
         }.get(distribution),
     )
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
 
     class FakeAdmin:
         def list_sessions(self, *, status: str | None) -> DummyModel:
@@ -199,9 +203,18 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert payload["command"] == "doctor"
     assert payload["status"] == "ok"
     assert payload["failed"] == 0
+    assert payload["warnings"] == 0
     assert "secret" not in json.dumps(payload)
 
     checks = _checks_by_name(payload)
+    assert checks["python_runtime"]["status"] == "pass"
+    assert checks["python_runtime"]["executable"]
+    assert checks["browser_cli_executable"] == {
+        "name": "browser_cli_executable",
+        "status": "pass",
+        "message": "browser-cli executable is available on PATH",
+        "path": "/usr/local/bin/browser-cli",
+    }
     assert checks["browser_cli"]["version"] == "0.1.0"
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "pass"
@@ -216,6 +229,39 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "session_count": 2,
         "status_filter": None,
     }
+
+
+def test_doctor_warns_when_executable_is_not_on_path(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr("browser_cli.cli.shutil.which", lambda name: None)
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            return DummyModel({"count": 0, "status_filter": status, "sessions": []})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert payload["failed"] == 0
+    assert payload["warnings"] == 1
+    checks = _checks_by_name(payload)
+    assert checks["browser_cli_executable"]["status"] == "warn"
+    assert checks["browser_cli_executable"]["fix"]["code"] == (
+        "install_browser_cli_on_path"
+    )
+    assert "uv tool install" in checks["browser_cli_executable"]["fix"]["commands"][0]
+    assert checks["api_connectivity"]["status"] == "pass"
 
 
 def test_doctor_fails_missing_required_env(

@@ -54,7 +54,7 @@ CLI for you:
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - browser-cli auth status 是否显示 configured 为 true
-   - browser-cli doctor 的 checks 中哪一项失败
+   - browser-cli doctor 的 checks 中哪一项 fail 或 warn
    - LEXMOUNT_API_KEY 是否已设置
    - LEXMOUNT_PROJECT_ID 是否已设置
    - 如果设置了 LEXMOUNT_BASE_URL，它是否为正确的 API endpoint
@@ -349,14 +349,15 @@ Argument parsing errors also return JSON on stdout with exit code `2`:
 Agents should use the `usage` field to repair malformed commands instead of
 parsing stderr.
 
-`browser-cli doctor` returns top-level `ok`, `failed`, and `checked` fields plus
-a `checks` array with `pass`, `fail`, or `skipped` statuses for install/version,
-environment, direct URL, and API connectivity checks. It masks `api_key` in
-direct URLs and diagnostic error messages by default. Failed or skipped checks
-may include a `fix` object with a stable `code`, recommended `commands`,
-relevant `env` names, and concise `guidance`; agents should prefer those fields
-when telling the user how to repair setup. `doctor --json` is a no-op
-compatibility form because JSON is already the only output format.
+`browser-cli doctor` returns top-level `ok`, `failed`, `warnings`, and `checked`
+fields plus a `checks` array with `pass`, `warn`, `fail`, or `skipped` statuses
+for Python/runtime, install path, version, environment, direct URL, and API
+connectivity checks. It masks `api_key` in direct URLs and diagnostic error
+messages by default. Failed, warning, or skipped checks may include a `fix`
+object with a stable `code`, recommended `commands`, relevant `env` names, and
+concise `guidance`; agents should prefer those fields when telling the user how
+to repair setup. `doctor --json` is a no-op compatibility form because JSON is
+already the only output format.
 
 `browser-cli auth status` reports local credential presence without revealing
 the API key. `browser-cli auth export-env` returns `commands` and `script`

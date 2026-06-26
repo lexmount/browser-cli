@@ -24,10 +24,13 @@ def test_skill_explains_doctor_status_decisions() -> None:
     normalized = _normalized_skill_text()
 
     assert "`ok: true` and `failed: 0`" in text
+    assert "`warnings > 0`" in text
     assert "`ok: false`" in text
+    assert '`status: "warn"`' in text
     assert '`status: "fail"`' in text
     assert '`status: "skipped"`' in text
     assert "continue with browser work" in normalized
+    assert "reporting warning check names" in normalized
     assert "stop before creating sessions, inspect `checks`" in normalized
     assert "follow each check's `fix` object" in normalized
 

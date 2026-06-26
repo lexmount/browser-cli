@@ -8,7 +8,9 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import shlex
+import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, NoReturn
@@ -4736,6 +4738,51 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     command = "doctor"
     checks: list[dict[str, Any]] = []
 
+    checks.append(
+        _doctor_check(
+            "python_runtime",
+            "pass",
+            "Python runtime is available",
+            executable=sys.executable,
+            version=sys.version.split()[0],
+            platform=sys.platform,
+        )
+    )
+
+    browser_cli_path = shutil.which("browser-cli")
+    if browser_cli_path:
+        checks.append(
+            _doctor_check(
+                "browser_cli_executable",
+                "pass",
+                "browser-cli executable is available on PATH",
+                path=browser_cli_path,
+            )
+        )
+    else:
+        checks.append(
+            _doctor_check(
+                "browser_cli_executable",
+                "warn",
+                (
+                    "browser-cli executable was not found on PATH; the current "
+                    "process is running, but future shell commands may fail."
+                ),
+                fix=_doctor_fix(
+                    "install_browser_cli_on_path",
+                    commands=[
+                        "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                        "browser-cli --help",
+                        "browser-cli doctor",
+                    ],
+                    guidance=[
+                        "Install browser-cli as a uv tool or add its executable directory to PATH.",
+                        "In local development, use `uv run browser-cli ...` from the repository.",
+                    ],
+                ),
+            )
+        )
+
     browser_cli_version = _package_version("browser-cli")
     checks.append(
         _doctor_check(
@@ -4922,12 +4969,14 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             )
 
     failed = [check for check in checks if check["status"] == "fail"]
+    warnings = [check for check in checks if check["status"] == "warn"]
     data: dict[str, Any] = {
         "ok": not failed,
         "command": command,
-        "status": "ok" if not failed else "error",
+        "status": "error" if failed else "warning" if warnings else "ok",
         "checked": len(checks),
         "failed": len(failed),
+        "warnings": len(warnings),
         "checks": checks,
     }
     if failed:
