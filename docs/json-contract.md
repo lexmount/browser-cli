@@ -73,10 +73,10 @@ Default behavior:
   cells, list items, dialog controls, frame metadata, or timing entries. Parse
   `href_masked`, `src_masked`, `frame_url_masked`, `name_masked`, and
   `absolute_url_masked` before copying or reporting URLs.
-- `action network-snapshot` masks fetch/XHR URLs by default and does not capture
-  request or response bodies. Parse `url_masked` and `absolute_url_masked`
-  before copying or reporting network URLs; treat `request_has_body` only as a
-  boolean hint.
+- `action network-snapshot` and `action wait-network` mask fetch/XHR URLs by
+  default and do not capture request or response bodies. Parse `url_masked` and
+  `absolute_url_masked` before copying or reporting network URLs; treat
+  `request_has_body` only as a boolean hint.
 - `action console-snapshot` and `action wait-console` mask token-like query
   parameters and key/value text in captured console/page-error entries and the
   reported page URL. Parse `text_masked`, `filename_masked`, and `url_masked`

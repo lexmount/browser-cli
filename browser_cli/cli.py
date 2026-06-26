@@ -3923,6 +3923,165 @@ def _network_snapshot_expression(
 """.strip()
 
 
+def _network_capture_bootstrap_expression() -> str:
+    expression = _network_snapshot_expression(
+        max_entries=0,
+        clear=False,
+        install_only=True,
+        source=None,
+        method=None,
+        failed_only=False,
+    )
+    start_marker = '  const stateKey = "__browserCliNetworkSnapshot";'
+    end_marker = "  const newlyInstalled = install();"
+    return expression[
+        expression.index(start_marker) : expression.index(end_marker)
+    ].rstrip()
+
+
+def _wait_network_expression(
+    *,
+    url: str | None,
+    url_match: str,
+    source: str | None,
+    method: str | None,
+    status: int | None,
+    failed_only: bool,
+    case_sensitive: bool,
+    after_index: int | None,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    url_source = "null" if url is None else _js_literal(url)
+    source_filter = "null" if source is None else _js_literal(source)
+    method_filter = "null" if method is None else _js_literal(method.upper())
+    status_filter = "null" if status is None else _js_literal(status)
+    after_index_source = "null" if after_index is None else _js_literal(after_index)
+    return f"""
+() => new Promise((resolve) => {{
+{_network_capture_bootstrap_expression()}
+  const requestedUrl = {url_source};
+  const urlMatchMode = {_js_literal(url_match)};
+  const requestedSource = {source_filter};
+  const requestedMethod = {method_filter};
+  const requestedStatus = {status_filter};
+  const failedOnly = {_js_literal(failed_only)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const afterIndex = {after_index_source};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const newlyInstalled = install();
+  const requestedUrlString = requestedUrl === null ? null : String(requestedUrl);
+  const hasUrlFilter = requestedUrlString !== null && requestedUrlString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let pattern = null;
+  if (hasUrlFilter && urlMatchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedUrlString, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const maskedLocation = maskUrlText(location.href);
+      resolve({{
+        url: maskedLocation,
+        url_masked: maskedLocation !== location.href,
+        title: document.title,
+        kind: "network_wait",
+        found: false,
+        matched: false,
+        timed_out: false,
+        requested_url: requestedUrl,
+        url_match: urlMatchMode,
+        case_sensitive: caseSensitive,
+        requested_source: requestedSource,
+        requested_method: requestedMethod,
+        requested_status: requestedStatus,
+        failed_only: failedOnly,
+        after_index: afterIndex,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        waited_ms: Date.now() - startedAt,
+        installed: state.installed,
+        newly_installed: newlyInstalled,
+        installed_at: state.installed_at,
+        entry_count: 0,
+        buffered_count: state.entries.length,
+        entry: null,
+        entries: [],
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const entryUrl = (entry) => entry.absolute_url || entry.url || "";
+  const urlMatches = (entry) => {{
+    if (!hasUrlFilter) return true;
+    const candidate = entryUrl(entry);
+    if (urlMatchMode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requestedUrlString);
+    if (urlMatchMode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const entryMatches = (entry) => {{
+    if (afterIndex !== null && Number(entry.index) <= afterIndex) return false;
+    if (requestedSource !== null && entry.source !== requestedSource) return false;
+    if (requestedMethod !== null && entry.method !== requestedMethod) return false;
+    if (requestedStatus !== null && entry.status !== requestedStatus) return false;
+    if (failedOnly && !entry.failed) return false;
+    return urlMatches(entry);
+  }};
+  const matchingEntries = () => state.entries.filter(entryMatches);
+  const finish = (found) => {{
+    const entries = matchingEntries();
+    const maskedLocation = maskUrlText(location.href);
+    const waitedMs = Date.now() - startedAt;
+    resolve({{
+      url: maskedLocation,
+      url_masked: maskedLocation !== location.href,
+      title: document.title,
+      kind: "network_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_url: requestedUrl,
+      url_match: urlMatchMode,
+      case_sensitive: caseSensitive,
+      requested_source: requestedSource,
+      requested_method: requestedMethod,
+      requested_status: requestedStatus,
+      failed_only: failedOnly,
+      after_index: afterIndex,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: waitedMs,
+      installed: state.installed,
+      newly_installed: newlyInstalled,
+      installed_at: state.installed_at,
+      entry_count: entries.length,
+      buffered_count: state.entries.length,
+      entry: entries.length ? entries[0] : null,
+      entries: entries.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    if (matchingEntries().length > 0) {{
+      finish(true);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _console_snapshot_expression(
     *,
     max_entries: int,
@@ -7930,6 +8089,22 @@ def cmd_action_network_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.network-snapshot", expression)
 
 
+def cmd_action_wait_network(args: argparse.Namespace) -> None:
+    expression = _wait_network_expression(
+        url=args.url,
+        url_match=args.url_match,
+        source=args.source,
+        method=args.method,
+        status=args.status,
+        failed_only=args.failed_only,
+        case_sensitive=args.case_sensitive,
+        after_index=args.after_index,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-network", expression)
+
+
 def cmd_action_console_snapshot(args: argparse.Namespace) -> None:
     expression = _console_snapshot_expression(
         max_entries=args.max_entries,
@@ -10148,6 +10323,54 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Install the fetch/XHR network listener without returning buffered entries.",
     )
     action_network_snapshot.set_defaults(func=cmd_action_network_snapshot)
+
+    action_wait_network = action_subparsers.add_parser(
+        "wait-network",
+        help="Wait for a buffered or future fetch/XHR network entry",
+    )
+    _add_session_target_args(action_wait_network)
+    action_wait_network.add_argument(
+        "--url",
+        help="Optional text to match against the masked absolute request URL.",
+    )
+    action_wait_network.add_argument(
+        "--url-match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --url should match network entry URLs.",
+    )
+    action_wait_network.add_argument(
+        "--source",
+        choices=["fetch", "xhr"],
+        help="Only match entries captured from this network source.",
+    )
+    action_wait_network.add_argument(
+        "--method",
+        help="Only match entries with this HTTP method, such as GET or POST.",
+    )
+    action_wait_network.add_argument(
+        "--status",
+        type=_non_negative_int,
+        help="Only match entries with this HTTP response status.",
+    )
+    action_wait_network.add_argument(
+        "--failed-only",
+        action="store_true",
+        help="Only match entries whose request failed before an HTTP response.",
+    )
+    action_wait_network.add_argument(
+        "--after-index",
+        type=_non_negative_int,
+        help="Only match entries whose network buffer index is greater than this value.",
+    )
+    action_wait_network.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_network.add_argument("--poll-ms", type=float, default=100)
+    action_wait_network.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make URL matching case-sensitive.",
+    )
+    action_wait_network.set_defaults(func=cmd_action_wait_network)
 
     action_console_snapshot = action_subparsers.add_parser(
         "console-snapshot",

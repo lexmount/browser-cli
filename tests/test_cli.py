@@ -219,6 +219,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.frame-snapshot",
         "action.performance-snapshot",
         "action.network-snapshot",
+        "action.wait-network",
         "action.console-snapshot",
         "action.wait-console",
         "action.outline-snapshot",
@@ -267,6 +268,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.frame-snapshot" in payload["commands"]
     assert "action.performance-snapshot" in payload["commands"]
     assert "action.network-snapshot" in payload["commands"]
+    assert "action.wait-network" in payload["commands"]
     assert "action.console-snapshot" in payload["commands"]
     assert "action.wait-console" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
@@ -4077,6 +4079,76 @@ def test_action_network_snapshot_expression_installs_fetch_and_xhr_buffer(
     assert payload["command"] == "action.network-snapshot"
 
 
+def test_action_wait_network_expression_waits_for_matching_entries(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "network_wait"}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "wait-network",
+                "--session-id",
+                "s1",
+                "--url",
+                "/api/save",
+                "--url-match",
+                "regex",
+                "--source",
+                "fetch",
+                "--method",
+                "post",
+                "--status",
+                "201",
+                "--after-index",
+                "2",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "new Promise" in expression
+    assert 'const requestedUrl = "/api/save"' in expression
+    assert 'const urlMatchMode = "regex"' in expression
+    assert 'const requestedSource = "fetch"' in expression
+    assert 'const requestedMethod = "POST"' in expression
+    assert "const requestedStatus = 201" in expression
+    assert "const caseSensitive = true" in expression
+    assert "const afterIndex = 2" in expression
+    assert "const timeoutMs = Math.max(0, 1000.0)" in expression
+    assert "__browserCliNetworkSnapshot" in expression
+    assert (
+        "const matchingEntries = () => state.entries.filter(entryMatches)" in expression
+    )
+    assert 'error: "invalid_regex"' in expression
+    assert "url_masked" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.wait-network"
+
+
 def test_action_console_snapshot_expression_installs_buffered_listener(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -5012,6 +5084,114 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                         "ok": True,
                         "failed": False,
                         "request_has_body": True,
+                        "duration_ms": 42.5,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-network",
+                "--session-id",
+                "s1",
+                "--url",
+                "/save",
+                "--source",
+                "fetch",
+                "--method",
+                "POST",
+                "--status",
+                "201",
+                "--after-index",
+                "1",
+            ],
+            "action.wait-network",
+            {
+                "kind": "network_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_url": "/save",
+                "url_match": "contains",
+                "case_sensitive": False,
+                "requested_source": "fetch",
+                "requested_method": "POST",
+                "requested_status": 201,
+                "failed_only": False,
+                "after_index": 1,
+                "entry_count": 1,
+                "buffered_count": 2,
+                "entry": {
+                    "index": 2,
+                    "source": "fetch",
+                    "method": "POST",
+                    "url": "https://api.example.test/save?token=***",
+                    "url_masked": True,
+                    "absolute_url": "https://api.example.test/save?token=***",
+                    "absolute_url_masked": True,
+                    "status": 201,
+                    "ok": True,
+                    "failed": False,
+                    "duration_ms": 42.5,
+                },
+                "entries": [
+                    {
+                        "index": 2,
+                        "source": "fetch",
+                        "method": "POST",
+                        "url": "https://api.example.test/save?token=***",
+                        "url_masked": True,
+                        "absolute_url": "https://api.example.test/save?token=***",
+                        "absolute_url_masked": True,
+                        "status": 201,
+                        "ok": True,
+                        "failed": False,
+                        "duration_ms": 42.5,
+                    }
+                ],
+            },
+            {
+                "kind": "network_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_url": "/save",
+                "url_match": "contains",
+                "case_sensitive": False,
+                "requested_source": "fetch",
+                "requested_method": "POST",
+                "requested_status": 201,
+                "failed_only": False,
+                "after_index": 1,
+                "entry_count": 1,
+                "buffered_count": 2,
+                "entry": {
+                    "index": 2,
+                    "source": "fetch",
+                    "method": "POST",
+                    "url": "https://api.example.test/save?token=***",
+                    "url_masked": True,
+                    "absolute_url": "https://api.example.test/save?token=***",
+                    "absolute_url_masked": True,
+                    "status": 201,
+                    "ok": True,
+                    "failed": False,
+                    "duration_ms": 42.5,
+                },
+                "entries": [
+                    {
+                        "index": 2,
+                        "source": "fetch",
+                        "method": "POST",
+                        "url": "https://api.example.test/save?token=***",
+                        "url_masked": True,
+                        "absolute_url": "https://api.example.test/save?token=***",
+                        "absolute_url_masked": True,
+                        "status": 201,
+                        "ok": True,
+                        "failed": False,
                         "duration_ms": 42.5,
                     }
                 ],

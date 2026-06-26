@@ -195,6 +195,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`frame-snapshot`",
         "`performance-snapshot`",
         "`network-snapshot`",
+        "`wait-network`",
         "`console-snapshot`",
         "`wait-console`",
         "`outline-snapshot`",
@@ -301,7 +302,10 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`filename_masked`" in normalized
     assert "`url_masked`" in normalized
     assert "`timed_out`" in normalized
+    assert "`requested_url`" in normalized
+    assert "`url_match`" in normalized
     assert "`requested_source`" in normalized
+    assert "`requested_status`" in normalized
     assert "`requested_level`" in normalized
     assert "`after_index`" in normalized
     assert "`headings`" in normalized
@@ -386,6 +390,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Diagnose fetch/XHR calls" in normalized
     assert "`network-snapshot --install-only`" in normalized
     assert "read `network-snapshot`" in normalized
+    assert "wait with `wait-network`" in normalized
     assert "Capture runtime errors" in normalized
     assert "`console-snapshot --install-only`" in normalized
     assert "read `console-snapshot`" in normalized

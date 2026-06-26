@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/console entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/console entries/fetch-XHR entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -293,6 +293,7 @@ browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --ma
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
 browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
 browser-cli action network-snapshot --session-id <session_id> --max-entries 50
+browser-cli action wait-network --session-id <session_id> --url /api/save --method POST --status 201
 browser-cli action console-snapshot --session-id <session_id> --max-entries 50
 browser-cli action wait-console --session-id <session_id> --source pageerror --level error --timeout-ms 5000
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
@@ -311,7 +312,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
-`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`,
+`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
@@ -334,7 +335,8 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `buffered_count`, `source`, `level`, `method`, `requested_method`, `status`,
 `ok`, `failed`, `failed_only`, `request_has_body`, `duration_ms`,
 `text_masked`, `filename_masked`, `url_masked`, `timed_out`,
-`requested_source`, `requested_level`, `after_index`, `headings`, `landmarks`, `outline_count`,
+`requested_url`, `url_match`, `requested_source`, `requested_status`,
+`requested_level`, `after_index`, `headings`, `landmarks`, `outline_count`,
 `heading_count`, `landmark_count`, `node_type`, `level`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
 `language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
@@ -353,8 +355,8 @@ tokens, authorization codes, passwords, or secrets are masked by default. Use
 `performance-snapshot` use the same URL masking for links, frame URLs, and
 performance resource URLs found inside table cells, list items, dialog controls,
 frame metadata, or timing entries.
-`network-snapshot` masks fetch/XHR URLs and does not capture request or response
-bodies; use `request_has_body` only as a boolean hint.
+`network-snapshot` and `wait-network` mask fetch/XHR URLs and do not capture
+request or response bodies; use `request_has_body` only as a boolean hint.
 `console-snapshot` and `wait-console` mask token-like key/value text in captured
 console/page error entries and the reported page URL.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
@@ -385,7 +387,7 @@ For page work, choose actions in this order:
    `wait-title`, `wait-load-state`, `wait-network-idle`, and
    `performance-snapshot` for navigation and async refresh flows.
    For fetch/XHR debugging, run `network-snapshot --install-only`, trigger the
-   behavior, then run `network-snapshot` and parse `entries`.
+   behavior, then run `network-snapshot` or `wait-network` and parse `entries`.
    For runtime errors, run `console-snapshot --install-only`, trigger the
    behavior, then run `console-snapshot` or `wait-console` and parse `entries`.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
@@ -427,9 +429,9 @@ Common task recipes:
    `wait-load-state`, `wait-network-idle`, `performance-snapshot`, `wait-text`,
    or `snapshot`.
 4. Diagnose fetch/XHR calls: run `network-snapshot --install-only`, trigger the
-   suspected action, read `network-snapshot`, and parse `entries`, `method`,
-   `status`, `ok`, `failed`, `duration_ms`, and masked URLs; use `--failed-only`
-   when looking for transport failures.
+   suspected action, read `network-snapshot` or wait with `wait-network`, and
+   parse `entries`, `method`, `status`, `ok`, `failed`, `duration_ms`, and
+   masked URLs; use `--failed-only` when looking for transport failures.
 5. Capture runtime errors: run `console-snapshot --install-only`, trigger the
    suspected action, read `console-snapshot` or wait with `wait-console`, then
    use `text-snapshot`, `dialog-snapshot`, or `inspect` to correlate visible
