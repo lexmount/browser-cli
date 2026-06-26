@@ -303,7 +303,9 @@ parsing stderr.
 `browser-cli doctor` returns a `checks` array with `pass`, `fail`, or `skipped`
 statuses for install/version, environment, direct URL, and API connectivity
 checks. It masks `api_key` in direct URLs and diagnostic error messages by
-default.
+default. Failed or skipped checks may include a `fix` object with a stable
+`code`, recommended `commands`, relevant `env` names, and concise `guidance`;
+agents should prefer those fields when telling the user how to repair setup.
 
 `browser-cli auth status` reports local credential presence without revealing
 the API key. `browser-cli auth export-env` returns `commands` and `script`

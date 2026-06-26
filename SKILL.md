@@ -278,4 +278,5 @@ For `auth`, report credential presence, missing variables, and next steps; do
 not report API key values. For `auth export-env`, use placeholders or masked
 commands unless the user explicitly asked to reveal secrets locally.
 For `doctor`, inspect `checks` and report failed check names without revealing
-API keys.
+API keys. When a check includes `fix`, use its `commands`, `env`, and
+`guidance` fields as the repair workflow.

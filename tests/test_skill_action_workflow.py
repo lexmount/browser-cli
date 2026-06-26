@@ -35,6 +35,8 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli doctor --skip-api" in normalized
     assert "If setup is uncertain, run `browser-cli auth status`, then" in normalized
     assert "inspect `checks` and report failed check names" in normalized
+    assert "When a check includes `fix`" in normalized
+    assert "use its `commands`, `env`, and `guidance` fields" in normalized
 
 
 def test_skill_uses_auth_helpers_for_setup() -> None:

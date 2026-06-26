@@ -178,6 +178,12 @@ def test_doctor_fails_missing_required_env(
     assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "fail"
     assert checks["direct_url"]["status"] == "fail"
     assert checks["api_connectivity"]["status"] == "skipped"
+    assert checks["env.LEXMOUNT_API_KEY"]["fix"]["code"] == "configure_credentials"
+    assert checks["env.LEXMOUNT_API_KEY"]["fix"]["env"] == ["LEXMOUNT_API_KEY"]
+    assert "browser-cli auth login" in checks["env.LEXMOUNT_API_KEY"]["fix"]["commands"]
+    assert checks["env.LEXMOUNT_PROJECT_ID"]["fix"]["env"] == ["LEXMOUNT_PROJECT_ID"]
+    assert checks["direct_url"]["fix"]["code"] == "fix_direct_url_configuration"
+    assert checks["api_connectivity"]["fix"]["code"] == "run_live_api_check"
 
 
 def test_doctor_skip_api_does_not_call_admin(
@@ -203,6 +209,13 @@ def test_doctor_skip_api_does_not_call_admin(
     assert payload["ok"] is True
     assert checks["direct_url"]["status"] == "pass"
     assert checks["api_connectivity"]["status"] == "skipped"
+    assert checks["api_connectivity"]["fix"] == {
+        "code": "run_live_api_check",
+        "commands": ["browser-cli doctor"],
+        "guidance": [
+            "Rerun doctor without --skip-api when live API access is available."
+        ],
+    }
 
 
 def test_doctor_masks_api_error_messages(
@@ -232,6 +245,11 @@ def test_doctor_masks_api_error_messages(
     checks = _checks_by_name(payload)
     assert checks["api_connectivity"]["status"] == "fail"
     assert checks["api_connectivity"]["error"] == "RuntimeError"
+    assert checks["api_connectivity"]["fix"]["code"] == "verify_api_connectivity"
+    assert checks["api_connectivity"]["fix"]["commands"] == [
+        "browser-cli auth status",
+        "browser-cli doctor",
+    ]
 
 
 def test_runtime_failures_mask_sensitive_values(

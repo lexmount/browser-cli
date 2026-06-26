@@ -240,6 +240,41 @@ def _doctor_check(
     return check
 
 
+def _doctor_fix(
+    code: str,
+    *,
+    commands: list[str] | None = None,
+    env: list[str] | None = None,
+    guidance: list[str] | None = None,
+) -> dict[str, Any]:
+    fix: dict[str, Any] = {"code": code}
+    if commands:
+        fix["commands"] = commands
+    if env:
+        fix["env"] = env
+    if guidance:
+        fix["guidance"] = guidance
+    return fix
+
+
+def _credential_doctor_fix(*env: str) -> dict[str, Any]:
+    return _doctor_fix(
+        "configure_credentials",
+        env=list(env),
+        commands=[
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            "browser-cli auth status",
+            "browser-cli doctor",
+        ],
+        guidance=[
+            "Get Project ID and API key from https://browser.lexmount.cn.",
+            "Set credentials only in the local shell, not in chat.",
+            "Run doctor again after exporting credentials.",
+        ],
+    )
+
+
 def _normalize_status(value: Any) -> str | None:
     if value is None:
         return None
@@ -3285,6 +3320,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             "pass" if api_key else "fail",
             "LEXMOUNT_API_KEY is set" if api_key else "LEXMOUNT_API_KEY is required",
             present=api_key is not None,
+            **({} if api_key else {"fix": _credential_doctor_fix("LEXMOUNT_API_KEY")}),
         )
     )
     checks.append(
@@ -3295,6 +3331,11 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             if project_id
             else "LEXMOUNT_PROJECT_ID is required",
             present=project_id is not None,
+            **(
+                {}
+                if project_id
+                else {"fix": _credential_doctor_fix("LEXMOUNT_PROJECT_ID")}
+            ),
         )
     )
     checks.append(
@@ -3330,6 +3371,23 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 "fail",
                 _mask_sensitive_text(str(exc)),
                 error=exc.__class__.__name__,
+                fix=_doctor_fix(
+                    "fix_direct_url_configuration",
+                    env=[
+                        "LEXMOUNT_API_KEY",
+                        "LEXMOUNT_PROJECT_ID",
+                        "LEXMOUNT_BASE_URL",
+                    ],
+                    commands=[
+                        "browser-cli auth status",
+                        "browser-cli auth export-env",
+                        "browser-cli doctor",
+                    ],
+                    guidance=[
+                        "Confirm required environment variables are set.",
+                        "Unset LEXMOUNT_BASE_URL unless a custom API endpoint is required.",
+                    ],
+                ),
             )
         )
     else:
@@ -3351,6 +3409,13 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 "api_connectivity",
                 "skipped",
                 "API connectivity check skipped by --skip-api",
+                fix=_doctor_fix(
+                    "run_live_api_check",
+                    commands=["browser-cli doctor"],
+                    guidance=[
+                        "Rerun doctor without --skip-api when live API access is available."
+                    ],
+                ),
             )
         )
     elif not api_key or not project_id:
@@ -3359,6 +3424,10 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 "api_connectivity",
                 "skipped",
                 "API connectivity check requires LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID",
+                fix=_credential_doctor_fix(
+                    "LEXMOUNT_API_KEY",
+                    "LEXMOUNT_PROJECT_ID",
+                ),
             )
         )
     else:
@@ -3377,6 +3446,18 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                     "fail",
                     _mask_sensitive_text(str(exc)),
                     error=error,
+                    fix=_doctor_fix(
+                        "verify_api_connectivity",
+                        commands=[
+                            "browser-cli auth status",
+                            "browser-cli doctor",
+                        ],
+                        guidance=[
+                            "Confirm Project ID and API key are valid for browser.lexmount.cn.",
+                            "Check LEXMOUNT_BASE_URL only if a custom API endpoint is configured.",
+                            "Create a new scoped API key if the current key was revoked or expired.",
+                        ],
+                    ),
                 )
             )
         else:
