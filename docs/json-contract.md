@@ -96,6 +96,9 @@ Default behavior:
   `refresh_available=false`.
 - `doctor --smoke-session` may report a temporary `session_id` and cleanup
   status, but must not print direct connect URLs or token values.
+- `doctor` reports a `command_catalog` check with `required_commands`,
+  `missing_required_commands`, `schema_version`, and `command_count` so agents
+  can detect an installed CLI that is too old for the Skill workflow.
 - `auth logout` may report local credential file deletion metadata, but must
   not print token values or unset environment variables.
 

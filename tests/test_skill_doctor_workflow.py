@@ -28,6 +28,8 @@ def test_skill_explains_doctor_status_decisions() -> None:
     assert "`ready_for_browser_actions: true`" in text
     assert '`browser_smoke_session` with `status: "pass"`' in text
     assert '`browser_smoke_session` with `status: "fail"`' in text
+    assert '`command_catalog` with `status: "warn"`' in text
+    assert "`missing_required_commands`" in text
     assert "`repair_plan`" in text
     assert "`warnings > 0`" in text
     assert "`ok: false`" in text
@@ -38,6 +40,10 @@ def test_skill_explains_doctor_status_decisions() -> None:
     assert "browser sessions/actions can be attempted" in normalized
     assert "a temporary browser session was created and closed" in normalized
     assert "manual `session close` command" in normalized
+    assert (
+        "follow its `fix` guidance before relying on the full Skill workflow"
+        in normalized
+    )
     assert (
         "prefer its aggregated `commands`, `env`, `guidance`, and `fixes`" in normalized
     )

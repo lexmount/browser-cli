@@ -101,6 +101,9 @@ what to do:
 - `browser_smoke_session` with `status: "fail"`: follow its `fix` commands,
   especially a manual `session close` command when `created` is true and
   `closed` is false.
+- `command_catalog` with `status: "warn"`: inspect
+  `missing_required_commands` and follow its `fix` guidance before relying on
+  the full Skill workflow.
 - `repair_plan`: prefer its aggregated `commands`, `env`, `guidance`, and
   `fixes` when explaining setup repair steps.
 - `warnings > 0` or a check with `status: "warn"`: continue only after

@@ -488,10 +488,13 @@ parsing stderr.
 `ready_for_browser_actions`, check-name arrays, and a `repair_plan` that
 aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
 `fail`, or `skipped` statuses for Python/runtime, install path, version,
-environment, direct URL, API connectivity, and optional browser smoke-session
-checks. It masks `api_key` in direct URLs and diagnostic error messages by
-default. `doctor --smoke-session` creates and closes a temporary session after
-API connectivity passes, then reports the `browser_smoke_session` check with
+command catalog, environment, direct URL, API connectivity, and optional browser
+smoke-session checks. The `command_catalog` check verifies the installed CLI has
+the commands expected by the Codex Skill and reports
+`missing_required_commands` with upgrade guidance when the action surface is too
+old. It masks `api_key` in direct URLs and diagnostic error messages by default.
+`doctor --smoke-session` creates and closes a temporary session after API
+connectivity passes, then reports the `browser_smoke_session` check with
 `created`, `closed`, `session_id`, and actionable close guidance if cleanup
 fails. Failed, warning, or skipped checks may include a `fix` object with a
 stable `code`, recommended `commands`, relevant `env` names, and concise

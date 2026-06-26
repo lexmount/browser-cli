@@ -143,8 +143,11 @@ Expected behavior after the website page exists:
   metadata, and reports `revoke_available=false` when `--revoke` is requested
   until the website/API exposes remote revoke.
 - `browser-cli auth export-env` remains local and masks secrets by default.
-- `browser-cli doctor --json` checks local env, package availability, API
-  connectivity, and optionally session creation when the user opts in.
+- `browser-cli doctor --json` checks local env, package availability, command
+  catalog compatibility, API connectivity, and optionally session creation when
+  the user opts in.
+- The command catalog compatibility check reports when an installed CLI is too
+  old for the current Codex Skill workflow.
 - `browser-cli doctor --smoke-session` creates and closes a temporary browser
   session after API connectivity passes and reports `browser_smoke_session`.
 
@@ -269,7 +272,8 @@ Useful actions:
 3. Doctor-aware setup
    - page text aligned with `browser-cli doctor --json`
    - troubleshooting table driven by `repair_plan` for missing env, auth
-     failure, executable PATH warnings, and quota/parallel limit
+     failure, command catalog warnings, executable PATH warnings, and
+     quota/parallel limit
 4. Context reuse support
    - explain `context pick --dry-run` and metadata-based `session create`
    - surface `selection_summary` fields such as `locked_matches`,

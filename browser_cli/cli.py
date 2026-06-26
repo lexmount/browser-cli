@@ -55,6 +55,28 @@ DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
+DOCTOR_REQUIRED_COMMANDS = (
+    "commands",
+    "doctor",
+    "auth.status",
+    "auth.login",
+    "auth.export-env",
+    "context.pick",
+    "context.status",
+    "session.create",
+    "session.close",
+    "action.open-url",
+    "action.page-info",
+    "action.interactive-snapshot",
+    "action.click-role",
+    "action.fill-label",
+    "action.wait-dialog",
+    "action.wait-frame",
+    "action.network-snapshot",
+    "action.wait-network",
+    "action.console-snapshot",
+    "action.wait-console",
+)
 COMMON_DOM_EVENT_NAMES = (
     "input",
     "change",
@@ -557,6 +579,69 @@ def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
         "guidance": _dedupe_preserving_order(guidance),
         "fixes": fixes,
     }
+
+
+def _doctor_command_catalog_check() -> dict[str, Any]:
+    try:
+        catalog = _command_catalog()
+    except Exception as exc:
+        return _doctor_check(
+            "command_catalog",
+            "warn",
+            "Command catalog could not be built.",
+            error=exc.__class__.__name__,
+            fix=_doctor_fix(
+                "verify_command_catalog",
+                commands=[
+                    "browser-cli commands --names-only",
+                    "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on command discovery before writing custom JavaScript.",
+                    "Upgrade or reinstall browser-cli if command discovery fails.",
+                ],
+            ),
+        )
+
+    command_names = {
+        str(command.get("name"))
+        for command in catalog.get("commands", [])
+        if isinstance(command, dict)
+    }
+    missing = [
+        command for command in DOCTOR_REQUIRED_COMMANDS if command not in command_names
+    ]
+    if missing:
+        return _doctor_check(
+            "command_catalog",
+            "warn",
+            "Command catalog is missing commands expected by the Codex Skill.",
+            schema_version=catalog.get("schema_version"),
+            command_count=len(command_names),
+            required_commands=list(DOCTOR_REQUIRED_COMMANDS),
+            missing_required_commands=missing,
+            fix=_doctor_fix(
+                "upgrade_browser_cli_command_surface",
+                commands=[
+                    "browser-cli commands --names-only",
+                    "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Upgrade browser-cli before relying on the full Codex Skill workflow.",
+                    "Use `browser-cli commands --group action --names-only` to inspect available actions.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "command_catalog",
+        "pass",
+        "Command catalog includes the commands expected by the Codex Skill.",
+        schema_version=catalog.get("schema_version"),
+        command_count=len(command_names),
+        required_commands=list(DOCTOR_REQUIRED_COMMANDS),
+        missing_required_commands=[],
+    )
 
 
 def _doctor_error_name(exc: Exception) -> str:
@@ -8688,6 +8773,8 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             version_known=runtime_version is not None,
         )
     )
+
+    checks.append(_doctor_command_catalog_check())
 
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")

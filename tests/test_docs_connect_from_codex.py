@@ -26,6 +26,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "browser-cli doctor --json" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "browser_smoke_session" in text
+    assert "command catalog compatibility" in text
+    assert "command catalog warnings" in text
     assert "ready_for_browser_actions" in text
     assert "repair_plan.commands" in text
     assert "repair_plan.env" in text

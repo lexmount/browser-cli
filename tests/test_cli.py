@@ -354,6 +354,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
     }
     assert checks["browser_cli"]["version"] == "0.1.0"
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
+    assert checks["command_catalog"]["status"] == "pass"
+    assert checks["command_catalog"]["schema_version"] == 1
+    assert "action.wait-dialog" in checks["command_catalog"]["required_commands"]
+    assert "action.wait-frame" in checks["command_catalog"]["required_commands"]
+    assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "pass"
     assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "pass"
     assert checks["direct_url"]["status"] == "pass"
@@ -366,6 +371,49 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "session_count": 2,
         "status_filter": None,
     }
+
+
+def test_doctor_warns_when_command_catalog_misses_skill_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._command_catalog",
+        lambda: {
+            "schema_version": 1,
+            "commands": [
+                {"name": "commands"},
+                {"name": "doctor"},
+                {"name": "session.create"},
+            ],
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "command_catalog" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    catalog = checks["command_catalog"]
+    assert catalog["status"] == "warn"
+    assert catalog["schema_version"] == 1
+    assert catalog["command_count"] == 3
+    assert "action.wait-dialog" in catalog["missing_required_commands"]
+    assert "action.wait-frame" in catalog["missing_required_commands"]
+    assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
+    assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
 
 
 def test_doctor_smoke_session_creates_and_closes_temp_session(
