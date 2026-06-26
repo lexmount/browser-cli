@@ -823,6 +823,22 @@ def _auth_token_info_next_steps(
     ]
 
 
+def _auth_logout_next_steps(*, deleted: bool, revoke_requested: bool) -> list[str]:
+    steps = [
+        "Run `browser-cli auth status` to verify local credential state.",
+        "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support lands.",
+    ]
+    if deleted:
+        steps.insert(0, "Local device-token metadata was removed.")
+    else:
+        steps.insert(0, "No local device-token metadata file was removed.")
+    if revoke_requested:
+        steps.append(
+            "Remote revoke is not implemented in browser-cli yet; revoke the token from browser.lexmount.cn if needed."
+        )
+    return steps
+
+
 def _dedupe_preserving_order(values: list[str] | tuple[str, ...]) -> list[str]:
     deduped: list[str] = []
     for value in values:
@@ -5483,6 +5499,60 @@ def cmd_auth_token_info(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_auth_logout(args: argparse.Namespace) -> None:
+    command = "auth.logout"
+    path, path_source = _device_token_credentials_path(args.credentials_file)
+    device_token_before = _local_device_token_status(args.credentials_file)
+    present_before = bool(device_token_before.get("present"))
+    warnings: list[str] = []
+    deleted = False
+
+    if args.revoke:
+        warnings.append(
+            "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
+        )
+
+    if path.exists():
+        if not path.is_file():
+            _failure(
+                command,
+                "invalid_credentials_path",
+                "Credentials path exists but is not a file.",
+                exit_code=1,
+                credentials_file=str(path),
+            )
+        try:
+            path.unlink()
+        except OSError as exc:
+            _failure(
+                command,
+                "credential_delete_error",
+                str(exc),
+                exit_code=1,
+                credentials_file=str(path),
+            )
+        deleted = True
+
+    present_after = path.exists()
+    _success(
+        command,
+        credentials_file=str(path),
+        path_source=path_source,
+        present_before=present_before,
+        present_after=present_after,
+        deleted=deleted,
+        env_unchanged=True,
+        revoke_requested=bool(args.revoke),
+        revoke_available=False,
+        warnings=warnings,
+        device_token_before=device_token_before,
+        next_steps=_auth_logout_next_steps(
+            deleted=deleted,
+            revoke_requested=bool(args.revoke),
+        ),
+    )
+
+
 def cmd_auth_export_env(args: argparse.Namespace) -> None:
     command = "auth.export-env"
     warnings: list[str] = []
@@ -6836,6 +6906,24 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Scope that should be present in the local device token. May be repeated.",
     )
     auth_token_info.set_defaults(func=cmd_auth_token_info)
+
+    auth_logout = auth_subparsers.add_parser(
+        "logout",
+        help="Remove local device-token metadata without touching env credentials",
+    )
+    auth_logout.add_argument(
+        "--credentials-file",
+        help=(
+            "Remove local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
+    auth_logout.add_argument(
+        "--revoke",
+        action="store_true",
+        help="Request remote revoke when available. Current implementation removes local metadata only.",
+    )
+    auth_logout.set_defaults(func=cmd_auth_logout)
 
     auth_export_env = auth_subparsers.add_parser(
         "export-env",

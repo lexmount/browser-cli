@@ -220,7 +220,8 @@ Suggested local credential shape:
 
 Current CLI support:
 
-- `browser-cli auth status`, `browser-cli auth token-info`, and
+- `browser-cli auth status`, `browser-cli auth token-info`,
+  `browser-cli auth logout`, and
   `browser-cli doctor` read the fallback credentials file,
   `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or
   `--credentials-file`.
@@ -230,6 +231,12 @@ Current CLI support:
 - `browser-cli auth token-info --required-scope <scope>` reports
   `scope_check.required_scopes`, `scope_check.missing_scopes`, and
   `scope_check.satisfied`.
+- `browser-cli auth logout` removes the local fallback credentials file and
+  reports `deleted`, `present_before`, `present_after`, `revoke_requested`, and
+  `revoke_available`.
+- `browser-cli auth logout --revoke` is accepted for forward compatibility but
+  currently reports `revoke_available=false` until browser.lexmount.cn exposes
+  remote token revoke.
 - Output never includes access or refresh token values.
 - Until browser API bearer-token support lands, `runtime_auth_usable` remains
   false for device tokens and browser actions still require env API-key
@@ -258,7 +265,8 @@ browser-cli auth refresh
 
 It must mask token values.
 
-`auth logout` should remove local credentials and optionally revoke the token:
+`auth logout` currently removes local credentials. Remote revoke remains future
+behavior:
 
 ```bash
 browser-cli auth logout --revoke

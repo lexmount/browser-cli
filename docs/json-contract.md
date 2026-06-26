@@ -54,9 +54,12 @@ Default behavior:
   `api_key`.
 - Diagnostic and auth commands should report whether credentials exist without
   printing secret values by default.
-- `auth status` and `doctor` may report local `device_token` metadata such as
-  project id, token id, scopes, expiration, and refresh-needed state, but must
-  never print access or refresh token values.
+- `auth status`, `auth token-info`, `auth logout`, and `doctor` may report
+  local `device_token` metadata such as project id, token id, scopes,
+  expiration, and refresh-needed state, but must never print access or refresh
+  token values.
+- `auth logout` may report local credential file deletion metadata, but must
+  not print token values or unset environment variables.
 
 Explicit reveal behavior:
 

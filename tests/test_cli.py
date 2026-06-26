@@ -796,6 +796,120 @@ def test_auth_token_info_reports_missing_credentials_file(
     assert payload["next_steps"][0] == "No local device-token metadata was found."
 
 
+def test_auth_logout_deletes_device_token_file_without_revealing_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+                "scopes": ["browser.actions:run"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "logout", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    assert not credentials_file.exists()
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert payload["command"] == "auth.logout"
+    assert payload["credentials_file"] == str(credentials_file)
+    assert payload["path_source"] == "argument"
+    assert payload["present_before"] is True
+    assert payload["present_after"] is False
+    assert payload["deleted"] is True
+    assert payload["env_unchanged"] is True
+    assert payload["revoke_requested"] is False
+    assert payload["revoke_available"] is False
+    assert payload["warnings"] == []
+    assert payload["device_token_before"]["token_id"] == "tok_123"
+    assert payload["next_steps"][0] == "Local device-token metadata was removed."
+
+
+def test_auth_logout_missing_file_is_idempotent(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    credentials_file = tmp_path / "missing.json"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "logout", "--credentials-file", str(credentials_file)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.logout"
+    assert payload["present_before"] is False
+    assert payload["present_after"] is False
+    assert payload["deleted"] is False
+    assert payload["env_unchanged"] is True
+    assert payload["warnings"] == []
+    assert payload["device_token_before"]["present"] is False
+    assert (
+        payload["next_steps"][0] == "No local device-token metadata file was removed."
+    )
+
+
+def test_auth_logout_revoke_flag_reports_remote_revoke_pending(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "secret-access-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "logout",
+                "--credentials-file",
+                str(credentials_file),
+                "--revoke",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert not credentials_file.exists()
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert payload["deleted"] is True
+    assert payload["revoke_requested"] is True
+    assert payload["revoke_available"] is False
+    assert payload["warnings"] == [
+        "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
+    ]
+    assert "Remote revoke is not implemented" in payload["next_steps"][-1]
+
+
 def test_auth_export_env_emits_safe_placeholders(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

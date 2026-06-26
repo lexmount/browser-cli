@@ -112,6 +112,7 @@ Use these local auth helpers:
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth token-info --required-scope browser:actions
+browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth login --project-id <project-id> --scope browser:actions --expires-in 24h
@@ -129,6 +130,10 @@ local terminal.
 access or refresh token values. Until bearer-token runtime support lands,
 `runtime_auth_usable` is true only when env API-key credentials are configured.
 Use `auth token-info --required-scope <scope>` to check scoped-token coverage.
+Use `auth logout --credentials-file <path>` to remove local device-token
+metadata without changing environment variables. `auth logout --revoke`
+currently reports `revoke_available: false` and reminds you to revoke from
+browser.lexmount.cn until remote revoke is implemented.
 
 After credentials are configured, run the self-check:
 
@@ -149,6 +154,7 @@ Authentication:
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth token-info --required-scope browser:sessions --required-scope browser:actions
+browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth login --project-id <project-id> --scope browser:sessions --scope browser:actions --expires-in 24h

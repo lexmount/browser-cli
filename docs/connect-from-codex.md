@@ -115,6 +115,7 @@ Current short-term CLI commands:
 ```bash
 browser-cli auth status
 browser-cli auth token-info
+browser-cli auth logout
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -130,6 +131,9 @@ Expected behavior after the website page exists:
   token-based flow is configured.
 - `browser-cli auth token-info` remains local and reports safe scoped-token
   metadata plus scope checks without printing token values.
+- `browser-cli auth logout` remains local, removes fallback device-token
+  metadata, and reports `revoke_available=false` when `--revoke` is requested
+  until the website/API exposes remote revoke.
 - `browser-cli auth export-env` remains local and masks secrets by default.
 - `browser-cli doctor --json` checks local env, package availability, API
   connectivity, and optionally session creation when the user opts in.

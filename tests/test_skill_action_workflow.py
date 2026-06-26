@@ -52,11 +52,12 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     normalized = _normalized_skill_text()
 
     assert (
-        "guide authentication with auth status/token-info/export-env/login"
+        "guide authentication with auth status/token-info/logout/export-env/login"
         in normalized
     )
     assert "browser-cli auth status" in normalized
     assert "browser-cli auth token-info" in normalized
+    assert "browser-cli auth logout" in normalized
     assert "browser-cli auth login" in normalized
     assert "browser-cli auth export-env" in normalized
     assert (
@@ -73,8 +74,11 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "`auth status` reports `auth_source`, `runtime_auth_usable`" in normalized
     assert "Use `auth token-info --required-scope <scope>`" in normalized
+    assert "Use `auth logout --credentials-file <path>`" in normalized
+    assert "`--revoke` only reports remote revoke pending" in normalized
     assert "`device_token.valid`, `device_token.expired`" in normalized
     assert "and `scope_check`" in normalized
+    assert "`revoke_requested`, `revoke_available`, and `warnings`" in normalized
     assert "Do not start browser actions from a device token" in normalized
     assert "do not report API key values" in normalized
 
