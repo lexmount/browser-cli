@@ -204,6 +204,18 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert payload["status"] == "ok"
     assert payload["failed"] == 0
     assert payload["warnings"] == 0
+    assert payload["failed_checks"] == []
+    assert payload["warning_checks"] == []
+    assert payload["skipped_checks"] == []
+    assert payload["ready_for_browser_actions"] is True
+    assert payload["repair_plan"] == {
+        "required": False,
+        "recommended": False,
+        "commands": [],
+        "env": [],
+        "guidance": [],
+        "fixes": [],
+    }
     assert "secret" not in json.dumps(payload)
 
     checks = _checks_by_name(payload)
@@ -255,6 +267,13 @@ def test_doctor_warns_when_executable_is_not_on_path(
     assert payload["status"] == "warning"
     assert payload["failed"] == 0
     assert payload["warnings"] == 1
+    assert payload["failed_checks"] == []
+    assert payload["warning_checks"] == ["browser_cli_executable"]
+    assert payload["ready_for_browser_actions"] is True
+    assert payload["repair_plan"]["required"] is False
+    assert payload["repair_plan"]["recommended"] is True
+    assert payload["repair_plan"]["fixes"][0]["check"] == "browser_cli_executable"
+    assert "uv tool install" in payload["repair_plan"]["commands"][0]
     checks = _checks_by_name(payload)
     assert checks["browser_cli_executable"]["status"] == "warn"
     assert checks["browser_cli_executable"]["fix"]["code"] == (
@@ -281,6 +300,15 @@ def test_doctor_fails_missing_required_env(
     assert payload["ok"] is False
     assert payload["error"] == "doctor_failed"
     assert payload["failed"] >= 2
+    assert payload["ready_for_browser_actions"] is False
+    assert "env.LEXMOUNT_API_KEY" in payload["failed_checks"]
+    assert "env.LEXMOUNT_PROJECT_ID" in payload["failed_checks"]
+    assert "direct_url" in payload["failed_checks"]
+    assert payload["skipped_checks"] == ["api_connectivity"]
+    assert payload["repair_plan"]["required"] is True
+    assert "LEXMOUNT_API_KEY" in payload["repair_plan"]["env"]
+    assert "LEXMOUNT_PROJECT_ID" in payload["repair_plan"]["env"]
+    assert "browser-cli auth login" in payload["repair_plan"]["commands"]
 
     checks = _checks_by_name(payload)
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "fail"
@@ -316,6 +344,12 @@ def test_doctor_skip_api_does_not_call_admin(
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
     assert payload["ok"] is True
+    assert payload["ready_for_browser_actions"] is False
+    assert payload["failed_checks"] == []
+    assert payload["skipped_checks"] == ["api_connectivity"]
+    assert payload["repair_plan"]["required"] is False
+    assert payload["repair_plan"]["recommended"] is True
+    assert payload["repair_plan"]["commands"] == ["browser-cli doctor"]
     assert checks["direct_url"]["status"] == "pass"
     assert checks["api_connectivity"]["status"] == "skipped"
     assert checks["api_connectivity"]["fix"] == {

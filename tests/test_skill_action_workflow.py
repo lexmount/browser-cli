@@ -42,9 +42,9 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "at the top level and after subcommands" in normalized
     assert "`ok: true` and `failed: 0`" in normalized
     assert "`ok: false`: stop before creating sessions" in normalized
-    assert "inspect `checks` and report failed or warning check names" in normalized
-    assert "When a check includes `fix`" in normalized
-    assert "use its `commands`, `env`, and `guidance` fields" in normalized
+    assert "inspect `ready_for_browser_actions`, `failed_checks`" in normalized
+    assert "Prefer `repair_plan.commands`" in normalized
+    assert "fall back to per-check `fix` objects" in normalized
 
 
 def test_skill_uses_auth_helpers_for_setup() -> None:

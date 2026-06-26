@@ -332,6 +332,53 @@ def _doctor_fix(
     return fix
 
 
+def _doctor_check_names(
+    checks: list[dict[str, Any]],
+    *,
+    status: str,
+) -> list[str]:
+    return [str(check["name"]) for check in checks if check.get("status") == status]
+
+
+def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    statuses = {"fail", "warn", "skipped"}
+    commands: list[str] = []
+    env: list[str] = []
+    guidance: list[str] = []
+    fixes: list[dict[str, Any]] = []
+
+    for check in checks:
+        if check.get("status") not in statuses:
+            continue
+        fix = check.get("fix")
+        if not isinstance(fix, dict):
+            continue
+
+        item: dict[str, Any] = {
+            "check": check.get("name"),
+            "status": check.get("status"),
+            "code": fix.get("code"),
+        }
+        for key in ("commands", "env", "guidance"):
+            values = fix.get(key)
+            if isinstance(values, list):
+                item[key] = values
+        fixes.append(item)
+
+        commands.extend(str(value) for value in fix.get("commands", []))
+        env.extend(str(value) for value in fix.get("env", []))
+        guidance.extend(str(value) for value in fix.get("guidance", []))
+
+    return {
+        "required": bool(_doctor_check_names(checks, status="fail")),
+        "recommended": bool(fixes),
+        "commands": _dedupe_preserving_order(commands),
+        "env": _dedupe_preserving_order(env),
+        "guidance": _dedupe_preserving_order(guidance),
+        "fixes": fixes,
+    }
+
+
 def _credential_doctor_fix(*env: str) -> dict[str, Any]:
     return _doctor_fix(
         "configure_credentials",
@@ -4970,6 +5017,10 @@ def cmd_doctor(args: argparse.Namespace) -> None:
 
     failed = [check for check in checks if check["status"] == "fail"]
     warnings = [check for check in checks if check["status"] == "warn"]
+    api_connectivity = next(
+        (check for check in checks if check.get("name") == "api_connectivity"),
+        None,
+    )
     data: dict[str, Any] = {
         "ok": not failed,
         "command": command,
@@ -4977,6 +5028,15 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "checked": len(checks),
         "failed": len(failed),
         "warnings": len(warnings),
+        "failed_checks": _doctor_check_names(checks, status="fail"),
+        "warning_checks": _doctor_check_names(checks, status="warn"),
+        "skipped_checks": _doctor_check_names(checks, status="skipped"),
+        "ready_for_browser_actions": (
+            not failed
+            and isinstance(api_connectivity, dict)
+            and api_connectivity.get("status") == "pass"
+        ),
+        "repair_plan": _doctor_repair_plan(checks),
         "checks": checks,
     }
     if failed:

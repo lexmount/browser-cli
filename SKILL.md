@@ -66,6 +66,9 @@ level and after subcommands; browser-cli output is always JSON. Parse the JSON
 before deciding what to do:
 
 - `ok: true` and `failed: 0`: continue with browser work.
+- `ready_for_browser_actions: true`: browser sessions/actions can be attempted.
+- `repair_plan`: prefer its aggregated `commands`, `env`, `guidance`, and
+  `fixes` when explaining setup repair steps.
 - `warnings > 0` or a check with `status: "warn"`: continue only after
   reporting warning check names and any `fix` guidance; warnings usually mean
   local installation/PATH hygiene rather than unusable credentials.
@@ -356,6 +359,8 @@ not report API key values. For `auth login`, prefer the `handoff` object's
 `copyable_commands`, `local_env`, `verification`, and `secret_policy` fields.
 For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.
-For `doctor`, inspect `checks` and report failed or warning check names without
-revealing API keys. When a check includes `fix`, use its `commands`, `env`, and
-`guidance` fields as the repair workflow.
+For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
+`warning_checks`, `skipped_checks`, and `repair_plan` first. Report failed or
+warning check names without revealing API keys. Prefer `repair_plan.commands`,
+`repair_plan.env`, and `repair_plan.guidance`; fall back to per-check `fix`
+objects only when needed.

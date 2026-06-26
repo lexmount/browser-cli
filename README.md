@@ -349,15 +349,16 @@ Argument parsing errors also return JSON on stdout with exit code `2`:
 Agents should use the `usage` field to repair malformed commands instead of
 parsing stderr.
 
-`browser-cli doctor` returns top-level `ok`, `failed`, `warnings`, and `checked`
-fields plus a `checks` array with `pass`, `warn`, `fail`, or `skipped` statuses
-for Python/runtime, install path, version, environment, direct URL, and API
-connectivity checks. It masks `api_key` in direct URLs and diagnostic error
-messages by default. Failed, warning, or skipped checks may include a `fix`
-object with a stable `code`, recommended `commands`, relevant `env` names, and
-concise `guidance`; agents should prefer those fields when telling the user how
-to repair setup. `doctor --json` is a no-op compatibility form because JSON is
-already the only output format.
+`browser-cli doctor` returns top-level `ok`, `failed`, `warnings`, `checked`,
+`ready_for_browser_actions`, check-name arrays, and a `repair_plan` that
+aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
+`fail`, or `skipped` statuses for Python/runtime, install path, version,
+environment, direct URL, and API connectivity checks. It masks `api_key` in
+direct URLs and diagnostic error messages by default. Failed, warning, or
+skipped checks may include a `fix` object with a stable `code`, recommended
+`commands`, relevant `env` names, and concise `guidance`; agents should prefer
+`repair_plan` when telling the user how to repair setup. `doctor --json` is a
+no-op compatibility form because JSON is already the only output format.
 
 `browser-cli auth status` reports local credential presence without revealing
 the API key. `browser-cli auth export-env` returns `commands` and `script`
