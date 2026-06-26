@@ -34,13 +34,18 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     prompt = _quoted_yaml_value(OPENAI_YAML.read_text(), "default_prompt")
 
     assert "$browser-cli" in prompt
-    assert "discover commands" in prompt
     assert "auth status" in prompt
     assert "refresh" in prompt
-    assert "doctor" in prompt
-    assert "smoke-session" in prompt
-    assert "context/session" in prompt
-    assert "browser actions" in prompt
+    assert "login" in prompt
+    assert "doctor --json" in prompt
+    assert "commands" in prompt
+    assert "custom JavaScript" in prompt
+    assert "dry-run" in prompt
+    assert "persistent contexts" in prompt
+    assert "sessions/actions" in prompt
+    assert "JSON output" in prompt
+    assert "secrets" in prompt
+    assert "chat" in prompt
 
 
 def test_openai_yaml_stays_aligned_with_skill_name() -> None:
