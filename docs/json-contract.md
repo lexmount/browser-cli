@@ -67,8 +67,8 @@ Default behavior:
   a hidden value rather than the literal page value.
 - `action link-snapshot` masks sensitive URL query parameter values by default
   in `href` and `absolute_url`; `action table-snapshot` and
-  `action list-snapshot` apply the same masking to links found inside table
-  cells or list items. Parse `href_masked` and
+  `action list-snapshot` and `action dialog-snapshot` apply the same masking to
+  links found inside table cells, list items, or dialog controls. Parse `href_masked` and
   `absolute_url_masked` before copying or reporting URLs.
 - `auth status`, `auth token-info`, `auth refresh`, `auth logout`, and `doctor`
   may report local `device_token` metadata such as project id, token id, scopes,

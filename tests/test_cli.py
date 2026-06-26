@@ -215,6 +215,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.table-snapshot",
         "action.list-snapshot",
         "action.text-snapshot",
+        "action.dialog-snapshot",
         "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
@@ -257,6 +258,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.table-snapshot" in payload["commands"]
     assert "action.list-snapshot" in payload["commands"]
     assert "action.text-snapshot" in payload["commands"]
+    assert "action.dialog-snapshot" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -3840,6 +3842,61 @@ def test_action_text_snapshot_expression_extracts_bounded_text_blocks(
     assert payload["command"] == "action.text-snapshot"
 
 
+def test_action_dialog_snapshot_expression_extracts_dialog_controls(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "dialogs", "dialogs": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "dialog-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "body",
+                "--include-hidden",
+                "--max-controls",
+                "8",
+                "--max-chars",
+                "240",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert 'const rootSelector = "body"' in expression
+    assert "const maxControls = Math.max(0, 8)" in expression
+    assert "const maxChars = Math.max(0, 240)" in expression
+    assert "[role~='alertdialog']" in expression
+    assert "[aria-modal='true']" in expression
+    assert "interactiveSelector" in expression
+    assert "control_count: candidateControls.length" in expression
+    assert "controls_truncated" in expression
+    assert "href_masked" in expression
+    assert "absolute_url_masked" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.dialog-snapshot"
+
+
 def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4339,6 +4396,112 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                         "text_length": 5,
                         "text_truncated": False,
                     },
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "dialog-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "body",
+                "--max-controls",
+                "4",
+                "--max-chars",
+                "120",
+            ],
+            "action.dialog-snapshot",
+            {
+                "kind": "dialogs",
+                "selector": "body",
+                "dialog_count": 1,
+                "node_count": 1,
+                "dialogs": [
+                    {
+                        "dialog_index": 0,
+                        "selector": "[role=dialog]",
+                        "tag": "div",
+                        "role": "dialog",
+                        "name": "Confirm",
+                        "title": "Confirm",
+                        "description": "Delete this item?",
+                        "modal": True,
+                        "text": "Confirm Delete this item?",
+                        "text_length": 25,
+                        "text_truncated": False,
+                        "control_count": 2,
+                        "controls": [
+                            {
+                                "control_index": 0,
+                                "selector": "button:nth-of-type(1)",
+                                "tag": "button",
+                                "role": "button",
+                                "name": "Cancel",
+                                "text": "Cancel",
+                                "disabled": False,
+                            },
+                            {
+                                "control_index": 1,
+                                "selector": "a.confirm",
+                                "tag": "a",
+                                "role": "link",
+                                "name": "Delete",
+                                "text": "Delete",
+                                "href": "/delete?token=***",
+                                "href_masked": True,
+                                "absolute_url": "https://example.test/delete?token=***",
+                                "absolute_url_masked": True,
+                            },
+                        ],
+                    }
+                ],
+            },
+            {
+                "kind": "dialogs",
+                "selector": "body",
+                "dialog_count": 1,
+                "node_count": 1,
+                "dialogs": [
+                    {
+                        "dialog_index": 0,
+                        "selector": "[role=dialog]",
+                        "tag": "div",
+                        "role": "dialog",
+                        "name": "Confirm",
+                        "title": "Confirm",
+                        "description": "Delete this item?",
+                        "modal": True,
+                        "text": "Confirm Delete this item?",
+                        "text_length": 25,
+                        "text_truncated": False,
+                        "control_count": 2,
+                        "controls": [
+                            {
+                                "control_index": 0,
+                                "selector": "button:nth-of-type(1)",
+                                "tag": "button",
+                                "role": "button",
+                                "name": "Cancel",
+                                "text": "Cancel",
+                                "disabled": False,
+                            },
+                            {
+                                "control_index": 1,
+                                "selector": "a.confirm",
+                                "tag": "a",
+                                "role": "link",
+                                "name": "Delete",
+                                "text": "Delete",
+                                "href": "/delete?token=***",
+                                "href_masked": True,
+                                "absolute_url": "https://example.test/delete?token=***",
+                                "absolute_url_masked": True,
+                            },
+                        ],
+                    }
                 ],
                 "url": "https://example.test",
             },

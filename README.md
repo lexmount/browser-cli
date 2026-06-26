@@ -321,6 +321,7 @@ browser-cli action link-snapshot --session-id <session_id> --selector "main" --m
 browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
 browser-cli action list-snapshot --session-id <session_id> --selector ".results" --max-items 50
 browser-cli action text-snapshot --session-id <session_id> --selector "main" --max-nodes 50 --max-chars 500
+browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -337,7 +338,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -354,6 +355,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `tables`, `table_count`, `headers`, `rows`, `cells`, `row_count`, `cell_count`,
 `lists`, `list_count`, `items`, `item_count`, `selected`, `checked`, `expanded`,
 `texts`, `text_count`, `text_length`, `text_truncated`, `aria_live`,
+`dialogs`, `dialog_count`, `controls`, `control_count`, `controls_truncated`,
+`modal`,
 `headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
 `node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
@@ -370,8 +373,8 @@ state is correct.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot` and `list-snapshot` use the same URL masking for links found
-inside table cells or list items.
+`table-snapshot`, `list-snapshot`, and `dialog-snapshot` use the same URL
+masking for links found inside table cells, list items, or dialog controls.
 
 Each action must receive exactly one browser target:
 
@@ -531,6 +534,9 @@ Common agent recipes:
 - Text, alerts, or status messages: `text-snapshot` -> read `texts`,
   `kind`, `aria_live`, `text_length`, and `text_truncated`; use `--selector`,
   `--max-nodes`, and `--max-chars` before falling back to full `snapshot`.
+- Modal or blocking prompt: `dialog-snapshot` -> read `dialogs`, `title`,
+  `description`, `text`, `controls`, `control_count`, and link masks; then use
+  `click-role`, `click-text`, or `click-index` for the chosen control.
 - Page structure: `outline-snapshot` -> read `headings` and `landmarks` before
   deciding where to inspect, click, or scroll.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
@@ -542,6 +548,10 @@ Common agent recipes:
 - Menu or keyboard flow: `focus`, `hover`, selector-scoped `press`,
   active/global `press-key`, or `dispatch-event`, then inspect again with
   `interactive-snapshot`.
+- Dialog flow: `dialog-snapshot` for modal dialogs, alert dialogs, cookie
+  banners, and confirmation prompts; choose a control from `controls`, then
+  click semantically and confirm with `wait-text`, `wait-role`, or
+  `text-snapshot`.
 - Read results: `page-info` for URL/title/readyState/viewport checks,
   `wait-title` for async title changes, `wait-count` for dynamic lists,
   `list-snapshot` for menu/listbox/search-result/task-list content,

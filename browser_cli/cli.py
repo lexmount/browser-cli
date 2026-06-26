@@ -3056,6 +3056,215 @@ def _text_snapshot_expression(
 """.strip()
 
 
+def _dialog_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_controls: int,
+    max_chars: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxControls = Math.max(0, {_js_literal(max_controls)});
+  const maxChars = Math.max(0, {_js_literal(max_chars)});
+  const dialogSelector = [
+    "dialog",
+    "[role~='dialog']",
+    "[role~='alertdialog']",
+    "[aria-modal='true']",
+    ".modal",
+    "[data-modal='true']"
+  ].join(",");
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{ absolute_url: raw, absolute_url_masked: false }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        same_origin: parsed.origin === location.origin
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        same_origin: null
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allDialogs = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(dialogSelector) ? [root] : []),
+      ...root.querySelectorAll(dialogSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allDialogs.push(candidate);
+      }}
+    }}
+  }}
+  const idsText = (value) => normalize(
+    String(value || "")
+      .split(/\\s+/)
+      .map((id) => document.getElementById(id)?.innerText ?? "")
+      .join(" ")
+  );
+  const firstText = (dialog, selector) => {{
+    const element = dialog.querySelector(selector);
+    return element ? textOf(element) : "";
+  }};
+  const truncateText = (value) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxChars) {{
+      return {{ text, text_truncated: false }};
+    }}
+    return {{
+      text: text.slice(0, maxChars),
+      text_truncated: true
+    }};
+  }};
+  const disabledState = (element) =>
+    Boolean(element.disabled) || element.getAttribute("aria-disabled") === "true";
+  const checkedState = (element) => {{
+    const ariaChecked = element.getAttribute("aria-checked");
+    if (ariaChecked === "true") return true;
+    if (ariaChecked === "false") return false;
+    if (ariaChecked === "mixed") return "mixed";
+    return "checked" in element ? Boolean(element.checked) : null;
+  }};
+  const selectedState = (element) => {{
+    const ariaSelected = element.getAttribute("aria-selected");
+    if (ariaSelected === "true") return true;
+    if (ariaSelected === "false") return false;
+    return "selected" in element ? Boolean(element.selected) : null;
+  }};
+  const linkPayload = (element) => {{
+    if (!element.matches?.(linkSelector)) {{
+      return {{}};
+    }}
+    const rawHref = element.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    return {{
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...maskedParsedUrl(rawHref)
+    }};
+  }};
+  const controlInfo = (element, controlIndex) => {{
+    const info = nodeInfo(element);
+    return {{
+      control_index: controlIndex,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      text: info.text,
+      type: element.getAttribute("type"),
+      disabled: disabledState(element),
+      checked: checkedState(element),
+      selected: selectedState(element),
+      visible: info.visible,
+      ...linkPayload(element)
+    }};
+  }};
+  const dialogTitle = (dialog) =>
+    idsText(dialog.getAttribute("aria-labelledby")) ||
+    firstText(dialog, "h1,h2,h3,h4,h5,h6,[role~='heading'],header");
+  const dialogDescription = (dialog) =>
+    idsText(dialog.getAttribute("aria-describedby")) ||
+    firstText(dialog, "p,[role~='document'],section,article");
+  const dialogInfo = (dialog, dialogIndex) => {{
+    const info = nodeInfo(dialog);
+    const rawControls = [...dialog.querySelectorAll(interactiveSelector)];
+    const visibleControls = rawControls.filter(visible);
+    const candidateControls = includeHidden ? rawControls : visibleControls;
+    const controls = candidateControls
+      .slice(0, maxControls)
+      .map(controlInfo);
+    const truncatedText = truncateText(info.text);
+    return {{
+      dialog_index: dialogIndex,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      title: dialogTitle(dialog),
+      description: dialogDescription(dialog),
+      modal: dialog.getAttribute("aria-modal") === "true" ||
+        (dialog.tagName.toLowerCase() === "dialog" && Boolean(dialog.open)),
+      open: dialog.tagName.toLowerCase() === "dialog"
+        ? Boolean(dialog.open)
+        : null,
+      text_length: info.text.length,
+      ...truncatedText,
+      visible: info.visible,
+      control_count: candidateControls.length,
+      visible_control_count: visibleControls.length,
+      node_count: controls.length,
+      controls_truncated: candidateControls.length > controls.length,
+      controls
+    }};
+  }};
+  const visibleDialogs = allDialogs.filter(visible);
+  const candidateDialogs = includeHidden ? allDialogs : visibleDialogs;
+  const dialogs = limited(candidateDialogs).map(dialogInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "dialogs",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_controls: maxControls,
+    max_chars: maxChars,
+    dialog_count: candidateDialogs.length,
+    node_count: dialogs.length,
+    total_count: allDialogs.length,
+    visible_count: visibleDialogs.length,
+    truncated: maxNodes !== null && candidateDialogs.length > dialogs.length,
+    dialogs
+  }};
+}}
+""".strip()
+
+
 def _outline_snapshot_expression(
     *,
     selector: str | None,
@@ -6661,6 +6870,17 @@ def cmd_action_text_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.text-snapshot", expression)
 
 
+def cmd_action_dialog_snapshot(args: argparse.Namespace) -> None:
+    expression = _dialog_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_controls=args.max_controls,
+        max_chars=args.max_chars,
+    )
+    _run_eval_backed_action_command(args, "action.dialog-snapshot", expression)
+
+
 def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
     expression = _outline_snapshot_expression(
         selector=args.selector,
@@ -8754,6 +8974,30 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum characters to return per text block.",
     )
     action_text_snapshot.set_defaults(func=cmd_action_text_snapshot)
+
+    action_dialog_snapshot = action_subparsers.add_parser(
+        "dialog-snapshot",
+        help="Capture modal/dialog structure, readable text, and controls",
+    )
+    _add_session_target_args(action_dialog_snapshot)
+    action_dialog_snapshot.add_argument(
+        "--selector",
+        help="Optional dialog or container selector used to scope dialogs.",
+    )
+    _add_snapshot_filter_args(action_dialog_snapshot)
+    action_dialog_snapshot.add_argument(
+        "--max-controls",
+        type=_non_negative_int,
+        default=30,
+        help="Maximum interactive controls to return per dialog.",
+    )
+    action_dialog_snapshot.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters to return per dialog text body.",
+    )
+    action_dialog_snapshot.set_defaults(func=cmd_action_dialog_snapshot)
 
     action_outline_snapshot = action_subparsers.add_parser(
         "outline-snapshot",
