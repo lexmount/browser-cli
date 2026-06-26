@@ -133,7 +133,8 @@ Each action must receive exactly one browser target:
 ```
 
 By default, action output masks `api_key` inside resolved direct connect URLs.
-Use `--reveal-connect-url` only for local debugging.
+Use `--reveal-connect-url` only for local debugging. Reveal flags expose only
+the explicitly requested URL field; other JSON fields are still redacted.
 
 Case files and compatibility aliases:
 

@@ -513,6 +513,50 @@ def test_action_reveal_connect_url_requires_explicit_flag(
     assert payload["connect_url_masked"] is False
 
 
+def test_action_reveal_connect_url_keeps_result_secrets_redacted(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: connect_url,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.run_browser_action",
+        lambda **kwargs: SimpleNamespace(
+            result={
+                "token": "result-token-value",
+                "nested": {
+                    "api_key": "nested-api-key",
+                    "url": (
+                        "https://example.test/callback?access_token=result-token-value"
+                    ),
+                },
+            }
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "snapshot", "--direct-url", "--reveal-connect-url"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "result-token-value" not in output
+    assert "nested-api-key" not in output
+    payload = json.loads(output)
+    assert payload["connect_url"] == connect_url
+    assert payload["connect_url_masked"] is False
+    assert payload["result"] == {
+        "token": "resu...alue",
+        "nested": {
+            "api_key": "nest...-key",
+            "url": "https://example.test/callback?access_token=***",
+        },
+    }
+
+
 def test_action_target_is_required(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

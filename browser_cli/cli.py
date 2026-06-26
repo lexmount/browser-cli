@@ -142,9 +142,14 @@ def _json_dump(
     exit_code: int = 0,
     *,
     redact_secrets: bool = True,
+    reveal_fields: set[str] | None = None,
 ) -> NoReturn:
+    revealed = {
+        field: payload[field] for field in reveal_fields or set() if field in payload
+    }
     if redact_secrets:
         payload = _redact_json_value(payload)
+    payload.update(revealed)
     print(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=str)
     )
@@ -155,11 +160,12 @@ def _success(
     command: str,
     *,
     redact_secrets: bool = True,
+    reveal_fields: set[str] | None = None,
     **payload: Any,
 ) -> NoReturn:
     data = {"ok": True, "command": command}
     data.update(payload)
-    _json_dump(data, redact_secrets=redact_secrets)
+    _json_dump(data, redact_secrets=redact_secrets, reveal_fields=reveal_fields)
 
 
 def _failure(
@@ -169,6 +175,7 @@ def _failure(
     *,
     exit_code: int = 1,
     redact_secrets: bool = True,
+    reveal_fields: set[str] | None = None,
     **payload: Any,
 ) -> NoReturn:
     data = {
@@ -178,7 +185,12 @@ def _failure(
         "message": message,
     }
     data.update(payload)
-    _json_dump(data, exit_code=exit_code, redact_secrets=redact_secrets)
+    _json_dump(
+        data,
+        exit_code=exit_code,
+        redact_secrets=redact_secrets,
+        reveal_fields=reveal_fields,
+    )
 
 
 def _command_from_argv(argv: list[str]) -> str:
@@ -414,7 +426,7 @@ def _run_action_command(
     reveal_connect_url = bool(getattr(args, "reveal_connect_url", False))
     _success(
         command,
-        redact_secrets=not reveal_connect_url,
+        reveal_fields={"connect_url"} if reveal_connect_url else None,
         session_id=getattr(args, "session_id", None),
         **_masked_connect_url_payload(
             connect_url,
@@ -510,7 +522,7 @@ def cmd_direct_url(args: argparse.Namespace) -> None:
     reveal_url = bool(getattr(args, "reveal_url", False))
     _success(
         command,
-        redact_secrets=not reveal_url,
+        reveal_fields={"connect_url"} if reveal_url else None,
         mode="direct",
         connect_url=connect_url if reveal_url else _mask_direct_url_secret(connect_url),
         masked=not reveal_url,
