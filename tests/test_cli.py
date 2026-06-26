@@ -1477,6 +1477,32 @@ def test_auth_login_guides_manual_browser_flow(
     assert handoff["install_command"] == (
         "uv tool install git+https://github.com/lexmount/browser-cli.git"
     )
+    assert [block["id"] for block in handoff["setup_blocks"]] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert handoff["setup_blocks"][2] == {
+        "id": "local_env",
+        "label": "Configure local shell",
+        "commands": [
+            "browser-cli auth export-env",
+            "export LEXMOUNT_API_KEY='<api-key>'",
+            "export LEXMOUNT_PROJECT_ID='<project-id>'",
+        ],
+        "secret_env": ["LEXMOUNT_API_KEY"],
+        "contains_secret_values": False,
+        "contains_secret_placeholders": True,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+    }
+    assert handoff["setup_blocks"][3]["commands"] == [
+        "browser-cli auth status",
+        "browser-cli doctor --json",
+        "browser-cli doctor --smoke-session",
+    ]
+    assert handoff["setup_blocks"][3]["safe_to_paste_in_chat"] is True
     assert handoff["copyable_commands"] == [
         "browser-cli auth status",
         "browser-cli auth login",
@@ -1510,6 +1536,7 @@ def test_auth_login_guides_manual_browser_flow(
     assert connect["available"] is False
     assert connect["project_id"] is None
     assert connect["project_id_source"] == "unset"
+    assert connect["setup_blocks"] == handoff["setup_blocks"]
     capability_ids = [
         "project_id_display",
         "scoped_api_key",
@@ -1645,6 +1672,10 @@ def test_auth_login_builds_connect_from_codex_contract_from_args(
         "browser:actions",
     ]
     assert payload["handoff"]["requested_expires_in"] == "24h"
+    assert payload["handoff"]["setup_blocks"][2]["commands"][-1] == (
+        "export LEXMOUNT_PROJECT_ID=arg-project"
+    )
+    assert connect["setup_blocks"] == payload["handoff"]["setup_blocks"]
 
     query = parse_qs(urlsplit(connect["url"]).query)
     assert query["project_id"] == ["arg-project"]
@@ -1755,6 +1786,7 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
     connect = payload["connect_from_codex"]
     assert connect["response"] == "device_code"
     assert connect["url"] == device_code["connect_from_codex_url"]
+    assert connect["setup_blocks"] == payload["fallback_handoff"]["setup_blocks"]
     assert connect["requested_scope_details"] == device_code["requested_scope_details"]
     assert connect["site_capability_status"]["available"] is False
     assert "device_code_oauth" in connect["site_capability_status"]["missing"]

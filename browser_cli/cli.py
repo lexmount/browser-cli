@@ -1505,6 +1505,62 @@ def _connect_from_codex_site_capability_status(
     }
 
 
+def _auth_login_setup_blocks(project_id: str | None) -> list[dict[str, Any]]:
+    project_id_value = project_id or "<project-id>"
+    return [
+        {
+            "id": "install",
+            "label": "Install browser-cli",
+            "commands": [
+                "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                "browser-cli --help",
+            ],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+        },
+        {
+            "id": "open_connect",
+            "label": "Open Connect from Codex",
+            "commands": [
+                "browser-cli auth login --open",
+            ],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+        },
+        {
+            "id": "local_env",
+            "label": "Configure local shell",
+            "commands": [
+                "browser-cli auth export-env",
+                "export LEXMOUNT_API_KEY='<api-key>'",
+                f"export LEXMOUNT_PROJECT_ID={shlex.quote(project_id_value)}",
+            ],
+            "secret_env": ["LEXMOUNT_API_KEY"],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": True,
+            "safe_to_paste_in_chat": False,
+            "local_shell_only": True,
+        },
+        {
+            "id": "verify",
+            "label": "Verify local setup",
+            "commands": [
+                "browser-cli auth status",
+                AGENT_DOCTOR_COMMAND,
+                "browser-cli doctor --smoke-session",
+            ],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+        },
+    ]
+
+
 def _auth_login_handoff(
     *,
     connect_url: str,
@@ -1521,6 +1577,7 @@ def _auth_login_handoff(
         "open_command": "browser-cli auth login --open",
         "open_url": connect_url,
         "install_command": "uv tool install git+https://github.com/lexmount/browser-cli.git",
+        "setup_blocks": _auth_login_setup_blocks(project_id),
         "copyable_commands": [
             "browser-cli auth status",
             "browser-cli auth login",
@@ -9492,6 +9549,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         site_capabilities
     )
     scope_details = _scope_details(scopes)
+    setup_blocks = handoff["setup_blocks"]
     open_url = device_connect_url if args.device_code else connect_url
     open_result: dict[str, Any] = {
         "requested": bool(args.open),
@@ -9559,6 +9617,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "requested_scope_details": scope_details,
                 "requested_expires_in": args.expires_in,
                 "response": "device_code",
+                "setup_blocks": setup_blocks,
                 "site_capability_status": site_capability_status,
                 "site_capabilities": site_capabilities,
                 "fallback": "Use the manual_env steps until browser.lexmount.cn supports device-code login.",
@@ -9605,6 +9664,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "requested_scopes": scopes,
             "requested_scope_details": scope_details,
             "requested_expires_in": args.expires_in,
+            "setup_blocks": setup_blocks,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
             "expected_outputs": [

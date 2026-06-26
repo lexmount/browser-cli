@@ -21,6 +21,11 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "open_result" in text
     assert "site_capabilities" in text
     assert "site_capability_status" in text
+    assert "setup_blocks" in text
+    assert "contains_secret_values" in text
+    assert "contains_secret_placeholders" in text
+    assert "safe_to_paste_in_chat" in text
+    assert "local_shell_only" in text
     assert "requested_scope_details" in text
     assert "permission names" in text
     assert "risk level" in text

@@ -133,6 +133,11 @@ Expected behavior after the website page exists:
   `site_capability_status` so agents can report structured browser site gaps:
   `project_id_display`, `scoped_api_key`, `copy_install_and_env`,
   `doctor_verification`, `scoped_key_lifecycle`, and `device_code_oauth`.
+- `browser-cli auth login` includes `setup_blocks` for install, Connect, local
+  env, and verification copy sections. Each block reports commands,
+  `contains_secret_values`, `contains_secret_placeholders`,
+  `safe_to_paste_in_chat`, and `local_shell_only` so the website can make secret
+  copy controls visually distinct.
 - `browser-cli auth login` includes `requested_scope_details` for each requested
   scope. Known scopes include a label, description, permission names, risk level,
   and destructive marker; custom or future scopes are returned with
