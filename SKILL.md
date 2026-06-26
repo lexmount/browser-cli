@@ -43,6 +43,12 @@ browser-cli auth login
 browser-cli auth export-env
 ```
 
+When `auth login` returns `handoff`, use it as the setup contract: open
+`connect_from_codex_url` or `login_url`, follow `copyable_commands`, require the
+listed `local_env` variables in the user's local shell, and run the
+`verification.doctor_command`. Follow `secret_policy`: never paste
+`LEXMOUNT_API_KEY`, revealed export output, or full direct URLs into chat.
+
 `auth export-env` prints placeholders by default. With `--from-current`, it
 still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
 a trusted local terminal.
@@ -343,8 +349,10 @@ the current `LEXMOUNT_API_KEY` value.
 If `error` is `argument_error`, read the JSON `usage` field and rerun a
 corrected command; do not parse stderr.
 For `auth`, report credential presence, missing variables, and next steps; do
-not report API key values. For `auth export-env`, use placeholders or masked
-commands unless the user explicitly asked to reveal secrets locally.
+not report API key values. For `auth login`, prefer the `handoff` object's
+`copyable_commands`, `local_env`, `verification`, and `secret_policy` fields.
+For `auth export-env`, use placeholders or masked commands unless the user
+explicitly asked to reveal secrets locally.
 For `doctor`, inspect `checks` and report failed check names without revealing
 API keys. When a check includes `fix`, use its `commands`, `env`, and
 `guidance` fields as the repair workflow.

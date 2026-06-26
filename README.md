@@ -143,11 +143,13 @@ browser-cli auth export-env --from-current --include-base-url
 ```
 
 `auth login` returns both the currently available `manual_env` flow and a
-machine-readable `connect_from_codex` contract. The latter includes the planned
-`https://browser.lexmount.cn/connect/codex` URL, optional `project_id`, repeated
-`scope` query parameters, requested `expires_in`, expected outputs, and the
-browser site requirements needed before device-code or scoped-token login can
-be marked available.
+machine-readable `handoff` plus `connect_from_codex` contract. `handoff`
+includes the Connect URL, copyable local commands, required env vars, safe
+secret-handling rules, and doctor verification command. `connect_from_codex`
+includes the planned `https://browser.lexmount.cn/connect/codex` URL, optional
+`project_id`, repeated `scope` query parameters, requested `expires_in`,
+expected outputs, and the browser site requirements needed before device-code or
+scoped-token login can be marked available.
 
 Diagnostics:
 

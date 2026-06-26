@@ -581,6 +581,64 @@ def _connect_from_codex_url(
     return f"{LEXMOUNT_CODEX_CONNECT_URL}?{urlencode(query)}"
 
 
+def _auth_login_handoff(
+    *,
+    connect_url: str,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    expires_in: str,
+) -> dict[str, Any]:
+    return {
+        "recommended_flow": "manual_env",
+        "login_url": LEXMOUNT_CONSOLE_URL,
+        "connect_from_codex_url": connect_url,
+        "connect_from_codex_available": False,
+        "install_command": "uv tool install git+https://github.com/lexmount/browser-cli.git",
+        "copyable_commands": [
+            "browser-cli auth status",
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            "browser-cli doctor",
+        ],
+        "local_env": [
+            {
+                "name": "LEXMOUNT_API_KEY",
+                "secret": True,
+                "required": True,
+                "source": "browser.lexmount.cn scoped API key",
+            },
+            {
+                "name": "LEXMOUNT_PROJECT_ID",
+                "secret": False,
+                "required": True,
+                "source": "browser.lexmount.cn Project ID",
+                "value": project_id,
+                "value_source": project_id_source,
+            },
+        ],
+        "requested_scopes": scopes,
+        "requested_expires_in": expires_in,
+        "verification": {
+            "status_command": "browser-cli auth status",
+            "doctor_command": "browser-cli doctor",
+            "success_condition": "auth.status configured is true and doctor ok is true",
+        },
+        "secret_policy": {
+            "do_not_paste_in_chat": [
+                "LEXMOUNT_API_KEY",
+                "full direct connect URLs containing api_key",
+                "auth export-env output produced with --reveal-secrets",
+            ],
+            "safe_to_share": [
+                "browser-cli auth status output",
+                "browser-cli doctor output with default masking",
+                "browser-cli auth export-env output without --reveal-secrets",
+            ],
+        },
+    }
+
+
 def _quote_env_value(value: str, shell: str) -> str:
     if shell in {"posix", "fish"}:
         return shlex.quote(value)
@@ -5010,11 +5068,19 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         scopes=scopes,
         expires_in=args.expires_in,
     )
+    handoff = _auth_login_handoff(
+        connect_url=connect_url,
+        project_id=project_id,
+        project_id_source=project_id_source,
+        scopes=scopes,
+        expires_in=args.expires_in,
+    )
     _success(
         command,
         flow="manual_env",
         login_url=LEXMOUNT_CONSOLE_URL,
         device_code_available=False,
+        handoff=handoff,
         connect_from_codex={
             "available": False,
             "url": connect_url,

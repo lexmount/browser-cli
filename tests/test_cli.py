@@ -538,6 +538,45 @@ def test_auth_login_guides_manual_browser_flow(
     assert payload["flows"][1]["available"] is False
     assert "browser-cli doctor" in payload["commands"]
 
+    handoff = payload["handoff"]
+    assert handoff["recommended_flow"] == "manual_env"
+    assert handoff["login_url"] == "https://browser.lexmount.cn"
+    assert handoff["connect_from_codex_url"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert handoff["connect_from_codex_available"] is False
+    assert handoff["install_command"] == (
+        "uv tool install git+https://github.com/lexmount/browser-cli.git"
+    )
+    assert handoff["copyable_commands"] == [
+        "browser-cli auth status",
+        "browser-cli auth login",
+        "browser-cli auth export-env",
+        "browser-cli doctor",
+    ]
+    assert handoff["local_env"] == [
+        {
+            "name": "LEXMOUNT_API_KEY",
+            "secret": True,
+            "required": True,
+            "source": "browser.lexmount.cn scoped API key",
+        },
+        {
+            "name": "LEXMOUNT_PROJECT_ID",
+            "secret": False,
+            "required": True,
+            "source": "browser.lexmount.cn Project ID",
+            "value": None,
+            "value_source": "unset",
+        },
+    ]
+    assert handoff["verification"]["doctor_command"] == "browser-cli doctor"
+    assert "LEXMOUNT_API_KEY" in handoff["secret_policy"]["do_not_paste_in_chat"]
+    assert (
+        "browser-cli auth export-env output without --reveal-secrets"
+        in handoff["secret_policy"]["safe_to_share"]
+    )
+
     connect = payload["connect_from_codex"]
     assert connect["available"] is False
     assert connect["project_id"] is None
@@ -599,6 +638,13 @@ def test_auth_login_builds_connect_from_codex_contract_from_args(
     assert connect["project_id_source"] == "argument"
     assert connect["requested_scopes"] == ["browser:sessions", "browser:actions"]
     assert connect["requested_expires_in"] == "24h"
+    assert payload["handoff"]["local_env"][1]["value"] == "arg-project"
+    assert payload["handoff"]["local_env"][1]["value_source"] == "argument"
+    assert payload["handoff"]["requested_scopes"] == [
+        "browser:sessions",
+        "browser:actions",
+    ]
+    assert payload["handoff"]["requested_expires_in"] == "24h"
 
     query = parse_qs(urlsplit(connect["url"]).query)
     assert query["project_id"] == ["arg-project"]

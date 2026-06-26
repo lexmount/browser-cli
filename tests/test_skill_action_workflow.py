@@ -54,6 +54,15 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli auth status" in normalized
     assert "browser-cli auth login" in normalized
     assert "browser-cli auth export-env" in normalized
+    assert (
+        "When `auth login` returns `handoff`, use it as the setup contract"
+        in normalized
+    )
+    assert "`connect_from_codex_url` or `login_url`" in normalized
+    assert (
+        "`copyable_commands`, `local_env`, `verification`, and `secret_policy`"
+        in normalized
+    )
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "do not report API key values" in normalized
 
