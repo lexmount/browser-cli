@@ -52,6 +52,7 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
     "browser:actions",
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
+AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
@@ -371,7 +372,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli auth refresh",
                 "browser-cli auth login",
                 "browser-cli auth export-env",
-                "browser-cli doctor --json",
+                AGENT_DOCTOR_COMMAND,
                 "browser-cli doctor --smoke-session",
             ],
             "one_off_page_task": [
@@ -760,7 +761,7 @@ def _credential_doctor_fix(*env: str) -> dict[str, Any]:
             "browser-cli auth login",
             "browser-cli auth export-env",
             "browser-cli auth status",
-            "browser-cli doctor",
+            AGENT_DOCTOR_COMMAND,
         ],
         guidance=[
             "Get Project ID and API key from https://browser.lexmount.cn.",
@@ -1207,7 +1208,7 @@ def _auth_next_steps(
 ) -> list[str]:
     if configured:
         return [
-            "Run `browser-cli doctor` to verify live API connectivity.",
+            f"Run `{AGENT_DOCTOR_COMMAND}` to verify live API connectivity.",
             "Create a session with `browser-cli session create`.",
         ]
     if device_token_status and device_token_status.get("present"):
@@ -1215,7 +1216,7 @@ def _auth_next_steps(
             return [
                 "Device token metadata is present, but browser actions still require env API-key credentials until bearer-token support lands.",
                 "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-                "Run `browser-cli doctor` after setting credentials.",
+                f"Run `{AGENT_DOCTOR_COMMAND}` after setting credentials.",
             ]
         return [
             "Local device-token metadata is present but not currently valid.",
@@ -1225,7 +1226,7 @@ def _auth_next_steps(
     return [
         "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
         "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-        "Run `browser-cli doctor` after setting credentials.",
+        f"Run `{AGENT_DOCTOR_COMMAND}` after setting credentials.",
     ]
 
 
@@ -1391,7 +1392,7 @@ def _auth_login_handoff(
             "browser-cli auth status",
             "browser-cli auth login",
             "browser-cli auth export-env",
-            "browser-cli doctor",
+            AGENT_DOCTOR_COMMAND,
         ],
         "local_env": [
             {
@@ -1413,7 +1414,7 @@ def _auth_login_handoff(
         "requested_expires_in": expires_in,
         "verification": {
             "status_command": "browser-cli auth status",
-            "doctor_command": "browser-cli doctor",
+            "doctor_command": AGENT_DOCTOR_COMMAND,
             "success_condition": "auth.status configured is true and doctor ok is true",
         },
         "secret_policy": {
@@ -9325,7 +9326,7 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
         script="\n".join(commands),
         next_steps=[
             "Run the export commands in the local shell.",
-            "Run `browser-cli doctor` to verify credentials.",
+            f"Run `{AGENT_DOCTOR_COMMAND}` to verify credentials.",
         ],
     )
 
@@ -9440,7 +9441,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             next_steps=[
                 "Use `browser-cli auth login` or `browser-cli auth login --open` for the manual Connect from Codex handoff today.",
                 "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-                "Run `browser-cli doctor` to verify the setup.",
+                f"Run `{AGENT_DOCTOR_COMMAND}` to verify the setup.",
                 "Implement browser.lexmount.cn device-code endpoints before treating this flow as available.",
             ],
         )
@@ -9464,7 +9465,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "Project ID for the selected project",
                 "Scoped API key or short-lived local token",
                 "Copyable shell export commands",
-                "`browser-cli doctor` verification guidance",
+                f"`{AGENT_DOCTOR_COMMAND}` verification guidance",
                 "Revoke and expiration details",
             ],
             "browser_site_requirements": [
@@ -9501,12 +9502,12 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "Create or copy an API key intended for local agent use.",
             "Run `browser-cli auth export-env` for safe shell export templates.",
             "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-            "Run `browser-cli doctor` to verify the setup.",
+            f"Run `{AGENT_DOCTOR_COMMAND}` to verify the setup.",
         ],
         commands=[
             "browser-cli auth export-env",
             "browser-cli auth status",
-            "browser-cli doctor",
+            AGENT_DOCTOR_COMMAND,
         ],
         browser_site_recommendations=[
             "Add /connect/codex with Project ID display and query parameters for project_id, scope, and expires_in.",

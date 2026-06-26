@@ -188,6 +188,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
+    assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
     assert (
         "browser-cli action page-info --session-id <session_id>"
@@ -920,7 +921,7 @@ def test_auth_status_reports_env_without_revealing_api_key(
         "using_default": False,
     }
     assert payload["region"]["value"] == "cn"
-    assert "browser-cli doctor" in payload["next_steps"][0]
+    assert "browser-cli doctor --json" in payload["next_steps"][0]
 
 
 def test_auth_status_reports_device_token_file_without_revealing_tokens(
@@ -1383,6 +1384,9 @@ def test_auth_export_env_emits_safe_placeholders(
     ]
     assert payload["exports"][0]["usable"] is False
     assert payload["exports"][1]["usable"] is False
+    assert payload["next_steps"][-1] == (
+        "Run `browser-cli doctor --json` to verify credentials."
+    )
 
 
 def test_auth_export_env_from_current_masks_api_key_by_default(
@@ -1459,7 +1463,7 @@ def test_auth_login_guides_manual_browser_flow(
     assert payload["flows"][0]["available"] is True
     assert payload["flows"][1]["name"] == "connect_from_codex"
     assert payload["flows"][1]["available"] is False
-    assert "browser-cli doctor" in payload["commands"]
+    assert "browser-cli doctor --json" in payload["commands"]
 
     handoff = payload["handoff"]
     assert handoff["recommended_flow"] == "manual_env"
@@ -1477,7 +1481,7 @@ def test_auth_login_guides_manual_browser_flow(
         "browser-cli auth status",
         "browser-cli auth login",
         "browser-cli auth export-env",
-        "browser-cli doctor",
+        "browser-cli doctor --json",
     ]
     assert handoff["local_env"] == [
         {
@@ -1495,7 +1499,7 @@ def test_auth_login_guides_manual_browser_flow(
             "value_source": "unset",
         },
     ]
-    assert handoff["verification"]["doctor_command"] == "browser-cli doctor"
+    assert handoff["verification"]["doctor_command"] == "browser-cli doctor --json"
     assert "LEXMOUNT_API_KEY" in handoff["secret_policy"]["do_not_paste_in_chat"]
     assert (
         "browser-cli auth export-env output without --reveal-secrets"
@@ -1506,6 +1510,10 @@ def test_auth_login_guides_manual_browser_flow(
     assert connect["available"] is False
     assert connect["project_id"] is None
     assert connect["project_id_source"] == "unset"
+    assert (
+        "`browser-cli doctor --json` verification guidance"
+        in connect["expected_outputs"]
+    )
     assert connect["requested_scopes"] == [
         "browser:sessions",
         "browser:contexts",
@@ -1535,6 +1543,7 @@ def test_auth_login_guides_manual_browser_flow(
         "url": connect["url"],
         "opened": False,
     }
+    assert any("browser-cli doctor --json" in step for step in payload["steps"])
     assert payload["warnings"] == []
 
 
@@ -1664,6 +1673,7 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
         "url": connect["url"],
         "opened": True,
     }
+    assert any("browser-cli doctor --json" in item for item in payload["next_steps"])
     assert any("device-code endpoints" in item for item in payload["next_steps"])
 
 
