@@ -2595,6 +2595,8 @@ def test_context_pick_selects_first_available_metadata_match(
     assert payload["selection_summary"] == {
         "checked": 3,
         "selected_context_id": "ctx-ready",
+        "recommended_next_action": "use_selected_context",
+        "decision_reason": "reusable_context_selected",
         "metadata_matches": 2,
         "metadata_mismatches": 1,
         "reusable_matches": 1,
@@ -2704,6 +2706,10 @@ def test_context_pick_can_create_when_no_reusable_context_matches(
     assert payload["selection_summary"]["checked"] == 1
     assert payload["selection_summary"]["locked_matches"] == 1
     assert payload["selection_summary"]["create_if_missing"] is True
+    assert (
+        payload["selection_summary"]["recommended_next_action"] == "use_created_context"
+    )
+    assert payload["selection_summary"]["decision_reason"] == "created_context_selected"
     assert payload["selection_summary"]["would_create"] is False
     assert calls == [
         ("list", {"status": None, "limit": 20}),
@@ -2749,6 +2755,11 @@ def test_context_pick_fails_when_no_reusable_context_matches(
     assert payload["checked"] == 1
     assert payload["candidates"][0]["reason"] == "status_locked"
     assert payload["selection_summary"]["locked_matches"] == 1
+    assert (
+        payload["selection_summary"]["recommended_next_action"]
+        == "wait_or_choose_different_context"
+    )
+    assert payload["selection_summary"]["decision_reason"] == "locked_context_matches"
     assert payload["selection_summary"]["would_create"] is False
 
 
@@ -2812,6 +2823,8 @@ def test_context_pick_dry_run_reports_would_create_without_creating(
     assert payload["selection_summary"] == {
         "checked": 2,
         "selected_context_id": None,
+        "recommended_next_action": "rerun_without_dry_run_to_create",
+        "decision_reason": "dry_run_create_if_missing",
         "metadata_matches": 1,
         "metadata_mismatches": 1,
         "reusable_matches": 0,

@@ -93,7 +93,9 @@ browser-cli session create --context-metadata-json '{"purpose":"login"}' --creat
 Do not reuse a context whose `availability` is `locked` or `unavailable` for a
 new read/write session. Close the session that holds it, or create a new
 context.
-Use the dry-run output to explain `selection_summary.locked_matches`,
+Use the dry-run output to read
+`selection_summary.recommended_next_action` first, then explain
+`selection_summary.decision_reason`, `selection_summary.locked_matches`,
 `selection_summary.reusable_matches`, and `would_create` before mutating
 persistent login state.
 

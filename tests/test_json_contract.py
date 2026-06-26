@@ -119,6 +119,13 @@ def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     assert "`open_command`" in text
 
 
+def test_json_contract_documents_context_selection_decision_fields() -> None:
+    text = JSON_CONTRACT.read_text()
+
+    assert "`recommended_next_action`" in text
+    assert "`decision_reason`" in text
+
+
 def test_error_output_contract_for_configuration_errors(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -207,6 +214,8 @@ def test_context_pick_dry_run_selection_summary_contract(
     assert summary["metadata_mismatches"] == 1
     assert summary["reusable_matches"] == 0
     assert summary["locked_matches"] == 1
+    assert summary["recommended_next_action"] == "rerun_without_dry_run_to_create"
+    assert summary["decision_reason"] == "dry_run_create_if_missing"
     assert summary["would_create"] is True
 
 

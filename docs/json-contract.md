@@ -48,7 +48,10 @@ without parsing help text.
 `context pick` and session context reuse return `selection_summary` with stable
 counts such as `checked`, `metadata_matches`, `metadata_mismatches`,
 `reusable_matches`, `locked_matches`, `unavailable_matches`, `unknown_matches`,
-and `would_create`. `context pick --dry-run` must not create a context.
+`recommended_next_action`, `decision_reason`, and `would_create`. Agents should
+prefer `recommended_next_action` over raw status strings when deciding whether
+to reuse, create, wait, or adjust filters. `context pick --dry-run` must not
+create a context.
 
 ## Exit Codes
 

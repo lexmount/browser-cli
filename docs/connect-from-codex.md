@@ -297,7 +297,8 @@ Useful actions:
 4. Context reuse support
    - explain `context pick --dry-run` and metadata-based `session create`
    - surface `selection_summary` fields such as `locked_matches`,
-     `metadata_mismatches`, `reusable_matches`, and `would_create`
+     `metadata_mismatches`, `reusable_matches`, `recommended_next_action`,
+     `decision_reason`, and `would_create`
    - show available/locked/unavailable contexts if backend exposes them
 5. Device-code/OAuth
    - CLI starts auth flow

@@ -159,7 +159,9 @@ Parse `context_reuse` from the session result. Reuse only when
 `available` can be reused, `locked` means busy, and `unavailable` needs a
 different context. If candidates include `locked: true`, report that a busy
 context was skipped. Inspect `selection_summary` for `locked_matches`,
-`metadata_mismatches`, `reusable_matches`, and `would_create`. Use
+`metadata_mismatches`, `reusable_matches`, `recommended_next_action`,
+`decision_reason`, and `would_create`. Prefer `recommended_next_action` when
+deciding whether to reuse, create, wait, or adjust filters. Use
 `context pick --metadata-json <json> --dry-run` before creating a session when
 you need to explain context reuse or avoid mutating persistent login state. Use
 `context status --context-id <context_id>` before reuse when the context id came

@@ -120,6 +120,8 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "`locked_matches`" in normalized
     assert "`metadata_mismatches`" in normalized
     assert "`reusable_matches`" in normalized
+    assert "`recommended_next_action`" in normalized
+    assert "`decision_reason`" in normalized
     assert "`would_create`" in normalized
     assert (
         "`context pick --metadata-json <json> --dry-run` before creating a session"

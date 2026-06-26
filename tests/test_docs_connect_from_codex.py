@@ -55,6 +55,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "selection_summary" in text
     assert "locked_matches" in text
     assert "metadata_mismatches" in text
+    assert "recommended_next_action" in text
+    assert "decision_reason" in text
     assert "would_create" in text
     assert "browser-cli context pick --metadata-json" in text
     assert "browser-cli session create --context-metadata-json" in text

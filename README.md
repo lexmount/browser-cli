@@ -655,8 +655,9 @@ candidate contexts, `created`, `selected`, `normalized_status`, `availability`,
 `availability: "unavailable"` as a state that needs a different context. Use
 `context pick --metadata-json '{"purpose":"codex-login"}' --dry-run` when you
 need to inspect or report candidates before creating a session; read
-`selection_summary.locked_matches`, `metadata_mismatches`, `reusable_matches`,
-and `would_create` before deciding whether to create a new context.
+`selection_summary.recommended_next_action`, `decision_reason`,
+`locked_matches`, `metadata_mismatches`, `reusable_matches`, and `would_create`
+before deciding whether to reuse, create, wait, or adjust filters.
 
 ## Codex Skill
 

@@ -862,10 +862,41 @@ def _context_pick_candidate(
     }
 
 
+def _context_selection_decision(
+    candidates: list[dict[str, Any]],
+    *,
+    selected_context_id: Any = None,
+    created: bool = False,
+    create_if_missing: bool = False,
+    dry_run: bool = False,
+) -> tuple[str, str]:
+    if selected_context_id is not None:
+        if created:
+            return "use_created_context", "created_context_selected"
+        return "use_selected_context", "reusable_context_selected"
+
+    metadata_matches = [
+        candidate for candidate in candidates if candidate.get("metadata_match") is True
+    ]
+    locked_matches = [
+        candidate for candidate in metadata_matches if candidate.get("locked") is True
+    ]
+    if dry_run and create_if_missing:
+        return "rerun_without_dry_run_to_create", "dry_run_create_if_missing"
+    if locked_matches:
+        return "wait_or_choose_different_context", "locked_context_matches"
+    if candidates and not metadata_matches:
+        return "adjust_metadata_filter", "no_metadata_matches"
+    if create_if_missing:
+        return "create_context", "create_if_missing"
+    return "rerun_with_create_if_missing", "no_reusable_context"
+
+
 def _context_selection_summary(
     candidates: list[dict[str, Any]],
     *,
     selected_context_id: Any = None,
+    created: bool = False,
     create_if_missing: bool = False,
     dry_run: bool = False,
 ) -> dict[str, Any]:
@@ -894,9 +925,18 @@ def _context_selection_summary(
         for candidate in metadata_matches
         if candidate.get("availability") == "unknown"
     ]
+    recommended_next_action, decision_reason = _context_selection_decision(
+        candidates,
+        selected_context_id=selected_context_id,
+        created=created,
+        create_if_missing=create_if_missing,
+        dry_run=dry_run,
+    )
     return {
         "checked": len(candidates),
         "selected_context_id": selected_context_id,
+        "recommended_next_action": recommended_next_action,
+        "decision_reason": decision_reason,
         "metadata_matches": len(metadata_matches),
         "metadata_mismatches": len(candidates) - len(metadata_matches),
         "reusable_matches": len(reusable_matches),
@@ -973,6 +1013,7 @@ def _select_or_create_context_for_session(
             "selection_summary": _context_selection_summary(
                 candidates,
                 selected_context_id=created_context.get("context_id"),
+                created=True,
                 create_if_missing=create_if_missing,
             ),
             "metadata_filter": metadata_filter,
@@ -1938,6 +1979,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             selection_summary=_context_selection_summary(
                 candidates,
                 selected_context_id=created_context_id,
+                created=True,
                 create_if_missing=args.create_if_missing,
             ),
             metadata_filter=metadata_filter,
