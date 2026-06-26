@@ -19,6 +19,14 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "browser-cli auth refresh" in text
     assert "browser-cli auth logout" in text
     assert "open_result" in text
+    assert "site_capabilities" in text
+    assert "site_capability_status" in text
+    assert "project_id_display" in text
+    assert "scoped_api_key" in text
+    assert "copy_install_and_env" in text
+    assert "doctor_verification" in text
+    assert "scoped_key_lifecycle" in text
+    assert "device_code_oauth" in text
     assert "revoke_available=false" in text
     assert "refresh_available=false" in text
     assert "refreshed=false" in text

@@ -1510,6 +1510,30 @@ def test_auth_login_guides_manual_browser_flow(
     assert connect["available"] is False
     assert connect["project_id"] is None
     assert connect["project_id_source"] == "unset"
+    capability_ids = [
+        "project_id_display",
+        "scoped_api_key",
+        "copy_install_and_env",
+        "doctor_verification",
+        "scoped_key_lifecycle",
+        "device_code_oauth",
+    ]
+    assert connect["site_capability_status"] == {
+        "available": False,
+        "available_count": 0,
+        "missing_count": len(capability_ids),
+        "missing": capability_ids,
+    }
+    assert [item["id"] for item in connect["site_capabilities"]] == capability_ids
+    assert all(item["available"] is False for item in connect["site_capabilities"])
+    lifecycle = next(
+        item
+        for item in connect["site_capabilities"]
+        if item["id"] == "scoped_key_lifecycle"
+    )
+    assert "permission labels" in lifecycle["browser_site_action"]
+    assert "expiration" in lifecycle["browser_site_action"]
+    assert "revoke" in lifecycle["browser_site_action"]
     assert (
         "`browser-cli doctor --json` verification guidance"
         in connect["expected_outputs"]
@@ -1662,6 +1686,15 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
     connect = payload["connect_from_codex"]
     assert connect["response"] == "device_code"
     assert connect["url"] == device_code["connect_from_codex_url"]
+    assert connect["site_capability_status"]["available"] is False
+    assert "device_code_oauth" in connect["site_capability_status"]["missing"]
+    device_code_oauth = next(
+        item
+        for item in connect["site_capabilities"]
+        if item["id"] == "device_code_oauth"
+    )
+    assert "OAuth" in device_code_oauth["browser_site_action"]
+    assert "scoped" in device_code_oauth["browser_site_action"]
     query = parse_qs(urlsplit(connect["url"]).query)
     assert query["project_id"] == ["arg-project"]
     assert query["scope"] == ["browser:actions"]

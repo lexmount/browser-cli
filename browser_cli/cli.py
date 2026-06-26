@@ -1372,6 +1372,81 @@ def _connect_from_codex_url(
     return f"{LEXMOUNT_CODEX_CONNECT_URL}?{urlencode(query)}"
 
 
+def _connect_from_codex_site_capabilities() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "project_id_display",
+            "available": False,
+            "required_for": ["manual_env", "scoped_api_key", "device_code"],
+            "browser_site_action": (
+                "Show the selected Project ID, project name, API host, and region "
+                "before issuing agent credentials."
+            ),
+        },
+        {
+            "id": "scoped_api_key",
+            "available": False,
+            "required_for": ["manual_env", "scoped_api_key"],
+            "browser_site_action": (
+                "Create a local-agent API key with explicit browser session, "
+                "context, and action permissions."
+            ),
+        },
+        {
+            "id": "copy_install_and_env",
+            "available": False,
+            "required_for": ["manual_env", "scoped_api_key"],
+            "browser_site_action": (
+                "Provide copyable uv install, auth export-env, local shell export, "
+                "and browser-cli doctor --json commands."
+            ),
+        },
+        {
+            "id": "doctor_verification",
+            "available": False,
+            "required_for": ["manual_env", "support"],
+            "browser_site_action": (
+                "Explain browser-cli doctor --json success criteria and map "
+                "repair_plan commands, env, and guidance to troubleshooting text."
+            ),
+        },
+        {
+            "id": "scoped_key_lifecycle",
+            "available": False,
+            "required_for": ["scoped_api_key", "security"],
+            "browser_site_action": (
+                "Show permission labels, expiration, status, masked preview, "
+                "revoke, and rotation controls for agent keys."
+            ),
+        },
+        {
+            "id": "device_code_oauth",
+            "available": False,
+            "required_for": ["device_code", "scoped_local_token"],
+            "browser_site_action": (
+                "Expose device-code or OAuth approval endpoints and issue "
+                "project-bound, scoped, time-limited local tokens."
+            ),
+        },
+    ]
+
+
+def _connect_from_codex_site_capability_status(
+    capabilities: list[dict[str, Any]],
+) -> dict[str, Any]:
+    missing = [
+        str(capability["id"])
+        for capability in capabilities
+        if not capability.get("available")
+    ]
+    return {
+        "available": not missing,
+        "available_count": len(capabilities) - len(missing),
+        "missing_count": len(missing),
+        "missing": missing,
+    }
+
+
 def _auth_login_handoff(
     *,
     connect_url: str,
@@ -9353,6 +9428,10 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         scopes=scopes,
         expires_in=args.expires_in,
     )
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
     open_url = device_connect_url if args.device_code else connect_url
     open_result: dict[str, Any] = {
         "requested": bool(args.open),
@@ -9418,6 +9497,8 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "requested_scopes": scopes,
                 "requested_expires_in": args.expires_in,
                 "response": "device_code",
+                "site_capability_status": site_capability_status,
+                "site_capabilities": site_capabilities,
                 "fallback": "Use the manual_env steps until browser.lexmount.cn supports device-code login.",
             },
             flows=[
@@ -9461,6 +9542,8 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "project_id_source": project_id_source,
             "requested_scopes": scopes,
             "requested_expires_in": args.expires_in,
+            "site_capability_status": site_capability_status,
+            "site_capabilities": site_capabilities,
             "expected_outputs": [
                 "Project ID for the selected project",
                 "Scoped API key or short-lived local token",

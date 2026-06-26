@@ -129,6 +129,10 @@ Expected behavior after the website page exists:
 - `browser-cli auth login` prints
   `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
   opens it in the local default browser and reports `open_result`.
+- `browser-cli auth login` includes `connect_from_codex.site_capabilities` and
+  `site_capability_status` so agents can report structured browser site gaps:
+  `project_id_display`, `scoped_api_key`, `copy_install_and_env`,
+  `doctor_verification`, `scoped_key_lifecycle`, and `device_code_oauth`.
 - `browser-cli auth login --device-code` now returns `available=false`,
   `reason=browser_site_endpoint_missing`, required device-code endpoints, and a
   `fallback_handoff` until the website/API implements the device-code flow.
