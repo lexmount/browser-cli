@@ -130,6 +130,67 @@ def test_error_output_contract_for_action_target_validation(
     assert "Pass exactly one action target" in payload["message"]
 
 
+def test_context_pick_dry_run_selection_summary_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            return DummyModel(
+                {
+                    "count": 2,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-locked",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex"},
+                        },
+                        {
+                            "context_id": "ctx-other",
+                            "status": "available",
+                            "metadata": {"purpose": "manual"},
+                        },
+                    ],
+                }
+            )
+
+        def create_context(self, *, metadata: dict[str, Any] | None) -> DummyModel:
+            raise AssertionError("dry-run must not create contexts")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    exit_code, payload, _output = run_cli_json(
+        [
+            "context",
+            "pick",
+            "--metadata-json",
+            '{"purpose":"codex"}',
+            "--create-if-missing",
+            "--dry-run",
+        ],
+        capsys,
+    )
+
+    assert exit_code == 0
+    assert payload["command"] == "context.pick"
+    assert payload["selected"] is False
+    assert payload["created"] is False
+    assert payload["dry_run"] is True
+    assert payload["would_create"] is True
+    summary = payload["selection_summary"]
+    assert summary["checked"] == 2
+    assert summary["metadata_matches"] == 1
+    assert summary["metadata_mismatches"] == 1
+    assert summary["reusable_matches"] == 0
+    assert summary["locked_matches"] == 1
+    assert summary["would_create"] is True
+
+
 def test_direct_url_secret_masking_contract(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

@@ -115,6 +115,15 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "browser-cli context pick --metadata-json" in normalized
     assert "browser-cli context status --context-id <context_id>" in normalized
     assert "candidates include `locked: true`" in normalized
+    assert "`selection_summary`" in normalized
+    assert "`locked_matches`" in normalized
+    assert "`metadata_mismatches`" in normalized
+    assert "`reusable_matches`" in normalized
+    assert "`would_create`" in normalized
+    assert (
+        "`context pick --metadata-json <json> --dry-run` before creating a session"
+        in normalized
+    )
 
 
 def test_skill_uses_json_argument_errors_for_command_repairs() -> None:

@@ -144,6 +144,7 @@ survive across sessions:
 browser-cli context create
 browser-cli session create --context-id <context_id> --context-mode read_write
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing --dry-run
 ```
 
 Use `read_write` for login/setup work that should update cookies or storage. Use
@@ -154,8 +155,12 @@ Parse `context_reuse` from the session result. Reuse only when
 `context_reuse.selected` is true. Prefer `availability` over raw status strings:
 `available` can be reused, `locked` means busy, and `unavailable` needs a
 different context. If candidates include `locked: true`, report that a busy
-context was skipped. Use `context status --context-id <context_id>` before reuse
-when the context id came from older notes.
+context was skipped. Inspect `selection_summary` for `locked_matches`,
+`metadata_mismatches`, `reusable_matches`, and `would_create`. Use
+`context pick --metadata-json <json> --dry-run` before creating a session when
+you need to explain context reuse or avoid mutating persistent login state. Use
+`context status --context-id <context_id>` before reuse when the context id came
+from older notes.
 
 If a command fails, parse the JSON error first. For configuration or credential
 errors, stop browser work and guide the user to configure local environment
@@ -216,6 +221,7 @@ browser-cli context list
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing --dry-run
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
 browser-cli context delete --context-id <context_id>
 ```

@@ -30,6 +30,11 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "repair_plan.commands" in text
     assert "repair_plan.env" in text
     assert "repair_plan.guidance" in text
+    assert "context pick --dry-run" in text
+    assert "selection_summary" in text
+    assert "locked_matches" in text
+    assert "metadata_mismatches" in text
+    assert "would_create" in text
     assert "browser-cli context pick --metadata-json" in text
     assert "browser-cli session create --context-metadata-json" in text
     assert 'availability: "available"' in text

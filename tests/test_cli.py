@@ -197,6 +197,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli context pick"
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
+    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][0]
 
     for name in (
         "commands",
@@ -2343,6 +2344,25 @@ def test_context_pick_selects_first_available_metadata_match(
     assert payload["context_id"] == "ctx-ready"
     assert payload["reuse"]["reusable"] is True
     assert payload["metadata_filter"] == {"purpose": "codex"}
+    assert payload["selection_summary"] == {
+        "checked": 3,
+        "selected_context_id": "ctx-ready",
+        "metadata_matches": 2,
+        "metadata_mismatches": 1,
+        "reusable_matches": 1,
+        "locked_matches": 1,
+        "unavailable_matches": 0,
+        "unknown_matches": 0,
+        "availability_counts": {"available": 2, "locked": 1},
+        "reason_counts": {
+            "metadata_mismatch": 1,
+            "status_locked": 1,
+            "status_reusable": 1,
+        },
+        "create_if_missing": False,
+        "dry_run": False,
+        "would_create": False,
+    }
     assert payload["candidates"] == [
         {
             "context_id": "ctx-locked",
@@ -2433,6 +2453,10 @@ def test_context_pick_can_create_when_no_reusable_context_matches(
     assert payload["created"] is True
     assert payload["context_id"] == "ctx-new"
     assert payload["reuse"]["reusable"] is True
+    assert payload["selection_summary"]["checked"] == 1
+    assert payload["selection_summary"]["locked_matches"] == 1
+    assert payload["selection_summary"]["create_if_missing"] is True
+    assert payload["selection_summary"]["would_create"] is False
     assert calls == [
         ("list", {"status": None, "limit": 20}),
         ("create", {"metadata": {"purpose": "codex"}}),
@@ -2476,6 +2500,83 @@ def test_context_pick_fails_when_no_reusable_context_matches(
     assert payload["selected"] is False
     assert payload["checked"] == 1
     assert payload["candidates"][0]["reason"] == "status_locked"
+    assert payload["selection_summary"]["locked_matches"] == 1
+    assert payload["selection_summary"]["would_create"] is False
+
+
+def test_context_pick_dry_run_reports_would_create_without_creating(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 2,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex"},
+                        },
+                        {
+                            "context_id": "ctx-other",
+                            "status": "available",
+                            "metadata": {"purpose": "manual"},
+                        },
+                    ],
+                }
+            )
+
+        def create_context(self, *, metadata: dict[str, Any] | None) -> DummyModel:
+            raise AssertionError("dry-run context pick must not create a context")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+                "--create-if-missing",
+                "--dry-run",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "context.pick"
+    assert payload["selected"] is False
+    assert payload["created"] is False
+    assert payload["dry_run"] is True
+    assert payload["would_create"] is True
+    assert payload["context"] is None
+    assert payload["selection_summary"] == {
+        "checked": 2,
+        "selected_context_id": None,
+        "metadata_matches": 1,
+        "metadata_mismatches": 1,
+        "reusable_matches": 0,
+        "locked_matches": 1,
+        "unavailable_matches": 0,
+        "unknown_matches": 0,
+        "availability_counts": {"available": 1, "locked": 1},
+        "reason_counts": {"metadata_mismatch": 1, "status_locked": 1},
+        "create_if_missing": True,
+        "dry_run": True,
+        "would_create": True,
+    }
+    assert calls == [("list", {"status": None, "limit": 20})]
 
 
 def test_compatibility_aliases_still_work(

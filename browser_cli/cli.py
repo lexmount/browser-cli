@@ -12,6 +12,7 @@ import shutil
 import shlex
 import sys
 import webbrowser
+from collections import Counter
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -359,7 +360,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli session close --session-id <session_id>",
             ],
             "persistent_login_state": [
-                'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing',
+                'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
             ],
         },
@@ -769,6 +770,57 @@ def _context_pick_candidate(
     }
 
 
+def _context_selection_summary(
+    candidates: list[dict[str, Any]],
+    *,
+    selected_context_id: Any = None,
+    create_if_missing: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    availability_counts = Counter(
+        str(candidate.get("availability", "unknown")) for candidate in candidates
+    )
+    reason_counts = Counter(
+        str(candidate.get("reason", "unknown")) for candidate in candidates
+    )
+    metadata_matches = [
+        candidate for candidate in candidates if candidate.get("metadata_match") is True
+    ]
+    reusable_matches = [
+        candidate for candidate in metadata_matches if candidate.get("reusable") is True
+    ]
+    locked_matches = [
+        candidate for candidate in metadata_matches if candidate.get("locked") is True
+    ]
+    unavailable_matches = [
+        candidate
+        for candidate in metadata_matches
+        if candidate.get("availability") == "unavailable"
+    ]
+    unknown_matches = [
+        candidate
+        for candidate in metadata_matches
+        if candidate.get("availability") == "unknown"
+    ]
+    return {
+        "checked": len(candidates),
+        "selected_context_id": selected_context_id,
+        "metadata_matches": len(metadata_matches),
+        "metadata_mismatches": len(candidates) - len(metadata_matches),
+        "reusable_matches": len(reusable_matches),
+        "locked_matches": len(locked_matches),
+        "unavailable_matches": len(unavailable_matches),
+        "unknown_matches": len(unknown_matches),
+        "availability_counts": dict(sorted(availability_counts.items())),
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "create_if_missing": bool(create_if_missing),
+        "dry_run": bool(dry_run),
+        "would_create": bool(
+            dry_run and selected_context_id is None and create_if_missing
+        ),
+    }
+
+
 def _select_or_create_context_for_session(
     admin: Any,
     *,
@@ -793,14 +845,20 @@ def _select_or_create_context_for_session(
 
     for context, candidate in zip(contexts, candidates, strict=True):
         if candidate["metadata_match"] and candidate["reusable"]:
+            context_id = context.get("context_id")
             return {
                 "selected": True,
                 "created": False,
-                "context_id": context.get("context_id"),
+                "context_id": context_id,
                 "context": context,
                 "reuse": _context_reuse_state(context),
                 "checked": len(contexts),
                 "candidates": candidates,
+                "selection_summary": _context_selection_summary(
+                    candidates,
+                    selected_context_id=context_id,
+                    create_if_missing=create_if_missing,
+                ),
                 "metadata_filter": metadata_filter,
                 "status_filter": status,
                 "limit": limit,
@@ -820,6 +878,11 @@ def _select_or_create_context_for_session(
             "reuse": _context_reuse_state(created_context),
             "checked": len(contexts),
             "candidates": candidates,
+            "selection_summary": _context_selection_summary(
+                candidates,
+                selected_context_id=created_context.get("context_id"),
+                create_if_missing=create_if_missing,
+            ),
             "metadata_filter": metadata_filter,
             "status_filter": status,
             "limit": limit,
@@ -833,6 +896,10 @@ def _select_or_create_context_for_session(
         created=False,
         checked=len(contexts),
         candidates=candidates,
+        selection_summary=_context_selection_summary(
+            candidates,
+            create_if_missing=create_if_missing,
+        ),
         metadata_filter=metadata_filter,
         status_filter=status,
         limit=limit,
@@ -1473,18 +1540,51 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
         if candidate["metadata_match"] and candidate["reusable"]:
             selected_context = context
             break
+    selected_context_id = (
+        selected_context.get("context_id") if selected_context is not None else None
+    )
+    selection_summary = _context_selection_summary(
+        candidates,
+        selected_context_id=selected_context_id,
+        create_if_missing=args.create_if_missing,
+        dry_run=args.dry_run,
+    )
 
     if selected_context is not None:
         _success(
             command,
             selected=True,
             created=False,
+            dry_run=args.dry_run,
             context_id=selected_context.get("context_id"),
             context=selected_context,
             reuse=_context_reuse_state(selected_context),
             checked=len(contexts),
             candidates=candidates,
+            selection_summary=selection_summary,
             metadata_filter=metadata_filter,
+        )
+
+    if args.dry_run:
+        _success(
+            command,
+            selected=False,
+            created=False,
+            dry_run=True,
+            would_create=selection_summary["would_create"],
+            context_id=None,
+            context=None,
+            reuse=None,
+            checked=len(contexts),
+            candidates=candidates,
+            selection_summary=selection_summary,
+            metadata_filter=metadata_filter,
+            message=(
+                "No reusable context matched. A non-dry-run context pick with "
+                "--create-if-missing would create a context."
+                if selection_summary["would_create"]
+                else "No reusable context matched the requested filters."
+            ),
         )
 
     if args.create_if_missing:
@@ -1493,15 +1593,22 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
         except Exception as exc:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
+        created_context_id = created_context.get("context_id")
         _success(
             command,
             selected=True,
             created=True,
-            context_id=created_context.get("context_id"),
+            dry_run=False,
+            context_id=created_context_id,
             context=created_context,
             reuse=_context_reuse_state(created_context),
             checked=len(contexts),
             candidates=candidates,
+            selection_summary=_context_selection_summary(
+                candidates,
+                selected_context_id=created_context_id,
+                create_if_missing=args.create_if_missing,
+            ),
             metadata_filter=metadata_filter,
         )
 
@@ -1511,8 +1618,10 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
         "No reusable context matched the requested filters.",
         selected=False,
         created=False,
+        dry_run=False,
         checked=len(contexts),
         candidates=candidates,
+        selection_summary=selection_summary,
         metadata_filter=metadata_filter,
     )
 
@@ -9564,6 +9673,11 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--create-if-missing",
         action="store_true",
         help="Create a context with the metadata filter when none is reusable.",
+    )
+    context_pick.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only inspect candidates and report whether a context would be selected or created.",
     )
     context_pick.set_defaults(func=cmd_context_pick)
 

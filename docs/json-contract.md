@@ -42,6 +42,11 @@ returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
 `secret_policy`, and `agent_entrypoints`; `--names-only` returns compact command
 names, and `--group <name>` filters by command group.
 
+`context pick` and session context reuse return `selection_summary` with stable
+counts such as `checked`, `metadata_matches`, `metadata_mismatches`,
+`reusable_matches`, `locked_matches`, `unavailable_matches`, `unknown_matches`,
+and `would_create`. `context pick --dry-run` must not create a context.
+
 ## Exit Codes
 
 - Successful commands exit with code `0`.
@@ -67,8 +72,8 @@ Default behavior:
   a hidden value rather than the literal page value.
 - `action link-snapshot` masks sensitive URL query parameter values by default
   in `href` and `absolute_url`; `action table-snapshot` and
-  `action list-snapshot`, `action dialog-snapshot`, and
-  `action frame-snapshot`, and `action performance-snapshot` apply the same
+  `action list-snapshot`, `action dialog-snapshot`, `action frame-snapshot`,
+  `action wait-frame`, and `action performance-snapshot` apply the same
   masking to links, frame URLs, and performance resource URLs found inside table
   cells, list items, dialog controls, frame metadata, or timing entries. Parse
   `href_masked`, `src_masked`, `frame_url_masked`, `name_masked`, and
