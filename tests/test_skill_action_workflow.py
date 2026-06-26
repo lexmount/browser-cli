@@ -38,6 +38,9 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`click`",
         "`type`",
         "`focus`",
+        "`get-value`",
+        "`wait-value`",
+        "`blur`",
         "`clear`",
         "`submit`",
         "`select-option`",
@@ -54,6 +57,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`result.exists`" in normalized
     assert "`result.clicked`" in normalized
     assert "`result.filled`" in normalized
+    assert "`result.value`" in normalized
+    assert "`result.readable`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -64,6 +69,8 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Fill and submit a form" in normalized
     assert "`interactive-snapshot`, use `fill-label`" in normalized
     assert "`clear` before replacement text" in normalized
+    assert "`get-value` or `wait-value` to confirm form state" in normalized
+    assert "use `blur` for focus-driven validation" in normalized
     assert "`select-option` or `check`" in normalized
     assert "then use `submit`" in normalized
     assert "`click-role --role button --name <text>` or `click-text`" in normalized

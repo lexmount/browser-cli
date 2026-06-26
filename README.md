@@ -133,6 +133,9 @@ browser-cli action query --session-id <session_id> --selector ".item" --max-node
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
+browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
+browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "hello"
+browser-cli action blur --session-id <session_id> --selector "input[name=q]"
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
@@ -150,14 +153,16 @@ browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
 `reload`, `go-back`, `go-forward`, `wait-url`, `get-text`, `exists`, `count`,
-`query`, `get-attribute`, `wait-text`, `focus`, `clear`, `submit`, `scroll`,
-`select-option`, `check`, `uncheck`, `hover`, `press`, `click-text`,
-`click-role`, `fill-label`, `accessibility-snapshot`, and
+`query`, `get-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`,
+`blur`, `clear`, `submit`, `scroll`, `select-option`, `check`, `uncheck`,
+`hover`, `press`, `click-text`, `click-role`, `fill-label`,
+`accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
-`focused`, `cleared`, `submitted`, or `navigation_requested` from `result`.
+`focused`, `value`, `readable`, `blurred`, `cleared`, `submitted`, or
+`navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -222,6 +227,7 @@ browser-cli action click --session-id <session_id> --selector <selector>
 browser-cli action wait-text --session-id <session_id> --text <text>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
 browser-cli action get-text --session-id <session_id> --selector <selector>
+browser-cli action get-value --session-id <session_id> --selector <selector>
 browser-cli action query --session-id <session_id> --selector <selector>
 browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
@@ -229,8 +235,9 @@ browser-cli session close --session-id <session_id>
 
 Common agent recipes:
 
-- Form submit: `interactive-snapshot` -> `fill-label` or `clear` -> `select-option`
-  or `check` -> `submit --selector <form-or-field>`,
+- Form submit: `interactive-snapshot` -> `fill-label` or `clear` ->
+  `wait-value` or `get-value` -> `blur` if validation is focus-driven ->
+  `select-option` or `check` -> `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then selector `click`

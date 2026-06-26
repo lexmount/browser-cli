@@ -826,6 +826,216 @@ def _focus_expression(*, selector: str, prevent_scroll: bool) -> str:
     )
 
 
+def _form_value_helpers_expression() -> str:
+    return """
+  const readFormValue = (node) => {
+    const tag = node.tagName.toLowerCase();
+    const type = String(node.getAttribute("type") || "").toLowerCase();
+    if (tag === "input" && ["checkbox", "radio"].includes(type)) {
+      return {
+        readable: true,
+        value: Boolean(node.checked),
+        value_type: "checked",
+        checked: Boolean(node.checked)
+      };
+    }
+    if (tag === "select") {
+      const selectedOptions = [...node.selectedOptions].map((option) => ({
+        value: option.value,
+        text: textOf(option)
+      }));
+      return {
+        readable: true,
+        value: node.multiple ? selectedOptions.map((option) => option.value) : node.value,
+        value_type: node.multiple ? "selected_values" : "value",
+        selected_options: selectedOptions,
+        multiple: Boolean(node.multiple)
+      };
+    }
+    if (node.isContentEditable) {
+      return {
+        readable: true,
+        value: node.textContent ?? "",
+        value_type: "text_content"
+      };
+    }
+    if ("value" in node) {
+      return {
+        readable: true,
+        value: node.value ?? "",
+        value_type: "value"
+      };
+    }
+    if ("checked" in node) {
+      return {
+        readable: true,
+        value: Boolean(node.checked),
+        value_type: "checked",
+        checked: Boolean(node.checked)
+      };
+    }
+    return { readable: false, value: null, value_type: null };
+  };
+  const formValueText = (currentValue) => Array.isArray(currentValue)
+    ? currentValue.join(",")
+    : String(currentValue ?? "");
+""".rstrip()
+
+
+def _get_value_expression(selector: str) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, readable: false, value: null }};
+  }}
+  return {{
+    selector,
+    found: true,
+    ...readFormValue(element),
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _wait_value_expression(
+    *,
+    selector: str,
+    value: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const requestedValue = {_js_literal(value)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        selector,
+        found: false,
+        selector_found: Boolean(document.querySelector(selector)),
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    const candidate = formValueText(currentValue);
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const element = document.querySelector(selector);
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          selector,
+          found: false,
+          selector_found: false,
+          value: null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const state = readFormValue(element);
+    if (!state.readable) {{
+      resolve({{
+        selector,
+        found: false,
+        selector_found: true,
+        ...state,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (matches(state.value)) {{
+      resolve({{
+        selector,
+        found: true,
+        selector_found: true,
+        ...state,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        found: false,
+        selector_found: true,
+        ...state,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _blur_expression(selector: str) -> str:
+    return _selector_expression(
+        selector,
+        """
+  const wasFocused = document.activeElement === element;
+  element.blur?.();
+  return {
+    selector,
+    found: true,
+    blurred: document.activeElement !== element,
+    was_focused: wasFocused,
+    focused: document.activeElement === element
+  };
+""".rstrip(),
+    )
+
+
 def _clear_expression(selector: str) -> str:
     return _event_expression(
         selector,
@@ -1137,6 +1347,37 @@ def cmd_action_focus(args: argparse.Namespace) -> None:
             selector=args.selector,
             prevent_scroll=args.prevent_scroll,
         ),
+    )
+
+
+def cmd_action_get_value(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-value",
+        _get_value_expression(args.selector),
+    )
+
+
+def cmd_action_wait_value(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-value",
+        _wait_value_expression(
+            selector=args.selector,
+            value=args.value,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_blur(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.blur",
+        _blur_expression(args.selector),
     )
 
 
@@ -1753,6 +1994,44 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Focus without scrolling the element into view.",
     )
     action_focus.set_defaults(func=cmd_action_focus)
+
+    action_get_value = action_subparsers.add_parser(
+        "get-value",
+        help="Read the value, checked state, or selected options from a form field",
+    )
+    _add_session_target_args(action_get_value)
+    action_get_value.add_argument("--selector", required=True)
+    action_get_value.set_defaults(func=cmd_action_get_value)
+
+    action_wait_value = action_subparsers.add_parser(
+        "wait-value",
+        help="Wait until a form field value matches text",
+    )
+    _add_session_target_args(action_wait_value)
+    action_wait_value.add_argument("--selector", required=True)
+    action_wait_value.add_argument("--value", required=True)
+    action_wait_value.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match the current value.",
+    )
+    action_wait_value.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_value.add_argument("--poll-ms", type=float, default=250)
+    action_wait_value.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_value.set_defaults(func=cmd_action_wait_value)
+
+    action_blur = action_subparsers.add_parser(
+        "blur",
+        help="Blur a selector to trigger focusout/change validation",
+    )
+    _add_session_target_args(action_blur)
+    action_blur.add_argument("--selector", required=True)
+    action_blur.set_defaults(func=cmd_action_blur)
 
     action_clear = action_subparsers.add_parser(
         "clear",
