@@ -110,6 +110,53 @@ def test_argument_errors_emit_json(
     assert usage_part in payload["usage"]
 
 
+def test_json_compatibility_flag_is_accepted_after_subcommands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            return DummyModel({"count": 0, "status_filter": status, "sessions": []})
+
+        def list_contexts(self, *, status: str | None, limit: int) -> DummyModel:
+            return DummyModel(
+                {
+                    "count": 0,
+                    "status_filter": status,
+                    "limit": limit,
+                    "contexts": [],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://api.lexmount.cn/connection?project_id=p&api_key=secret",
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.run_browser_action",
+        lambda **kwargs: SimpleNamespace(result={"title": "Example"}),
+    )
+
+    cases = [
+        (["auth", "status", "--json"], "auth.status"),
+        (["session", "list", "--json"], "session.list"),
+        (["session", "--json", "list"], "session.list"),
+        (["context", "list", "--json"], "context.list"),
+        (["list-contexts", "--json"], "context.list"),
+        (["action", "snapshot", "--session-id", "s1", "--json"], "action.snapshot"),
+        (["action", "--json", "snapshot", "--session-id", "s1"], "action.snapshot"),
+    ]
+    for argv, command in cases:
+        with pytest.raises(SystemExit) as exc_info:
+            cli_main(argv)
+
+        assert exc_info.value.code == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["ok"] is True
+        assert payload["command"] == command
+
+
 def _checks_by_name(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {check["name"]: check for check in payload["checks"]}
 

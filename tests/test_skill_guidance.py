@@ -47,5 +47,6 @@ def test_skill_guides_json_failures_and_secret_hygiene() -> None:
 
     assert "parse the JSON error first" in text
     assert "`error`, `message`, and command-specific fields" in text
+    assert "safe to include `--json` at the top level or after subcommands" in text
     assert "Do not paste API keys, Project IDs, or full direct" in text
     assert "Use reveal flags only for local debugging in a trusted shell" in normalized

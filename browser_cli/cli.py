@@ -168,6 +168,23 @@ class JsonArgumentParser(argparse.ArgumentParser):
         )
 
 
+def _parser_has_option(parser: argparse.ArgumentParser, option: str) -> bool:
+    return any(option in action.option_strings for action in parser._actions)
+
+
+def _add_json_compatibility_flag(parser: argparse.ArgumentParser) -> None:
+    if not _parser_has_option(parser, "--json"):
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help=argparse.SUPPRESS,
+        )
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for subparser in action.choices.values():
+                _add_json_compatibility_flag(subparser)
+
+
 def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
     if not raw:
         return None
@@ -6306,6 +6323,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_auth_commands(subparsers)
     _add_doctor_command(subparsers)
     _add_alias_commands(subparsers)
+    _add_json_compatibility_flag(parser)
 
     return parser
 

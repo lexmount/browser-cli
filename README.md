@@ -126,9 +126,9 @@ browser-cli doctor
 browser-cli doctor --json
 ```
 
-`browser-cli` output is always JSON; `doctor --json` is accepted for agent
-compatibility. Use `browser-cli doctor --skip-api` only when the live API should
-not be called.
+`browser-cli` output is always JSON; `--json` is accepted as an agent
+compatibility no-op at the top level and after subcommands. Use
+`browser-cli doctor --skip-api` only when the live API should not be called.
 
 ## Commands
 
@@ -300,7 +300,11 @@ browser-cli close-session --session-id <session_id>
 
 ## JSON Output
 
-All command output is JSON.
+All command output is JSON. `--json` is accepted as a no-op compatibility flag
+for agents that habitually request machine-readable output; it can appear before
+the command group or after subcommands, for example `browser-cli --json auth
+status`, `browser-cli auth status --json`, or `browser-cli action snapshot
+--session-id <session_id> --json`.
 
 Successful commands include:
 
@@ -350,7 +354,7 @@ direct URLs and diagnostic error messages by default. Failed or skipped checks
 may include a `fix` object with a stable `code`, recommended `commands`,
 relevant `env` names, and concise `guidance`; agents should prefer those fields
 when telling the user how to repair setup. `doctor --json` is a no-op
-compatibility flag because JSON is already the only output format.
+compatibility form because JSON is already the only output format.
 
 `browser-cli auth status` reports local credential presence without revealing
 the API key. `browser-cli auth export-env` returns `commands` and `script`

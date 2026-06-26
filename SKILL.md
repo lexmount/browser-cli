@@ -55,8 +55,9 @@ browser-cli doctor --json
 
 Run `browser-cli doctor --json` before the first browser action in a thread,
 after credential changes, or when a session/context/action command fails for an
-unclear reason. `--json` is accepted for compatibility; browser-cli output is
-always JSON. Parse the JSON before deciding what to do:
+unclear reason. `--json` is accepted as a no-op compatibility flag at the top
+level and after subcommands; browser-cli output is always JSON. Parse the JSON
+before deciding what to do:
 
 - `ok: true` and `failed: 0`: continue with browser work.
 - `ok: false`: stop before creating sessions, inspect `checks` with
@@ -332,6 +333,8 @@ the shared direct websocket path.
 
 Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, `message`, and command-specific fields. Do not log revealed API keys.
+It is safe to include `--json` at the top level or after subcommands because it
+does not change output.
 Do not paste API keys, Project IDs, or full direct connect URLs into chat, docs,
 commits, screenshots, or test fixtures. By default, browser direct URLs are
 masked. Use reveal flags only for local debugging in a trusted shell.
