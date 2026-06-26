@@ -159,6 +159,18 @@ def _context_payload(value: Any) -> dict[str, Any]:
     return payload
 
 
+def _metadata_matches(
+    context_payload: dict[str, Any],
+    metadata_match: dict[str, Any] | None,
+) -> bool:
+    if not metadata_match:
+        return True
+    metadata = context_payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return all(metadata.get(key) == value for key, value in metadata_match.items())
+
+
 def _mask_direct_url_secret(connect_url: str) -> str:
     parsed = urlsplit(connect_url)
     query = [
@@ -288,8 +300,17 @@ def cmd_context_delete(args: argparse.Namespace) -> None:
     _success(command, context_id=args.context_id, deleted=True)
 
 
-def _context_resolution_summary(contexts: list[Any]) -> dict[str, Any]:
-    payloads = [_context_payload(context) for context in contexts]
+def _context_resolution_summary(
+    contexts: list[Any],
+    *,
+    metadata_match: dict[str, Any] | None,
+) -> dict[str, Any]:
+    all_payloads = [_context_payload(context) for context in contexts]
+    payloads = [
+        payload
+        for payload in all_payloads
+        if _metadata_matches(payload, metadata_match)
+    ]
     available = [
         payload for payload in payloads if payload["reuse"]["can_reuse_now"] is True
     ]
@@ -303,6 +324,10 @@ def _context_resolution_summary(contexts: list[Any]) -> dict[str, Any]:
         "locked_count": len(locked),
         "considered_count": len(payloads),
         "considered_contexts": payloads,
+        "metadata_match": metadata_match,
+        "matched_count": len(payloads),
+        "total_count": len(all_payloads),
+        "unmatched_count": len(all_payloads) - len(payloads),
     }
 
 
@@ -361,9 +386,12 @@ def _context_missing_decision(summary: dict[str, Any]) -> dict[str, Any]:
         )
     else:
         action = "create_context"
-        reason = (
-            "no_contexts_found" if considered_count == 0 else "no_available_context"
-        )
+        if considered_count == 0 and summary.get("total_count", 0) == 0:
+            reason = "no_contexts_found"
+        elif considered_count == 0 and summary.get("metadata_match"):
+            reason = "no_matching_contexts"
+        else:
+            reason = "no_available_context"
 
     return {
         "action": action,
@@ -377,13 +405,58 @@ def _context_missing_decision(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _context_metadata_mismatch_decision() -> dict[str, Any]:
+    return {
+        "action": "create_context",
+        "reason": "metadata_mismatch",
+        "can_start_session": False,
+        "should_create_context": True,
+        "should_close_session": False,
+        "selected_context_id": None,
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+    }
+
+
 def cmd_context_resolve(args: argparse.Namespace) -> None:
     command = "context.resolve"
     admin = LexmountBrowserAdmin()
+    create_metadata = (
+        args.metadata if args.metadata is not None else args.metadata_match
+    )
+    if (
+        args.create_if_missing
+        and args.metadata_match
+        and not _metadata_matches({"metadata": create_metadata}, args.metadata_match)
+    ):
+        _failure(
+            command,
+            "metadata_mismatch",
+            "--metadata-json must contain every key and value from --metadata-match-json.",
+            metadata_match=args.metadata_match,
+            metadata=create_metadata,
+        )
     try:
         if args.context_id:
             context = admin.get_context(args.context_id)
             context_payload = _context_payload(context)
+            metadata_matches = _metadata_matches(context_payload, args.metadata_match)
+            if not metadata_matches:
+                _success(
+                    command,
+                    resolved=False,
+                    created=False,
+                    decision=_context_metadata_mismatch_decision(),
+                    context=context_payload,
+                    context_id=context_payload.get("context_id"),
+                    metadata_match=args.metadata_match,
+                    metadata_matches=False,
+                    recommended_session_command=None,
+                    next_steps=[
+                        "Use a context whose metadata matches the requested persistent login state.",
+                        "Run browser-cli context resolve --create-if-missing with the same --metadata-match-json.",
+                    ],
+                )
             resolved = context_payload["reuse"]["can_reuse_now"] is True
             decision = _context_reuse_decision(context_payload, created=False)
             _success(
@@ -393,6 +466,8 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
                 decision=decision,
                 context=context_payload,
                 context_id=context_payload.get("context_id"),
+                metadata_match=args.metadata_match,
+                metadata_matches=True,
                 recommended_session_command=context_payload["reuse"][
                     "recommended_session_command"
                 ],
@@ -401,7 +476,10 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
 
         listed = admin.list_contexts(status=args.status, limit=args.limit)
         contexts = list(listed.contexts)
-        summary = _context_resolution_summary(contexts)
+        summary = _context_resolution_summary(
+            contexts,
+            metadata_match=args.metadata_match,
+        )
         selected = next(
             (
                 payload
@@ -429,7 +507,7 @@ def cmd_context_resolve(args: argparse.Namespace) -> None:
             )
 
         if args.create_if_missing:
-            context = admin.create_context(metadata=args.metadata)
+            context = admin.create_context(metadata=create_metadata)
             context_payload = _context_payload(context)
             decision = _context_reuse_decision(context_payload, created=True)
             _success(
@@ -754,6 +832,12 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         dest="metadata",
         type=_parse_metadata_json,
         help="JSON object used when --create-if-missing creates a context",
+    )
+    context_resolve.add_argument(
+        "--metadata-match-json",
+        dest="metadata_match",
+        type=_parse_metadata_json,
+        help="JSON object that candidate context metadata must contain",
     )
     context_resolve.set_defaults(func=cmd_context_resolve)
 

@@ -385,6 +385,208 @@ def test_context_resolve_selects_available_context(
     )
 
 
+def test_context_resolve_selects_metadata_matching_context(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            assert status is None
+            assert limit == 20
+            return DummyModel(
+                {
+                    "count": 2,
+                    "contexts": [
+                        {
+                            "context_id": "other_ctx",
+                            "status": "available",
+                            "metadata": {"site": "docs", "purpose": "login"},
+                        },
+                        {
+                            "context_id": "target_ctx",
+                            "status": "available",
+                            "metadata": {"site": "mail", "purpose": "login"},
+                        },
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "resolve",
+                "--metadata-match-json",
+                '{"site":"mail","purpose":"login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resolved"] is True
+    assert payload["context_id"] == "target_ctx"
+    assert payload["metadata_match"] == {"site": "mail", "purpose": "login"}
+    assert payload["matched_count"] == 1
+    assert payload["unmatched_count"] == 1
+    assert payload["total_count"] == 2
+
+
+def test_context_resolve_creates_with_metadata_match_when_no_candidate_matches(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "other_ctx",
+                            "status": "available",
+                            "metadata": {"site": "docs"},
+                        }
+                    ],
+                }
+            )
+
+        def create_context(
+            self,
+            *,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(("create", {"metadata": metadata}))
+            return DummyModel(
+                {
+                    "context_id": "new_ctx",
+                    "status": "available",
+                    "metadata": metadata,
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "resolve",
+                "--create-if-missing",
+                "--metadata-match-json",
+                '{"site":"mail","purpose":"login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert calls == [
+        ("list", {"status": None, "limit": 20}),
+        ("create", {"metadata": {"site": "mail", "purpose": "login"}}),
+    ]
+    assert payload["created"] is True
+    assert payload["context_id"] == "new_ctx"
+    assert payload["metadata_match"] == {"site": "mail", "purpose": "login"}
+    assert payload["matched_count"] == 0
+    assert payload["unmatched_count"] == 1
+
+
+def test_context_resolve_rejects_create_metadata_that_does_not_match_filter(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError("context resolve should fail before API calls")
+
+        def create_context(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError("context resolve should not create mismatched context")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "resolve",
+                "--create-if-missing",
+                "--metadata-match-json",
+                '{"site":"mail"}',
+                "--metadata-json",
+                '{"site":"docs"}',
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "context.resolve"
+    assert payload["error"] == "metadata_mismatch"
+    assert payload["metadata_match"] == {"site": "mail"}
+    assert payload["metadata"] == {"site": "docs"}
+
+
+def test_context_resolve_reports_no_matching_contexts_without_create(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            assert status is None
+            assert limit == 20
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "other_ctx",
+                            "status": "available",
+                            "metadata": {"site": "docs"},
+                        }
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "resolve",
+                "--metadata-match-json",
+                '{"site":"mail"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resolved"] is False
+    assert payload["decision"]["reason"] == "no_matching_contexts"
+    assert payload["decision"]["should_create_context"] is True
+    assert payload["matched_count"] == 0
+    assert payload["unmatched_count"] == 1
+
+
 def test_context_resolve_creates_when_no_context_is_available(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -478,6 +680,51 @@ def test_context_resolve_reports_explicit_locked_context(
         "can_start_session": False,
         "should_create_context": True,
         "should_close_session": True,
+        "selected_context_id": None,
+        "recommended_context_mode": None,
+        "recommended_session_command": None,
+    }
+
+
+def test_context_resolve_rejects_explicit_metadata_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def get_context(self, context_id: str) -> DummyModel:
+            return DummyModel(
+                {
+                    "context_id": context_id,
+                    "status": "available",
+                    "metadata": {"site": "docs"},
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "resolve",
+                "--context-id",
+                "ctx1",
+                "--metadata-match-json",
+                '{"site":"mail"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["resolved"] is False
+    assert payload["metadata_matches"] is False
+    assert payload["metadata_match"] == {"site": "mail"}
+    assert payload["decision"] == {
+        "action": "create_context",
+        "reason": "metadata_mismatch",
+        "can_start_session": False,
+        "should_create_context": True,
+        "should_close_session": False,
         "selected_context_id": None,
         "recommended_context_mode": None,
         "recommended_session_command": None,

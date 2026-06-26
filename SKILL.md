@@ -50,7 +50,7 @@ Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
 ```bash
-browser-cli context resolve --create-if-missing
+browser-cli context resolve --create-if-missing --metadata-match-json '{"site":"example.com","purpose":"login"}'
 browser-cli session create --context-id <context_id> --context-mode read_write
 ```
 
@@ -65,7 +65,8 @@ task.
 
 For persistent-login tasks, prefer this decision flow:
 
-1. Run `browser-cli context resolve --create-if-missing`.
+1. Run `browser-cli context resolve --create-if-missing` with
+   `--metadata-match-json` describing the site, account, or purpose when known.
 2. If `decision.action` is `start_session`, use `decision.selected_context_id`,
    the returned `context_id`, or `recommended_session_command`.
 3. If `decision.action` is `close_or_create_context`, do not reuse it for a new
@@ -74,7 +75,9 @@ For persistent-login tasks, prefer this decision flow:
 4. Use `--context-mode read_write` while logging in or changing cookies/storage.
    Use `--context-mode read_only` for inspection when the login state must not
    change.
-5. Do not delete contexts that may hold user login state unless the user asks.
+5. If `decision.reason` is `metadata_mismatch` or `no_matching_contexts`, create
+   or select a matching context instead of reusing unrelated login state.
+6. Do not delete contexts that may hold user login state unless the user asks.
 
 Always close sessions created for temporary automation unless the user asks to
 keep them open.
@@ -98,6 +101,7 @@ browser-cli context create
 browser-cli context list
 browser-cli context get --context-id <context_id>
 browser-cli context resolve --create-if-missing
+browser-cli context resolve --metadata-match-json '{"site":"example.com"}'
 browser-cli context delete --context-id <context_id>
 ```
 

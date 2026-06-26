@@ -111,6 +111,7 @@ browser-cli context list --limit 20
 browser-cli context get --context-id <context_id>
 browser-cli context resolve
 browser-cli context resolve --create-if-missing
+browser-cli context resolve --metadata-match-json '{"site":"example.com","purpose":"login"}'
 browser-cli context resolve --context-id <context_id>
 browser-cli context delete --context-id <context_id>
 ```
@@ -118,7 +119,7 @@ browser-cli context delete --context-id <context_id>
 Persistent login context workflow:
 
 ```bash
-browser-cli context resolve --create-if-missing --metadata-json '{"purpose":"login"}'
+browser-cli context resolve --create-if-missing --metadata-match-json '{"site":"example.com","purpose":"login"}'
 browser-cli session create --context-id <context_id> --context-mode read_write
 ```
 
@@ -129,7 +130,10 @@ JSON includes a `reuse` object with `can_reuse_now`, `reason`, `next_steps`, and
 `recommended_session_command`. `context resolve` also returns a top-level
 `decision` object with `action`, `reason`, `can_start_session`,
 `should_create_context`, `should_close_session`, and `selected_context_id` so
-agents can branch without inferring from free-form text.
+agents can branch without inferring from free-form text. Use
+`--metadata-match-json` to reuse only contexts whose metadata contains the
+requested keys and values; if `--create-if-missing` is used without
+`--metadata-json`, the match metadata is used for the newly created context.
 
 Browser actions:
 
@@ -210,7 +214,8 @@ Use `context create` plus `session create --context-id <context_id>` when login
 state or cookies should survive between sessions.
 Use `context resolve --create-if-missing` when the agent needs a reusable
 context but does not know whether one already exists or whether it is locked by
-an active session.
+an active session. Add `--metadata-match-json` for persistent login state tied to
+a specific site, account, or task.
 
 ## Codex Skill
 
