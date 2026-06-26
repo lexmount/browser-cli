@@ -1592,6 +1592,116 @@ def _wait_count_expression(
 """.strip()
 
 
+def _wait_state_expression(
+    *,
+    selector: str,
+    state: str,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const requestedState = {_js_literal(state)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const ariaTrue = (element, name) => element.getAttribute(name) === "true";
+  const ariaFalse = (element, name) => element.getAttribute(name) === "false";
+  const elementState = (element) => {{
+    if (!element) {{
+      return {{
+        found: false,
+        element: null,
+        state_values: {{
+          attached: false,
+          detached: true,
+          visible: false,
+          hidden: true,
+          enabled: false,
+          disabled: null,
+          editable: false,
+          readonly: null,
+          checked: null,
+          unchecked: null,
+          focused: false,
+          in_viewport: null,
+          out_of_viewport: null
+        }}
+      }};
+    }}
+    const rect = element.getBoundingClientRect();
+    const inViewport = rect.bottom >= 0 &&
+      rect.right >= 0 &&
+      rect.top <= window.innerHeight &&
+      rect.left <= window.innerWidth;
+    const disabled = Boolean(element.disabled) || ariaTrue(element, "aria-disabled");
+    const readonly = Boolean(element.readOnly) || ariaTrue(element, "aria-readonly");
+    let checked = null;
+    if ("checked" in element) {{
+      checked = Boolean(element.checked);
+    }} else if (ariaTrue(element, "aria-checked")) {{
+      checked = true;
+    }} else if (ariaFalse(element, "aria-checked")) {{
+      checked = false;
+    }}
+    const visibleState = visible(element);
+    const tag = element.tagName.toLowerCase();
+    const editable = Boolean(
+      element.isContentEditable ||
+      (["input", "textarea", "select"].includes(tag) && !disabled && !readonly)
+    );
+    return {{
+      found: true,
+      element: nodeInfo(element),
+      state_values: {{
+        attached: true,
+        detached: false,
+        visible: visibleState,
+        hidden: !visibleState,
+        enabled: !disabled,
+        disabled,
+        editable,
+        readonly,
+        checked,
+        unchecked: checked === null ? null : !checked,
+        focused: document.activeElement === element,
+        in_viewport: inViewport,
+        out_of_viewport: !inViewport
+      }}
+    }};
+  }};
+  const stateMatches = (stateValues) => {{
+    const normalizedState = requestedState.replace(/-/g, "_");
+    return Boolean(stateValues[normalizedState]);
+  }};
+  const check = () => {{
+    const element = document.querySelector(selector);
+    const result = elementState(element);
+    const waitedMs = Date.now() - startedAt;
+    const matched = stateMatches(result.state_values);
+    if (matched || waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        state: requestedState,
+        found: result.found,
+        matched,
+        waited_ms: waitedMs,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        state_values: result.state_values,
+        element: result.element
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _wait_attribute_expression(
     *,
     selector: str,
@@ -3616,6 +3726,19 @@ def cmd_action_wait_count(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_wait_state(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-state",
+        _wait_state_expression(
+            selector=args.selector,
+            state=args.state,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
+    )
+
+
 def cmd_action_query(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -5066,6 +5189,35 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Include hidden DOM nodes in the count.",
     )
     action_wait_count.set_defaults(func=cmd_action_wait_count)
+
+    action_wait_state = action_subparsers.add_parser(
+        "wait-state",
+        help="Wait until a selector reaches a common DOM state",
+    )
+    _add_session_target_args(action_wait_state)
+    action_wait_state.add_argument("--selector", required=True)
+    action_wait_state.add_argument(
+        "--state",
+        required=True,
+        choices=[
+            "attached",
+            "detached",
+            "visible",
+            "hidden",
+            "enabled",
+            "disabled",
+            "editable",
+            "readonly",
+            "checked",
+            "unchecked",
+            "focused",
+            "in-viewport",
+            "out-of-viewport",
+        ],
+    )
+    action_wait_state.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_state.add_argument("--poll-ms", type=float, default=250)
+    action_wait_state.set_defaults(func=cmd_action_wait_state)
 
     action_query = action_subparsers.add_parser(
         "query",

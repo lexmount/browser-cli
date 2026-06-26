@@ -91,6 +91,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`get-text`",
         "`count`",
         "`wait-count`",
+        "`wait-state`",
         "`query`",
         "`inspect`",
         "`get-attribute`",
@@ -148,6 +149,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`network_idle`" in normalized
     assert "`quiet_ms`" in normalized
     assert "`requested_count`" in normalized
+    assert "`matched`" in normalized
+    assert "`state_values`" in normalized
     assert "`attribute_found`" in normalized
     assert "`requested_value`" in normalized
     assert "`dispatched`" in normalized
@@ -182,6 +185,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`select-label` for labeled selects" in normalized
     assert "`select-option` or `check`" in normalized
     assert "prefer `check-label` for labeled controls" in normalized
+    assert "`wait-state --state enabled` for async submit buttons" in normalized
     assert "`dispatch-event --event input --event change`" in normalized
     assert "then use `submit`" in normalized
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
@@ -198,12 +202,13 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, `inspect`, and `get-attribute` before" in normalized
     assert "use `inspect` for `state.disabled`, `state.readonly`" in normalized
-    assert "use `wait-count` or `wait-attribute` for async DOM changes" in normalized
+    assert "use `wait-count`, `wait-state`, or `wait-attribute`" in normalized
     assert "Open menus or keyboard flows" in normalized
     assert "use `focus`, `hover` for menus, `press` for shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized
     assert "Read page results" in normalized
     assert "use `wait-count` for dynamic lists" in normalized
+    assert "`wait-state` for enabled/visible/checked/focused states" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` before reading dynamic results" in normalized
     assert "Adjust browser state" in normalized

@@ -199,6 +199,7 @@ browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
 browser-cli action count --session-id <session_id> --selector ".item"
 browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
+browser-cli action wait-state --session-id <session_id> --selector "button[type=submit]" --state enabled
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
@@ -245,7 +246,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 
 `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`,
 `wait-network-idle`, `get-text`, `exists`, `count`, `query`, `get-attribute`,
-`wait-count`, `wait-attribute`, `wait-text`, `focus`, `get-value`,
+`wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `focus`, `get-value`,
 `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
@@ -260,11 +261,12 @@ JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
-`attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
-`dispatched`, `dispatched_events`, `fields`, `value_masked`, `bounding_box`,
-`in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
-`option_found`, `option_label`, `requested_checked`, `previous_checked`,
-`changed`, or `navigation_requested` from `result`.
+`matched`, `state_values`, `attribute_found`, `requested_value`, `network_idle`,
+`quiet_ms`, `submitted`, `dispatched`, `dispatched_events`, `fields`,
+`value_masked`, `bounding_box`, `in_viewport`, `index`, `attributes`,
+`html_truncated`, `requested_option_label`, `option_found`, `option_label`,
+`requested_checked`, `previous_checked`, `changed`, or `navigation_requested`
+from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -381,8 +383,8 @@ Common agent recipes:
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`,
   `set-value`, or `clear` -> `wait-value` or `get-value` -> `blur` if validation is
   focus-driven -> `select-label`, `select-option`, `check-label`, or `check` ->
-  `dispatch-event` if explicit `input`/`change` is needed ->
-  `submit --selector <form-or-field>`,
+  `wait-state --state enabled` for async submit buttons -> `dispatch-event` if
+  explicit `input`/`change` is needed -> `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`
@@ -397,9 +399,9 @@ Common agent recipes:
   or `snapshot`.
 - Menu or keyboard flow: `focus`, `hover`, `press`, or `dispatch-event`, then
   inspect again with `interactive-snapshot`.
-- Read results: `wait-count` for dynamic lists, `wait-attribute` for DOM state
-  changes, `get-text` for known selectors, or `snapshot` when the selector is
-  unknown.
+- Read results: `wait-count` for dynamic lists, `wait-attribute` for DOM
+  attributes, `wait-state` for enabled/visible/checked/focused states, `get-text`
+  for known selectors, or `snapshot` when the selector is unknown.
 - Browser state: use `storage-get` to inspect local/session storage, `storage-set`
   to adjust feature flags or onboarding state, and `storage-remove` or
   `storage-clear --prefix <prefix>` for targeted cleanup. Use `wait-storage`
@@ -408,8 +410,8 @@ Common agent recipes:
   `wait-cookie` after consent/login flows; HttpOnly cookies are not visible
   through this action surface.
 - Debug candidate selectors: use `count` for cardinality, `query` for node
-  metadata, `get-attribute` for href/value/aria checks, then `wait-count` or
-  `wait-attribute` for async DOM changes.
+  metadata, `inspect` for state, `get-attribute` for href/value/aria checks,
+  then `wait-count`, `wait-state`, or `wait-attribute` for async DOM changes.
 - Final evidence: `screenshot`, then close the session unless it should stay
   open.
 
