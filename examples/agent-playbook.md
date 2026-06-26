@@ -98,6 +98,7 @@ Prefer built-in actions over writing JavaScript:
 
 ```bash
 browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action wait-title --session-id <session_id> --title <title-or-fragment>
 browser-cli action wait-selector --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
@@ -107,8 +108,8 @@ browser-cli action snapshot --session-id <session_id>
 
 When expanded action commands are available, use them for common browser
 operations such as reading page info, checking existence, reading text,
-scrolling, selecting options, checking boxes, hovering, pressing selector keys,
-and sending active/global shortcut keys.
+waiting on title changes, scrolling, selecting options, checking boxes,
+hovering, pressing selector keys, and sending active/global shortcut keys.
 
 Prefer semantic actions such as `wait-role`, `click-role`, `click-text`,
 `fill-label`, `select-label`, `check-label`, `interactive-snapshot`, and

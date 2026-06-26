@@ -207,6 +207,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "context.pick",
         "action.open-url",
         "action.page-info",
+        "action.wait-title",
         "action.press-key",
         "action.click-role",
         "action.fill-label",
@@ -245,6 +246,7 @@ def test_commands_catalog_filters_group_and_names_only(
     }
     assert "action.open-url" in payload["commands"]
     assert "action.page-info" in payload["commands"]
+    assert "action.wait-title" in payload["commands"]
     assert "action.press-key" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -4118,6 +4120,41 @@ def test_third_batch_eval_backed_action_commands_emit_structured_results(
                 "found": True,
                 "requested_url": "/dashboard",
                 "match": "contains",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-title",
+                "--session-id",
+                "s1",
+                "--title",
+                "Dashboard",
+                "--match",
+                "exact",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+            ],
+            "action.wait-title",
+            {
+                "found": True,
+                "title": "Dashboard",
+                "requested_title": "Dashboard",
+                "match": "exact",
+                "case_sensitive": True,
+                "waited_ms": 50,
+            },
+            {
+                "found": True,
+                "title": "Dashboard",
+                "requested_title": "Dashboard",
+                "match": "exact",
+                "case_sensitive": True,
                 "waited_ms": 50,
                 "url": "https://example.test",
             },

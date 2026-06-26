@@ -3021,6 +3021,80 @@ def _wait_url_expression(
 """.strip()
 
 
+def _wait_title_expression(
+    *,
+    title: str,
+    match: str,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const requestedTitle = {_js_literal(title)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedTitle, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        found: false,
+        title: document.title,
+        requested_title: requestedTitle,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const normalize = (value) => caseSensitive ? value : String(value).toLowerCase();
+  const requestedComparable = normalize(requestedTitle);
+  const matches = (candidate) => {{
+    const comparable = normalize(candidate);
+    if (matchMode === "exact") return comparable === requestedComparable;
+    if (matchMode === "regex") return pattern.test(candidate);
+    return comparable.includes(requestedComparable);
+  }};
+  const check = () => {{
+    const currentTitle = document.title;
+    const waitedMs = Date.now() - startedAt;
+    if (matches(currentTitle)) {{
+      resolve({{
+        found: true,
+        title: currentTitle,
+        requested_title: requestedTitle,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        title: currentTitle,
+        requested_title: requestedTitle,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _wait_load_state_expression(
     *,
     state: str,
@@ -4722,6 +4796,20 @@ def cmd_action_wait_url(args: argparse.Namespace) -> None:
         _wait_url_expression(
             url=args.url,
             match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_title(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-title",
+        _wait_title_expression(
+            title=args.title,
+            match=args.match,
+            case_sensitive=args.case_sensitive,
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
         ),
@@ -6687,6 +6775,26 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_wait_url.add_argument("--timeout-ms", type=float, default=30000)
     action_wait_url.add_argument("--poll-ms", type=float, default=250)
     action_wait_url.set_defaults(func=cmd_action_wait_url)
+
+    action_wait_title = action_subparsers.add_parser(
+        "wait-title",
+        help="Wait until document.title matches text or a regex",
+    )
+    _add_session_target_args(action_wait_title)
+    action_wait_title.add_argument("--title", required=True)
+    action_wait_title.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+    )
+    action_wait_title.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_title.add_argument("--poll-ms", type=float, default=250)
+    action_wait_title.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match the title case-sensitively.",
+    )
+    action_wait_title.set_defaults(func=cmd_action_wait_title)
 
     action_wait_load_state = action_subparsers.add_parser(
         "wait-load-state",

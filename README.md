@@ -260,6 +260,7 @@ browser-cli action reload --session-id <session_id>
 browser-cli action go-back --session-id <session_id>
 browser-cli action go-forward --session-id <session_id>
 browser-cli action wait-url --session-id <session_id> --url /dashboard
+browser-cli action wait-title --session-id <session_id> --title Dashboard --match contains
 browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action get-text --session-id <session_id> --selector "main"
@@ -314,9 +315,9 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-`page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`,
-`wait-network-idle`, `get-text`, `exists`, `count`, `query`, `get-attribute`,
-`wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`,
+`page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
+`wait-load-state`, `wait-network-idle`, `get-text`, `exists`, `count`, `query`,
+`get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`,
 `get-value`, `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `set-file-input`,
@@ -338,8 +339,9 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `option_found`, `option_label`, `requested_checked`, `previous_checked`,
 `changed`, `total_candidate_count`, `ready_state`, `visibility_state`,
 `viewport`, `scroll`, `body_text_length`, `html_length`, `language`,
-`referrer`, `code`, `target`, `target_info`, `modifiers`, `events`,
-`keydown_accepted`, or `navigation_requested` from `result`.
+`referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
+`target_info`, `modifiers`, `events`, `keydown_accepted`, or
+`navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -452,6 +454,7 @@ For a new browser task, agents should prefer this sequence:
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
+browser-cli action wait-title --session-id <session_id> --title <title-or-fragment>
 browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action page-info --session-id <session_id>
 browser-cli action snapshot --session-id <session_id>
@@ -491,15 +494,16 @@ Common agent recipes:
   `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized
   HTML before trying another action.
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
-  confirm with `page-info`, `wait-url`, `wait-load-state`, `wait-network-idle`,
-  `wait-text`, or `snapshot`.
+  confirm with `page-info`, `wait-url`, `wait-title`, `wait-load-state`,
+  `wait-network-idle`, `wait-text`, or `snapshot`.
 - Menu or keyboard flow: `focus`, `hover`, selector-scoped `press`,
   active/global `press-key`, or `dispatch-event`, then inspect again with
   `interactive-snapshot`.
 - Read results: `page-info` for URL/title/readyState/viewport checks,
-  `wait-count` for dynamic lists, `wait-attribute` for DOM attributes,
-  `wait-state` for enabled/visible/checked/focused states, `get-text` for known
-  selectors, or `snapshot` when the selector is unknown.
+  `wait-title` for async title changes, `wait-count` for dynamic lists,
+  `wait-attribute` for DOM attributes, `wait-state` for
+  enabled/visible/checked/focused states, `get-text` for known selectors, or
+  `snapshot` when the selector is unknown.
 - Browser state: use `storage-get` to inspect local/session storage, `storage-set`
   to adjust feature flags or onboarding state, and `storage-remove` or
   `storage-clear --prefix <prefix>` for targeted cleanup. Use `wait-storage`

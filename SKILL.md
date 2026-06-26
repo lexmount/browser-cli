@@ -229,6 +229,7 @@ browser-cli action reload --session-id <session_id>
 browser-cli action go-back --session-id <session_id>
 browser-cli action go-forward --session-id <session_id>
 browser-cli action wait-url --session-id <session_id> --url /dashboard
+browser-cli action wait-title --session-id <session_id> --title Dashboard --match contains
 browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action get-text --session-id <session_id> --selector "main"
@@ -283,7 +284,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
 Prefer these built-in actions over writing custom JavaScript. `page-info`, `reload`,
-`go-back`, `go-forward`, `wait-url`, `wait-load-state`, `wait-network-idle`,
+`go-back`, `go-forward`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`,
 `get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-count`,
 `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `get-value`, `wait-value`, `blur`,
 `storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
@@ -304,8 +305,8 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `html_truncated`, `total_candidate_count`, `requested_option_label`, `option_found`, `option_label`,
 `requested_checked`, `previous_checked`, `changed`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
-`language`, `referrer`, `code`, `target`, `target_info`, `modifiers`, `events`,
-`keydown_accepted`, and `navigation_requested`
+`language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
+`target_info`, `modifiers`, `events`, `keydown_accepted`, and `navigation_requested`
 before assuming the page changed.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
 `body_text_length`, `html_length`, `language`, and `referrer` before taking a
@@ -325,8 +326,8 @@ For page work, choose actions in this order:
    `wait-value`, `blur`, `clear`, `set-value`, `dispatch-event`, `submit`,
    `select-option`, `check`, and `uncheck`.
 4. Use `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`,
-   `wait-load-state`, and `wait-network-idle` for navigation and async refresh
-   flows.
+   `wait-title`, `wait-load-state`, and `wait-network-idle` for navigation and
+   async refresh flows.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
    localStorage/sessionStorage state instead of writing storage JavaScript. Use
    `wait-storage` after actions expected to create, update, or remove keys.
@@ -360,18 +361,19 @@ Common task recipes:
    `click` after `exists`, `inspect`, or `bounding-box` confirms a stable selector. For repeated matches, run `query` and then
    `click-index --index <n>`.
 3. Navigate page history or async refresh: use `reload`, `go-back`, or
-   `go-forward`, then confirm with `page-info`, `wait-url`, `wait-load-state`,
-   `wait-network-idle`, `wait-text`, or `snapshot`.
+   `go-forward`, then confirm with `page-info`, `wait-url`, `wait-title`,
+   `wait-load-state`, `wait-network-idle`, `wait-text`, or `snapshot`.
 4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    selector-scoped keys, `press-key` for active/global shortcuts such as
    Enter/Escape, `dispatch-event` for explicit DOM events, and
    `blur` for focus-driven validation, then inspect again with
    `interactive-snapshot`.
 5. Read page results: use `page-info` for URL/title/readyState/viewport checks,
-   `wait-count` for dynamic lists, `wait-attribute` for DOM attributes,
-   `wait-state` for enabled/visible/checked/focused states, `get-text` for a
-   known selector; use `snapshot` when the page structure or selector is
-   unknown; use `wait-text` or `wait-role` before reading dynamic results.
+   `wait-title` for async title changes, `wait-count` for dynamic lists,
+   `wait-attribute` for DOM attributes, `wait-state` for
+   enabled/visible/checked/focused states, `get-text` for a known selector; use
+   `snapshot` when the page structure or selector is unknown; use `wait-text`
+   or `wait-role` before reading dynamic results.
 6. Adjust browser state: use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
    `storage-clear --prefix <prefix>` for targeted cleanup; use `wait-storage`

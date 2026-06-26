@@ -140,6 +140,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`get-attribute`",
         "`wait-attribute`",
         "`wait-selector`",
+        "`wait-title`",
         "`wait-load-state`",
         "`wait-network-idle`",
         "`wait-text`",
@@ -232,6 +233,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`html_length`" in normalized
     assert "`language`" in normalized
     assert "`referrer`" in normalized
+    assert "`requested_title`" in normalized
+    assert "`case_sensitive`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -268,7 +271,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`click-index --index <n>`" in normalized
     assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
-    assert "confirm with `page-info`, `wait-url`, `wait-load-state`" in normalized
+    assert "confirm with `page-info`, `wait-url`, `wait-title`" in normalized
     assert "`wait-network-idle`, `wait-text`, or `snapshot`" in normalized
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, `inspect`, and `get-attribute` before" in normalized
@@ -282,6 +285,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`dispatch-event` for explicit DOM events" in normalized
     assert "Read page results" in normalized
     assert "use `page-info` for URL/title/readyState/viewport checks" in normalized
+    assert "`wait-title` for async title changes" in normalized
     assert "`wait-count` for dynamic lists" in normalized
     assert "`wait-state` for enabled/visible/checked/focused states" in normalized
     assert "`get-text` for a known selector" in normalized
