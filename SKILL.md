@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/dialogs/console entries/fetch-XHR entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/dialogs/frames/console entries/fetch-XHR entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -292,6 +292,7 @@ browser-cli action text-snapshot --session-id <session_id> --selector "main" --m
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
 browser-cli action wait-dialog --session-id <session_id> --text "Confirm" --modal-only
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
+browser-cli action wait-frame --session-id <session_id> --url "/checkout" --readable-only
 browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
 browser-cli action network-snapshot --session-id <session_id> --max-entries 50
 browser-cli action wait-network --session-id <session_id> --url /api/save --method POST --status 201
@@ -313,7 +314,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
-`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`,
+`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
@@ -330,8 +331,9 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `expanded`, `texts`, `text_count`, `text_length`, `text_truncated`,
 `aria_live`, `dialogs`, `dialog_count`, `total_dialog_count`, `requested_text`,
 `modal_only`, `controls`, `control_count`,
-`controls_truncated`, `modal`, `frames`, `frame_count`, `src`, `src_masked`,
-`frame_url`, `frame_url_masked`, `readable`, `read_error`, `navigation`,
+`controls_truncated`, `modal`, `frames`, `frame_count`, `total_frame_count`,
+`src`, `src_masked`, `frame_url`, `frame_url_masked`, `readable`,
+`readable_only`, `same_origin_only`, `text_match`, `read_error`, `navigation`,
 `resources`, `resource_count`, `initiator_type`, `initiator_types`, `duration`,
 `transfer_size`, `response_status`, `entries`, `entry_count`, `matched_count`,
 `buffered_count`, `source`, `level`, `method`, `requested_method`, `status`,
@@ -353,7 +355,7 @@ real value into chat.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, and
+`table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, and
 `performance-snapshot` use the same URL masking for links, frame URLs, and
 performance resource URLs found inside table cells, list items, dialog controls,
 frame metadata, or timing entries.
@@ -373,8 +375,8 @@ For page work, choose actions in this order:
    search results, listboxes, or task lists; use `text-snapshot` for bounded
    visible text, alerts, and status messages; use `wait-dialog` or
    `dialog-snapshot` for modals, alert dialogs, cookie banners, and confirmation
-   prompts; use `frame-snapshot` before frame-related JavaScript or when content
-   appears embedded.
+   prompts; use `wait-frame` or `frame-snapshot` before frame-related JavaScript
+   or when content appears embedded.
 2. Prefer semantic actions: `wait-role` for async roles/names, `click-role` for known roles/names, `click-text` for
    visible text, `click-index` for a chosen repeated selector match,
    `link-snapshot` for choosing or reporting navigation URLs, `list-snapshot`
@@ -437,8 +439,8 @@ Common task recipes:
    masked URLs; use `--failed-only` when looking for transport failures.
 5. Capture runtime errors: run `console-snapshot --install-only`, trigger the
    suspected action, read `console-snapshot` or wait with `wait-console`, then
-   use `text-snapshot`, `wait-dialog`, `dialog-snapshot`, or `inspect` to
-   correlate visible state with JS errors.
+   use `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
+   `inspect` to correlate visible state with JS errors.
 6. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    selector-scoped keys, `press-key` for active/global shortcuts such as
    Enter/Escape, `dispatch-event` for explicit DOM events, and
@@ -447,8 +449,9 @@ Common task recipes:
    confirmation prompts, run `wait-dialog` when the dialog appears asynchronously,
    otherwise run `dialog-snapshot`, choose from `controls`, then use
    `click-role`, `click-text`, or `click-index`. For iframe or embedded app
-   issues, run `frame-snapshot` and parse `readable`, `same_origin`, `frame_url`,
-   and `read_error` before deciding whether direct DOM inspection is possible.
+   issues, run `wait-frame` when the frame appears asynchronously, otherwise run
+   `frame-snapshot` and parse `readable`, `same_origin`, `frame_url`, and
+   `read_error` before deciding whether direct DOM inspection is possible.
 7. Read page results: use `page-info` for URL/title/readyState/viewport checks,
    `wait-title` for async title changes, `wait-count` for dynamic lists,
    `list-snapshot` for menu/listbox/search-result/task-list content,

@@ -324,6 +324,7 @@ browser-cli action text-snapshot --session-id <session_id> --selector "main" --m
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
 browser-cli action wait-dialog --session-id <session_id> --text "Confirm" --modal-only
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
+browser-cli action wait-frame --session-id <session_id> --url "/checkout" --readable-only
 browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
 browser-cli action network-snapshot --session-id <session_id> --max-entries 50
 browser-cli action wait-network --session-id <session_id> --url /api/save --method POST --status 201
@@ -345,7 +346,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -364,8 +365,9 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `texts`, `text_count`, `text_length`, `text_truncated`, `aria_live`,
 `dialogs`, `dialog_count`, `total_dialog_count`, `requested_text`, `modal_only`,
 `controls`, `control_count`, `controls_truncated`, `modal`,
-`frames`, `frame_count`, `src`, `src_masked`, `frame_url`, `frame_url_masked`,
-`readable`, `read_error`,
+`frames`, `frame_count`, `total_frame_count`, `src`, `src_masked`,
+`frame_url`, `frame_url_masked`, `readable`, `readable_only`,
+`same_origin_only`, `text_match`, `read_error`,
 `navigation`, `resources`, `resource_count`, `initiator_type`,
 `initiator_types`, `duration`, `transfer_size`, `response_status`,
 `entries`, `entry_count`, `matched_count`, `buffered_count`, `source`, `level`,
@@ -389,7 +391,7 @@ state is correct.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, and
+`table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, and
 `performance-snapshot` use the same URL masking for links, frame URLs, and
 performance resource URLs found inside table cells, list items, dialog controls,
 frame metadata, or timing entries.
@@ -593,8 +595,8 @@ Common agent recipes:
   `wait-network-idle`, `performance-snapshot`, `wait-text`, or `snapshot`.
 - Runtime errors: install `console-snapshot --install-only`, trigger the
   suspected action, read `console-snapshot` or wait with `wait-console`, then use
-  `text-snapshot`, `dialog-snapshot`, or `inspect` to correlate visible state
-  with JS errors.
+  `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or `inspect`
+  to correlate visible state with JS errors.
 - Menu or keyboard flow: `focus`, `hover`, selector-scoped `press`,
   active/global `press-key`, or `dispatch-event`, then inspect again with
   `interactive-snapshot`.
@@ -602,9 +604,11 @@ Common agent recipes:
   otherwise `dialog-snapshot` for modal dialogs, alert dialogs, cookie banners,
   and confirmation prompts; choose a control from `controls`, then click
   semantically and confirm with `wait-text`, `wait-role`, or `text-snapshot`.
-- Frame flow: `frame-snapshot` before writing frame-related JavaScript; use
-  `readable`, `same_origin`, `frame_url`, and `read_error` to decide whether the
-  agent can inspect the embedded page or needs a different browser workflow.
+- Frame flow: use `wait-frame` when the iframe or embedded app appears
+  asynchronously, otherwise `frame-snapshot` before writing frame-related
+  JavaScript; use `readable`, `same_origin`, `frame_url`, and `read_error` to
+  decide whether the agent can inspect the embedded page or needs a different
+  browser workflow.
 - Read results: `page-info` for URL/title/readyState/viewport checks,
   `wait-title` for async title changes, `wait-count` for dynamic lists,
   `list-snapshot` for menu/listbox/search-result/task-list content,

@@ -3591,6 +3591,170 @@ def _frame_snapshot_expression(
 """.strip()
 
 
+def _wait_frame_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_chars: int,
+    url: str | None,
+    url_match: str,
+    text: str | None,
+    text_match: str,
+    case_sensitive: bool,
+    readable_only: bool,
+    same_origin_only: bool,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    url_source = "null" if url is None else _js_literal(url)
+    text_source = "null" if text is None else _js_literal(text)
+    return f"""
+() => new Promise((resolve) => {{
+  const collectFrames = {
+        _frame_snapshot_expression(
+            selector=selector,
+            include_hidden=include_hidden,
+            max_nodes=max_nodes,
+            max_chars=max_chars,
+        )
+    };
+  const requestedUrl = {url_source};
+  const urlMatchMode = {_js_literal(url_match)};
+  const requestedText = {text_source};
+  const textMatchMode = {_js_literal(text_match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const readableOnly = {_js_literal(readable_only)};
+  const sameOriginOnly = {_js_literal(same_origin_only)};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const requestedUrlString = requestedUrl === null ? null : String(requestedUrl);
+  const requestedTextString = requestedText === null ? null : String(requestedText);
+  const hasUrlFilter = requestedUrlString !== null && requestedUrlString.length > 0;
+  const hasTextFilter = requestedTextString !== null && requestedTextString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let resolved = false;
+  const finishInvalidRegex = (invalidFilter, error) => {{
+    const snapshot = collectFrames();
+    resolved = true;
+    resolve({{
+      url: snapshot.url,
+      title: snapshot.title,
+      kind: "frame_wait",
+      found: false,
+      matched: false,
+      timed_out: false,
+      requested_url: requestedUrl,
+      url_match: urlMatchMode,
+      requested_text: requestedText,
+      text_match: textMatchMode,
+      case_sensitive: caseSensitive,
+      readable_only: readableOnly,
+      same_origin_only: sameOriginOnly,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: Date.now() - startedAt,
+      frame_count: 0,
+      total_frame_count: snapshot.frame_count,
+      frame: null,
+      frames: [],
+      error: "invalid_regex",
+      invalid_filter: invalidFilter,
+      message: String(error.message || error)
+    }});
+  }};
+  const compilePattern = (value, mode, invalidFilter) => {{
+    if (value === null || value.length === 0 || mode !== "regex") return null;
+    try {{
+      return new RegExp(value, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      finishInvalidRegex(invalidFilter, error);
+      return null;
+    }}
+  }};
+  const urlPattern = compilePattern(requestedUrlString, urlMatchMode, "url");
+  if (resolved) return;
+  const textPattern = compilePattern(requestedTextString, textMatchMode, "text");
+  if (resolved) return;
+  const valueMatches = (candidate, requested, mode, pattern) => {{
+    if (requested === null || requested.length === 0) return true;
+    if (mode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requested);
+    if (mode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const frameUrlText = (frame) => [
+    frame.src,
+    frame.absolute_url,
+    frame.frame_url,
+    frame.origin,
+    frame.pathname
+  ].filter(Boolean).join(" ");
+  const frameText = (frame) => [
+    frame.name,
+    frame.text,
+    frame.name_attribute,
+    frame.title_attribute,
+    frame.frame_title,
+    frame.body_text
+  ].filter(Boolean).join(" ");
+  const isSameOrigin = (frame) =>
+    frame.same_origin === true || frame.frame_same_origin === true;
+  const matchingFrames = (snapshot) => (snapshot.frames || [])
+    .filter((frame) => !readableOnly || frame.readable === true)
+    .filter((frame) => !sameOriginOnly || isSameOrigin(frame))
+    .filter((frame) => !hasUrlFilter ||
+      valueMatches(frameUrlText(frame), requestedUrlString, urlMatchMode, urlPattern)
+    )
+    .filter((frame) => !hasTextFilter ||
+      valueMatches(frameText(frame), requestedTextString, textMatchMode, textPattern)
+    );
+  const finish = (found, snapshot, frames) => {{
+    resolve({{
+      url: snapshot.url,
+      title: snapshot.title,
+      kind: "frame_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_url: requestedUrl,
+      url_match: urlMatchMode,
+      requested_text: requestedText,
+      text_match: textMatchMode,
+      case_sensitive: caseSensitive,
+      readable_only: readableOnly,
+      same_origin_only: sameOriginOnly,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: Date.now() - startedAt,
+      frame_count: frames.length,
+      total_frame_count: snapshot.frame_count,
+      frame: frames.length ? frames[0] : null,
+      frames: frames.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    const snapshot = collectFrames();
+    const frames = matchingFrames(snapshot);
+    if (frames.length > 0) {{
+      finish(true, snapshot, frames);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false, snapshot, frames);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _performance_snapshot_expression(
     *,
     max_resources: int,
@@ -8211,6 +8375,25 @@ def cmd_action_frame_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.frame-snapshot", expression)
 
 
+def cmd_action_wait_frame(args: argparse.Namespace) -> None:
+    expression = _wait_frame_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_chars=args.max_chars,
+        url=args.url,
+        url_match=args.url_match,
+        text=args.text,
+        text_match=args.text_match,
+        case_sensitive=args.case_sensitive,
+        readable_only=args.readable_only,
+        same_origin_only=args.same_origin_only,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-frame", expression)
+
+
 def cmd_action_performance_snapshot(args: argparse.Namespace) -> None:
     expression = _performance_snapshot_expression(
         max_resources=args.max_resources,
@@ -10452,6 +10635,61 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum readable body text characters to return for same-origin frames.",
     )
     action_frame_snapshot.set_defaults(func=cmd_action_frame_snapshot)
+
+    action_wait_frame = action_subparsers.add_parser(
+        "wait-frame",
+        help="Wait for an iframe/frame entry and return matching frame metadata",
+    )
+    _add_session_target_args(action_wait_frame)
+    action_wait_frame.add_argument(
+        "--selector",
+        help="Optional iframe/frame or container selector used to scope frames.",
+    )
+    _add_snapshot_filter_args(action_wait_frame)
+    action_wait_frame.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=500,
+        help="Maximum readable body text characters to return for same-origin frames.",
+    )
+    action_wait_frame.add_argument(
+        "--url",
+        help="Optional URL text to match against src, absolute_url, or readable frame_url.",
+    )
+    action_wait_frame.add_argument(
+        "--url-match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --url should match frame URLs.",
+    )
+    action_wait_frame.add_argument(
+        "--text",
+        help="Optional text to match against frame name, title, or readable body text.",
+    )
+    action_wait_frame.add_argument(
+        "--text-match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --text should match frame text.",
+    )
+    action_wait_frame.add_argument(
+        "--readable-only",
+        action="store_true",
+        help="Only match frames whose document is same-origin readable.",
+    )
+    action_wait_frame.add_argument(
+        "--same-origin-only",
+        action="store_true",
+        help="Only match frames whose src or readable document is same-origin.",
+    )
+    action_wait_frame.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_frame.add_argument("--poll-ms", type=float, default=100)
+    action_wait_frame.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make URL and text matching case-sensitive.",
+    )
+    action_wait_frame.set_defaults(func=cmd_action_wait_frame)
 
     action_performance_snapshot = action_subparsers.add_parser(
         "performance-snapshot",

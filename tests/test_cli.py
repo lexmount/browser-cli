@@ -218,6 +218,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.dialog-snapshot",
         "action.wait-dialog",
         "action.frame-snapshot",
+        "action.wait-frame",
         "action.performance-snapshot",
         "action.network-snapshot",
         "action.wait-network",
@@ -268,6 +269,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.dialog-snapshot" in payload["commands"]
     assert "action.wait-dialog" in payload["commands"]
     assert "action.frame-snapshot" in payload["commands"]
+    assert "action.wait-frame" in payload["commands"]
     assert "action.performance-snapshot" in payload["commands"]
     assert "action.network-snapshot" in payload["commands"]
     assert "action.wait-network" in payload["commands"]
@@ -4029,6 +4031,78 @@ def test_action_frame_snapshot_expression_extracts_frame_metadata(
     assert payload["command"] == "action.frame-snapshot"
 
 
+def test_action_wait_frame_expression_waits_for_matching_frames(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "frame_wait"}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "wait-frame",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--url",
+                "checkout",
+                "--url-match",
+                "regex",
+                "--text",
+                "Pay",
+                "--text-match",
+                "contains",
+                "--readable-only",
+                "--same-origin-only",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+                "--max-chars",
+                "240",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "new Promise" in expression
+    assert "const collectFrames = () =>" in expression
+    assert 'const rootSelector = "main"' in expression
+    assert 'const requestedUrl = "checkout"' in expression
+    assert 'const urlMatchMode = "regex"' in expression
+    assert 'const requestedText = "Pay"' in expression
+    assert 'const textMatchMode = "contains"' in expression
+    assert "const readableOnly = true" in expression
+    assert "const sameOriginOnly = true" in expression
+    assert "const timeoutMs = Math.max(0, 1000.0)" in expression
+    assert "const maxChars = Math.max(0, 240)" in expression
+    assert "frameUrlText" in expression
+    assert "total_frame_count" in expression
+    assert 'error: "invalid_regex"' in expression
+    assert "invalid_filter: invalidFilter" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.wait-frame"
+
+
 def test_action_performance_snapshot_expression_extracts_timing_entries(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -5112,6 +5186,142 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "selector": "main",
                 "frame_count": 1,
                 "node_count": 1,
+                "frames": [
+                    {
+                        "frame_index": 0,
+                        "selector": "iframe.checkout",
+                        "tag": "iframe",
+                        "name": "Checkout",
+                        "id": "checkout-frame",
+                        "name_attribute": "checkout",
+                        "title_attribute": "Checkout",
+                        "src": "/checkout?token=***",
+                        "src_masked": True,
+                        "absolute_url": "https://example.test/checkout?token=***",
+                        "absolute_url_masked": True,
+                        "same_origin": True,
+                        "readable": True,
+                        "frame_url": "https://example.test/checkout?token=***",
+                        "frame_url_masked": True,
+                        "frame_title": "Checkout",
+                        "body_text": "Pay now",
+                        "body_text_length": 7,
+                        "body_text_truncated": False,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-frame",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--url",
+                "checkout",
+                "--text",
+                "Pay",
+                "--readable-only",
+                "--same-origin-only",
+            ],
+            "action.wait-frame",
+            {
+                "kind": "frame_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_url": "checkout",
+                "url_match": "contains",
+                "requested_text": "Pay",
+                "text_match": "contains",
+                "case_sensitive": False,
+                "readable_only": True,
+                "same_origin_only": True,
+                "frame_count": 1,
+                "total_frame_count": 1,
+                "frame": {
+                    "frame_index": 0,
+                    "selector": "iframe.checkout",
+                    "tag": "iframe",
+                    "name": "Checkout",
+                    "id": "checkout-frame",
+                    "name_attribute": "checkout",
+                    "title_attribute": "Checkout",
+                    "src": "/checkout?token=***",
+                    "src_masked": True,
+                    "absolute_url": "https://example.test/checkout?token=***",
+                    "absolute_url_masked": True,
+                    "same_origin": True,
+                    "readable": True,
+                    "frame_url": "https://example.test/checkout?token=***",
+                    "frame_url_masked": True,
+                    "frame_title": "Checkout",
+                    "body_text": "Pay now",
+                    "body_text_length": 7,
+                    "body_text_truncated": False,
+                },
+                "frames": [
+                    {
+                        "frame_index": 0,
+                        "selector": "iframe.checkout",
+                        "tag": "iframe",
+                        "name": "Checkout",
+                        "id": "checkout-frame",
+                        "name_attribute": "checkout",
+                        "title_attribute": "Checkout",
+                        "src": "/checkout?token=***",
+                        "src_masked": True,
+                        "absolute_url": "https://example.test/checkout?token=***",
+                        "absolute_url_masked": True,
+                        "same_origin": True,
+                        "readable": True,
+                        "frame_url": "https://example.test/checkout?token=***",
+                        "frame_url_masked": True,
+                        "frame_title": "Checkout",
+                        "body_text": "Pay now",
+                        "body_text_length": 7,
+                        "body_text_truncated": False,
+                    }
+                ],
+            },
+            {
+                "kind": "frame_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_url": "checkout",
+                "url_match": "contains",
+                "requested_text": "Pay",
+                "text_match": "contains",
+                "case_sensitive": False,
+                "readable_only": True,
+                "same_origin_only": True,
+                "frame_count": 1,
+                "total_frame_count": 1,
+                "frame": {
+                    "frame_index": 0,
+                    "selector": "iframe.checkout",
+                    "tag": "iframe",
+                    "name": "Checkout",
+                    "id": "checkout-frame",
+                    "name_attribute": "checkout",
+                    "title_attribute": "Checkout",
+                    "src": "/checkout?token=***",
+                    "src_masked": True,
+                    "absolute_url": "https://example.test/checkout?token=***",
+                    "absolute_url_masked": True,
+                    "same_origin": True,
+                    "readable": True,
+                    "frame_url": "https://example.test/checkout?token=***",
+                    "frame_url_masked": True,
+                    "frame_title": "Checkout",
+                    "body_text": "Pay now",
+                    "body_text_length": 7,
+                    "body_text_truncated": False,
+                },
                 "frames": [
                     {
                         "frame_index": 0,

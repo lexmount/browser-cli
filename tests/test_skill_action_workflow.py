@@ -18,7 +18,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "use `list-snapshot` before choosing from menus" in normalized
     assert "use `text-snapshot` for bounded visible text" in normalized
     assert "use `wait-dialog` or `dialog-snapshot` for modals" in normalized
-    assert "use `frame-snapshot`" in normalized
+    assert "use `wait-frame` or `frame-snapshot`" in normalized
     assert "For runtime errors, run `console-snapshot --install-only`" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
@@ -194,6 +194,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`dialog-snapshot`",
         "`wait-dialog`",
         "`frame-snapshot`",
+        "`wait-frame`",
         "`performance-snapshot`",
         "`network-snapshot`",
         "`wait-network`",
@@ -279,9 +280,13 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`modal`" in normalized
     assert "`frames`" in normalized
     assert "`frame_count`" in normalized
+    assert "`total_frame_count`" in normalized
     assert "`src_masked`" in normalized
     assert "`frame_url_masked`" in normalized
     assert "`readable`" in normalized
+    assert "`readable_only`" in normalized
+    assert "`same_origin_only`" in normalized
+    assert "`text_match`" in normalized
     assert "`read_error`" in normalized
     assert "`navigation`" in normalized
     assert "`resources`" in normalized
@@ -411,7 +416,8 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`dispatch-event` for explicit DOM events" in normalized
     assert "run `wait-dialog` when the dialog appears asynchronously" in normalized
     assert "otherwise run `dialog-snapshot`, choose from `controls`" in normalized
-    assert "run `frame-snapshot` and parse `readable`" in normalized
+    assert "run `wait-frame` when the frame appears asynchronously" in normalized
+    assert "otherwise run `frame-snapshot` and parse `readable`" in normalized
     assert "Read page results" in normalized
     assert "use `page-info` for URL/title/readyState/viewport checks" in normalized
     assert "`wait-title` for async title changes" in normalized
