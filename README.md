@@ -225,12 +225,14 @@ browser-cli auth export-env --from-current --include-base-url
 refresh is not implemented yet, so agents should use its `next_steps` and keep
 using env API-key credentials for browser actions today.
 
-`auth login` returns both the currently available `manual_env` flow and a
-machine-readable `handoff` plus `connect_from_codex` contract. `handoff`
-includes the Connect URL, copyable local commands, required env vars, safe
-secret-handling rules, and doctor verification command. `connect_from_codex`
-includes the planned `https://browser.lexmount.cn/connect/codex` URL, optional
-`project_id`, repeated `scope` query parameters, requested `expires_in`,
+`auth login` returns top-level `flow`, `selected_flow`, `available`,
+`manual_env_available`, and `device_code_available`, plus the currently
+available `manual_env` flow, a machine-readable `handoff`, and a
+`connect_from_codex` contract. `handoff` includes the Connect URL, copyable
+local commands, required env vars, safe secret-handling rules, and doctor
+verification command. `connect_from_codex` includes the planned
+`https://browser.lexmount.cn/connect/codex` URL, optional `project_id`,
+repeated `scope` query parameters, requested `expires_in`,
 expected outputs, structured `setup_blocks`, `requested_scope_details`,
 `site_capabilities`/`site_capability_status`, and the browser site requirements
 needed before device-code or scoped-token login can be marked available.

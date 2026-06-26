@@ -88,6 +88,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
         in normalized
     )
     assert "`connect_from_codex_url` or `login_url`" in normalized
+    assert "Check top-level `selected_flow`, `available`" in normalized
     assert (
         "`copyable_commands`, `open_command`, `local_env`, `verification`, and"
         in normalized

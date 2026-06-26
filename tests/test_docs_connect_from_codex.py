@@ -13,6 +13,9 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "browser-cli auth login" in text
     assert "browser-cli auth login --open" in text
     assert "browser-cli auth login --device-code" in text
+    assert "selected_flow" in text
+    assert "manual_env_available" in text
+    assert "device_code_available" in text
     assert "reason=browser_site_endpoint_missing" in text
     assert "fallback_handoff" in text
     assert "browser-cli auth token-info" in text

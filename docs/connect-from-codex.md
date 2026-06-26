@@ -130,6 +130,9 @@ Expected behavior after the website page exists:
 - `browser-cli auth login` prints
   `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
   opens it in the local default browser and reports `open_result`.
+- `browser-cli auth login` reports top-level `flow`, `selected_flow`,
+  `available`, `manual_env_available`, and `device_code_available` before nested
+  details so agents can pick the current setup path directly.
 - `browser-cli auth login` includes `connect_from_codex.site_capabilities` and
   `site_capability_status` so agents can report structured browser site gaps:
   `project_id_display`, `scoped_api_key`, `copy_install_and_env`,

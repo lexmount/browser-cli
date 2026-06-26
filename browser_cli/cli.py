@@ -9947,7 +9947,9 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         _success(
             command,
             flow="device_code",
+            selected_flow="device_code",
             available=False,
+            manual_env_available=True,
             login_url=LEXMOUNT_CONSOLE_URL,
             device_code_available=False,
             reason="browser_site_endpoint_missing",
@@ -10021,6 +10023,9 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
     _success(
         command,
         flow="manual_env",
+        selected_flow="manual_env",
+        available=True,
+        manual_env_available=True,
         login_url=LEXMOUNT_CONSOLE_URL,
         device_code_available=False,
         handoff=handoff,

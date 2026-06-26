@@ -62,7 +62,9 @@ browser-cli commands --workflow connect_from_codex_auth
 When `auth login` returns `handoff`, use it as the setup contract: open
 `connect_from_codex_url` or `login_url`, follow `copyable_commands`, require the
 listed `local_env` variables in the user's local shell, and run the
-`verification.doctor_command`. Use `browser-cli auth login --open` or
+`verification.doctor_command`. Check top-level `selected_flow`, `available`,
+`manual_env_available`, and `device_code_available` before choosing a setup
+path. Use `browser-cli auth login --open` or
 `handoff.open_command` only when the user wants the local browser opened; then
 inspect `open_result`. Follow `secret_policy`: never paste `LEXMOUNT_API_KEY`,
 revealed export output, or full direct URLs into chat.

@@ -116,6 +116,9 @@ Default behavior:
 - When env API-key credentials are incomplete, `auth status` reports
   `missing_env` plus a `fix` object with safe Connect from Codex setup commands
   and no API key values.
+- `auth login` reports top-level `flow`, `selected_flow`, `available`,
+  `manual_env_available`, and `device_code_available` so agents can choose the
+  currently usable setup path without inferring it from nested flow metadata.
 - `auth export-env` reports top-level `usable` and `unusable_exports` so agents
   can distinguish directly runnable export commands from placeholder or masked
   commands.

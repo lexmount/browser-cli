@@ -1928,6 +1928,9 @@ def test_auth_login_guides_manual_browser_flow(
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "auth.login"
     assert payload["flow"] == "manual_env"
+    assert payload["selected_flow"] == "manual_env"
+    assert payload["available"] is True
+    assert payload["manual_env_available"] is True
     assert payload["login_url"] == "https://browser.lexmount.cn"
     assert payload["device_code_available"] is False
     assert payload["flows"][0]["name"] == "manual_env"
@@ -2221,7 +2224,9 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "auth.login"
     assert payload["flow"] == "device_code"
+    assert payload["selected_flow"] == "device_code"
     assert payload["available"] is False
+    assert payload["manual_env_available"] is True
     assert payload["device_code_available"] is False
     assert payload["reason"] == "browser_site_endpoint_missing"
     assert payload["fallback_flow"] == "manual_env"
