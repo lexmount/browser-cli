@@ -5,16 +5,24 @@ agent-facing browser tool.
 
 ## First Checks
 
-Prefer CLI checks before writing browser code:
+Prefer local auth and doctor checks before writing browser code:
 
 ```bash
 browser-cli --help
 browser-cli commands --names-only
-browser-cli direct-url
-browser-cli session list
+browser-cli auth status
+browser-cli auth login
+browser-cli auth export-env
+browser-cli doctor --json
 ```
 
-When available in the installed version, run:
+If credentials are missing, parse the `auth login` JSON and guide the user
+through `handoff.connect_from_codex_url`, `handoff.copyable_commands`, and
+`verification.doctor_command`. Keep `LEXMOUNT_API_KEY`, revealed export output,
+and full direct browser URLs out of chat.
+
+Run doctor before the first browser action, after credential changes, and when
+session, context, or action commands fail for unclear reasons:
 
 ```bash
 browser-cli auth status
@@ -29,6 +37,7 @@ Use command discovery before guessing new action names:
 
 ```bash
 browser-cli commands --group action
+browser-cli commands --group action --names-only
 ```
 
 Read `required_options`, `required_one_of`, and `browser_target.exactly_one_of`
@@ -47,6 +56,10 @@ session. If the smoke session was created but not closed, follow the returned
 
 Do not ask the user to paste API keys into chat. Direct them to
 `https://browser.lexmount.cn` and keep secrets in the local shell.
+
+Only run browser session commands after `ready_for_browser_actions` is true or
+after you have reported the exact warning/failure checks and the user still
+wants to proceed.
 
 ## One-Off Page Task
 
@@ -72,6 +85,7 @@ browser-cli session create --context-id <context_id> --context-mode read_write
 When reusing persistent login state by metadata, prefer:
 
 ```bash
+browser-cli context pick --metadata-json '{"purpose":"login"}' --create-if-missing --dry-run
 browser-cli context pick --metadata-json '{"purpose":"login"}' --create-if-missing
 browser-cli session create --context-metadata-json '{"purpose":"login"}' --create-context-if-missing --context-mode read_write
 ```
@@ -79,6 +93,9 @@ browser-cli session create --context-metadata-json '{"purpose":"login"}' --creat
 Do not reuse a context whose `availability` is `locked` or `unavailable` for a
 new read/write session. Close the session that holds it, or create a new
 context.
+Use the dry-run output to explain `selection_summary.locked_matches`,
+`selection_summary.reusable_matches`, and `would_create` before mutating
+persistent login state.
 
 ## Case Files
 

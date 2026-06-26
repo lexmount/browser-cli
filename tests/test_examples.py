@@ -23,15 +23,26 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli doctor --json" in text
     assert "browser-cli commands --names-only" in text
     assert "browser-cli commands --group action" in text
+    assert "browser-cli commands --group action --names-only" in text
+    assert "browser-cli auth login" in text
+    assert "browser-cli auth export-env" in text
+    assert "handoff.connect_from_codex_url" in text
+    assert "verification.doctor_command" in text
+    assert "Run doctor before the first browser action" in text
     assert "browser_target.exactly_one_of" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "ready_for_browser_actions" in text
     assert "browser_smoke_session.status" in text
     assert "`fix.commands`" in text
     assert "repair_plan.commands" in text
-    assert "browser-cli context pick --metadata-json" in text
+    assert (
+        "browser-cli context pick --metadata-json "
+        '\'{"purpose":"login"}\' --create-if-missing --dry-run'
+    ) in text
     assert "browser-cli session create --context-metadata-json" in text
     assert "`availability` is `locked` or `unavailable`" in text
+    assert "selection_summary.locked_matches" in text
+    assert "would_create" in text
     assert "wait-role" in text
     assert "click-role" in text
     assert "page-info" in text
@@ -40,3 +51,4 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "active/global shortcut keys" in text
     assert "interactive-snapshot" in text
     assert "context resolve" not in text
+    assert "browser-cli direct-url" not in text
