@@ -133,6 +133,10 @@ Expected behavior after the website page exists:
   `site_capability_status` so agents can report structured browser site gaps:
   `project_id_display`, `scoped_api_key`, `copy_install_and_env`,
   `doctor_verification`, `scoped_key_lifecycle`, and `device_code_oauth`.
+- `browser-cli auth login` includes `requested_scope_details` for each requested
+  scope. Known scopes include a label, description, permission names, risk level,
+  and destructive marker; custom or future scopes are returned with
+  `known: false` so browser.lexmount.cn can still render them explicitly.
 - `browser-cli auth login --device-code` now returns `available=false`,
   `reason=browser_site_endpoint_missing`, required device-code endpoints, and a
   `fallback_handoff` until the website/API implements the device-code flow.

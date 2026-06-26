@@ -21,6 +21,10 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "open_result" in text
     assert "site_capabilities" in text
     assert "site_capability_status" in text
+    assert "requested_scope_details" in text
+    assert "permission names" in text
+    assert "risk level" in text
+    assert "known: false" in text
     assert "project_id_display" in text
     assert "scoped_api_key" in text
     assert "copy_install_and_env" in text

@@ -1353,6 +1353,64 @@ def _auth_login_scopes(args: argparse.Namespace) -> list[str]:
     return _dedupe_preserving_order(raw_scopes)
 
 
+def _scope_detail(scope: str) -> dict[str, Any]:
+    known_scopes: dict[str, dict[str, Any]] = {
+        "browser:sessions": {
+            "label": "Browser sessions",
+            "description": "Create, list, inspect, keep alive, and close browser sessions.",
+            "permissions": [
+                "browser.sessions:create",
+                "browser.sessions:list",
+                "browser.sessions:read",
+                "browser.sessions:close",
+            ],
+            "risk": "medium",
+            "destructive": False,
+        },
+        "browser:contexts": {
+            "label": "Persistent browser contexts",
+            "description": "Create, list, inspect, reuse, and delete persistent browser contexts.",
+            "permissions": [
+                "browser.contexts:create",
+                "browser.contexts:list",
+                "browser.contexts:read",
+                "browser.contexts:delete",
+            ],
+            "risk": "medium",
+            "destructive": True,
+        },
+        "browser:actions": {
+            "label": "Browser actions",
+            "description": "Open pages and operate browser pages with clicks, typing, snapshots, screenshots, and DOM-backed actions.",
+            "permissions": [
+                "browser.actions:run",
+            ],
+            "risk": "high",
+            "destructive": False,
+        },
+    }
+    detail = known_scopes.get(scope)
+    if detail is None:
+        return {
+            "scope": scope,
+            "known": False,
+            "label": scope,
+            "description": "Custom or future scope requested by the caller.",
+            "permissions": [scope],
+            "risk": "unknown",
+            "destructive": None,
+        }
+    return {
+        "scope": scope,
+        "known": True,
+        **detail,
+    }
+
+
+def _scope_details(scopes: list[str]) -> list[dict[str, Any]]:
+    return [_scope_detail(scope) for scope in scopes]
+
+
 def _connect_from_codex_url(
     *,
     project_id: str | None,
@@ -1486,6 +1544,7 @@ def _auth_login_handoff(
             },
         ],
         "requested_scopes": scopes,
+        "requested_scope_details": _scope_details(scopes),
         "requested_expires_in": expires_in,
         "verification": {
             "status_command": "browser-cli auth status",
@@ -9432,6 +9491,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
     site_capability_status = _connect_from_codex_site_capability_status(
         site_capabilities
     )
+    scope_details = _scope_details(scopes)
     open_url = device_connect_url if args.device_code else connect_url
     open_result: dict[str, Any] = {
         "requested": bool(args.open),
@@ -9471,6 +9531,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "project_id": project_id,
                 "project_id_source": project_id_source,
                 "requested_scopes": scopes,
+                "requested_scope_details": scope_details,
                 "requested_expires_in": args.expires_in,
                 "required_endpoints": [
                     "POST /api/auth/device/code",
@@ -9495,6 +9556,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "project_id": project_id,
                 "project_id_source": project_id_source,
                 "requested_scopes": scopes,
+                "requested_scope_details": scope_details,
                 "requested_expires_in": args.expires_in,
                 "response": "device_code",
                 "site_capability_status": site_capability_status,
@@ -9541,6 +9603,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "project_id": project_id,
             "project_id_source": project_id_source,
             "requested_scopes": scopes,
+            "requested_scope_details": scope_details,
             "requested_expires_in": args.expires_in,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,

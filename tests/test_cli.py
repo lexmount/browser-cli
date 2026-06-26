@@ -1543,6 +1543,34 @@ def test_auth_login_guides_manual_browser_flow(
         "browser:contexts",
         "browser:actions",
     ]
+    assert [item["scope"] for item in connect["requested_scope_details"]] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert connect["requested_scope_details"][0] == {
+        "scope": "browser:sessions",
+        "known": True,
+        "label": "Browser sessions",
+        "description": "Create, list, inspect, keep alive, and close browser sessions.",
+        "permissions": [
+            "browser.sessions:create",
+            "browser.sessions:list",
+            "browser.sessions:read",
+            "browser.sessions:close",
+        ],
+        "risk": "medium",
+        "destructive": False,
+    }
+    context_detail = connect["requested_scope_details"][1]
+    assert context_detail["label"] == "Persistent browser contexts"
+    assert context_detail["destructive"] is True
+    assert "browser.contexts:delete" in context_detail["permissions"]
+    action_detail = connect["requested_scope_details"][2]
+    assert action_detail["label"] == "Browser actions"
+    assert action_detail["risk"] == "high"
+    assert action_detail["permissions"] == ["browser.actions:run"]
+    assert handoff["requested_scope_details"] == connect["requested_scope_details"]
     assert connect["requested_expires_in"] == "7d"
     assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
     query = parse_qs(urlsplit(connect["url"]).query)
@@ -1601,6 +1629,14 @@ def test_auth_login_builds_connect_from_codex_contract_from_args(
     assert connect["project_id"] == "arg-project"
     assert connect["project_id_source"] == "argument"
     assert connect["requested_scopes"] == ["browser:sessions", "browser:actions"]
+    assert [item["scope"] for item in connect["requested_scope_details"]] == [
+        "browser:sessions",
+        "browser:actions",
+    ]
+    assert (
+        payload["handoff"]["requested_scope_details"]
+        == connect["requested_scope_details"]
+    )
     assert connect["requested_expires_in"] == "24h"
     assert payload["handoff"]["local_env"][1]["value"] == "arg-project"
     assert payload["handoff"]["local_env"][1]["value_source"] == "argument"
@@ -1614,6 +1650,36 @@ def test_auth_login_builds_connect_from_codex_contract_from_args(
     assert query["project_id"] == ["arg-project"]
     assert query["scope"] == ["browser:sessions", "browser:actions"]
     assert query["expires_in"] == ["24h"]
+
+
+def test_auth_login_reports_unknown_scope_details(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login", "--scope", "browser:future"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    connect = payload["connect_from_codex"]
+    assert connect["requested_scopes"] == ["browser:future"]
+    assert connect["requested_scope_details"] == [
+        {
+            "scope": "browser:future",
+            "known": False,
+            "label": "browser:future",
+            "description": "Custom or future scope requested by the caller.",
+            "permissions": ["browser:future"],
+            "risk": "unknown",
+            "destructive": None,
+        }
+    ]
+    assert (
+        payload["handoff"]["requested_scope_details"]
+        == connect["requested_scope_details"]
+    )
 
 
 def test_auth_login_device_code_reports_pending_browser_site_contract(
@@ -1675,6 +1741,9 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
     assert device_code["project_id"] == "arg-project"
     assert device_code["project_id_source"] == "argument"
     assert device_code["requested_scopes"] == ["browser:actions"]
+    assert device_code["requested_scope_details"][0]["scope"] == "browser:actions"
+    assert device_code["requested_scope_details"][0]["label"] == "Browser actions"
+    assert device_code["requested_scope_details"][0]["risk"] == "high"
     assert device_code["requested_expires_in"] == "24h"
     assert "POST /api/auth/device/code" in device_code["required_endpoints"]
     assert "POST /api/auth/device/token" in device_code["required_endpoints"]
@@ -1686,6 +1755,7 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
     connect = payload["connect_from_codex"]
     assert connect["response"] == "device_code"
     assert connect["url"] == device_code["connect_from_codex_url"]
+    assert connect["requested_scope_details"] == device_code["requested_scope_details"]
     assert connect["site_capability_status"]["available"] is False
     assert "device_code_oauth" in connect["site_capability_status"]["missing"]
     device_code_oauth = next(

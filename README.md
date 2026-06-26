@@ -202,9 +202,12 @@ includes the Connect URL, copyable local commands, required env vars, safe
 secret-handling rules, and doctor verification command. `connect_from_codex`
 includes the planned `https://browser.lexmount.cn/connect/codex` URL, optional
 `project_id`, repeated `scope` query parameters, requested `expires_in`,
-expected outputs, structured `site_capabilities`/`site_capability_status`, and
-the browser site requirements needed before device-code or scoped-token login
-can be marked available. Capability ids currently include
+expected outputs, `requested_scope_details`, structured
+`site_capabilities`/`site_capability_status`, and the browser site requirements
+needed before device-code or scoped-token login can be marked available.
+`requested_scope_details` gives browser.lexmount.cn labels, descriptions,
+permission names, risk levels, and destructive markers for known scopes, while
+unknown future scopes are marked with `known: false`. Capability ids currently include
 `project_id_display`, `scoped_api_key`, `copy_install_and_env`,
 `doctor_verification`, `scoped_key_lifecycle`, and `device_code_oauth`.
 Use `auth login --open` when you want the CLI to open the Connect URL in the
