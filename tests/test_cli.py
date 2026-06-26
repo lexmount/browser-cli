@@ -393,6 +393,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "persistent_login_state",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "one_off_page_task"
+    ] == [
+        "create_session",
+        "open_url",
+        "find_targets",
+        "close_session",
+    ]
+    assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
     for command_name in (
         "action.press",
         "action.hover",
@@ -472,10 +481,71 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "one_off_page_task",
         "persistent_login_state",
     ]
+    assert catalog["missing_required_workflow_steps"] == {}
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
     assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_agent_workflow_missing_required_steps(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._command_catalog",
+        lambda: {
+            "schema_version": 1,
+            "commands": [
+                {"name": command_name}
+                for command_name in cli_module.DOCTOR_REQUIRED_COMMANDS
+            ],
+            "agent_workflows": {
+                "setup_and_verify": {
+                    "steps": [
+                        {"id": "auth_status"},
+                        {"id": "doctor"},
+                    ],
+                },
+                "one_off_page_task": {
+                    "steps": [
+                        {"id": "create_session"},
+                        {"id": "open_url"},
+                        {"id": "find_targets"},
+                    ],
+                },
+                "persistent_login_state": {
+                    "steps": [
+                        {"id": "dry_run_context_pick"},
+                        {"id": "create_session_with_context"},
+                        {"id": "close_session"},
+                    ],
+                },
+            },
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "warning"
+    catalog = _checks_by_name(payload)["command_catalog"]
+    assert catalog["missing_required_commands"] == []
+    assert catalog["missing_required_workflows"] == []
+    assert catalog["missing_required_workflow_steps"] == {
+        "one_off_page_task": ["close_session"]
+    }
+    assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
+    assert "browser-cli commands" in payload["repair_plan"]["commands"]
 
 
 def test_doctor_smoke_session_creates_and_closes_temp_session(

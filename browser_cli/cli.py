@@ -101,6 +101,23 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "one_off_page_task",
     "persistent_login_state",
 )
+DOCTOR_REQUIRED_WORKFLOW_STEPS = {
+    "setup_and_verify": (
+        "auth_status",
+        "doctor",
+    ),
+    "one_off_page_task": (
+        "create_session",
+        "open_url",
+        "find_targets",
+        "close_session",
+    ),
+    "persistent_login_state": (
+        "dry_run_context_pick",
+        "create_session_with_context",
+        "close_session",
+    ),
+}
 COMMAND_ALIASES = {
     "action.interactive-only-snapshot": "action.interactive-snapshot",
 }
@@ -726,6 +743,19 @@ def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
     return repair_plan
 
 
+def _doctor_workflow_step_names(workflow: Any) -> set[str]:
+    if not isinstance(workflow, dict):
+        return set()
+    steps = workflow.get("steps")
+    if not isinstance(steps, list):
+        return set()
+    return {
+        str(step.get("id"))
+        for step in steps
+        if isinstance(step, dict) and step.get("id")
+    }
+
+
 def _doctor_command_catalog_check() -> dict[str, Any]:
     try:
         catalog = _command_catalog()
@@ -763,11 +793,25 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         for workflow in DOCTOR_REQUIRED_WORKFLOWS
         if workflow not in workflow_names
     ]
-    if missing_commands or missing_workflows:
+    required_workflow_steps = {
+        workflow: list(steps)
+        for workflow, steps in DOCTOR_REQUIRED_WORKFLOW_STEPS.items()
+    }
+    missing_workflow_steps: dict[str, list[str]] = {}
+    if isinstance(workflows, dict):
+        for workflow, required_steps in DOCTOR_REQUIRED_WORKFLOW_STEPS.items():
+            if workflow not in workflow_names:
+                continue
+            step_names = _doctor_workflow_step_names(workflows.get(workflow))
+            missing_steps = [step for step in required_steps if step not in step_names]
+            if missing_steps:
+                missing_workflow_steps[workflow] = missing_steps
+
+    if missing_commands or missing_workflows or missing_workflow_steps:
         return _doctor_check(
             "command_catalog",
             "warn",
-            "Command catalog is missing commands or workflows expected by the Codex Skill.",
+            "Command catalog is missing commands, workflows, or workflow steps expected by the Codex Skill.",
             schema_version=catalog.get("schema_version"),
             command_count=len(command_names),
             workflow_count=len(workflow_names),
@@ -775,6 +819,8 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
             missing_required_commands=missing_commands,
             required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
             missing_required_workflows=missing_workflows,
+            required_workflow_steps=required_workflow_steps,
+            missing_required_workflow_steps=missing_workflow_steps,
             fix=_doctor_fix(
                 "upgrade_browser_cli_command_surface",
                 commands=[
@@ -785,7 +831,7 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
                 guidance=[
                     "Upgrade browser-cli before relying on the full Codex Skill workflow.",
                     "Use `browser-cli commands --group action --names-only` to inspect available actions.",
-                    "Use `browser-cli commands` to inspect structured agent_workflows.",
+                    "Use `browser-cli commands` to inspect structured agent_workflows and their steps.",
                 ],
             ),
         )
@@ -801,6 +847,8 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         missing_required_commands=[],
         required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
         missing_required_workflows=[],
+        required_workflow_steps=required_workflow_steps,
+        missing_required_workflow_steps={},
     )
 
 

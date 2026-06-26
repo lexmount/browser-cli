@@ -504,9 +504,10 @@ aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
 command catalog, environment, direct URL, API connectivity, and optional browser
 smoke-session checks. The `command_catalog` check verifies the installed CLI has
 the commands and `agent_workflows` expected by the Codex Skill and reports
-`missing_required_commands` or `missing_required_workflows` with upgrade
-guidance when the action or workflow surface is too old. That required surface
-includes selector actions, press/hover/scroll, get-text/exists,
+`missing_required_commands`, `missing_required_workflows`, or
+`missing_required_workflow_steps` with upgrade guidance when the action or
+workflow surface is too old or missing critical steps such as cleanup. That
+required surface includes selector actions, press/hover/scroll, get-text/exists,
 select/check/uncheck, role/text/label actions, accessibility snapshot, and
 interactive-only snapshot. It masks `api_key` in direct URLs and diagnostic
 error messages by default.

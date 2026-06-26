@@ -125,6 +125,8 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
 
     assert "`required_workflows`" in text
     assert "`missing_required_workflows`" in text
+    assert "`required_workflow_steps`" in text
+    assert "`missing_required_workflow_steps`" in text
     assert "`workflow_count`" in text
 
 
