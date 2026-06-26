@@ -325,6 +325,7 @@ browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --ma
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
 browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
 browser-cli action console-snapshot --session-id <session_id> --max-entries 50
+browser-cli action wait-console --session-id <session_id> --source pageerror --level error --timeout-ms 5000
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -341,7 +342,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `console-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -365,7 +366,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `navigation`, `resources`, `resource_count`, `initiator_type`,
 `initiator_types`, `duration`, `transfer_size`, `response_status`,
 `entries`, `entry_count`, `buffered_count`, `source`, `level`, `method`,
-`text_masked`, `filename_masked`, `url_masked`,
+`text_masked`, `filename_masked`, `url_masked`, `timed_out`, `requested_source`,
+`requested_level`, `after_index`,
 `headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
 `node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
@@ -386,8 +388,8 @@ tokens, authorization codes, passwords, or secrets are masked by default. Use
 `performance-snapshot` use the same URL masking for links, frame URLs, and
 performance resource URLs found inside table cells, list items, dialog controls,
 frame metadata, or timing entries.
-`console-snapshot` masks token-like key/value text in captured console/page
-error entries and the reported page URL.
+`console-snapshot` and `wait-console` mask token-like key/value text in captured
+console/page error entries and the reported page URL.
 
 Each action must receive exactly one browser target:
 
@@ -561,7 +563,9 @@ Common agent recipes:
 - Console or page error diagnosis: run `console-snapshot --install-only` before
   the suspicious action, trigger the page behavior, then run `console-snapshot`
   to read `entries`, `source`, `level`, `method`, and masked `text`. Use
-  `--clear` after collecting entries.
+  `--clear` after collecting entries. To wait for a future error, run
+  `wait-console --source pageerror --level error`; pass `--after-index` from a
+  prior `console-snapshot` entry when stale buffered entries should be ignored.
 - Page structure: `outline-snapshot` -> read `headings` and `landmarks` before
   deciding where to inspect, click, or scroll.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
@@ -571,8 +575,9 @@ Common agent recipes:
   confirm with `page-info`, `wait-url`, `wait-title`, `wait-load-state`,
   `wait-network-idle`, `performance-snapshot`, `wait-text`, or `snapshot`.
 - Runtime errors: install `console-snapshot --install-only`, trigger the
-  suspected action, read `console-snapshot`, then use `text-snapshot`,
-  `dialog-snapshot`, or `inspect` to correlate visible state with JS errors.
+  suspected action, read `console-snapshot` or wait with `wait-console`, then use
+  `text-snapshot`, `dialog-snapshot`, or `inspect` to correlate visible state
+  with JS errors.
 - Menu or keyboard flow: `focus`, `hover`, selector-scoped `press`,
   active/global `press-key`, or `dispatch-event`, then inspect again with
   `interactive-snapshot`.

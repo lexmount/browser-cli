@@ -73,10 +73,10 @@ Default behavior:
   cells, list items, dialog controls, frame metadata, or timing entries. Parse
   `href_masked`, `src_masked`, `frame_url_masked`, `name_masked`, and
   `absolute_url_masked` before copying or reporting URLs.
-- `action console-snapshot` masks token-like query parameters and key/value
-  text in captured console/page-error entries and its reported page URL. Parse
-  `text_masked`, `filename_masked`, and `url_masked` before copying console
-  output, script filenames, or page URLs.
+- `action console-snapshot` and `action wait-console` mask token-like query
+  parameters and key/value text in captured console/page-error entries and the
+  reported page URL. Parse `text_masked`, `filename_masked`, and `url_masked`
+  before copying console output, script filenames, or page URLs.
 - `auth status`, `auth token-info`, `auth refresh`, `auth logout`, and `doctor`
   may report local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh

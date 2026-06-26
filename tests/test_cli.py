@@ -219,6 +219,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.frame-snapshot",
         "action.performance-snapshot",
         "action.console-snapshot",
+        "action.wait-console",
         "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
@@ -265,6 +266,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.frame-snapshot" in payload["commands"]
     assert "action.performance-snapshot" in payload["commands"]
     assert "action.console-snapshot" in payload["commands"]
+    assert "action.wait-console" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -4066,6 +4068,73 @@ def test_action_console_snapshot_expression_installs_buffered_listener(
     assert payload["command"] == "action.console-snapshot"
 
 
+def test_action_wait_console_expression_waits_for_matching_entries(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "console_wait"}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "wait-console",
+                "--session-id",
+                "s1",
+                "--text",
+                "Boom",
+                "--match",
+                "regex",
+                "--source",
+                "pageerror",
+                "--level",
+                "error",
+                "--after-index",
+                "2",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "new Promise" in expression
+    assert 'const requestedText = "Boom"' in expression
+    assert 'const matchMode = "regex"' in expression
+    assert 'const requestedSource = "pageerror"' in expression
+    assert 'const requestedLevel = "error"' in expression
+    assert "const caseSensitive = true" in expression
+    assert "const afterIndex = 2" in expression
+    assert "const timeoutMs = Math.max(0, 1000.0)" in expression
+    assert "__browserCliConsoleSnapshot" in expression
+    assert (
+        "const matchingEntries = () => state.entries.filter(entryMatches)" in expression
+    )
+    assert 'error: "invalid_regex"' in expression
+    assert "url_masked" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.wait-console"
+
+
 def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4903,6 +4972,88 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                         "filename_masked": False,
                         "lineno": 12,
                     },
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-console",
+                "--session-id",
+                "s1",
+                "--text",
+                "Boom",
+                "--source",
+                "pageerror",
+                "--level",
+                "error",
+                "--after-index",
+                "1",
+            ],
+            "action.wait-console",
+            {
+                "kind": "console_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_text": "Boom",
+                "match": "contains",
+                "case_sensitive": False,
+                "requested_source": "pageerror",
+                "requested_level": "error",
+                "after_index": 1,
+                "entry_count": 1,
+                "buffered_count": 2,
+                "entry": {
+                    "index": 2,
+                    "source": "pageerror",
+                    "level": "error",
+                    "method": "error",
+                    "text": "Boom",
+                    "text_masked": False,
+                },
+                "entries": [
+                    {
+                        "index": 2,
+                        "source": "pageerror",
+                        "level": "error",
+                        "method": "error",
+                        "text": "Boom",
+                        "text_masked": False,
+                    }
+                ],
+            },
+            {
+                "kind": "console_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_text": "Boom",
+                "match": "contains",
+                "case_sensitive": False,
+                "requested_source": "pageerror",
+                "requested_level": "error",
+                "after_index": 1,
+                "entry_count": 1,
+                "buffered_count": 2,
+                "entry": {
+                    "index": 2,
+                    "source": "pageerror",
+                    "level": "error",
+                    "method": "error",
+                    "text": "Boom",
+                    "text_masked": False,
+                },
+                "entries": [
+                    {
+                        "index": 2,
+                        "source": "pageerror",
+                        "level": "error",
+                        "method": "error",
+                        "text": "Boom",
+                        "text_masked": False,
+                    }
                 ],
                 "url": "https://example.test",
             },

@@ -3849,6 +3849,150 @@ def _console_snapshot_expression(
 """.strip()
 
 
+def _console_capture_bootstrap_expression() -> str:
+    expression = _console_snapshot_expression(
+        max_entries=0,
+        clear=False,
+        install_only=True,
+    )
+    start_marker = '  const stateKey = "__browserCliConsoleSnapshot";'
+    end_marker = "  const newlyInstalled = install();"
+    return expression[
+        expression.index(start_marker) : expression.index(end_marker)
+    ].rstrip()
+
+
+def _wait_console_expression(
+    *,
+    text: str | None,
+    match: str,
+    source: str | None,
+    level: str | None,
+    case_sensitive: bool,
+    after_index: int | None,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    text_source = "null" if text is None else _js_literal(text)
+    source_source = "null" if source is None else _js_literal(source)
+    level_source = "null" if level is None else _js_literal(level)
+    after_index_source = "null" if after_index is None else _js_literal(after_index)
+    return f"""
+() => new Promise((resolve) => {{
+{_console_capture_bootstrap_expression()}
+  const requestedText = {text_source};
+  const matchMode = {_js_literal(match)};
+  const requestedSource = {source_source};
+  const requestedLevel = {level_source};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const afterIndex = {after_index_source};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const newlyInstalled = install();
+  const requestedTextString = requestedText === null ? null : String(requestedText);
+  const hasTextFilter = requestedTextString !== null && requestedTextString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let pattern = null;
+  if (hasTextFilter && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedTextString, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const maskedLocation = maskText(location.href);
+      resolve({{
+        url: maskedLocation,
+        url_masked: maskedLocation !== location.href,
+        title: document.title,
+        kind: "console_wait",
+        found: false,
+        matched: false,
+        timed_out: false,
+        requested_text: requestedText,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        requested_source: requestedSource,
+        requested_level: requestedLevel,
+        after_index: afterIndex,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        waited_ms: Date.now() - startedAt,
+        installed: state.installed,
+        newly_installed: newlyInstalled,
+        installed_at: state.installed_at,
+        entry_count: 0,
+        buffered_count: state.entries.length,
+        entry: null,
+        entries: [],
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const textMatches = (entry) => {{
+    if (!hasTextFilter) return true;
+    const candidate = String(entry.text || "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requestedTextString);
+    if (matchMode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const entryMatches = (entry) => {{
+    if (afterIndex !== null && Number(entry.index) <= afterIndex) return false;
+    if (requestedSource !== null && entry.source !== requestedSource) return false;
+    if (requestedLevel !== null && entry.level !== requestedLevel) return false;
+    return textMatches(entry);
+  }};
+  const matchingEntries = () => state.entries.filter(entryMatches);
+  const finish = (found) => {{
+    const entries = matchingEntries();
+    const maskedLocation = maskText(location.href);
+    const waitedMs = Date.now() - startedAt;
+    resolve({{
+      url: maskedLocation,
+      url_masked: maskedLocation !== location.href,
+      title: document.title,
+      kind: "console_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_text: requestedText,
+      match: matchMode,
+      case_sensitive: caseSensitive,
+      requested_source: requestedSource,
+      requested_level: requestedLevel,
+      after_index: afterIndex,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: waitedMs,
+      installed: state.installed,
+      newly_installed: newlyInstalled,
+      installed_at: state.installed_at,
+      entry_count: entries.length,
+      buffered_count: state.entries.length,
+      entry: entries.length ? entries[0] : null,
+      entries: entries.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    if (matchingEntries().length > 0) {{
+      finish(true);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _outline_snapshot_expression(
     *,
     selector: str | None,
@@ -7493,6 +7637,20 @@ def cmd_action_console_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.console-snapshot", expression)
 
 
+def cmd_action_wait_console(args: argparse.Namespace) -> None:
+    expression = _wait_console_expression(
+        text=args.text,
+        match=args.match,
+        source=args.source,
+        level=args.level,
+        case_sensitive=args.case_sensitive,
+        after_index=args.after_index,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-console", expression)
+
+
 def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
     expression = _outline_snapshot_expression(
         selector=args.selector,
@@ -9674,6 +9832,45 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Install the page console/error listener without returning buffered entries.",
     )
     action_console_snapshot.set_defaults(func=cmd_action_console_snapshot)
+
+    action_wait_console = action_subparsers.add_parser(
+        "wait-console",
+        help="Wait for a buffered or future console/page error entry",
+    )
+    _add_session_target_args(action_wait_console)
+    action_wait_console.add_argument(
+        "--text",
+        help="Optional text to match against the masked console entry text.",
+    )
+    action_wait_console.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --text should match console entry text.",
+    )
+    action_wait_console.add_argument(
+        "--source",
+        choices=["console", "pageerror", "unhandledrejection"],
+        help="Only match entries from this source.",
+    )
+    action_wait_console.add_argument(
+        "--level",
+        choices=["debug", "info", "warn", "error"],
+        help="Only match entries with this normalized level.",
+    )
+    action_wait_console.add_argument(
+        "--after-index",
+        type=_non_negative_int,
+        help="Only match entries whose console buffer index is greater than this value.",
+    )
+    action_wait_console.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_console.add_argument("--poll-ms", type=float, default=100)
+    action_wait_console.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make text matching case-sensitive.",
+    )
+    action_wait_console.set_defaults(func=cmd_action_wait_console)
 
     action_outline_snapshot = action_subparsers.add_parser(
         "outline-snapshot",

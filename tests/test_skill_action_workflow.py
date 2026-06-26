@@ -195,6 +195,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`frame-snapshot`",
         "`performance-snapshot`",
         "`console-snapshot`",
+        "`wait-console`",
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
@@ -290,6 +291,10 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`text_masked`" in normalized
     assert "`filename_masked`" in normalized
     assert "`url_masked`" in normalized
+    assert "`timed_out`" in normalized
+    assert "`requested_source`" in normalized
+    assert "`requested_level`" in normalized
+    assert "`after_index`" in normalized
     assert "`headings`" in normalized
     assert "`landmarks`" in normalized
     assert "`outline_count`" in normalized
@@ -372,6 +377,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Capture runtime errors" in normalized
     assert "`console-snapshot --install-only`" in normalized
     assert "read `console-snapshot`" in normalized
+    assert "wait with `wait-console`" in normalized
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, `inspect`, and `get-attribute` before" in normalized
     assert "use `inspect` for `state.disabled`, `state.readonly`" in normalized
