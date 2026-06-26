@@ -5,14 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
-import shutil
-import subprocess
-import sys
-import tomllib
-import webbrowser
-from importlib import metadata
-from pathlib import Path
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -40,153 +35,51 @@ from lex_browser_runtime.browser.models import (
     BrowserRuntimeError,
 )
 
-PACKAGE_NAME = "browser-cli"
-DEFAULT_BROWSER_CONSOLE_URL = "https://browser.lexmount.cn"
-DEFAULT_CODEX_AUTHORIZATION_URL = f"{DEFAULT_BROWSER_CONSOLE_URL}/connect/codex"
-DEFAULT_CODEX_DEVICE_AUTHORIZATION_URL = (
-    f"{DEFAULT_BROWSER_CONSOLE_URL}/connect/codex/device"
-)
-DEFAULT_CODEX_TOKEN_URL = f"{DEFAULT_BROWSER_CONSOLE_URL}/connect/codex/token"
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
-DEFAULT_CODEX_AUTH_SCOPES = (
+LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
+LEXMOUNT_CODEX_CONNECT_URL = f"{LEXMOUNT_CONSOLE_URL}/connect/codex"
+DEFAULT_CODEX_CONNECT_SCOPES = (
     "browser:sessions",
     "browser:contexts",
     "browser:actions",
 )
-REQUIRED_AUTH_ENV_VARS = ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
-SENSITIVE_ENV_VARS = (
-    "LEXMOUNT_API_KEY",
-    "LEXMOUNT_ACCESS_TOKEN",
-    "LEXMOUNT_REFRESH_TOKEN",
-    "LEXMOUNT_TOKEN",
+DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
+COMMON_DOM_EVENT_NAMES = (
+    "input",
+    "change",
+    "click",
+    "focus",
+    "blur",
+    "submit",
+    "mousedown",
+    "mouseup",
+    "mouseover",
+    "mouseenter",
+    "mousemove",
 )
-SENSITIVE_FIELD_NAMES = {
-    "access_token",
+CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle"}
+CONTEXT_LOCKED_STATUSES = {"locked", "busy", "in_use", "in-use", "active", "running"}
+SENSITIVE_PAYLOAD_KEYS = {
     "api_key",
     "apikey",
+    "access_token",
     "authorization",
-    "auth_token",
-    "password",
-    "refresh_token",
     "secret",
     "token",
 }
-SENSITIVE_QUERY_PARAMS = {
-    "access_token",
-    "api_key",
-    "apikey",
-    "auth_token",
-    "refresh_token",
-    "token",
-}
-SUBCOMMAND_GROUPS = {"action", "auth", "case", "context", "session"}
-TOP_LEVEL_COMMANDS = SUBCOMMAND_GROUPS | {
-    "close-session",
-    "direct-url",
-    "doctor",
-    "list-contexts",
-    "prepare",
-}
-_current_parse_argv: list[str] = []
 
 
-def _mask_secret_value(value: str) -> str:
-    if len(value) <= 8:
-        return "***"
-    return f"{value[:4]}...{value[-4:]}"
-
-
-def _configured_secret_values() -> list[str]:
-    return [
-        value
-        for name in SENSITIVE_ENV_VARS
-        if (value := os.environ.get(name)) and len(value) >= 8
-    ]
-
-
-def _mask_url_query_secrets(value: str) -> str:
-    parsed = urlsplit(value)
-    if not parsed.query:
-        return value
-
-    changed = False
-    query: list[tuple[str, str]] = []
-    for key, raw_value in parse_qsl(parsed.query, keep_blank_values=True):
-        if key.lower() in SENSITIVE_QUERY_PARAMS and raw_value:
-            query.append((key, "***"))
-            changed = True
-        else:
-            query.append((key, raw_value))
-
-    if not changed:
-        return value
-    return urlunsplit(
-        (
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            urlencode(query, safe="*"),
-            parsed.fragment,
-        )
-    )
-
-
-def _redact_string(value: str) -> str:
-    redacted = _mask_url_query_secrets(value)
-    for secret in _configured_secret_values():
-        redacted = redacted.replace(secret, _mask_secret_value(secret))
-    return redacted
-
-
-def _redact_json_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        redacted: dict[Any, Any] = {}
-        for key, item in value.items():
-            if isinstance(key, str) and key.lower() in SENSITIVE_FIELD_NAMES:
-                redacted[key] = (
-                    _mask_secret_value(item) if isinstance(item, str) and item else item
-                )
-            else:
-                redacted[key] = _redact_json_value(item)
-        return redacted
-    if isinstance(value, list):
-        return [_redact_json_value(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_redact_json_value(item) for item in value)
-    if isinstance(value, str):
-        return _redact_string(value)
-    return value
-
-
-def _json_dump(
-    payload: dict[str, Any],
-    exit_code: int = 0,
-    *,
-    redact_secrets: bool = True,
-    reveal_fields: set[str] | None = None,
-) -> NoReturn:
-    revealed = {
-        field: payload[field] for field in reveal_fields or set() if field in payload
-    }
-    if redact_secrets:
-        payload = _redact_json_value(payload)
-    payload.update(revealed)
+def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
     print(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=str)
     )
     raise SystemExit(exit_code)
 
 
-def _success(
-    command: str,
-    *,
-    redact_secrets: bool = True,
-    reveal_fields: set[str] | None = None,
-    **payload: Any,
-) -> NoReturn:
+def _success(command: str, **payload: Any) -> NoReturn:
     data = {"ok": True, "command": command}
     data.update(payload)
-    _json_dump(data, redact_secrets=redact_secrets, reveal_fields=reveal_fields)
+    _json_dump(data)
 
 
 def _failure(
@@ -195,48 +88,23 @@ def _failure(
     message: str,
     *,
     exit_code: int = 1,
-    redact_secrets: bool = True,
-    reveal_fields: set[str] | None = None,
     **payload: Any,
 ) -> NoReturn:
     data = {
         "ok": False,
         "command": command,
-        "error": error,
-        "message": message,
+        "error": _mask_sensitive_text(error),
+        "message": _mask_sensitive_text(message),
     }
-    data.update(payload)
-    _json_dump(
-        data,
-        exit_code=exit_code,
-        redact_secrets=redact_secrets,
-        reveal_fields=reveal_fields,
+    data.update(
+        {
+            key: "***"
+            if _is_sensitive_payload_key(key)
+            else _sanitize_failure_value(value)
+            for key, value in payload.items()
+        }
     )
-
-
-def _command_from_argv(argv: list[str]) -> str:
-    if not argv or argv[0].startswith("-"):
-        return "browser-cli"
-
-    root = argv[0]
-    if root not in TOP_LEVEL_COMMANDS:
-        return "browser-cli"
-    if root in SUBCOMMAND_GROUPS:
-        if len(argv) > 1 and not argv[1].startswith("-"):
-            return f"{root}.{argv[1]}"
-        return root
-    return root
-
-
-class BrowserCliArgumentParser(argparse.ArgumentParser):
-    def error(self, message: str) -> NoReturn:
-        _failure(
-            _command_from_argv(_current_parse_argv),
-            "argument_error",
-            message,
-            exit_code=2,
-            usage=self.format_usage().strip(),
-        )
+    _json_dump(data, exit_code=exit_code)
 
 
 def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
@@ -252,17 +120,26 @@ def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
     _failure(command, exc.__class__.__name__, str(exc))
 
 
-def _exception_brief(exc: Exception) -> dict[str, Any]:
-    info = getattr(exc, "lexmount_error_info", None)
-    if isinstance(info, LexmountErrorInfo):
-        payload: dict[str, Any] = {
-            "error": info.code,
-            "exception_message": info.message,
-        }
-        if info.status_code is not None:
-            payload["status_code"] = info.status_code
-        return payload
-    return {"error": exc.__class__.__name__, "exception_message": str(exc)}
+def _command_from_prog(prog: str) -> str:
+    parts = prog.split()
+    if parts and parts[0] == "browser-cli":
+        parts = parts[1:]
+    return ".".join(parts) if parts else "browser-cli"
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def add_subparsers(self, *args: Any, **kwargs: Any) -> Any:
+        kwargs.setdefault("parser_class", type(self))
+        return super().add_subparsers(*args, **kwargs)
+
+    def error(self, message: str) -> NoReturn:
+        _failure(
+            _command_from_prog(self.prog),
+            "argument_error",
+            message,
+            exit_code=2,
+            usage=self.format_usage().strip(),
+        )
 
 
 def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
@@ -275,6 +152,11 @@ def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         raise argparse.ArgumentTypeError("metadata JSON must decode to an object")
     return value
+
+
+def _parse_filter_metadata_json(raw: str | None) -> dict[str, Any]:
+    parsed = _parse_metadata_json(raw)
+    return parsed or {}
 
 
 def _normalize_context_mode(value: str) -> str:
@@ -291,93 +173,25 @@ def _normalize_browser_mode(value: str) -> str:
     return value
 
 
+def _non_negative_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("value must be an integer") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return parsed
+
+
 def _model_payload(value: Any) -> dict[str, Any]:
     return value.model_dump(mode="json")
 
 
-def _package_version() -> str:
+def _package_version(distribution: str) -> str | None:
     try:
-        return metadata.version(PACKAGE_NAME)
-    except metadata.PackageNotFoundError:
-        pass
-
-    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
-    try:
-        data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-    except OSError:
-        return "unknown"
-
-    project = data.get("project")
-    if isinstance(project, dict):
-        version = project.get("version")
-        if isinstance(version, str):
-            return version
-    return "unknown"
-
-
-def _context_reuse_payload(context_payload: dict[str, Any]) -> dict[str, Any]:
-    status = context_payload.get("status")
-    normalized_status = str(status or "").lower()
-    context_id = context_payload.get("context_id")
-
-    if normalized_status == "available":
-        command = None
-        if context_id:
-            command = (
-                "browser-cli session create "
-                f"--context-id {context_id} --context-mode read_write"
-            )
-        return {
-            "can_reuse_now": True,
-            "reason": "context_available",
-            "recommended_context_mode": "read_write",
-            "recommended_session_command": command,
-            "next_steps": [
-                "Create a session with this context_id to reuse cookies and storage."
-            ],
-        }
-
-    if normalized_status == "locked":
-        return {
-            "can_reuse_now": False,
-            "reason": "context_locked",
-            "recommended_context_mode": None,
-            "recommended_session_command": None,
-            "next_steps": [
-                "Close the active session using this context, then retry.",
-                "Create a new context if the current session must stay open.",
-            ],
-        }
-
-    return {
-        "can_reuse_now": None,
-        "reason": "context_status_unknown"
-        if status is None
-        else "context_not_available",
-        "recommended_context_mode": None,
-        "recommended_session_command": None,
-        "next_steps": [
-            "Inspect the context status before using it for persistent login state."
-        ],
-    }
-
-
-def _context_payload(value: Any) -> dict[str, Any]:
-    payload = dict(value) if isinstance(value, dict) else _model_payload(value)
-    payload["reuse"] = _context_reuse_payload(payload)
-    return payload
-
-
-def _metadata_matches(
-    context_payload: dict[str, Any],
-    metadata_match: dict[str, Any] | None,
-) -> bool:
-    if not metadata_match:
-        return True
-    metadata = context_payload.get("metadata")
-    if not isinstance(metadata, dict):
-        return False
-    return all(metadata.get(key) == value for key, value in metadata_match.items())
+        return version(distribution)
+    except PackageNotFoundError:
+        return None
 
 
 def _mask_direct_url_secret(connect_url: str) -> str:
@@ -411,1267 +225,378 @@ def _masked_connect_url_payload(
     }
 
 
-def _env_value(name: str) -> str | None:
-    value = os.environ.get(name)
-    if value is None or value == "":
-        return None
+def _mask_sensitive_text(text: str) -> str:
+    masked = re.sub(
+        r"(?i)((?:api[_-]?key|access[_-]?token|token)=)[^&\s]+",
+        r"\1***",
+        text,
+    )
+    api_key = os.environ.get("LEXMOUNT_API_KEY")
+    if api_key:
+        masked = masked.replace(api_key, "***")
+    return masked
+
+
+def _is_sensitive_payload_key(key: Any) -> bool:
+    normalized = str(key).lower().replace("-", "_")
+    return normalized in SENSITIVE_PAYLOAD_KEYS
+
+
+def _sanitize_failure_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _mask_sensitive_text(value)
+    if isinstance(value, dict):
+        return {
+            key: "***"
+            if _is_sensitive_payload_key(key)
+            else _sanitize_failure_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_failure_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_failure_value(item) for item in value)
     return value
 
 
-def _mask_secret(value: str | None) -> str | None:
-    if not value:
+def _doctor_check(
+    name: str,
+    status: str,
+    message: str,
+    **details: Any,
+) -> dict[str, Any]:
+    check = {"name": name, "status": status, "message": message}
+    check.update(details)
+    return check
+
+
+def _doctor_fix(
+    code: str,
+    *,
+    commands: list[str] | None = None,
+    env: list[str] | None = None,
+    guidance: list[str] | None = None,
+) -> dict[str, Any]:
+    fix: dict[str, Any] = {"code": code}
+    if commands:
+        fix["commands"] = commands
+    if env:
+        fix["env"] = env
+    if guidance:
+        fix["guidance"] = guidance
+    return fix
+
+
+def _credential_doctor_fix(*env: str) -> dict[str, Any]:
+    return _doctor_fix(
+        "configure_credentials",
+        env=list(env),
+        commands=[
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            "browser-cli auth status",
+            "browser-cli doctor",
+        ],
+        guidance=[
+            "Get Project ID and API key from https://browser.lexmount.cn.",
+            "Set credentials only in the local shell, not in chat.",
+            "Run doctor again after exporting credentials.",
+        ],
+    )
+
+
+def _normalize_status(value: Any) -> str | None:
+    if value is None:
         return None
-    if len(value) <= 8:
-        return "***"
-    return f"{value[:4]}...{value[-4:]}"
+    return str(value).strip().lower()
 
 
-def _auth_env_var_payload(
+def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
+    status = _normalize_status(context.get("status"))
+    if status in CONTEXT_REUSABLE_STATUSES:
+        return {
+            "status": context.get("status"),
+            "reusable": True,
+            "locked": False,
+            "reason": "status_reusable",
+        }
+    if status in CONTEXT_LOCKED_STATUSES:
+        return {
+            "status": context.get("status"),
+            "reusable": False,
+            "locked": True,
+            "reason": "status_locked",
+        }
+    if status is None:
+        return {
+            "status": None,
+            "reusable": False,
+            "locked": False,
+            "reason": "status_missing",
+        }
+    return {
+        "status": context.get("status"),
+        "reusable": False,
+        "locked": False,
+        "reason": "status_not_reusable",
+    }
+
+
+def _metadata_matches(
+    metadata: dict[str, Any] | None,
+    expected: dict[str, Any],
+) -> bool:
+    if not expected:
+        return True
+    if not isinstance(metadata, dict):
+        return False
+    return all(metadata.get(key) == value for key, value in expected.items())
+
+
+def _context_pick_candidate(
+    context: dict[str, Any],
+    metadata_filter: dict[str, Any],
+) -> dict[str, Any]:
+    reuse = _context_reuse_state(context)
+    metadata_match = _metadata_matches(context.get("metadata"), metadata_filter)
+    return {
+        "context_id": context.get("context_id"),
+        "status": context.get("status"),
+        "metadata_match": metadata_match,
+        "reusable": reuse["reusable"],
+        "locked": reuse["locked"],
+        "reason": reuse["reason"] if metadata_match else "metadata_mismatch",
+    }
+
+
+def _select_or_create_context_for_session(
+    admin: Any,
+    *,
+    command: str,
+    metadata_filter: dict[str, Any],
+    status: str | None,
+    limit: int,
+    create_if_missing: bool,
+) -> dict[str, Any]:
+    try:
+        result = admin.list_contexts(status=status, limit=limit)
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    payload = _model_payload(result)
+    contexts = payload.get("contexts", [])
+    if not isinstance(contexts, list):
+        contexts = []
+    candidates = [
+        _context_pick_candidate(context, metadata_filter) for context in contexts
+    ]
+
+    for context, candidate in zip(contexts, candidates, strict=True):
+        if candidate["metadata_match"] and candidate["reusable"]:
+            return {
+                "selected": True,
+                "created": False,
+                "context_id": context.get("context_id"),
+                "context": context,
+                "reuse": _context_reuse_state(context),
+                "checked": len(contexts),
+                "candidates": candidates,
+                "metadata_filter": metadata_filter,
+                "status_filter": status,
+                "limit": limit,
+            }
+
+    if create_if_missing:
+        try:
+            context = admin.create_context(metadata=metadata_filter or None)
+        except Exception as exc:
+            _failure_from_exception(command, exc)
+        created_context = _model_payload(context)
+        return {
+            "selected": True,
+            "created": True,
+            "context_id": created_context.get("context_id"),
+            "context": created_context,
+            "reuse": _context_reuse_state(created_context),
+            "checked": len(contexts),
+            "candidates": candidates,
+            "metadata_filter": metadata_filter,
+            "status_filter": status,
+            "limit": limit,
+        }
+
+    _failure(
+        command,
+        "no_available_context",
+        "No reusable context matched the requested session context filters.",
+        selected=False,
+        created=False,
+        checked=len(contexts),
+        candidates=candidates,
+        metadata_filter=metadata_filter,
+        status_filter=status,
+        limit=limit,
+    )
+
+
+def _env_value_status(
     name: str,
     *,
     secret: bool = False,
-    reveal_secrets: bool = False,
     default: str | None = None,
 ) -> dict[str, Any]:
-    raw_value = _env_value(name)
-    value = raw_value if raw_value is not None else default
-    masked = bool(secret and raw_value and not reveal_secrets)
-    if masked:
-        value = _mask_secret(raw_value)
-    return {
-        "set": raw_value is not None,
-        "value": value,
-        "masked": masked,
-        "default": raw_value is None and default is not None,
-    }
+    value = os.environ.get(name)
+    present = bool(value)
+    payload: dict[str, Any] = {"present": present}
+    if secret:
+        payload.update(
+            {
+                "masked_value": "***" if present else None,
+                "length": len(value) if value else 0,
+            }
+        )
+    else:
+        payload["value"] = value
+    if default is not None:
+        payload["default"] = default
+        payload["effective_value"] = value or default
+        payload["using_default"] = not present
+    return payload
 
 
-def _auth_status_decision(missing: list[str]) -> dict[str, Any]:
-    if not missing:
-        return {
-            "action": "verify_access",
-            "reason": "credentials_configured",
-            "can_attempt_api": True,
-            "can_start_browser_work": True,
-            "should_open_browser": False,
-            "missing": [],
-            "next_command": "browser-cli session list",
-            "fallback_command": "browser-cli doctor --json",
-        }
-
-    return {
-        "action": "login",
-        "reason": "missing_credentials",
-        "can_attempt_api": False,
-        "can_start_browser_work": False,
-        "should_open_browser": False,
-        "missing": missing,
-        "next_command": "browser-cli auth login",
-        "optional_open_command": "browser-cli auth login --open",
-    }
-
-
-def _auth_status_payload(*, reveal_secrets: bool) -> dict[str, Any]:
-    missing = [name for name in REQUIRED_AUTH_ENV_VARS if _env_value(name) is None]
-    return {
-        "configured": not missing,
-        "missing": missing,
-        "decision": _auth_status_decision(missing),
-        "console_url": DEFAULT_BROWSER_CONSOLE_URL,
-        "environment": {
-            "LEXMOUNT_API_KEY": _auth_env_var_payload(
-                "LEXMOUNT_API_KEY",
-                secret=True,
-                reveal_secrets=reveal_secrets,
-            ),
-            "LEXMOUNT_PROJECT_ID": _auth_env_var_payload("LEXMOUNT_PROJECT_ID"),
-            "LEXMOUNT_BASE_URL": _auth_env_var_payload(
-                "LEXMOUNT_BASE_URL",
-                default=DEFAULT_LEXMOUNT_BASE_URL,
-            ),
-            "LEXMOUNT_REGION": _auth_env_var_payload("LEXMOUNT_REGION"),
-        },
-        "next_steps": _auth_next_steps(missing),
-    }
-
-
-def _auth_next_steps(missing: list[str]) -> list[str]:
-    if not missing:
+def _auth_next_steps(*, configured: bool) -> list[str]:
+    if configured:
         return [
-            "Run browser-cli session list to verify API connectivity.",
-            "Run browser-cli auth export-env to generate shell configuration lines.",
+            "Run `browser-cli doctor` to verify live API connectivity.",
+            "Create a session with `browser-cli session create`.",
         ]
     return [
-        f"Open {DEFAULT_BROWSER_CONSOLE_URL} and sign in.",
-        "Select a project, copy its Project ID, and create or copy an API key.",
+        "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
         "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-        "Run browser-cli auth status again.",
+        "Run `browser-cli doctor` after setting credentials.",
     ]
 
 
-def _quote_env_value(value: str, *, shell: str) -> str:
+def _dedupe_preserving_order(values: list[str] | tuple[str, ...]) -> list[str]:
+    deduped: list[str] = []
+    for value in values:
+        if value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+def _auth_login_project_id(args: argparse.Namespace) -> tuple[str | None, str]:
+    if args.project_id:
+        return args.project_id, "argument"
+    env_project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
+    if env_project_id:
+        return env_project_id, "env"
+    return None, "unset"
+
+
+def _auth_login_scopes(args: argparse.Namespace) -> list[str]:
+    raw_scopes = args.scope or list(DEFAULT_CODEX_CONNECT_SCOPES)
+    return _dedupe_preserving_order(raw_scopes)
+
+
+def _connect_from_codex_url(
+    *,
+    project_id: str | None,
+    scopes: list[str],
+    expires_in: str,
+) -> str:
+    query: list[tuple[str, str]] = [
+        ("source", "browser-cli"),
+        ("intent", "agent-browser-control"),
+        ("response", "env"),
+        ("expires_in", expires_in),
+    ]
+    if project_id:
+        query.append(("project_id", project_id))
+    query.extend(("scope", scope) for scope in scopes)
+    return f"{LEXMOUNT_CODEX_CONNECT_URL}?{urlencode(query)}"
+
+
+def _quote_env_value(value: str, shell: str) -> str:
     if shell in {"posix", "fish"}:
         return shlex.quote(value)
-    if shell == "powershell":
-        return "'" + value.replace("'", "''") + "'"
-    raise ValueError(f"Unsupported shell: {shell}")
+    escaped = value.replace("'", "''")
+    return f"'{escaped}'"
 
 
-def _format_env_line(name: str, value: str, *, shell: str) -> str:
-    quoted = _quote_env_value(value, shell=shell)
-    if shell == "posix":
-        return f"export {name}={quoted}"
+def _export_command(name: str, value: str, shell: str) -> str:
+    quoted = _quote_env_value(value, shell)
     if shell == "fish":
         return f"set -gx {name} {quoted}"
     if shell == "powershell":
         return f"$env:{name} = {quoted}"
-    raise ValueError(f"Unsupported shell: {shell}")
-
-
-def _export_env_value(
-    name: str,
-    *,
-    secret: bool,
-    reveal_secrets: bool,
-    placeholder: str,
-    placeholder_usable: bool = False,
-) -> tuple[str, bool, bool]:
-    raw_value = _env_value(name)
-    if raw_value is None:
-        return placeholder, False, placeholder_usable
-    if secret and not reveal_secrets:
-        masked = _mask_secret(raw_value) or "***"
-        return masked, True, False
-    return raw_value, False, True
-
-
-def cmd_auth_status(args: argparse.Namespace) -> None:
-    _success(
-        "auth.status",
-        **_auth_status_payload(reveal_secrets=args.reveal_secrets),
-    )
-
-
-def cmd_auth_bootstrap(args: argparse.Namespace) -> None:
-    status = _auth_status_payload(reveal_secrets=False)
-    configured = bool(status["configured"])
-    authorization_url = args.authorization_url
-    open_result: dict[str, Any]
-    if args.open and not configured:
-        open_result = _open_authorization_url(authorization_url)
-    elif args.open:
-        open_result = {
-            "requested": False,
-            "ok": None,
-            "reason": "credentials_already_configured",
-        }
-    else:
-        open_result = {"requested": False, "ok": None}
-
-    if configured:
-        decision = {
-            "action": "verify_access",
-            "reason": "credentials_configured",
-            "can_attempt_api": True,
-            "can_start_browser_work": False,
-            "requires_user_browser": False,
-            "requires_browser_lexmount_cn": False,
-            "next_command": "browser-cli doctor --json",
-            "fallback_command": "browser-cli session list",
-        }
-        workflow = [
-            "browser-cli doctor --json",
-            "browser-cli session list",
-            "browser-cli session create",
-        ]
-    else:
-        decision = {
-            "action": "login",
-            "reason": "missing_credentials",
-            "can_attempt_api": False,
-            "can_start_browser_work": False,
-            "requires_user_browser": True,
-            "requires_browser_lexmount_cn": True,
-            "missing": status["missing"],
-            "next_command": "browser-cli auth login --open"
-            if args.open
-            else "browser-cli auth login",
-            "fallback_command": "browser-cli auth export-env",
-        }
-        workflow = [
-            "browser-cli auth login --open" if args.open else "browser-cli auth login",
-            "browser-cli auth export-env",
-            "browser-cli auth status",
-            "browser-cli doctor --json",
-        ]
-
-    _success(
-        "auth.bootstrap",
-        configured=configured,
-        status=status,
-        decision=decision,
-        workflow=workflow,
-        install_command="uv tool install git+https://github.com/lexmount/browser-cli.git",
-        authorization_url=authorization_url,
-        opened=open_result,
-        connect_from_codex={
-            "available": False,
-            "authorization_url": authorization_url,
-            "manual_fallback_command": "browser-cli auth login",
-            "future_device_code_command": "browser-cli auth device-code",
-            "spec_command": "browser-cli auth connect-spec",
-            "needs_browser_lexmount_cn": [
-                "Project ID display",
-                "Scoped API key creation",
-                "Copyable env and install commands",
-                "Doctor verification guidance",
-                "Credential revoke, expiry, and scope controls",
-                "Device-code or OAuth approval endpoint",
-            ],
-        },
-        safety_rules=[
-            "Do not ask the user to paste API keys into chat.",
-            "Do not print revealed API keys unless the user is in a trusted local shell.",
-            "Prefer browser-cli doctor --json before starting browser work.",
-            "Use browser-cli auth connect-spec when implementing browser.lexmount.cn.",
-        ],
-    )
-
-
-def cmd_auth_export_env(args: argparse.Namespace) -> None:
-    command = "auth.export-env"
-    env_specs = [
-        (
-            "LEXMOUNT_API_KEY",
-            True,
-            f"<api-key from {DEFAULT_BROWSER_CONSOLE_URL}>",
-            False,
-        ),
-        (
-            "LEXMOUNT_PROJECT_ID",
-            False,
-            f"<project-id from {DEFAULT_BROWSER_CONSOLE_URL}>",
-            False,
-        ),
-    ]
-    if _env_value("LEXMOUNT_BASE_URL") or args.include_base_url:
-        env_specs.append(
-            (
-                "LEXMOUNT_BASE_URL",
-                False,
-                DEFAULT_LEXMOUNT_BASE_URL,
-                True,
-            )
-        )
-    if _env_value("LEXMOUNT_REGION"):
-        env_specs.append(("LEXMOUNT_REGION", False, "<region>", False))
-
-    missing: list[str] = []
-    lines: list[str] = []
-    masked = False
-    all_usable = True
-    contains_secrets = False
-    for name, secret, placeholder, placeholder_usable in env_specs:
-        value, value_masked, usable = _export_env_value(
-            name,
-            secret=secret,
-            reveal_secrets=args.reveal_secrets,
-            placeholder=placeholder,
-            placeholder_usable=placeholder_usable,
-        )
-        if name in REQUIRED_AUTH_ENV_VARS and _env_value(name) is None:
-            missing.append(name)
-        masked = masked or value_masked
-        all_usable = all_usable and usable
-        contains_secrets = contains_secrets or bool(secret and usable)
-        lines.append(_format_env_line(name, value, shell=args.shell))
-
-    _success(
-        command,
-        shell=args.shell,
-        lines=lines,
-        script="\n".join(lines),
-        complete=not missing,
-        missing=missing,
-        masked=masked,
-        usable=all_usable and not missing,
-        contains_secrets=contains_secrets,
-        console_url=DEFAULT_BROWSER_CONSOLE_URL,
-        next_steps=[
-            "Use --reveal-secrets only in a local trusted shell when you need usable export lines.",
-            "Do not paste revealed API keys into chat, logs, README files, or commits.",
-            "Run browser-cli auth status after exporting credentials.",
-        ],
-    )
-
-
-def _open_authorization_url(url: str) -> dict[str, Any]:
-    try:
-        opened = webbrowser.open(url)
-    except Exception as exc:
-        return {
-            "requested": True,
-            "ok": False,
-            "error": exc.__class__.__name__,
-            "message": str(exc),
-        }
-    return {
-        "requested": True,
-        "ok": bool(opened),
-    }
-
-
-def cmd_auth_login(args: argparse.Namespace) -> None:
-    status = _auth_status_payload(reveal_secrets=False)
-    authorization_url = args.authorization_url
-    open_result = (
-        _open_authorization_url(authorization_url)
-        if args.open
-        else {"requested": False, "ok": None}
-    )
-    _success(
-        "auth.login",
-        console_url=DEFAULT_BROWSER_CONSOLE_URL,
-        authorization_url=authorization_url,
-        opened=open_result,
-        configured=status["configured"],
-        missing=status["missing"],
-        required_env=list(REQUIRED_AUTH_ENV_VARS),
-        suggested_commands=[
-            "browser-cli auth status",
-            "browser-cli auth export-env",
-            "browser-cli session list",
-        ],
-        next_steps=[
-            f"Open {authorization_url} and sign in.",
-            "Select the project Codex should use.",
-            "Create or copy a scoped API key for agent/browser automation.",
-            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-            "Run browser-cli auth status, then browser-cli session list.",
-        ],
-        future_flow={
-            "name": "Connect from Codex",
-            "needs_browser_lexmount_cn": True,
-            "prototype_command": "browser-cli auth device-code",
-            "description": (
-                "A future browser.lexmount.cn flow should let the user approve "
-                "Codex access and return scoped local credentials without manual "
-                "API key copying."
-            ),
-        },
-    )
-
-
-def _browser_cli_version() -> str | None:
-    version = _package_version()
-    return None if version == "unknown" else version
-
-
-def _uv_status() -> dict[str, Any]:
-    path = shutil.which("uv")
-    result: dict[str, Any] = {
-        "available": bool(path),
-        "path": path,
-        "version": None,
-    }
-    if path is None:
-        result["message"] = "uv was not found in PATH."
-        return result
-
-    try:
-        completed = subprocess.run(
-            [path, "--version"],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=5,
-        )
-    except Exception as exc:
-        result.update(
-            {
-                "available": False,
-                "message": f"Failed to run uv --version: {exc}",
-            }
-        )
-        return result
-
-    version_text = (completed.stdout or completed.stderr).strip()
-    result["version"] = version_text or None
-    if completed.returncode != 0:
-        result.update(
-            {
-                "available": False,
-                "message": f"uv --version exited with {completed.returncode}.",
-            }
-        )
-    return result
-
-
-def _doctor_check(
-    checks: list[dict[str, Any]],
-    *,
-    name: str,
-    ok: bool,
-    severity: str,
-    message: str,
-    **payload: Any,
-) -> None:
-    check = {
-        "name": name,
-        "ok": ok,
-        "severity": "info" if ok else severity,
-        "message": message,
-    }
-    check.update(payload)
-    checks.append(check)
-
-
-def _doctor_overall_ok(checks: list[dict[str, Any]]) -> bool:
-    return all(check["ok"] or check["severity"] != "error" for check in checks)
-
-
-def _doctor_status(checks: list[dict[str, Any]]) -> str:
-    if not _doctor_overall_ok(checks):
-        return "fail"
-    if any(not check["ok"] for check in checks):
-        return "warn"
-    return "pass"
-
-
-def _doctor_decision(checks: list[dict[str, Any]]) -> dict[str, Any]:
-    checks_by_name = {check["name"]: check for check in checks}
-    blocking_checks = [
-        check["name"]
-        for check in checks
-        if not check["ok"] and check["severity"] == "error"
-    ]
-    warning_checks = [
-        check["name"]
-        for check in checks
-        if not check["ok"] and check["severity"] == "warning"
-    ]
-    api_check = checks_by_name.get("api", {})
-    session_smoke_check = checks_by_name.get("session-smoke")
-    api_verified = bool(api_check.get("ok") and not api_check.get("skipped"))
-    session_smoke_requested = session_smoke_check is not None
-    session_smoke_verified = bool(session_smoke_check and session_smoke_check.get("ok"))
-    ready_for_browser_work = not blocking_checks and api_verified
-
-    recommended_action = "continue"
-    next_command = "browser-cli session create"
-    if blocking_checks:
-        next_command = "browser-cli doctor --json"
-        if "credentials" in blocking_checks or "direct-url" in blocking_checks:
-            recommended_action = "fix_configuration"
-        elif "api" in blocking_checks:
-            recommended_action = "fix_api_access"
-        elif "session-smoke" in blocking_checks:
-            recommended_action = "fix_session_lifecycle"
-            next_command = "browser-cli doctor --smoke-session --json"
-        else:
-            recommended_action = "fix_errors"
-    elif not api_verified:
-        recommended_action = "run_api_check"
-        next_command = "browser-cli doctor --json"
-    elif warning_checks:
-        recommended_action = "continue_with_warnings"
-
-    return {
-        "ready_for_browser_work": ready_for_browser_work,
-        "api_verified": api_verified,
-        "session_smoke_requested": session_smoke_requested,
-        "session_smoke_verified": session_smoke_verified,
-        "blocking_checks": blocking_checks,
-        "warning_checks": warning_checks,
-        "recommended_action": recommended_action,
-        "next_command": next_command,
-    }
-
-
-def _doctor_workflow(decision: dict[str, Any]) -> dict[str, Any]:
-    recommended_action = decision["recommended_action"]
-    blocking_checks = list(decision["blocking_checks"])
-    warning_checks = list(decision["warning_checks"])
-    can_start_session = bool(decision["ready_for_browser_work"])
-
-    commands: list[str]
-    next_step: str
-    if can_start_session:
-        next_step = "start_browser_session"
-        commands = ["browser-cli session create"]
-        if not decision["session_smoke_verified"]:
-            commands.append("browser-cli doctor --smoke-session --json")
-    elif recommended_action == "run_api_check":
-        next_step = "verify_api"
-        commands = ["browser-cli doctor --json"]
-    elif recommended_action == "fix_configuration":
-        next_step = "configure_credentials"
-        commands = [
-            "browser-cli auth bootstrap",
-            "browser-cli auth login",
-            "browser-cli auth status",
-            "browser-cli doctor --json",
-        ]
-    elif recommended_action == "fix_api_access":
-        next_step = "fix_api_access"
-        commands = [
-            "browser-cli auth status",
-            "browser-cli doctor --json",
-            "browser-cli session list",
-        ]
-    elif recommended_action == "fix_session_lifecycle":
-        next_step = "debug_session_lifecycle"
-        commands = [
-            "browser-cli doctor --smoke-session --json",
-            "browser-cli session list --status active",
-        ]
-    else:
-        next_step = "fix_doctor_errors"
-        commands = [decision["next_command"]]
-
-    return {
-        "next_step": next_step,
-        "can_start_browser_work": can_start_session,
-        "primary_command": commands[0],
-        "commands": commands,
-        "blocking_checks": blocking_checks,
-        "warning_checks": warning_checks,
-        "smoke_session_recommended": bool(
-            can_start_session and not decision["session_smoke_verified"]
-        ),
-        "notes": [
-            "Use primary_command first; parse its JSON before continuing.",
-            "Run smoke-session only for onboarding or session lifecycle debugging.",
-            "Do not ask the user to paste API keys into chat.",
-        ],
-    }
-
-
-def _doctor_session_payload(session: Any) -> dict[str, Any]:
-    payload = session.model_dump(mode="json")
-    return {
-        key: payload.get(key)
-        for key in (
-            "session_id",
-            "status",
-            "browser_mode",
-            "project_id",
-            "created_at",
-            "inspect_url",
-        )
-        if payload.get(key) is not None
-    }
-
-
-def _doctor_session_smoke(
-    admin: LexmountBrowserAdmin,
-    *,
-    browser_mode: str,
-) -> tuple[bool, str, dict[str, Any]]:
-    session_id: str | None = None
-    payload: dict[str, Any] = {
-        "browser_mode": browser_mode,
-        "created": False,
-        "closed": False,
-    }
-    try:
-        result = admin.create_session(
-            context_id=None,
-            create_context=False,
-            context_mode="read_write",
-            browser_mode=browser_mode,
-            metadata=None,
-        )
-        session = result.session
-        session_id = session.session_id
-        payload.update(
-            {
-                "created": True,
-                "session": _doctor_session_payload(session),
-                "session_id": session_id,
-            }
-        )
-    except Exception as exc:
-        payload.update(_exception_brief(exc))
-        return False, "Browser session smoke test failed to create a session.", payload
-
-    if not session_id:
-        return (
-            False,
-            "Browser session smoke test created a session without a session_id.",
-            payload,
-        )
-
-    try:
-        admin.close_session(session_id)
-    except Exception as exc:
-        payload.update(
-            {
-                "closed": False,
-                "close_error": _exception_brief(exc),
-            }
-        )
-        return (
-            False,
-            "Browser session smoke test created a session but failed to close it.",
-            payload,
-        )
-
-    payload["closed"] = True
-    return True, "Browser session smoke test created and closed a session.", payload
-
-
-def cmd_doctor(args: argparse.Namespace) -> None:
-    command = "doctor"
-    checks: list[dict[str, Any]] = []
-    next_steps: list[str] = []
-
-    version = _browser_cli_version()
-    _doctor_check(
-        checks,
-        name="browser-cli",
-        ok=version is not None,
-        severity="warning",
-        message=(
-            f"browser-cli package version is {version}."
-            if version
-            else "browser-cli package metadata was not found."
-        ),
-        version=version,
-    )
-
-    _doctor_check(
-        checks,
-        name="python",
-        ok=True,
-        severity="info",
-        message=f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-        executable=sys.executable,
-        version=sys.version.split()[0],
-    )
-
-    uv = _uv_status()
-    uv_payload = {key: value for key, value in uv.items() if key != "message"}
-    _doctor_check(
-        checks,
-        name="uv",
-        ok=bool(uv["available"]),
-        severity="warning",
-        message=uv.get("message")
-        or (
-            f"uv is available: {uv['version']}" if uv["version"] else "uv is available."
-        ),
-        **uv_payload,
-    )
-    if not uv["available"]:
-        next_steps.append("Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh")
-
-    env_status = {
-        "LEXMOUNT_API_KEY": {"set": bool(os.getenv("LEXMOUNT_API_KEY"))},
-        "LEXMOUNT_PROJECT_ID": {"set": bool(os.getenv("LEXMOUNT_PROJECT_ID"))},
-        "LEXMOUNT_BASE_URL": {
-            "set": bool(os.getenv("LEXMOUNT_BASE_URL")),
-            "value": os.getenv("LEXMOUNT_BASE_URL") or "https://api.lexmount.cn",
-            "defaulted": not bool(os.getenv("LEXMOUNT_BASE_URL")),
-        },
-        "LEXMOUNT_REGION": {
-            "set": bool(os.getenv("LEXMOUNT_REGION")),
-            "value": os.getenv("LEXMOUNT_REGION"),
-        },
-    }
-    missing_required = [
-        name
-        for name in ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
-        if not env_status[name]["set"]
-    ]
-    _doctor_check(
-        checks,
-        name="credentials",
-        ok=not missing_required,
-        severity="error",
-        message=(
-            "Required Lexmount environment variables are set."
-            if not missing_required
-            else "Missing required Lexmount environment variables: "
-            + ", ".join(missing_required)
-        ),
-        missing=missing_required,
-    )
-    if missing_required:
-        next_steps.append(
-            "Log in to https://browser.lexmount.cn and export LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID."
-        )
-
-    direct_url_payload: dict[str, Any] | None = None
-    try:
-        direct_url = build_direct_connect_url()
-        direct_url_payload = {
-            "connect_url": _mask_direct_url_secret(direct_url),
-            "masked": True,
-        }
-        _doctor_check(
-            checks,
-            name="direct-url",
-            ok=True,
-            severity="info",
-            message="Direct websocket URL can be built from configuration.",
-            **direct_url_payload,
-        )
-    except Exception as exc:
-        _doctor_check(
-            checks,
-            name="direct-url",
-            ok=False,
-            severity="error",
-            message="Failed to build direct websocket URL.",
-            **_exception_brief(exc),
-        )
-
-    api_payload: dict[str, Any] | None = None
-    if args.skip_api:
-        _doctor_check(
-            checks,
-            name="api",
-            ok=False,
-            severity="warning",
-            message="API connectivity check was skipped.",
-            skipped=True,
-        )
-        next_steps.append(
-            "Run browser-cli doctor without --skip-api to verify API access."
-        )
-    elif missing_required:
-        _doctor_check(
-            checks,
-            name="api",
-            ok=False,
-            severity="error",
-            message="API connectivity check skipped because credentials are missing.",
-            skipped=True,
-        )
-    else:
-        try:
-            sessions = LexmountBrowserAdmin().list_sessions(status=None)
-            api_payload = {
-                "session_count": sessions.count,
-                "pagination": (
-                    sessions.pagination.model_dump(mode="json")
-                    if sessions.pagination is not None
-                    else None
-                ),
-            }
-            _doctor_check(
-                checks,
-                name="api",
-                ok=True,
-                severity="info",
-                message="Lexmount API is reachable with current credentials.",
-                **api_payload,
-            )
-        except Exception as exc:
-            _doctor_check(
-                checks,
-                name="api",
-                ok=False,
-                severity="error",
-                message="Lexmount API connectivity check failed.",
-                **_exception_brief(exc),
-            )
-            next_steps.append(
-                "Check credentials, project access, network connectivity, and LEXMOUNT_BASE_URL."
-            )
-
-    session_smoke_payload: dict[str, Any] | None = None
-    if args.smoke_session:
-        if missing_required:
-            session_smoke_payload = {
-                "skipped": True,
-                "reason": "missing_credentials",
-            }
-            _doctor_check(
-                checks,
-                name="session-smoke",
-                ok=False,
-                severity="error",
-                message="Browser session smoke test skipped because credentials are missing.",
-                **session_smoke_payload,
-            )
-        else:
-            smoke_ok, smoke_message, session_smoke_payload = _doctor_session_smoke(
-                LexmountBrowserAdmin(),
-                browser_mode=args.smoke_browser_mode,
-            )
-            _doctor_check(
-                checks,
-                name="session-smoke",
-                ok=smoke_ok,
-                severity="error",
-                message=smoke_message,
-                **session_smoke_payload,
-            )
-            if not smoke_ok:
-                next_steps.append(
-                    "Check browser quota, project access, active sessions, and whether any smoke-test session needs manual cleanup."
-                )
-
-    ok = _doctor_overall_ok(checks)
-    decision = _doctor_decision(checks)
-    data = {
-        "ok": ok,
-        "command": command,
-        "status": _doctor_status(checks),
-        "version": {"browser_cli": version},
-        "configuration": {"environment": env_status},
-        "checks": checks,
-        "decision": decision,
-        "workflow": _doctor_workflow(decision),
-        "next_steps": next_steps,
-    }
-    if direct_url_payload is not None:
-        data["direct_url"] = direct_url_payload
-    if api_payload is not None:
-        data["api"] = api_payload
-    if session_smoke_payload is not None:
-        data["session_smoke"] = session_smoke_payload
-    _json_dump(data, exit_code=0 if ok else 1)
-
-
-def cmd_auth_device_code(args: argparse.Namespace) -> None:
-    authorization_url = args.authorization_url
-    scopes = args.scopes or list(DEFAULT_CODEX_AUTH_SCOPES)
-    open_result = (
-        _open_authorization_url(authorization_url)
-        if args.open
-        else {"requested": False, "ok": None}
-    )
-
-    _success(
-        "auth.device-code",
-        flow="device_code",
-        available=False,
-        status="not_available",
-        reason="browser_lexmount_cn_endpoint_required",
-        needs_browser_lexmount_cn=True,
-        authorization_url=authorization_url,
-        device_authorization_endpoint=args.device_authorization_url,
-        token_endpoint=args.token_url,
-        opened=open_result,
-        requested_scopes=scopes,
-        endpoint_contract={
-            "device_authorization_response": [
-                "device_code",
-                "user_code",
-                "verification_uri",
-                "verification_uri_complete",
-                "expires_in",
-                "interval",
-                "scopes",
-            ],
-            "token_response": [
-                "access_token",
-                "token_type",
-                "expires_in",
-                "scope",
-                "project_id",
-            ],
-            "token_error_codes": [
-                "authorization_pending",
-                "slow_down",
-                "expired_token",
-                "access_denied",
-            ],
-        },
-        browser_lexmount_cn_requirements=[
-            "Issue a short-lived device_code and user_code for Codex authorization.",
-            "Show the selected Project ID and requested scopes before approval.",
-            "Return a scoped, expiring token or API key for browser automation.",
-            "Support polling with authorization_pending, slow_down, expired_token, and access_denied errors.",
-            "Expose revoke and expiration controls for issued Codex credentials.",
-        ],
-        fallback_commands=[
-            "browser-cli auth login",
-            "browser-cli auth status",
-            "browser-cli auth export-env",
-        ],
-        next_steps=[
-            "Until browser.lexmount.cn implements this contract, use browser-cli auth login for manual setup.",
-            "Do not ask the user to paste API keys into chat.",
-            "When the endpoint is available, wire this command to request and poll the device-code flow.",
-        ],
-    )
-
-
-def _connect_backend_endpoints(args: argparse.Namespace) -> list[dict[str, Any]]:
-    return [
-        {
-            "id": "projects",
-            "method": "GET",
-            "path": "/api/codex/projects",
-            "auth": "browser_session",
-            "response_fields": ["projects", "current_project_id"],
-            "purpose": "List projects the signed-in user may connect to Codex.",
-        },
-        {
-            "id": "scoped_api_key_create",
-            "method": "POST",
-            "path": "/api/codex/api-keys",
-            "auth": "browser_session",
-            "request_fields": ["project_id", "scopes", "expires_in", "label"],
-            "response_fields": [
-                "key_id",
-                "api_key",
-                "masked_key_preview",
-                "project_id",
-                "scopes",
-                "expires_at",
-            ],
-            "secret_response_fields": ["api_key"],
-            "purpose": "Create a scoped key shown once for local shell export.",
-        },
-        {
-            "id": "scoped_api_key_revoke",
-            "method": "DELETE",
-            "path": "/api/codex/api-keys/{key_id}",
-            "auth": "browser_session",
-            "response_fields": ["key_id", "revoked", "revoked_at"],
-            "purpose": "Revoke a Codex-issued scoped key.",
-        },
-        {
-            "id": "device_authorization",
-            "method": "POST",
-            "path": urlsplit(args.device_authorization_url).path,
-            "auth": "none",
-            "request_fields": ["client_id", "scope"],
-            "response_fields": [
-                "device_code",
-                "user_code",
-                "verification_uri",
-                "verification_uri_complete",
-                "expires_in",
-                "interval",
-                "scopes",
-            ],
-            "purpose": "Start a device-code authorization for Codex.",
-        },
-        {
-            "id": "device_token",
-            "method": "POST",
-            "path": urlsplit(args.token_url).path,
-            "auth": "none",
-            "request_fields": ["grant_type", "device_code"],
-            "response_fields": [
-                "access_token",
-                "token_type",
-                "expires_in",
-                "scope",
-                "project_id",
-            ],
-            "error_codes": [
-                "authorization_pending",
-                "slow_down",
-                "expired_token",
-                "access_denied",
-            ],
-            "purpose": "Poll for approved scoped credentials.",
-        },
-    ]
-
-
-def _connect_frontend_states() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": "signed_out",
-            "required_ui": ["sign_in_button", "authorization_url"],
-            "next_action": "sign_in",
-        },
-        {
-            "id": "project_selected",
-            "required_ui": ["project_id", "project_name", "copy_project_id"],
-            "next_action": "choose_scopes",
-        },
-        {
-            "id": "scoped_key_created",
-            "required_ui": ["api_key_once", "masked_key_preview", "expires_at"],
-            "next_action": "copy_env",
-            "secret_handling": "Show api_key once and never persist it in browser logs.",
-        },
-        {
-            "id": "env_ready",
-            "required_ui": ["install_command", "env_exports", "verify_commands"],
-            "next_action": "run_doctor",
-        },
-        {
-            "id": "doctor_verified",
-            "required_ui": ["doctor_command", "success_criteria", "troubleshooting"],
-            "next_action": "start_codex_browser_work",
-        },
-        {
-            "id": "device_code_pending",
-            "required_ui": ["user_code", "verification_uri", "expires_in"],
-            "next_action": "approve_or_deny",
-        },
-    ]
-
-
-def _connect_acceptance_tests() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": "manual_env_flow",
-            "commands": [
-                "browser-cli auth bootstrap",
-                "browser-cli auth status",
-                "browser-cli doctor --json",
-                "browser-cli session list",
-            ],
-            "success_criteria": [
-                "auth status returns configured=true",
-                "doctor returns ok=true",
-                "session list returns ok=true",
-            ],
-        },
-        {
-            "id": "device_code_contract",
-            "commands": [
-                "browser-cli auth device-code --scope browser:sessions",
-                "browser-cli auth connect-spec",
-            ],
-            "success_criteria": [
-                "device-code endpoint returns device_code and user_code",
-                "token endpoint supports authorization_pending and access_denied",
-            ],
-        },
-    ]
-
-
-def cmd_auth_connect_spec(args: argparse.Namespace) -> None:
-    scopes = args.scopes or list(DEFAULT_CODEX_AUTH_SCOPES)
-
-    _success(
-        "auth.connect-spec",
-        name="Connect from Codex",
-        available=False,
-        status="spec_only",
-        console_url=DEFAULT_BROWSER_CONSOLE_URL,
-        authorization_url=args.authorization_url,
-        install_command="uv tool install git+https://github.com/lexmount/browser-cli.git",
-        verification_commands=[
-            "browser-cli auth status",
-            "browser-cli doctor --json",
-            "browser-cli session list",
-        ],
-        backend_endpoints=_connect_backend_endpoints(args),
-        frontend_states=_connect_frontend_states(),
-        doctor_verification_contract={
-            "command": "browser-cli doctor --json",
-            "success_criteria": [
-                "ok is true",
-                "decision.ready_for_browser_work is true",
-                "checks contains credentials, direct-url, and api",
-            ],
-            "failure_ui": [
-                "Show blocking_checks and warning_checks.",
-                "Show next_steps and decision.next_command.",
-                "Never display raw API keys from local command output.",
-            ],
-        },
-        acceptance_tests=_connect_acceptance_tests(),
-        credential_lifecycle={
-            "default_expiration": "short_lived",
-            "recommended_max_ttl_seconds": 604800,
-            "key_storage": "Store only a hash/server-side secret reference; show raw api_key once.",
-            "audit_events": [
-                "codex_key_created",
-                "codex_key_copied",
-                "codex_key_revoked",
-                "codex_device_authorized",
-                "codex_device_denied",
-            ],
-            "required_controls": ["revoke", "rotate", "extend_expiry", "reduce_scope"],
-        },
-        required_scopes=[
-            {
-                "scope": scope,
-                "required": True,
-                "description": {
-                    "browser:sessions": "Create, list, inspect, keep alive, and close browser sessions.",
-                    "browser:contexts": "Create, list, inspect, resolve, and delete browser contexts.",
-                    "browser:actions": "Run browser page actions against approved sessions.",
-                }.get(scope, "Custom browser-cli authorization scope."),
-            }
-            for scope in scopes
-        ],
-        copy_blocks=[
-            {
-                "id": "install",
-                "title": "Install browser-cli",
-                "language": "bash",
-                "contains_secret": False,
-                "lines": [
-                    "uv tool install git+https://github.com/lexmount/browser-cli.git",
-                    "browser-cli --help",
-                ],
-            },
-            {
-                "id": "env-posix",
-                "title": "Set local shell environment",
-                "language": "bash",
-                "contains_secret": True,
-                "secret_handling": "Only copy into the user's local trusted shell.",
-                "lines": [
-                    "export LEXMOUNT_API_KEY=<scoped-api-key>",
-                    "export LEXMOUNT_PROJECT_ID=<project-id>",
-                ],
-            },
-            {
-                "id": "verify",
-                "title": "Verify browser-cli access",
-                "language": "bash",
-                "contains_secret": False,
-                "lines": [
-                    "browser-cli auth status",
-                    "browser-cli doctor --json",
-                    "browser-cli session list",
-                ],
-            },
-        ],
-        page_sections=[
-            {
-                "id": "project",
-                "title": "Project selection",
-                "required_fields": ["project_id", "project_name"],
-                "actions": ["copy_project_id", "switch_project"],
-            },
-            {
-                "id": "scoped_api_key",
-                "title": "Scoped API key",
-                "required_fields": [
-                    "key_id",
-                    "masked_key_preview",
-                    "scopes",
-                    "expires_at",
-                ],
-                "actions": ["create", "copy_once", "revoke", "rotate"],
-            },
-            {
-                "id": "copy_env_install",
-                "title": "Copy install and env commands",
-                "required_fields": ["install_command", "env_exports", "shell"],
-                "actions": ["copy_install", "copy_env", "copy_verify"],
-            },
-            {
-                "id": "doctor_verify",
-                "title": "Doctor verification",
-                "required_fields": ["doctor_command", "expected_ok", "next_steps"],
-                "actions": ["copy_doctor_command", "show_troubleshooting"],
-            },
-            {
-                "id": "permissions",
-                "title": "Permission and expiry controls",
-                "required_fields": ["scopes", "expires_at", "revoked_at"],
-                "actions": ["edit_scopes", "extend_expiry", "revoke"],
-            },
-            {
-                "id": "device_code",
-                "title": "Device-code authorization",
-                "required_fields": [
-                    "device_authorization_endpoint",
-                    "token_endpoint",
-                    "user_code",
-                    "verification_uri",
-                ],
-                "actions": ["approve", "deny", "poll_status"],
-            },
-        ],
-        device_code_contract={
-            "device_authorization_endpoint": args.device_authorization_url,
-            "token_endpoint": args.token_url,
-            "authorization_url": args.authorization_url,
-            "response_fields": [
-                "device_code",
-                "user_code",
-                "verification_uri",
-                "verification_uri_complete",
-                "expires_in",
-                "interval",
-                "scopes",
-            ],
-            "token_success_fields": [
-                "access_token",
-                "token_type",
-                "expires_in",
-                "scope",
-                "project_id",
-            ],
-            "token_error_codes": [
-                "authorization_pending",
-                "slow_down",
-                "expired_token",
-                "access_denied",
-            ],
-        },
-        security_requirements=[
-            "Show the selected Project ID before creating credentials.",
-            "Default to least-privilege browser scopes.",
-            "Prefer short expirations for Codex credentials.",
-            "Reveal API keys only once and never store raw keys in page logs.",
-            "Support revoke, rotate, and expiration controls.",
-            "Never ask users to paste API keys into Codex chat.",
-        ],
-        next_steps=[
-            "Implement these sections on browser.lexmount.cn/connect/codex.",
-            "After endpoints are available, wire browser-cli auth device-code to request and poll them.",
-            "Keep browser-cli auth login as the manual fallback.",
-        ],
-    )
+    return f"export {name}={quoted}"
 
 
 def cmd_session_create(args: argparse.Namespace) -> None:
     command = "session.create"
-    if not args.resolve_context and args.metadata_match:
+    context_reuse: dict[str, Any] | None = None
+    context_metadata_filter = getattr(args, "context_metadata_filter", None)
+    if context_metadata_filter is None and (
+        args.create_context_if_missing or args.context_status is not None
+    ):
         _failure(
             command,
-            "invalid_arguments",
-            "--metadata-match-json requires --resolve-context.",
+            "argument_error",
+            (
+                "Use --create-context-if-missing or --context-status together "
+                "with --context-metadata-json."
+            ),
+            exit_code=2,
         )
-    if not args.resolve_context and args.context_status:
+    if context_metadata_filter is not None and (args.context_id or args.create_context):
         _failure(
             command,
-            "invalid_arguments",
-            "--context-status requires --resolve-context.",
+            "argument_error",
+            (
+                "Use --context-metadata-json without --context-id or "
+                "--create-context; pass --create-context-if-missing when a new "
+                "matching context should be created."
+            ),
+            exit_code=2,
         )
-    if not args.resolve_context and args.context_limit != 20:
-        _failure(
-            command,
-            "invalid_arguments",
-            "--context-limit requires --resolve-context.",
-        )
+
     try:
         admin = LexmountBrowserAdmin()
         context_id = args.context_id
         create_context = args.create_context
-        metadata = args.metadata
-        context_resolution = None
-        if args.resolve_context:
-            context_id, context_resolution = _resolve_context_for_session(
-                command,
+
+        if context_metadata_filter is not None:
+            context_reuse = _select_or_create_context_for_session(
                 admin,
-                args,
+                command=command,
+                metadata_filter=context_metadata_filter,
+                status=args.context_status,
+                limit=args.context_limit,
+                create_if_missing=args.create_context_if_missing,
             )
+            context_id = context_reuse.get("context_id")
             create_context = False
-            metadata = None
+            if not context_id:
+                _failure(
+                    command,
+                    "context_missing_id",
+                    "Selected context does not include a context_id.",
+                    context_reuse=context_reuse,
+                )
 
         result = admin.create_session(
             context_id=context_id,
             create_context=create_context,
             context_mode=args.context_mode,
             browser_mode=args.browser_mode,
-            metadata=metadata,
+            metadata=args.metadata,
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
     payload = _model_payload(result)
-    if context_resolution is not None:
-        payload["context_resolution"] = context_resolution
+    if context_reuse is not None:
+        payload["context_reuse"] = context_reuse
     _success(command, **payload)
 
 
@@ -1722,7 +647,7 @@ def cmd_context_create(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().create_context(metadata=args.metadata)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_context_payload(context))
+    _success(command, context=_model_payload(context))
 
 
 def cmd_context_list(args: argparse.Namespace) -> None:
@@ -1734,10 +659,7 @@ def cmd_context_list(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    payload = _model_payload(result)
-    contexts = getattr(result, "contexts", payload.get("contexts", []))
-    payload["contexts"] = [_context_payload(context) for context in contexts]
-    _success(command, **payload)
+    _success(command, **_model_payload(result))
 
 
 def cmd_context_get(args: argparse.Namespace) -> None:
@@ -1746,7 +668,91 @@ def cmd_context_get(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().get_context(args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_context_payload(context))
+    _success(command, context=_model_payload(context))
+
+
+def cmd_context_status(args: argparse.Namespace) -> None:
+    command = "context.status"
+    try:
+        context = LexmountBrowserAdmin().get_context(args.context_id)
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    payload = _model_payload(context)
+    reuse = _context_reuse_state(payload)
+    _success(
+        command,
+        context_id=payload.get("context_id") or args.context_id,
+        reusable=reuse["reusable"],
+        locked=reuse["locked"],
+        reuse=reuse,
+        context=payload,
+    )
+
+
+def cmd_context_pick(args: argparse.Namespace) -> None:
+    command = "context.pick"
+    metadata_filter = args.metadata_filter
+    admin = LexmountBrowserAdmin()
+    try:
+        result = admin.list_contexts(
+            status=args.status,
+            limit=args.limit,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    payload = _model_payload(result)
+    contexts = payload.get("contexts", [])
+    candidates = [
+        _context_pick_candidate(context, metadata_filter) for context in contexts
+    ]
+    selected_context: dict[str, Any] | None = None
+    for context, candidate in zip(contexts, candidates, strict=True):
+        if candidate["metadata_match"] and candidate["reusable"]:
+            selected_context = context
+            break
+
+    if selected_context is not None:
+        _success(
+            command,
+            selected=True,
+            created=False,
+            context_id=selected_context.get("context_id"),
+            context=selected_context,
+            reuse=_context_reuse_state(selected_context),
+            checked=len(contexts),
+            candidates=candidates,
+            metadata_filter=metadata_filter,
+        )
+
+    if args.create_if_missing:
+        try:
+            context = admin.create_context(metadata=metadata_filter or None)
+        except Exception as exc:
+            _failure_from_exception(command, exc)
+        created_context = _model_payload(context)
+        _success(
+            command,
+            selected=True,
+            created=True,
+            context_id=created_context.get("context_id"),
+            context=created_context,
+            reuse=_context_reuse_state(created_context),
+            checked=len(contexts),
+            candidates=candidates,
+            metadata_filter=metadata_filter,
+        )
+
+    _failure(
+        command,
+        "no_available_context",
+        "No reusable context matched the requested filters.",
+        selected=False,
+        created=False,
+        checked=len(contexts),
+        candidates=candidates,
+        metadata_filter=metadata_filter,
+    )
 
 
 def cmd_context_delete(args: argparse.Namespace) -> None:
@@ -1756,419 +762,6 @@ def cmd_context_delete(args: argparse.Namespace) -> None:
     except Exception as exc:
         _failure_from_exception(command, exc)
     _success(command, context_id=args.context_id, deleted=True)
-
-
-def _context_resolution_summary(
-    contexts: list[Any],
-    *,
-    metadata_match: dict[str, Any] | None,
-) -> dict[str, Any]:
-    all_payloads = [_context_payload(context) for context in contexts]
-    payloads = [
-        payload
-        for payload in all_payloads
-        if _metadata_matches(payload, metadata_match)
-    ]
-    available = [
-        payload for payload in payloads if payload["reuse"]["can_reuse_now"] is True
-    ]
-    locked = [
-        payload
-        for payload in payloads
-        if payload.get("status") and str(payload["status"]).lower() == "locked"
-    ]
-    return {
-        "available_count": len(available),
-        "locked_count": len(locked),
-        "considered_count": len(payloads),
-        "considered_contexts": payloads,
-        "metadata_match": metadata_match,
-        "matched_count": len(payloads),
-        "total_count": len(all_payloads),
-        "unmatched_count": len(all_payloads) - len(payloads),
-    }
-
-
-def _context_reuse_decision(
-    context_payload: dict[str, Any],
-    *,
-    created: bool,
-) -> dict[str, Any]:
-    reuse = context_payload["reuse"]
-    can_reuse = reuse["can_reuse_now"] is True
-    reason = "context_created" if created and can_reuse else reuse["reason"]
-
-    if can_reuse:
-        action = "start_session"
-        should_create_context = False
-        should_close_session = False
-        selected_context_id = context_payload.get("context_id")
-    elif reuse["reason"] == "context_locked":
-        action = "close_or_create_context"
-        should_create_context = True
-        should_close_session = True
-        selected_context_id = None
-    elif reuse["reason"] == "context_not_available":
-        action = "create_context"
-        should_create_context = True
-        should_close_session = False
-        selected_context_id = None
-    else:
-        action = "inspect_context"
-        should_create_context = False
-        should_close_session = False
-        selected_context_id = None
-
-    return {
-        "action": action,
-        "reason": reason,
-        "can_start_session": can_reuse,
-        "should_create_context": should_create_context,
-        "should_close_session": should_close_session,
-        "selected_context_id": selected_context_id,
-        "recommended_context_mode": reuse["recommended_context_mode"],
-        "recommended_session_command": reuse["recommended_session_command"],
-    }
-
-
-def _context_missing_decision(summary: dict[str, Any]) -> dict[str, Any]:
-    locked_count = summary["locked_count"]
-    considered_count = summary["considered_count"]
-
-    if locked_count:
-        action = "close_or_create_context"
-        reason = (
-            "only_locked_contexts"
-            if locked_count == considered_count
-            else "no_available_context"
-        )
-    else:
-        action = "create_context"
-        if considered_count == 0 and summary.get("total_count", 0) == 0:
-            reason = "no_contexts_found"
-        elif considered_count == 0 and summary.get("metadata_match"):
-            reason = "no_matching_contexts"
-        else:
-            reason = "no_available_context"
-
-    return {
-        "action": action,
-        "reason": reason,
-        "can_start_session": False,
-        "should_create_context": True,
-        "should_close_session": bool(locked_count),
-        "selected_context_id": None,
-        "recommended_context_mode": None,
-        "recommended_session_command": None,
-    }
-
-
-def _context_metadata_mismatch_decision() -> dict[str, Any]:
-    return {
-        "action": "create_context",
-        "reason": "metadata_mismatch",
-        "can_start_session": False,
-        "should_create_context": True,
-        "should_close_session": False,
-        "selected_context_id": None,
-        "recommended_context_mode": None,
-        "recommended_session_command": None,
-    }
-
-
-def _context_resolution_failure(
-    command: str,
-    message: str,
-    *,
-    decision: dict[str, Any],
-    context: dict[str, Any] | None = None,
-    **payload: Any,
-) -> NoReturn:
-    _failure(
-        command,
-        "context_not_reusable",
-        message,
-        context_resolution={
-            "resolved": False,
-            "created": False,
-            "decision": decision,
-            "context": context,
-            "context_id": context.get("context_id") if context else None,
-            **payload,
-        },
-    )
-
-
-def _resolved_context_payload(
-    context_payload: dict[str, Any],
-    *,
-    created: bool,
-    metadata_match: dict[str, Any] | None,
-    **payload: Any,
-) -> dict[str, Any]:
-    return {
-        "resolved": context_payload["reuse"]["can_reuse_now"] is True,
-        "created": created,
-        "decision": _context_reuse_decision(context_payload, created=created),
-        "context": context_payload,
-        "context_id": context_payload.get("context_id"),
-        "metadata_match": metadata_match,
-        "recommended_session_command": context_payload["reuse"][
-            "recommended_session_command"
-        ],
-        "next_steps": context_payload["reuse"]["next_steps"],
-        **payload,
-    }
-
-
-def _resolve_context_for_session(
-    command: str,
-    admin: LexmountBrowserAdmin,
-    args: argparse.Namespace,
-) -> tuple[str | None, dict[str, Any]]:
-    create_metadata = (
-        args.metadata if args.metadata is not None else args.metadata_match
-    )
-    if (
-        args.create_context
-        and args.metadata_match
-        and not _metadata_matches({"metadata": create_metadata}, args.metadata_match)
-    ):
-        _failure(
-            command,
-            "metadata_mismatch",
-            "--metadata-json must contain every key and value from --metadata-match-json.",
-            metadata_match=args.metadata_match,
-            metadata=create_metadata,
-        )
-
-    if args.context_id:
-        context_payload = _context_payload(admin.get_context(args.context_id))
-        metadata_matches = _metadata_matches(context_payload, args.metadata_match)
-        if not metadata_matches:
-            _context_resolution_failure(
-                command,
-                "The explicit context metadata does not match --metadata-match-json.",
-                decision=_context_metadata_mismatch_decision(),
-                context=context_payload,
-                metadata_match=args.metadata_match,
-                metadata_matches=False,
-                next_steps=[
-                    "Use a context whose metadata matches the requested persistent login state.",
-                    "Pass --create-context with --resolve-context to create a matching context.",
-                ],
-            )
-        resolution = _resolved_context_payload(
-            context_payload,
-            created=False,
-            metadata_match=args.metadata_match,
-            metadata_matches=True,
-        )
-        if resolution["decision"]["can_start_session"] is not True:
-            _context_resolution_failure(
-                command,
-                "The explicit context is not available for a new read/write session.",
-                decision=resolution["decision"],
-                context=context_payload,
-                metadata_match=args.metadata_match,
-                metadata_matches=True,
-                next_steps=context_payload["reuse"]["next_steps"],
-            )
-        return context_payload.get("context_id"), resolution
-
-    listed = admin.list_contexts(status=args.context_status, limit=args.context_limit)
-    contexts = list(listed.contexts)
-    summary = _context_resolution_summary(
-        contexts,
-        metadata_match=args.metadata_match,
-    )
-    resolution_summary = {key: value for key, value in summary.items()}
-    resolution_summary.pop("metadata_match", None)
-    selected = next(
-        (
-            payload
-            for payload in summary["considered_contexts"]
-            if payload["reuse"]["can_reuse_now"] is True
-        ),
-        None,
-    )
-    if selected:
-        return selected.get("context_id"), _resolved_context_payload(
-            selected,
-            created=False,
-            metadata_match=args.metadata_match,
-            status_filter=args.context_status,
-            limit=args.context_limit,
-            **resolution_summary,
-        )
-
-    if args.create_context:
-        context_payload = _context_payload(
-            admin.create_context(metadata=create_metadata)
-        )
-        resolution = _resolved_context_payload(
-            context_payload,
-            created=True,
-            metadata_match=args.metadata_match,
-            status_filter=args.context_status,
-            limit=args.context_limit,
-            **resolution_summary,
-        )
-        if resolution["decision"]["can_start_session"] is not True:
-            _context_resolution_failure(
-                command,
-                "The newly created context is not available for a new session.",
-                decision=resolution["decision"],
-                context=context_payload,
-                status_filter=args.context_status,
-                limit=args.context_limit,
-                next_steps=context_payload["reuse"]["next_steps"],
-                **summary,
-            )
-        return context_payload.get("context_id"), resolution
-
-    decision = _context_missing_decision(summary)
-    _context_resolution_failure(
-        command,
-        "No available context matched the requested persistent login state.",
-        decision=decision,
-        status_filter=args.context_status,
-        limit=args.context_limit,
-        next_steps=[
-            "Pass --create-context with --resolve-context to create a reusable context.",
-            "Run browser-cli context list to inspect locked and available contexts.",
-        ],
-        **summary,
-    )
-
-
-def cmd_context_resolve(args: argparse.Namespace) -> None:
-    command = "context.resolve"
-    admin = LexmountBrowserAdmin()
-    create_metadata = (
-        args.metadata if args.metadata is not None else args.metadata_match
-    )
-    if (
-        args.create_if_missing
-        and args.metadata_match
-        and not _metadata_matches({"metadata": create_metadata}, args.metadata_match)
-    ):
-        _failure(
-            command,
-            "metadata_mismatch",
-            "--metadata-json must contain every key and value from --metadata-match-json.",
-            metadata_match=args.metadata_match,
-            metadata=create_metadata,
-        )
-    try:
-        if args.context_id:
-            context = admin.get_context(args.context_id)
-            context_payload = _context_payload(context)
-            metadata_matches = _metadata_matches(context_payload, args.metadata_match)
-            if not metadata_matches:
-                _success(
-                    command,
-                    resolved=False,
-                    created=False,
-                    decision=_context_metadata_mismatch_decision(),
-                    context=context_payload,
-                    context_id=context_payload.get("context_id"),
-                    metadata_match=args.metadata_match,
-                    metadata_matches=False,
-                    recommended_session_command=None,
-                    next_steps=[
-                        "Use a context whose metadata matches the requested persistent login state.",
-                        "Run browser-cli context resolve --create-if-missing with the same --metadata-match-json.",
-                    ],
-                )
-            resolved = context_payload["reuse"]["can_reuse_now"] is True
-            decision = _context_reuse_decision(context_payload, created=False)
-            _success(
-                command,
-                resolved=resolved,
-                created=False,
-                decision=decision,
-                context=context_payload,
-                context_id=context_payload.get("context_id"),
-                metadata_match=args.metadata_match,
-                metadata_matches=True,
-                recommended_session_command=context_payload["reuse"][
-                    "recommended_session_command"
-                ],
-                next_steps=context_payload["reuse"]["next_steps"],
-            )
-
-        listed = admin.list_contexts(status=args.status, limit=args.limit)
-        contexts = list(listed.contexts)
-        summary = _context_resolution_summary(
-            contexts,
-            metadata_match=args.metadata_match,
-        )
-        selected = next(
-            (
-                payload
-                for payload in summary["considered_contexts"]
-                if payload["reuse"]["can_reuse_now"] is True
-            ),
-            None,
-        )
-        if selected:
-            decision = _context_reuse_decision(selected, created=False)
-            _success(
-                command,
-                resolved=True,
-                created=False,
-                decision=decision,
-                context=selected,
-                context_id=selected.get("context_id"),
-                status_filter=args.status,
-                limit=args.limit,
-                recommended_session_command=selected["reuse"][
-                    "recommended_session_command"
-                ],
-                next_steps=selected["reuse"]["next_steps"],
-                **summary,
-            )
-
-        if args.create_if_missing:
-            context = admin.create_context(metadata=create_metadata)
-            context_payload = _context_payload(context)
-            decision = _context_reuse_decision(context_payload, created=True)
-            _success(
-                command,
-                resolved=context_payload["reuse"]["can_reuse_now"] is True,
-                created=True,
-                decision=decision,
-                context=context_payload,
-                context_id=context_payload.get("context_id"),
-                status_filter=args.status,
-                limit=args.limit,
-                recommended_session_command=context_payload["reuse"][
-                    "recommended_session_command"
-                ],
-                next_steps=context_payload["reuse"]["next_steps"],
-                **summary,
-            )
-
-    except Exception as exc:
-        _failure_from_exception(command, exc)
-
-    _success(
-        command,
-        resolved=False,
-        created=False,
-        decision=_context_missing_decision(summary),
-        context=None,
-        context_id=None,
-        status_filter=args.status,
-        limit=args.limit,
-        recommended_session_command=None,
-        next_steps=[
-            "Run browser-cli context resolve --create-if-missing to create a reusable context.",
-            "Run browser-cli context list to inspect locked and available contexts.",
-        ],
-        **summary,
-    )
 
 
 def _target_from_args(args: argparse.Namespace) -> BrowserActionTarget:
@@ -2207,17 +800,2304 @@ def _run_action_command(
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    reveal_connect_url = bool(getattr(args, "reveal_connect_url", False))
     _success(
         command,
-        reveal_fields={"connect_url"} if reveal_connect_url else None,
         session_id=getattr(args, "session_id", None),
         **_masked_connect_url_payload(
             connect_url,
-            reveal_connect_url=reveal_connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
         ),
         result=result.result,
     )
+
+
+def _js_literal(value: Any) -> str:
+    return json.dumps(value)
+
+
+def _eval_backed_result_payload(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return {"value": result}
+
+    value = result.get("value")
+    payload = dict(value) if isinstance(value, dict) else {"value": value}
+    for key in ("url", "fallback"):
+        if key in result and key not in payload:
+            payload[key] = result[key]
+    return payload
+
+
+def _run_eval_backed_action_command(
+    args: argparse.Namespace,
+    command: str,
+    expression: str,
+) -> None:
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = run_browser_action(
+            connect_url=connect_url,
+            action="eval",
+            request=EvalRequest(expression=expression),
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=_eval_backed_result_payload(result.result),
+    )
+
+
+def _selector_expression(selector: str, body: str) -> str:
+    return f"""
+() => {{
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false }};
+  }}
+{body}
+}}
+""".strip()
+
+
+def _event_expression(selector: str, body: str) -> str:
+    return _selector_expression(
+        selector,
+        f"""
+  const dispatch = (event) => element.dispatchEvent(event);
+{body}
+""".rstrip(),
+    )
+
+
+def _dom_helpers_expression(
+    *,
+    include_hidden: bool = False,
+    max_nodes: int | None = None,
+) -> str:
+    max_nodes_source = "null" if max_nodes is None else _js_literal(max_nodes)
+    return f"""
+  const includeHidden = {_js_literal(include_hidden)};
+  const maxNodes = {max_nodes_source};
+  const interactiveSelector = [
+    "a[href]",
+    "button",
+    "input:not([type=hidden])",
+    "select",
+    "textarea",
+    "summary",
+    "[role]",
+    "[onclick]",
+    "[tabindex]:not([tabindex='-1'])",
+    "[contenteditable='true']"
+  ].join(",");
+
+  const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const visible = (element) => {{
+    if (includeHidden) return true;
+    const style = window.getComputedStyle(element);
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.opacity === "0"
+    ) {{
+      return false;
+    }}
+    return Boolean(
+      element.offsetWidth ||
+      element.offsetHeight ||
+      element.getClientRects().length
+    );
+  }};
+  const textOf = (element) => normalize(element.innerText ?? element.textContent ?? "");
+  const nameFromLabelledBy = (element) => {{
+    const labelledBy = element.getAttribute("aria-labelledby");
+    if (!labelledBy) return "";
+    return normalize(
+      labelledBy
+        .split(/\\s+/)
+        .map((id) => document.getElementById(id)?.innerText ?? "")
+        .join(" ")
+    );
+  }};
+  const accessibleName = (element) => normalize(
+    element.getAttribute("aria-label") ||
+    nameFromLabelledBy(element) ||
+    element.getAttribute("alt") ||
+    element.getAttribute("title") ||
+    element.getAttribute("placeholder") ||
+    element.value ||
+    textOf(element)
+  );
+  const roleOf = (element) => {{
+    const explicitRole = normalize(element.getAttribute("role")).split(" ")[0];
+    if (explicitRole) return explicitRole;
+    const tag = element.tagName.toLowerCase();
+    const type = String(element.getAttribute("type") || "").toLowerCase();
+    if (tag === "a" && element.hasAttribute("href")) return "link";
+    if (tag === "button") return "button";
+    if (tag === "select") return "combobox";
+    if (tag === "textarea") return "textbox";
+    if (tag === "img") return "img";
+    if (tag === "summary") return "button";
+    if (tag === "input") {{
+      if (["button", "submit", "reset"].includes(type)) return "button";
+      if (type === "checkbox") return "checkbox";
+      if (type === "radio") return "radio";
+      if (type === "range") return "slider";
+      if (["email", "password", "search", "tel", "text", "url", ""].includes(type)) {{
+        return "textbox";
+      }}
+      return type || "input";
+    }}
+    if (/^h[1-6]$/.test(tag)) return "heading";
+    return "";
+  }};
+  const cssPath = (element) => {{
+    if (element.id) return `#${{CSS.escape(element.id)}}`;
+    const parts = [];
+    let current = element;
+    while (current && current.nodeType === Node.ELEMENT_NODE && parts.length < 4) {{
+      let part = current.tagName.toLowerCase();
+      if (current.classList.length) {{
+        part += "." + [...current.classList].slice(0, 2).map(CSS.escape).join(".");
+      }}
+      const parent = current.parentElement;
+      if (parent) {{
+        const siblings = [...parent.children].filter((child) => child.tagName === current.tagName);
+        if (siblings.length > 1) {{
+          part += `:nth-of-type(${{siblings.indexOf(current) + 1}})`;
+        }}
+      }}
+      parts.unshift(part);
+      current = parent;
+    }}
+    return parts.join(" > ");
+  }};
+  const nodeInfo = (element) => ({{
+    selector: cssPath(element),
+    tag: element.tagName.toLowerCase(),
+    role: roleOf(element) || null,
+    name: accessibleName(element),
+    text: textOf(element),
+    visible: visible(element)
+  }});
+  const matchesText = (candidate, query, exact, caseSensitive) => {{
+    let haystack = normalize(candidate);
+    let needle = normalize(query);
+    if (!caseSensitive) {{
+      haystack = haystack.toLowerCase();
+      needle = needle.toLowerCase();
+    }}
+    return exact ? haystack === needle : haystack.includes(needle);
+  }};
+  const limited = (nodes) => maxNodes === null ? nodes : nodes.slice(0, maxNodes);
+""".rstrip()
+
+
+def _click_text_expression(
+    *,
+    text: str,
+    selector: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    selector_source = (
+        "interactiveSelector" if selector is None else _js_literal(selector)
+    )
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedText = {_js_literal(text)};
+  const selector = {selector_source};
+  const candidates = [...document.querySelectorAll(selector)].filter(visible);
+  const element = candidates.find((candidate) =>
+    matchesText(accessibleName(candidate), requestedText, {_js_literal(exact)}, {_js_literal(case_sensitive)})
+  );
+  if (!element) {{
+    return {{
+      found: false,
+      clicked: false,
+      text: requestedText,
+      selector,
+      candidate_count: candidates.length,
+      candidates: candidates.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  element.focus?.();
+  element.click();
+  return {{
+    found: true,
+    clicked: true,
+    text: requestedText,
+    selector,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _click_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const candidates = [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+  const element = roleMatches.find((candidate) =>
+    requestedName === null ||
+    matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+  );
+  if (!element) {{
+    return {{
+      found: false,
+      clicked: false,
+      role: requestedRole,
+      name: requestedName,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  element.focus?.();
+  element.click();
+  return {{
+    found: true,
+    clicked: true,
+    role: requestedRole,
+    name: requestedName,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _fill_label_expression(
+    *,
+    label: str,
+    text: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedLabel = {_js_literal(label)};
+  const text = {_js_literal(text)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const fieldSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true']";
+  const labelElements = [...document.querySelectorAll("label")].filter(visible);
+  let element = null;
+  let matchedLabel = null;
+  for (const labelElement of labelElements) {{
+    if (!matchesText(textOf(labelElement), requestedLabel, exact, caseSensitive)) {{
+      continue;
+    }}
+    matchedLabel = nodeInfo(labelElement);
+    if (labelElement.htmlFor) {{
+      element = document.getElementById(labelElement.htmlFor);
+    }}
+    element ||= labelElement.querySelector(fieldSelector);
+    if (element) break;
+  }}
+  if (!element) {{
+    element = [...document.querySelectorAll(fieldSelector)]
+      .filter(visible)
+      .find((candidate) =>
+        matchesText(accessibleName(candidate), requestedLabel, exact, caseSensitive)
+      );
+  }}
+  if (!element) {{
+    return {{ found: false, filled: false, label: requestedLabel, text }};
+  }}
+  const previousValue = element.isContentEditable ? element.textContent : element.value;
+  if (element.isContentEditable) {{
+    element.textContent = text;
+  }} else {{
+    element.value = text;
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  return {{
+    found: true,
+    filled: true,
+    label: requestedLabel,
+    text,
+    previous_value: previousValue,
+    value: element.isContentEditable ? element.textContent : element.value,
+    label_element: matchedLabel,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _click_index_expression(
+    *,
+    selector: str,
+    index: int,
+    include_hidden: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const selector = {_js_literal(selector)};
+  const index = {_js_literal(index)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const candidates = includeHidden ? all : visibleNodes;
+  const element = candidates[index] || null;
+  if (!element) {{
+    return {{
+      selector,
+      index,
+      include_hidden: includeHidden,
+      found: false,
+      clicked: false,
+      count: candidates.length,
+      total_count: all.length,
+      visible_count: visibleNodes.length,
+      candidates: candidates.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  element.focus?.();
+  element.click();
+  return {{
+    selector,
+    index,
+    include_hidden: includeHidden,
+    found: true,
+    clicked: true,
+    count: candidates.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _form_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    reveal_sensitive_values: bool,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+{_form_value_helpers_expression()}
+  const rootSelector = {selector_source};
+  const revealSensitiveValues = {_js_literal(reveal_sensitive_values)};
+  const fieldSelector = "input, textarea, select, [contenteditable='true']";
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const fields = [];
+  const seen = new Set();
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(fieldSelector) ? [root] : []),
+      ...root.querySelectorAll(fieldSelector)
+    ];
+    for (const field of candidates) {{
+      if (seen.has(field) || !visible(field)) continue;
+      seen.add(field);
+      fields.push(field);
+    }}
+  }}
+  const labelTexts = (field) => {{
+    const labels = field.labels ? [...field.labels] : [];
+    const closestLabel = field.closest?.("label");
+    if (closestLabel && !labels.includes(closestLabel)) labels.push(closestLabel);
+    return labels.map((label) => textOf(label)).filter(Boolean);
+  }};
+  const optionsOf = (field) => field.tagName.toLowerCase() === "select"
+    ? [...field.options].map((option) => ({{
+        value: option.value,
+        text: textOf(option),
+        selected: Boolean(option.selected),
+        disabled: Boolean(option.disabled)
+      }}))
+    : null;
+  const fieldInfo = (field) => {{
+    const info = nodeInfo(field);
+    const tag = field.tagName.toLowerCase();
+    const type = String(field.getAttribute("type") || "").toLowerCase();
+    const rawValue = readFormValue(field);
+    const sensitive = tag === "input" && (type === "password" || type === "hidden");
+    const valuePayload = sensitive && !revealSensitiveValues
+      ? {{
+          ...rawValue,
+          value: rawValue.value === null || rawValue.value === "" ? rawValue.value : "***",
+          value_masked: rawValue.value !== null && rawValue.value !== "",
+          value_length: String(rawValue.value ?? "").length
+        }}
+      : {{ ...rawValue, value_masked: false }};
+    return {{
+      ...info,
+      type: type || null,
+      id: field.id || null,
+      name_attribute: field.getAttribute("name"),
+      labels: labelTexts(field),
+      placeholder: field.getAttribute("placeholder"),
+      disabled: Boolean(field.disabled),
+      required: Boolean(field.required),
+      readonly: Boolean(field.readOnly),
+      autocomplete: field.getAttribute("autocomplete"),
+      options: optionsOf(field),
+      ...valuePayload
+    }};
+  }};
+  const visibleFields = fields.filter(visible);
+  const nodes = limited(fields).map(fieldInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "form",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    field_count: fields.length,
+    visible_count: visibleFields.length,
+    truncated: maxNodes !== null && fields.length > nodes.length,
+    fields: nodes
+  }};
+}}
+""".strip()
+
+
+def _wait_text_expression(
+    *,
+    text: str,
+    selector: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedText = {_js_literal(text)};
+  const selector = {selector_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const candidates = () => {{
+    const roots = selector === null
+      ? [document.body || document.documentElement].filter(Boolean)
+      : [...document.querySelectorAll(selector)];
+    return roots.filter(visible);
+  }};
+  const check = () => {{
+    const nodes = candidates();
+    const element = nodes.find((candidate) =>
+      matchesText(textOf(candidate), requestedText, exact, caseSensitive) ||
+      matchesText(accessibleName(candidate), requestedText, exact, caseSensitive)
+    );
+    const waitedMs = Date.now() - startedAt;
+    if (element) {{
+      resolve({{
+        found: true,
+        text: requestedText,
+        selector,
+        waited_ms: waitedMs,
+        candidate_count: nodes.length,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        text: requestedText,
+        selector,
+        waited_ms: waitedMs,
+        candidate_count: nodes.length
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_count_expression(
+    *,
+    selector: str,
+    count: int,
+    comparison: str,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const selector = {_js_literal(selector)};
+  const requestedCount = Math.max(0, {_js_literal(count)});
+  const comparison = {_js_literal(comparison)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const compare = (actual, expected) => {{
+    if (comparison === "eq") return actual === expected;
+    if (comparison === "gt") return actual > expected;
+    if (comparison === "gte") return actual >= expected;
+    if (comparison === "lt") return actual < expected;
+    if (comparison === "lte") return actual <= expected;
+    return false;
+  }};
+  const check = () => {{
+    const all = [...document.querySelectorAll(selector)];
+    const visibleNodes = all.filter(visible);
+    const matched = includeHidden ? all : visibleNodes;
+    const waitedMs = Date.now() - startedAt;
+    const reached = compare(matched.length, requestedCount);
+    if (reached) {{
+      resolve({{
+        selector,
+        found: true,
+        count: matched.length,
+        requested_count: requestedCount,
+        comparison,
+        include_hidden: includeHidden,
+        total_count: all.length,
+        visible_count: visibleNodes.length,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        found: false,
+        count: matched.length,
+        requested_count: requestedCount,
+        comparison,
+        include_hidden: includeHidden,
+        total_count: all.length,
+        visible_count: visibleNodes.length,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_attribute_expression(
+    *,
+    selector: str,
+    name: str,
+    value: str | None,
+    state: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const name = {_js_literal(name)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        selector,
+        name,
+        found: false,
+        state: requestedState,
+        selector_found: Boolean(document.querySelector(selector)),
+        attribute_found: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const element = document.querySelector(selector);
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          selector,
+          name,
+          found: false,
+          state: requestedState,
+          selector_found: false,
+          attribute_found: null,
+          value: null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const currentValue = element.getAttribute(name);
+    const attributeFound = currentValue !== null;
+    const reached = requestedState === "absent"
+      ? !attributeFound
+      : attributeFound && matches(currentValue);
+    if (reached) {{
+      resolve({{
+        selector,
+        name,
+        found: true,
+        state: requestedState,
+        selector_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        name,
+        found: false,
+        state: requestedState,
+        selector_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _query_expression(
+    *,
+    selector: str,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const selector = {_js_literal(selector)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const matched = includeHidden ? all : visibleNodes;
+  const nodes = limited(matched).map(nodeInfo);
+  return {{
+    selector,
+    kind: "query",
+    include_hidden: includeHidden,
+    count: matched.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && matched.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+
+
+def _reload_expression() -> str:
+    return """
+() => {
+  const beforeUrl = location.href;
+  const beforeTitle = document.title;
+  setTimeout(() => window.location.reload(), 0);
+  return {
+    action: "reload",
+    navigation_requested: true,
+    reloaded: true,
+    before_url: beforeUrl,
+    url: beforeUrl,
+    title: beforeTitle
+  };
+}
+""".strip()
+
+
+def _history_expression(action: str) -> str:
+    method = "back" if action == "back" else "forward"
+    return f"""
+() => {{
+  const beforeUrl = location.href;
+  const beforeTitle = document.title;
+  const historyLength = history.length;
+  setTimeout(() => history.{method}(), 0);
+  return {{
+    action: {_js_literal(action)},
+    navigation_requested: true,
+    before_url: beforeUrl,
+    url: beforeUrl,
+    title: beforeTitle,
+    history_length: historyLength
+  }};
+}}
+""".strip()
+
+
+def _wait_url_expression(
+    *,
+    url: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const requestedUrl = {_js_literal(url)};
+  const matchMode = {_js_literal(match)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedUrl);
+    }} catch (error) {{
+      resolve({{
+        found: false,
+        url: location.href,
+        requested_url: requestedUrl,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (candidate) => {{
+    if (matchMode === "exact") return candidate === requestedUrl;
+    if (matchMode === "regex") return pattern.test(candidate);
+    return candidate.includes(requestedUrl);
+  }};
+  const check = () => {{
+    const currentUrl = location.href;
+    const waitedMs = Date.now() - startedAt;
+    if (matches(currentUrl)) {{
+      resolve({{
+        found: true,
+        url: currentUrl,
+        requested_url: requestedUrl,
+        match: matchMode,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        url: currentUrl,
+        requested_url: requestedUrl,
+        match: matchMode,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_load_state_expression(
+    *,
+    state: str,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const requestedState = {_js_literal(state)};
+  const stateAliases = {{
+    domcontentloaded: "interactive",
+    load: "complete"
+  }};
+  const targetState = stateAliases[requestedState] || requestedState;
+  const ranks = {{ loading: 0, interactive: 1, complete: 2 }};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  if (!(targetState in ranks)) {{
+    resolve({{
+      found: false,
+      state: document.readyState,
+      requested_state: requestedState,
+      target_state: targetState,
+      waited_ms: 0,
+      error: "invalid_state"
+    }});
+    return;
+  }}
+  const check = () => {{
+    const currentState = document.readyState;
+    const waitedMs = Date.now() - startedAt;
+    if (ranks[currentState] >= ranks[targetState]) {{
+      resolve({{
+        found: true,
+        state: currentState,
+        requested_state: requestedState,
+        target_state: targetState,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        state: currentState,
+        requested_state: requestedState,
+        target_state: targetState,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_network_idle_expression(
+    *,
+    idle_ms: float,
+    timeout_ms: float,
+    poll_ms: float,
+    max_inflight: int,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const idleMs = Math.max(0, {_js_literal(idle_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const maxInflight = Math.max(0, {_js_literal(max_inflight)});
+  let pendingRequests = 0;
+  let observedRequestCount = 0;
+  let observedResponseCount = 0;
+  let observedFailureCount = 0;
+  let observedResourceCount = 0;
+  let lastActivityAt = Date.now();
+  let observerAvailable = false;
+  let fetchInstrumented = false;
+  let xhrInstrumented = false;
+  let observer = null;
+  const originalFetch = window.fetch;
+  const originalXhrSend = window.XMLHttpRequest?.prototype?.send;
+
+  const markActivity = () => {{
+    lastActivityAt = Date.now();
+  }};
+  const incrementPending = () => {{
+    pendingRequests += 1;
+    observedRequestCount += 1;
+    markActivity();
+  }};
+  const decrementPending = (failed) => {{
+    pendingRequests = Math.max(0, pendingRequests - 1);
+    if (failed) observedFailureCount += 1;
+    else observedResponseCount += 1;
+    markActivity();
+  }};
+  const cleanup = () => {{
+    if (observer) {{
+      try {{ observer.disconnect(); }} catch (error) {{}}
+    }}
+    if (fetchInstrumented) {{
+      window.fetch = originalFetch;
+    }}
+    if (xhrInstrumented) {{
+      window.XMLHttpRequest.prototype.send = originalXhrSend;
+    }}
+  }};
+
+  try {{
+    if (typeof PerformanceObserver === "function") {{
+      observer = new PerformanceObserver((list) => {{
+        const entries = list.getEntries();
+        if (entries.length) {{
+          observedResourceCount += entries.length;
+          markActivity();
+        }}
+      }});
+      observer.observe({{ type: "resource", buffered: false }});
+      observerAvailable = true;
+    }}
+  }} catch (error) {{
+    observerAvailable = false;
+  }}
+
+  try {{
+    if (typeof originalFetch === "function") {{
+      window.fetch = (...args) => {{
+        incrementPending();
+        return originalFetch.apply(window, args).then(
+          (response) => {{
+            decrementPending(false);
+            return response;
+          }},
+          (error) => {{
+            decrementPending(true);
+            throw error;
+          }}
+        );
+      }};
+      fetchInstrumented = true;
+    }}
+  }} catch (error) {{
+    fetchInstrumented = false;
+  }}
+
+  try {{
+    if (typeof originalXhrSend === "function") {{
+      window.XMLHttpRequest.prototype.send = function(...args) {{
+        incrementPending();
+        this.addEventListener(
+          "loadend",
+          () => decrementPending(false),
+          {{ once: true }}
+        );
+        try {{
+          return originalXhrSend.apply(this, args);
+        }} catch (error) {{
+          decrementPending(true);
+          throw error;
+        }}
+      }};
+      xhrInstrumented = true;
+    }}
+  }} catch (error) {{
+    xhrInstrumented = false;
+  }}
+
+  const finish = (found) => {{
+    const now = Date.now();
+    const waitedMs = now - startedAt;
+    const quietMs = now - lastActivityAt;
+    cleanup();
+    resolve({{
+      found,
+      network_idle: found,
+      idle_ms: idleMs,
+      quiet_ms: quietMs,
+      waited_ms: waitedMs,
+      pending_requests: pendingRequests,
+      max_inflight: maxInflight,
+      observed_request_count: observedRequestCount,
+      observed_response_count: observedResponseCount,
+      observed_failure_count: observedFailureCount,
+      observed_resource_count: observedResourceCount,
+      observer_available: observerAvailable,
+      fetch_instrumented: fetchInstrumented,
+      xhr_instrumented: xhrInstrumented
+    }});
+  }};
+
+  const check = () => {{
+    const now = Date.now();
+    const waitedMs = now - startedAt;
+    const quietMs = now - lastActivityAt;
+    if (pendingRequests <= maxInflight && quietMs >= idleMs) {{
+      finish(true);
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      finish(false);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _focus_expression(*, selector: str, prevent_scroll: bool) -> str:
+    return _selector_expression(
+        selector,
+        f"""
+  element.focus({{ preventScroll: {_js_literal(prevent_scroll)} }});
+  return {{
+    selector,
+    found: true,
+    focused: document.activeElement === element,
+    prevent_scroll: {_js_literal(prevent_scroll)}
+  }};
+""".rstrip(),
+    )
+
+
+def _form_value_helpers_expression() -> str:
+    return """
+  const readFormValue = (node) => {
+    const tag = node.tagName.toLowerCase();
+    const type = String(node.getAttribute("type") || "").toLowerCase();
+    if (tag === "input" && ["checkbox", "radio"].includes(type)) {
+      return {
+        readable: true,
+        value: Boolean(node.checked),
+        value_type: "checked",
+        checked: Boolean(node.checked)
+      };
+    }
+    if (tag === "select") {
+      const selectedOptions = [...node.selectedOptions].map((option) => ({
+        value: option.value,
+        text: textOf(option)
+      }));
+      return {
+        readable: true,
+        value: node.multiple ? selectedOptions.map((option) => option.value) : node.value,
+        value_type: node.multiple ? "selected_values" : "value",
+        selected_options: selectedOptions,
+        multiple: Boolean(node.multiple)
+      };
+    }
+    if (node.isContentEditable) {
+      return {
+        readable: true,
+        value: node.textContent ?? "",
+        value_type: "text_content"
+      };
+    }
+    if ("value" in node) {
+      return {
+        readable: true,
+        value: node.value ?? "",
+        value_type: "value"
+      };
+    }
+    if ("checked" in node) {
+      return {
+        readable: true,
+        value: Boolean(node.checked),
+        value_type: "checked",
+        checked: Boolean(node.checked)
+      };
+    }
+    return { readable: false, value: null, value_type: null };
+  };
+  const formValueText = (currentValue) => Array.isArray(currentValue)
+    ? currentValue.join(",")
+    : String(currentValue ?? "");
+""".rstrip()
+
+
+def _get_value_expression(selector: str) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, readable: false, value: null }};
+  }}
+  return {{
+    selector,
+    found: true,
+    ...readFormValue(element),
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _wait_value_expression(
+    *,
+    selector: str,
+    value: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const requestedValue = {_js_literal(value)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        selector,
+        found: false,
+        selector_found: Boolean(document.querySelector(selector)),
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    const candidate = formValueText(currentValue);
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const element = document.querySelector(selector);
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          selector,
+          found: false,
+          selector_found: false,
+          value: null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const state = readFormValue(element);
+    if (!state.readable) {{
+      resolve({{
+        selector,
+        found: false,
+        selector_found: true,
+        ...state,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (matches(state.value)) {{
+      resolve({{
+        selector,
+        found: true,
+        selector_found: true,
+        ...state,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        found: false,
+        selector_found: true,
+        ...state,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _blur_expression(selector: str) -> str:
+    return _selector_expression(
+        selector,
+        """
+  const wasFocused = document.activeElement === element;
+  element.blur?.();
+  return {
+    selector,
+    found: true,
+    blurred: document.activeElement !== element,
+    was_focused: wasFocused,
+    focused: document.activeElement === element
+  };
+""".rstrip(),
+    )
+
+
+def _storage_area_expression(area: str) -> str:
+    return f"""
+  const area = {_js_literal(area)};
+  const storageForArea = () => area === "session" ? window.sessionStorage : window.localStorage;
+""".rstrip()
+
+
+def _storage_get_expression(
+    *,
+    area: str,
+    key: str | None,
+    prefix: str | None,
+    max_items: int,
+) -> str:
+    key_source = "null" if key is None else _js_literal(key)
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const requestedKey = {key_source};
+  const prefix = {prefix_source};
+  const maxItems = Math.max(1, {_js_literal(max_items)});
+  try {{
+    const storage = storageForArea();
+    if (requestedKey !== null) {{
+      const value = storage.getItem(requestedKey);
+      return {{
+        area,
+        key: requestedKey,
+        found: value !== null,
+        value,
+        value_length: value === null ? null : value.length
+      }};
+    }}
+    const keys = [];
+    for (let index = 0; index < storage.length; index += 1) {{
+      const candidate = storage.key(index);
+      if (candidate !== null && (prefix === null || candidate.startsWith(prefix))) {{
+        keys.push(candidate);
+      }}
+    }}
+    const items = keys.slice(0, maxItems).map((candidate) => {{
+      const value = storage.getItem(candidate);
+      return {{
+        key: candidate,
+        value,
+        value_length: value === null ? null : value.length
+      }};
+    }});
+    return {{
+      area,
+      key: null,
+      prefix,
+      found: true,
+      count: keys.length,
+      item_count: items.length,
+      max_items: maxItems,
+      truncated: keys.length > items.length,
+      items
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      key: requestedKey,
+      prefix,
+      found: false,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _storage_set_expression(*, area: str, key: str, value: str) -> str:
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const key = {_js_literal(key)};
+  const value = {_js_literal(value)};
+  try {{
+    const storage = storageForArea();
+    const previousValue = storage.getItem(key);
+    storage.setItem(key, value);
+    const currentValue = storage.getItem(key);
+    return {{
+      area,
+      key,
+      set: currentValue === value,
+      found: true,
+      previous_value: previousValue,
+      value: currentValue,
+      value_length: currentValue === null ? null : currentValue.length
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      key,
+      set: false,
+      found: false,
+      value: null,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _storage_remove_expression(*, area: str, key: str) -> str:
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const key = {_js_literal(key)};
+  try {{
+    const storage = storageForArea();
+    const previousValue = storage.getItem(key);
+    storage.removeItem(key);
+    return {{
+      area,
+      key,
+      removed: storage.getItem(key) === null,
+      had_key: previousValue !== null,
+      found: previousValue !== null,
+      previous_value: previousValue
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      key,
+      removed: false,
+      found: false,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _storage_clear_expression(*, area: str, prefix: str | None) -> str:
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const prefix = {prefix_source};
+  try {{
+    const storage = storageForArea();
+    const keys = [];
+    for (let index = 0; index < storage.length; index += 1) {{
+      const candidate = storage.key(index);
+      if (candidate !== null && (prefix === null || candidate.startsWith(prefix))) {{
+        keys.push(candidate);
+      }}
+    }}
+    for (const key of keys) {{
+      storage.removeItem(key);
+    }}
+    return {{
+      area,
+      prefix,
+      cleared: true,
+      cleared_count: keys.length,
+      keys
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      prefix,
+      cleared: false,
+      cleared_count: 0,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _wait_storage_expression(
+    *,
+    area: str,
+    key: str,
+    value: str | None,
+    state: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_storage_area_expression(area)}
+  const key = {_js_literal(key)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        area,
+        key,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const waitedMs = Date.now() - startedAt;
+    try {{
+      const storage = storageForArea();
+      const currentValue = storage.getItem(key);
+      const exists = currentValue !== null;
+      const reached = requestedState === "absent"
+        ? !exists
+        : exists && matches(currentValue);
+      if (reached) {{
+        resolve({{
+          area,
+          key,
+          found: true,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          area,
+          key,
+          found: false,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+    }} catch (error) {{
+      resolve({{
+        area,
+        key,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        error: String(error.name || "Error"),
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _cookie_helpers_expression() -> str:
+    return """
+  const documentCookieScope = "document.cookie";
+  const decodePart = (value) => {
+    try {
+      return decodeURIComponent(value);
+    } catch (error) {
+      return value;
+    }
+  };
+  const parseCookies = () => {
+    const raw = document.cookie || "";
+    if (!raw) return [];
+    return raw
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separator = part.indexOf("=");
+        const rawName = separator === -1 ? part : part.slice(0, separator);
+        const rawValue = separator === -1 ? "" : part.slice(separator + 1);
+        const name = decodePart(rawName);
+        const value = decodePart(rawValue);
+        return {
+          name,
+          value,
+          raw_name: rawName,
+          raw_value: rawValue,
+          value_length: value.length
+        };
+      });
+  };
+  const findCookie = (name) =>
+    parseCookies().find((cookie) => cookie.name === name) || null;
+  const cookieAssignment = ({
+    name,
+    value,
+    path,
+    domain,
+    maxAge,
+    expires,
+    sameSite,
+    secure
+  }) => {
+    const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`];
+    if (path) parts.push(`Path=${path}`);
+    if (domain) parts.push(`Domain=${domain}`);
+    if (Number.isFinite(maxAge)) parts.push(`Max-Age=${Math.trunc(maxAge)}`);
+    if (expires) parts.push(`Expires=${expires}`);
+    if (sameSite) {
+      parts.push(`SameSite=${sameSite[0].toUpperCase()}${sameSite.slice(1).toLowerCase()}`);
+    }
+    if (secure) parts.push("Secure");
+    return parts.join("; ");
+  };
+""".rstrip()
+
+
+def _cookie_get_expression(
+    *,
+    name: str | None,
+    prefix: str | None,
+    max_items: int,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const requestedName = {name_source};
+  const prefix = {prefix_source};
+  const maxItems = Math.max(1, {_js_literal(max_items)});
+  try {{
+    if (requestedName !== null) {{
+      const cookie = findCookie(requestedName);
+      return {{
+        document_cookie_scope: documentCookieScope,
+        name: requestedName,
+        found: cookie !== null,
+        value: cookie?.value ?? null,
+        raw_value: cookie?.raw_value ?? null,
+        value_length: cookie?.value_length ?? null
+      }};
+    }}
+    const matched = parseCookies().filter((cookie) =>
+      prefix === null || cookie.name.startsWith(prefix)
+    );
+    const items = matched.slice(0, maxItems);
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name: null,
+      prefix,
+      found: true,
+      count: matched.length,
+      item_count: items.length,
+      max_items: maxItems,
+      truncated: matched.length > items.length,
+      items
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name: requestedName,
+      prefix,
+      found: false,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _cookie_set_expression(
+    *,
+    name: str,
+    value: str,
+    path: str | None,
+    domain: str | None,
+    max_age: int | None,
+    expires: str | None,
+    same_site: str | None,
+    secure: bool,
+) -> str:
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const name = {_js_literal(name)};
+  const value = {_js_literal(value)};
+  const path = {_js_literal(path)};
+  const domain = {_js_literal(domain)};
+  const maxAge = {_js_literal(max_age)};
+  const expires = {_js_literal(expires)};
+  const sameSite = {_js_literal(same_site)};
+  const secure = {_js_literal(secure)};
+  try {{
+    const previousCookie = findCookie(name);
+    const assignment = cookieAssignment({{
+      name,
+      value,
+      path,
+      domain,
+      maxAge,
+      expires,
+      sameSite,
+      secure
+    }});
+    document.cookie = assignment;
+    const currentCookie = findCookie(name);
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      set: currentCookie?.value === value,
+      found: currentCookie !== null,
+      previous_value: previousCookie?.value ?? null,
+      value: currentCookie?.value ?? null,
+      value_length: currentCookie?.value_length ?? null,
+      path,
+      domain,
+      max_age: maxAge,
+      expires,
+      same_site: sameSite,
+      secure
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      set: false,
+      found: false,
+      value: null,
+      path,
+      domain,
+      max_age: maxAge,
+      expires,
+      same_site: sameSite,
+      secure,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _cookie_delete_expression(
+    *,
+    name: str,
+    path: str | None,
+    domain: str | None,
+) -> str:
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const name = {_js_literal(name)};
+  const path = {_js_literal(path)};
+  const domain = {_js_literal(domain)};
+  try {{
+    const previousCookie = findCookie(name);
+    document.cookie = cookieAssignment({{
+      name,
+      value: "",
+      path,
+      domain,
+      maxAge: 0,
+      expires: "Thu, 01 Jan 1970 00:00:00 GMT",
+      sameSite: null,
+      secure: false
+    }});
+    const currentCookie = findCookie(name);
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      deleted: currentCookie === null,
+      had_cookie: previousCookie !== null,
+      found: previousCookie !== null,
+      previous_value: previousCookie?.value ?? null,
+      path,
+      domain
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      deleted: false,
+      found: false,
+      path,
+      domain,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _cookie_clear_expression(
+    *,
+    prefix: str | None,
+    path: str | None,
+    domain: str | None,
+) -> str:
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const prefix = {prefix_source};
+  const path = {_js_literal(path)};
+  const domain = {_js_literal(domain)};
+  try {{
+    const matched = parseCookies().filter((cookie) =>
+      prefix === null || cookie.name.startsWith(prefix)
+    );
+    for (const cookie of matched) {{
+      document.cookie = cookieAssignment({{
+        name: cookie.name,
+        value: "",
+        path,
+        domain,
+        maxAge: 0,
+        expires: "Thu, 01 Jan 1970 00:00:00 GMT",
+        sameSite: null,
+        secure: false
+      }});
+    }}
+    const remainingNames = new Set(parseCookies().map((cookie) => cookie.name));
+    const deletedNames = matched
+      .map((cookie) => cookie.name)
+      .filter((name) => !remainingNames.has(name));
+    return {{
+      document_cookie_scope: documentCookieScope,
+      prefix,
+      path,
+      domain,
+      cleared: deletedNames.length === matched.length,
+      cleared_count: deletedNames.length,
+      matched_count: matched.length,
+      names: matched.map((cookie) => cookie.name),
+      remaining_count: matched.length - deletedNames.length
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      prefix,
+      path,
+      domain,
+      cleared: false,
+      cleared_count: 0,
+      matched_count: 0,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _wait_cookie_expression(
+    *,
+    name: str,
+    value: str | None,
+    state: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_cookie_helpers_expression()}
+  const name = {_js_literal(name)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        document_cookie_scope: documentCookieScope,
+        name,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const waitedMs = Date.now() - startedAt;
+    try {{
+      const cookie = findCookie(name);
+      const exists = cookie !== null;
+      const currentValue = cookie?.value ?? null;
+      const reached = requestedState === "absent"
+        ? !exists
+        : exists && matches(currentValue);
+      if (reached) {{
+        resolve({{
+          document_cookie_scope: documentCookieScope,
+          name,
+          found: true,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          raw_value: cookie?.raw_value ?? null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          document_cookie_scope: documentCookieScope,
+          name,
+          found: false,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          raw_value: cookie?.raw_value ?? null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+    }} catch (error) {{
+      resolve({{
+        document_cookie_scope: documentCookieScope,
+        name,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        error: String(error.name || "Error"),
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _clear_expression(selector: str) -> str:
+    return _event_expression(
+        selector,
+        """
+  const previousValue = element.isContentEditable
+    ? element.textContent
+    : ("value" in element ? element.value : null);
+  if (element.isContentEditable) {
+    element.textContent = "";
+  } else if ("value" in element) {
+    element.value = "";
+  } else {
+    return {
+      selector,
+      found: true,
+      clearable: false,
+      cleared: false,
+      previous_value: previousValue,
+      value: null
+    };
+  }
+  dispatch(new Event("input", { bubbles: true }));
+  dispatch(new Event("change", { bubbles: true }));
+  const value = element.isContentEditable ? element.textContent : element.value;
+  return {
+    selector,
+    found: true,
+    clearable: true,
+    cleared: value === "",
+    previous_value: previousValue,
+    value
+  };
+""".rstrip(),
+    )
+
+
+def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -> str:
+    return _event_expression(
+        selector,
+        f"""
+  const requestedValue = {_js_literal(value)};
+  const previousValue = element.isContentEditable
+    ? element.textContent
+    : ("value" in element ? element.value : null);
+  if (element.isContentEditable) {{
+    element.textContent = requestedValue;
+  }} else if ("value" in element) {{
+    element.value = requestedValue;
+  }} else {{
+    return {{
+      selector,
+      found: true,
+      writable: false,
+      set: false,
+      previous_value: previousValue,
+      value: null,
+      requested_value: requestedValue,
+      dispatched_events: []
+    }};
+  }}
+  const dispatchedEvents = [];
+  if ({_js_literal(dispatch_events)}) {{
+    for (const type of ["input", "change"]) {{
+      dispatch(new Event(type, {{ bubbles: true }}));
+      dispatchedEvents.push(type);
+    }}
+  }}
+  const currentValue = element.isContentEditable ? element.textContent : element.value;
+  return {{
+    selector,
+    found: true,
+    writable: true,
+    set: currentValue === requestedValue,
+    previous_value: previousValue,
+    value: currentValue,
+    requested_value: requestedValue,
+    dispatched_events: dispatchedEvents
+  }};
+""".rstrip(),
+    )
+
+
+def _dispatch_event_expression(
+    *,
+    selector: str,
+    events: list[str],
+    bubbles: bool,
+    cancelable: bool,
+) -> str:
+    return _event_expression(
+        selector,
+        f"""
+  const requestedEvents = {_js_literal(events)};
+  const bubbles = {_js_literal(bubbles)};
+  const cancelable = {_js_literal(cancelable)};
+  const results = [];
+  for (const type of requestedEvents) {{
+    let accepted = true;
+    if (type === "focus" && typeof element.focus === "function") {{
+      element.focus();
+    }} else if (type === "blur" && typeof element.blur === "function") {{
+      element.blur();
+    }} else if (type === "click" && typeof element.click === "function") {{
+      element.click();
+    }} else {{
+      accepted = dispatch(new Event(type, {{ bubbles, cancelable }}));
+    }}
+    results.push({{ type, accepted }});
+  }}
+  return {{
+    selector,
+    found: true,
+    dispatched: true,
+    requested_events: requestedEvents,
+    events: results,
+    focused: document.activeElement === element
+  }};
+""".rstrip(),
+    )
+
+
+def _submit_expression(*, selector: str, skip_validation: bool) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const skipValidation = {_js_literal(skip_validation)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, form_found: false, submitted: false }};
+  }}
+  const form = element.matches("form") ? element : element.closest("form");
+  if (!form) {{
+    return {{
+      selector,
+      found: true,
+      form_found: false,
+      submitted: false,
+      element: nodeInfo(element)
+    }};
+  }}
+  const nativeRequestSubmit = HTMLFormElement.prototype.requestSubmit;
+  const nativeSubmit = HTMLFormElement.prototype.submit;
+  const useRequestSubmit = !skipValidation && typeof nativeRequestSubmit === "function";
+  try {{
+    if (useRequestSubmit) {{
+      nativeRequestSubmit.call(form);
+    }} else {{
+      nativeSubmit.call(form);
+    }}
+  }} catch (error) {{
+    return {{
+      selector,
+      found: true,
+      form_found: true,
+      submitted: false,
+      skip_validation: skipValidation,
+      used_request_submit: useRequestSubmit,
+      error: String(error.name || "Error"),
+      message: String(error.message || error),
+      form: nodeInfo(form)
+    }};
+  }}
+  return {{
+    selector,
+    found: true,
+    form_found: true,
+    submitted: true,
+    skip_validation: skipValidation,
+    used_request_submit: useRequestSubmit,
+    form: nodeInfo(form)
+  }};
+}}
+""".strip()
+
+
+def _rect_object_expression(variable_name: str) -> str:
+    return (
+        "{ "
+        f"x: {variable_name}.x, "
+        f"y: {variable_name}.y, "
+        f"top: {variable_name}.top, "
+        f"right: {variable_name}.right, "
+        f"bottom: {variable_name}.bottom, "
+        f"left: {variable_name}.left, "
+        f"width: {variable_name}.width, "
+        f"height: {variable_name}.height "
+        "}"
+    )
+
+
+def _bounding_box_expression(selector: str) -> str:
+    rect_object = _rect_object_expression("rect")
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, visible: false, bounding_box: null }};
+  }}
+  const rect = element.getBoundingClientRect();
+  const center = {{
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  }};
+  const inViewport = rect.bottom >= 0 &&
+    rect.right >= 0 &&
+    rect.top <= window.innerHeight &&
+    rect.left <= window.innerWidth;
+  return {{
+    selector,
+    found: true,
+    visible: visible(element),
+    in_viewport: inViewport,
+    bounding_box: {rect_object},
+    center,
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _scroll_into_view_expression(
+    *,
+    selector: str,
+    block: str,
+    inline: str,
+    behavior: str,
+) -> str:
+    before_rect = _rect_object_expression("before")
+    after_rect = _rect_object_expression("after")
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const block = {_js_literal(block)};
+  const inline = {_js_literal(inline)};
+  const behavior = {_js_literal(behavior)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, scrolled: false }};
+  }}
+  const before = element.getBoundingClientRect();
+  element.scrollIntoView({{ block, inline, behavior }});
+  const after = element.getBoundingClientRect();
+  const inViewport = after.bottom >= 0 &&
+    after.right >= 0 &&
+    after.top <= window.innerHeight &&
+    after.left <= window.innerWidth;
+  return {{
+    selector,
+    found: true,
+    scrolled: true,
+    block,
+    inline,
+    behavior,
+    before: {before_rect},
+    after: {after_rect},
+    in_viewport: inViewport,
+    visible: visible(element),
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
 
 
 def cmd_action_open_url(args: argparse.Namespace) -> None:
@@ -2297,6 +3177,1102 @@ def cmd_action_snapshot(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_reload(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(args, "action.reload", _reload_expression())
+
+
+def cmd_action_go_back(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(args, "action.go-back", _history_expression("back"))
+
+
+def cmd_action_go_forward(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.go-forward",
+        _history_expression("forward"),
+    )
+
+
+def cmd_action_wait_url(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-url",
+        _wait_url_expression(
+            url=args.url,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_load_state(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-load-state",
+        _wait_load_state_expression(
+            state=args.state,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_network_idle(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-network-idle",
+        _wait_network_idle_expression(
+            idle_ms=args.idle_ms,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            max_inflight=args.max_inflight,
+        ),
+    )
+
+
+def cmd_action_get_text(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-text",
+        _selector_expression(
+            args.selector,
+            """
+  const text = element.innerText ?? element.textContent ?? "";
+  return { selector, found: true, text };
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_exists(args: argparse.Namespace) -> None:
+    selector = _js_literal(args.selector)
+    _run_eval_backed_action_command(
+        args,
+        "action.exists",
+        f"""
+() => {{
+  const selector = {selector};
+  return {{ selector, exists: Boolean(document.querySelector(selector)) }};
+}}
+""".strip(),
+    )
+
+
+def cmd_action_count(args: argparse.Namespace) -> None:
+    expression = f"""
+() => {{
+{_dom_helpers_expression(include_hidden=args.include_hidden)}
+  const selector = {_js_literal(args.selector)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const matched = includeHidden ? all : visibleNodes;
+  return {{
+    selector,
+    include_hidden: includeHidden,
+    count: matched.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.count", expression)
+
+
+def cmd_action_wait_count(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-count",
+        _wait_count_expression(
+            selector=args.selector,
+            count=args.count,
+            comparison=args.comparison,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
+def cmd_action_query(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.query",
+        _query_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        ),
+    )
+
+
+def cmd_action_get_attribute(args: argparse.Namespace) -> None:
+    attribute = _js_literal(args.name)
+    _run_eval_backed_action_command(
+        args,
+        "action.get-attribute",
+        _selector_expression(
+            args.selector,
+            f"""
+  const name = {attribute};
+  const attributeValue = element.getAttribute(name);
+  let propertyValue = null;
+  if (name in element) {{
+    const raw = element[name];
+    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
+      ? raw
+      : String(raw);
+  }}
+  return {{
+    selector,
+    found: true,
+    name,
+    value: attributeValue,
+    attribute_value: attributeValue,
+    property_value: propertyValue
+  }};
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_wait_attribute(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-attribute",
+        _wait_attribute_expression(
+            selector=args.selector,
+            name=args.name,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_wait_text(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-text",
+        _wait_text_expression(
+            text=args.text,
+            selector=args.selector,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
+def cmd_action_focus(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.focus",
+        _focus_expression(
+            selector=args.selector,
+            prevent_scroll=args.prevent_scroll,
+        ),
+    )
+
+
+def cmd_action_get_value(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-value",
+        _get_value_expression(args.selector),
+    )
+
+
+def cmd_action_wait_value(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-value",
+        _wait_value_expression(
+            selector=args.selector,
+            value=args.value,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_blur(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.blur",
+        _blur_expression(args.selector),
+    )
+
+
+def cmd_action_storage_get(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-get",
+        _storage_get_expression(
+            area=args.area,
+            key=args.key,
+            prefix=args.prefix,
+            max_items=args.max_items,
+        ),
+    )
+
+
+def cmd_action_storage_set(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-set",
+        _storage_set_expression(
+            area=args.area,
+            key=args.key,
+            value=args.value,
+        ),
+    )
+
+
+def cmd_action_storage_remove(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-remove",
+        _storage_remove_expression(
+            area=args.area,
+            key=args.key,
+        ),
+    )
+
+
+def cmd_action_storage_clear(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-clear",
+        _storage_clear_expression(
+            area=args.area,
+            prefix=args.prefix,
+        ),
+    )
+
+
+def cmd_action_wait_storage(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-storage",
+        _wait_storage_expression(
+            area=args.area,
+            key=args.key,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_cookie_get(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-get",
+        _cookie_get_expression(
+            name=args.name,
+            prefix=args.prefix,
+            max_items=args.max_items,
+        ),
+    )
+
+
+def cmd_action_cookie_set(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-set",
+        _cookie_set_expression(
+            name=args.name,
+            value=args.value,
+            path=args.path,
+            domain=args.domain,
+            max_age=args.max_age,
+            expires=args.expires,
+            same_site=args.same_site,
+            secure=args.secure,
+        ),
+    )
+
+
+def cmd_action_cookie_delete(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-delete",
+        _cookie_delete_expression(
+            name=args.name,
+            path=args.path,
+            domain=args.domain,
+        ),
+    )
+
+
+def cmd_action_cookie_clear(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-clear",
+        _cookie_clear_expression(
+            prefix=args.prefix,
+            path=args.path,
+            domain=args.domain,
+        ),
+    )
+
+
+def cmd_action_wait_cookie(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-cookie",
+        _wait_cookie_expression(
+            name=args.name,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_clear(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.clear",
+        _clear_expression(args.selector),
+    )
+
+
+def cmd_action_set_value(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.set-value",
+        _set_value_expression(
+            args.selector,
+            args.value,
+            dispatch_events=not args.no_events,
+        ),
+    )
+
+
+def cmd_action_dispatch_event(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.dispatch-event",
+        _dispatch_event_expression(
+            selector=args.selector,
+            events=args.event,
+            bubbles=not args.no_bubbles,
+            cancelable=args.cancelable,
+        ),
+    )
+
+
+def cmd_action_submit(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.submit",
+        _submit_expression(
+            selector=args.selector,
+            skip_validation=args.skip_validation,
+        ),
+    )
+
+
+def cmd_action_scroll(args: argparse.Namespace) -> None:
+    selector = getattr(args, "selector", None)
+    x = _js_literal(args.x)
+    y = _js_literal(args.y)
+    behavior = _js_literal(args.behavior)
+
+    if selector:
+        expression = _selector_expression(
+            selector,
+            f"""
+  element.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
+  return {{ selector, found: true, scrolled: true, x: {x}, y: {y} }};
+""".rstrip(),
+        )
+    else:
+        expression = f"""
+() => {{
+  window.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
+  return {{
+    selector: null,
+    found: true,
+    scrolled: true,
+    x: {x},
+    y: {y},
+    scroll_x: window.scrollX,
+    scroll_y: window.scrollY
+  }};
+}}
+""".strip()
+
+    _run_eval_backed_action_command(args, "action.scroll", expression)
+
+
+def cmd_action_bounding_box(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.bounding-box",
+        _bounding_box_expression(args.selector),
+    )
+
+
+def cmd_action_scroll_into_view(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.scroll-into-view",
+        _scroll_into_view_expression(
+            selector=args.selector,
+            block=args.block,
+            inline=args.inline,
+            behavior=args.behavior,
+        ),
+    )
+
+
+def cmd_action_select_option(args: argparse.Namespace) -> None:
+    value = _js_literal(args.value)
+    _run_eval_backed_action_command(
+        args,
+        "action.select-option",
+        _event_expression(
+            args.selector,
+            f"""
+  const requestedValue = {value};
+  const previousValue = element.value;
+  element.value = requestedValue;
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    selected: element.value === requestedValue,
+    value: element.value,
+    requested_value: requestedValue,
+    previous_value: previousValue
+  }};
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_check(args: argparse.Namespace) -> None:
+    _run_checkbox_action(args, checked=True, command="action.check")
+
+
+def cmd_action_uncheck(args: argparse.Namespace) -> None:
+    _run_checkbox_action(args, checked=False, command="action.uncheck")
+
+
+def _run_checkbox_action(
+    args: argparse.Namespace,
+    *,
+    checked: bool,
+    command: str,
+) -> None:
+    checked_literal = _js_literal(checked)
+    _run_eval_backed_action_command(
+        args,
+        command,
+        _event_expression(
+            args.selector,
+            f"""
+  if (!("checked" in element)) {{
+    return {{
+      selector,
+      found: true,
+      checkable: false,
+      checked: Boolean(element.checked)
+    }};
+  }}
+  element.checked = {checked_literal};
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    checkable: true,
+    checked: Boolean(element.checked)
+  }};
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_hover(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.hover",
+        _event_expression(
+            args.selector,
+            """
+  const init = {
+    view: window,
+    bubbles: true,
+    cancelable: true,
+    clientX: element.getBoundingClientRect().left,
+    clientY: element.getBoundingClientRect().top
+  };
+  for (const type of ["mouseover", "mouseenter", "mousemove"]) {
+    dispatch(new MouseEvent(type, init));
+  }
+  return { selector, found: true, hovered: true };
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_press(args: argparse.Namespace) -> None:
+    key = _js_literal(args.key)
+    _run_eval_backed_action_command(
+        args,
+        "action.press",
+        _event_expression(
+            args.selector,
+            f"""
+  const key = {key};
+  element.focus();
+  const init = {{ key, code: key, bubbles: true, cancelable: true }};
+  const keydownAccepted = dispatch(new KeyboardEvent("keydown", init));
+  dispatch(new KeyboardEvent("keypress", init));
+  dispatch(new KeyboardEvent("keyup", init));
+  return {{
+    selector,
+    found: true,
+    focused: document.activeElement === element,
+    key,
+    pressed: true,
+    keydown_accepted: keydownAccepted
+  }};
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_click_text(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-text",
+        _click_text_expression(
+            text=args.text,
+            selector=args.selector,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_click_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-role",
+        _click_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_click_index(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-index",
+        _click_index_expression(
+            selector=args.selector,
+            index=args.index,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
+def cmd_action_fill_label(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.fill-label",
+        _fill_label_expression(
+            label=args.label,
+            text=args.text,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_form_snapshot(args: argparse.Namespace) -> None:
+    expression = _form_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        reveal_sensitive_values=args.reveal_sensitive_values,
+    )
+    _run_eval_backed_action_command(args, "action.form-snapshot", expression)
+
+
+def cmd_action_accessibility_snapshot(args: argparse.Namespace) -> None:
+    expression = f"""
+() => {{
+{_dom_helpers_expression(include_hidden=args.include_hidden, max_nodes=args.max_nodes)}
+  const root = document.body || document.documentElement;
+  const elements = root ? [...root.querySelectorAll("*")] : [];
+  const interesting = elements.filter((element) => {{
+    if (!visible(element)) return false;
+    const info = nodeInfo(element);
+    return Boolean(info.role || info.name || info.text);
+  }});
+  const nodes = limited(interesting).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "dom-accessibility",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && interesting.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.accessibility-snapshot", expression)
+
+
+def cmd_action_interactive_snapshot(args: argparse.Namespace) -> None:
+    expression = f"""
+() => {{
+{_dom_helpers_expression(include_hidden=args.include_hidden, max_nodes=args.max_nodes)}
+  const elements = [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const nodes = limited(elements).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "interactive",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && elements.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.interactive-snapshot", expression)
+
+
+def cmd_doctor(args: argparse.Namespace) -> None:
+    command = "doctor"
+    checks: list[dict[str, Any]] = []
+
+    browser_cli_version = _package_version("browser-cli")
+    checks.append(
+        _doctor_check(
+            "browser_cli",
+            "pass",
+            "browser-cli import succeeded",
+            version=browser_cli_version or "unknown",
+            version_known=browser_cli_version is not None,
+        )
+    )
+
+    runtime_version = _package_version("lex-browser-runtime")
+    checks.append(
+        _doctor_check(
+            "lex_browser_runtime",
+            "pass",
+            "lex-browser-runtime import succeeded",
+            version=runtime_version or "unknown",
+            version_known=runtime_version is not None,
+        )
+    )
+
+    api_key = os.environ.get("LEXMOUNT_API_KEY")
+    project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
+    base_url = os.environ.get("LEXMOUNT_BASE_URL")
+    region = os.environ.get("LEXMOUNT_REGION")
+
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_API_KEY",
+            "pass" if api_key else "fail",
+            "LEXMOUNT_API_KEY is set" if api_key else "LEXMOUNT_API_KEY is required",
+            present=api_key is not None,
+            **({} if api_key else {"fix": _credential_doctor_fix("LEXMOUNT_API_KEY")}),
+        )
+    )
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_PROJECT_ID",
+            "pass" if project_id else "fail",
+            "LEXMOUNT_PROJECT_ID is set"
+            if project_id
+            else "LEXMOUNT_PROJECT_ID is required",
+            present=project_id is not None,
+            **(
+                {}
+                if project_id
+                else {"fix": _credential_doctor_fix("LEXMOUNT_PROJECT_ID")}
+            ),
+        )
+    )
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_BASE_URL",
+            "pass",
+            "LEXMOUNT_BASE_URL is set"
+            if base_url
+            else "LEXMOUNT_BASE_URL is not set; the default endpoint will be used",
+            present=base_url is not None,
+            value=base_url,
+            default=DEFAULT_LEXMOUNT_BASE_URL,
+        )
+    )
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_REGION",
+            "pass",
+            "LEXMOUNT_REGION is set"
+            if region
+            else "LEXMOUNT_REGION is not set; runtime defaults apply",
+            present=region is not None,
+            value=region,
+        )
+    )
+
+    try:
+        connect_url = build_direct_connect_url()
+    except Exception as exc:
+        checks.append(
+            _doctor_check(
+                "direct_url",
+                "fail",
+                _mask_sensitive_text(str(exc)),
+                error=exc.__class__.__name__,
+                fix=_doctor_fix(
+                    "fix_direct_url_configuration",
+                    env=[
+                        "LEXMOUNT_API_KEY",
+                        "LEXMOUNT_PROJECT_ID",
+                        "LEXMOUNT_BASE_URL",
+                    ],
+                    commands=[
+                        "browser-cli auth status",
+                        "browser-cli auth export-env",
+                        "browser-cli doctor",
+                    ],
+                    guidance=[
+                        "Confirm required environment variables are set.",
+                        "Unset LEXMOUNT_BASE_URL unless a custom API endpoint is required.",
+                    ],
+                ),
+            )
+        )
+    else:
+        checks.append(
+            _doctor_check(
+                "direct_url",
+                "pass",
+                "direct browser websocket URL can be built",
+                **_masked_connect_url_payload(
+                    connect_url,
+                    reveal_connect_url=args.reveal_connect_url,
+                ),
+            )
+        )
+
+    if args.skip_api:
+        checks.append(
+            _doctor_check(
+                "api_connectivity",
+                "skipped",
+                "API connectivity check skipped by --skip-api",
+                fix=_doctor_fix(
+                    "run_live_api_check",
+                    commands=["browser-cli doctor"],
+                    guidance=[
+                        "Rerun doctor without --skip-api when live API access is available."
+                    ],
+                ),
+            )
+        )
+    elif not api_key or not project_id:
+        checks.append(
+            _doctor_check(
+                "api_connectivity",
+                "skipped",
+                "API connectivity check requires LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID",
+                fix=_credential_doctor_fix(
+                    "LEXMOUNT_API_KEY",
+                    "LEXMOUNT_PROJECT_ID",
+                ),
+            )
+        )
+    else:
+        try:
+            result = LexmountBrowserAdmin().list_sessions(status=None)
+        except Exception as exc:
+            info = getattr(exc, "lexmount_error_info", None)
+            error = (
+                info.payload().get("error")
+                if isinstance(info, LexmountErrorInfo)
+                else exc.__class__.__name__
+            )
+            checks.append(
+                _doctor_check(
+                    "api_connectivity",
+                    "fail",
+                    _mask_sensitive_text(str(exc)),
+                    error=error,
+                    fix=_doctor_fix(
+                        "verify_api_connectivity",
+                        commands=[
+                            "browser-cli auth status",
+                            "browser-cli doctor",
+                        ],
+                        guidance=[
+                            "Confirm Project ID and API key are valid for browser.lexmount.cn.",
+                            "Check LEXMOUNT_BASE_URL only if a custom API endpoint is configured.",
+                            "Create a new scoped API key if the current key was revoked or expired.",
+                        ],
+                    ),
+                )
+            )
+        else:
+            payload = _model_payload(result)
+            checks.append(
+                _doctor_check(
+                    "api_connectivity",
+                    "pass",
+                    "Lexmount API is reachable",
+                    session_count=payload.get("count"),
+                    status_filter=payload.get("status_filter"),
+                )
+            )
+
+    failed = [check for check in checks if check["status"] == "fail"]
+    data: dict[str, Any] = {
+        "ok": not failed,
+        "command": command,
+        "status": "ok" if not failed else "error",
+        "checked": len(checks),
+        "failed": len(failed),
+        "checks": checks,
+    }
+    if failed:
+        data.update(
+            {
+                "error": "doctor_failed",
+                "message": "One or more doctor checks failed.",
+            }
+        )
+    _json_dump(data, exit_code=1 if failed else 0)
+
+
+def cmd_auth_status(args: argparse.Namespace) -> None:
+    command = "auth.status"
+    api_key = os.environ.get("LEXMOUNT_API_KEY")
+    project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
+    configured = bool(api_key and project_id)
+
+    _success(
+        command,
+        configured=configured,
+        api_key=_env_value_status("LEXMOUNT_API_KEY", secret=True),
+        project_id=_env_value_status("LEXMOUNT_PROJECT_ID"),
+        base_url=_env_value_status(
+            "LEXMOUNT_BASE_URL",
+            default=DEFAULT_LEXMOUNT_BASE_URL,
+        ),
+        region=_env_value_status("LEXMOUNT_REGION"),
+        next_steps=_auth_next_steps(configured=configured),
+    )
+
+
+def cmd_auth_export_env(args: argparse.Namespace) -> None:
+    command = "auth.export-env"
+    warnings: list[str] = []
+
+    api_key = "<api-key>"
+    api_key_source = "placeholder"
+    if args.from_current and os.environ.get("LEXMOUNT_API_KEY"):
+        api_key_source = "env"
+        if args.reveal_secrets:
+            api_key = os.environ["LEXMOUNT_API_KEY"]
+        else:
+            api_key = "<redacted-api-key>"
+            warnings.append(
+                "LEXMOUNT_API_KEY is masked. Rerun with --from-current "
+                "--reveal-secrets only in a trusted local terminal to print a usable export."
+            )
+
+    project_id = "<project-id>"
+    project_id_source = "placeholder"
+    if args.from_current and os.environ.get("LEXMOUNT_PROJECT_ID"):
+        project_id = os.environ["LEXMOUNT_PROJECT_ID"]
+        project_id_source = "env"
+
+    entries = [
+        {
+            "name": "LEXMOUNT_API_KEY",
+            "value": api_key,
+            "secret": True,
+            "source": api_key_source,
+            "usable": api_key not in {"<api-key>", "<redacted-api-key>"},
+        },
+        {
+            "name": "LEXMOUNT_PROJECT_ID",
+            "value": project_id,
+            "secret": False,
+            "source": project_id_source,
+            "usable": project_id != "<project-id>",
+        },
+    ]
+
+    if args.include_base_url:
+        current_base_url = os.environ.get("LEXMOUNT_BASE_URL")
+        base_url = (
+            current_base_url
+            if args.from_current and current_base_url
+            else DEFAULT_LEXMOUNT_BASE_URL
+        )
+        entries.append(
+            {
+                "name": "LEXMOUNT_BASE_URL",
+                "value": base_url,
+                "secret": False,
+                "source": "env"
+                if args.from_current and current_base_url
+                else "default",
+                "usable": True,
+            }
+        )
+
+    if args.include_region:
+        current_region = os.environ.get("LEXMOUNT_REGION")
+        region = current_region if args.from_current and current_region else "<region>"
+        entries.append(
+            {
+                "name": "LEXMOUNT_REGION",
+                "value": region,
+                "secret": False,
+                "source": "env"
+                if args.from_current and current_region
+                else "placeholder",
+                "usable": region != "<region>",
+            }
+        )
+
+    commands = [
+        _export_command(str(entry["name"]), str(entry["value"]), args.shell)
+        for entry in entries
+    ]
+    secrets_revealed = (
+        args.reveal_secrets
+        and api_key_source == "env"
+        and api_key not in {"<api-key>", "<redacted-api-key>"}
+    )
+    _success(
+        command,
+        shell=args.shell,
+        from_current=args.from_current,
+        secrets_revealed=secrets_revealed,
+        warnings=warnings,
+        exports=entries,
+        commands=commands,
+        script="\n".join(commands),
+        next_steps=[
+            "Run the export commands in the local shell.",
+            "Run `browser-cli doctor` to verify credentials.",
+        ],
+    )
+
+
+def cmd_auth_login(args: argparse.Namespace) -> None:
+    command = "auth.login"
+    project_id, project_id_source = _auth_login_project_id(args)
+    scopes = _auth_login_scopes(args)
+    connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+    )
+    _success(
+        command,
+        flow="manual_env",
+        login_url=LEXMOUNT_CONSOLE_URL,
+        device_code_available=False,
+        connect_from_codex={
+            "available": False,
+            "url": connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": scopes,
+            "requested_expires_in": args.expires_in,
+            "expected_outputs": [
+                "Project ID for the selected project",
+                "Scoped API key or short-lived local token",
+                "Copyable shell export commands",
+                "`browser-cli doctor` verification guidance",
+                "Revoke and expiration details",
+            ],
+            "browser_site_requirements": [
+                "Implement /connect/codex on browser.lexmount.cn.",
+                "Accept optional project_id, repeated scope, and expires_in query parameters.",
+                "Show the selected Project ID before issuing credentials.",
+                "Issue scoped credentials for browser sessions, contexts, and actions.",
+                "Offer copyable env/install commands without exposing secrets in chat.",
+                "Support revoke, expiration, and device-code or OAuth approval.",
+            ],
+            "fallback": "Use the manual_env steps until browser.lexmount.cn supports this flow.",
+        },
+        flows=[
+            {
+                "name": "manual_env",
+                "available": True,
+                "description": "User copies Project ID and API key from browser.lexmount.cn into the local shell.",
+            },
+            {
+                "name": "connect_from_codex",
+                "available": False,
+                "url": connect_url,
+                "description": "Planned browser.lexmount.cn flow for scoped agent credentials.",
+            },
+        ],
+        message=(
+            "Open browser.lexmount.cn, sign in, choose a project, create or copy "
+            "an API key, then set local environment variables."
+        ),
+        steps=[
+            "Open https://browser.lexmount.cn and sign in.",
+            "Select the project you want Codex or the agent to control.",
+            "Copy the Project ID from the console.",
+            "Create or copy an API key intended for local agent use.",
+            "Run `browser-cli auth export-env` for safe shell export templates.",
+            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+            "Run `browser-cli doctor` to verify the setup.",
+        ],
+        commands=[
+            "browser-cli auth export-env",
+            "browser-cli auth status",
+            "browser-cli doctor",
+        ],
+        browser_site_recommendations=[
+            "Add /connect/codex with Project ID display and query parameters for project_id, scope, and expires_in.",
+            "Offer scoped API keys with expiration, revoke, and permission labels.",
+            "Show copyable env/install commands and a doctor verification step.",
+            "Add device-code or OAuth authorization for short-lived local tokens.",
+        ],
+    )
+
+
 def cmd_direct_url(args: argparse.Namespace) -> None:
     command = "direct-url"
     try:
@@ -2306,7 +4282,6 @@ def cmd_direct_url(args: argparse.Namespace) -> None:
     reveal_url = bool(getattr(args, "reveal_url", False))
     _success(
         command,
-        reveal_fields={"connect_url"} if reveal_url else None,
         mode="direct",
         connect_url=connect_url if reveal_url else _mask_direct_url_secret(connect_url),
         masked=not reveal_url,
@@ -2382,157 +4357,51 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         help="JSON object used when --create-context creates a context",
     )
     parser.add_argument(
-        "--resolve-context",
-        action="store_true",
+        "--context-metadata-json",
+        dest="context_metadata_filter",
+        type=_parse_filter_metadata_json,
         help=(
-            "Resolve an available context before creating the session. "
-            "With --create-context, create one when no match is available."
+            "Pick a reusable context matching this metadata before creating "
+            "the session."
         ),
     )
     parser.add_argument(
-        "--metadata-match-json",
-        dest="metadata_match",
-        type=_parse_metadata_json,
-        help="JSON object that resolved context metadata must contain",
+        "--create-context-if-missing",
+        action="store_true",
+        help="Create a context with --context-metadata-json when no reusable match exists.",
     )
     parser.add_argument(
         "--context-status",
-        help="Optional context status filter used with --resolve-context",
+        help="Optional status filter used while picking a reusable context.",
     )
     parser.add_argument(
         "--context-limit",
         type=int,
         default=20,
-        help="Maximum contexts to inspect when --resolve-context lists contexts",
+        help="Maximum contexts to inspect while picking a reusable context.",
     )
 
 
-def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
-    auth = subparsers.add_parser("auth", help="Inspect and configure credentials")
-    auth_subparsers = auth.add_subparsers(dest="auth_command", required=True)
-
-    auth_status = auth_subparsers.add_parser(
-        "status",
-        help="Show local Lexmount credential configuration",
-    )
-    auth_status.add_argument(
-        "--reveal-secrets",
+def _add_text_match_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--exact",
         action="store_true",
-        help="Print secret values instead of masked values. Use only locally.",
+        help="Require an exact normalized text match. Default uses contains.",
     )
-    auth_status.set_defaults(func=cmd_auth_status)
-
-    auth_bootstrap = auth_subparsers.add_parser(
-        "bootstrap",
-        help="Return the first-step Codex authentication workflow decision",
-    )
-    auth_bootstrap.add_argument(
-        "--open",
+    parser.add_argument(
+        "--case-sensitive",
         action="store_true",
-        help="Open the Connect from Codex page when credentials are missing.",
+        help="Match text case-sensitively. Default is case-insensitive.",
     )
-    auth_bootstrap.add_argument(
-        "--authorization-url",
-        default=DEFAULT_CODEX_AUTHORIZATION_URL,
-        help="Authorization page URL. Defaults to browser.lexmount.cn Connect from Codex.",
-    )
-    auth_bootstrap.set_defaults(func=cmd_auth_bootstrap)
 
-    auth_export_env = auth_subparsers.add_parser(
-        "export-env",
-        help="Generate shell env lines for Lexmount credentials",
-    )
-    auth_export_env.add_argument(
-        "--shell",
-        choices=["posix", "fish", "powershell"],
-        default="posix",
-    )
-    auth_export_env.add_argument(
-        "--include-base-url",
-        action="store_true",
-        help="Include LEXMOUNT_BASE_URL, using the China default if unset.",
-    )
-    auth_export_env.add_argument(
-        "--reveal-secrets",
-        action="store_true",
-        help="Print usable secret values. Do not paste this output into chat.",
-    )
-    auth_export_env.set_defaults(func=cmd_auth_export_env)
 
-    auth_login = auth_subparsers.add_parser(
-        "login",
-        help="Show browser.lexmount.cn login and configuration guidance",
-    )
-    auth_login.add_argument(
-        "--open",
+def _add_snapshot_filter_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--max-nodes", type=int, default=100)
+    parser.add_argument(
+        "--include-hidden",
         action="store_true",
-        help="Open the authorization page in the local default browser.",
+        help="Include hidden DOM nodes in the snapshot.",
     )
-    auth_login.add_argument(
-        "--authorization-url",
-        default=DEFAULT_CODEX_AUTHORIZATION_URL,
-        help="Authorization page URL. Defaults to browser.lexmount.cn Connect from Codex.",
-    )
-    auth_login.set_defaults(func=cmd_auth_login)
-
-    auth_device_code = auth_subparsers.add_parser(
-        "device-code",
-        help="Show the Connect from Codex device-code authorization contract",
-    )
-    auth_device_code.add_argument(
-        "--open",
-        action="store_true",
-        help="Open the authorization page in the local default browser.",
-    )
-    auth_device_code.add_argument(
-        "--authorization-url",
-        default=DEFAULT_CODEX_AUTHORIZATION_URL,
-        help="Human authorization page URL.",
-    )
-    auth_device_code.add_argument(
-        "--device-authorization-url",
-        default=DEFAULT_CODEX_DEVICE_AUTHORIZATION_URL,
-        help="Future device authorization endpoint URL.",
-    )
-    auth_device_code.add_argument(
-        "--token-url",
-        default=DEFAULT_CODEX_TOKEN_URL,
-        help="Future device-code polling token endpoint URL.",
-    )
-    auth_device_code.add_argument(
-        "--scope",
-        dest="scopes",
-        action="append",
-        help="Requested authorization scope. May be passed more than once.",
-    )
-    auth_device_code.set_defaults(func=cmd_auth_device_code)
-
-    auth_connect_spec = auth_subparsers.add_parser(
-        "connect-spec",
-        help="Show browser.lexmount.cn Connect from Codex page requirements",
-    )
-    auth_connect_spec.add_argument(
-        "--authorization-url",
-        default=DEFAULT_CODEX_AUTHORIZATION_URL,
-        help="Human authorization page URL.",
-    )
-    auth_connect_spec.add_argument(
-        "--device-authorization-url",
-        default=DEFAULT_CODEX_DEVICE_AUTHORIZATION_URL,
-        help="Future device authorization endpoint URL.",
-    )
-    auth_connect_spec.add_argument(
-        "--token-url",
-        default=DEFAULT_CODEX_TOKEN_URL,
-        help="Future device-code polling token endpoint URL.",
-    )
-    auth_connect_spec.add_argument(
-        "--scope",
-        dest="scopes",
-        action="append",
-        help="Required page authorization scope. May be passed more than once.",
-    )
-    auth_connect_spec.set_defaults(func=cmd_auth_connect_spec)
 
 
 def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
@@ -2540,7 +4409,6 @@ def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     session_subparsers = session.add_subparsers(
         dest="session_command",
         required=True,
-        parser_class=BrowserCliArgumentParser,
     )
 
     session_create = session_subparsers.add_parser("create", help="Create a session")
@@ -2575,7 +4443,6 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_subparsers = context.add_subparsers(
         dest="context_command",
         required=True,
-        parser_class=BrowserCliArgumentParser,
     )
 
     context_create = context_subparsers.add_parser("create", help="Create a context")
@@ -2596,31 +4463,35 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_get.add_argument("--context-id", required=True)
     context_get.set_defaults(func=cmd_context_get)
 
-    context_resolve = context_subparsers.add_parser(
-        "resolve",
-        help="Find or create an available context for persistent state reuse",
+    context_status = context_subparsers.add_parser(
+        "status",
+        help="Check whether one context is reusable or locked",
     )
-    context_resolve.add_argument("--context-id", help="Inspect one explicit context")
-    context_resolve.add_argument("--status", help="Optional status filter")
-    context_resolve.add_argument("--limit", type=int, default=20)
-    context_resolve.add_argument(
+    context_status.add_argument("--context-id", required=True)
+    context_status.set_defaults(func=cmd_context_status)
+
+    context_pick = context_subparsers.add_parser(
+        "pick",
+        help="Pick the first reusable context, optionally creating one",
+    )
+    context_pick.add_argument(
+        "--status",
+        help="Optional server-side status filter before local reusable checks",
+    )
+    context_pick.add_argument("--limit", type=int, default=20)
+    context_pick.add_argument(
+        "--metadata-json",
+        dest="metadata_filter",
+        type=_parse_filter_metadata_json,
+        default={},
+        help="JSON object that must match top-level context metadata fields",
+    )
+    context_pick.add_argument(
         "--create-if-missing",
         action="store_true",
-        help="Create a new context when no available context is found",
+        help="Create a context with the metadata filter when none is reusable.",
     )
-    context_resolve.add_argument(
-        "--metadata-json",
-        dest="metadata",
-        type=_parse_metadata_json,
-        help="JSON object used when --create-if-missing creates a context",
-    )
-    context_resolve.add_argument(
-        "--metadata-match-json",
-        dest="metadata_match",
-        type=_parse_metadata_json,
-        help="JSON object that candidate context metadata must contain",
-    )
-    context_resolve.set_defaults(func=cmd_context_resolve)
+    context_pick.set_defaults(func=cmd_context_pick)
 
     context_delete = context_subparsers.add_parser("delete", help="Delete context")
     context_delete.add_argument("--context-id", required=True)
@@ -2629,11 +4500,7 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
 def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action = subparsers.add_parser("action", help="Run browser actions")
-    action_subparsers = action.add_subparsers(
-        dest="action_command",
-        required=True,
-        parser_class=BrowserCliArgumentParser,
-    )
+    action_subparsers = action.add_subparsers(dest="action_command", required=True)
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)
@@ -2702,14 +4569,680 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_snapshot.add_argument("--max-chars", type=int, default=8000)
     action_snapshot.set_defaults(func=cmd_action_snapshot)
 
+    action_reload = action_subparsers.add_parser(
+        "reload",
+        help="Reload the current page",
+    )
+    _add_session_target_args(action_reload)
+    action_reload.set_defaults(func=cmd_action_reload)
+
+    action_go_back = action_subparsers.add_parser(
+        "go-back",
+        help="Request browser history back navigation",
+    )
+    _add_session_target_args(action_go_back)
+    action_go_back.set_defaults(func=cmd_action_go_back)
+
+    action_go_forward = action_subparsers.add_parser(
+        "go-forward",
+        help="Request browser history forward navigation",
+    )
+    _add_session_target_args(action_go_forward)
+    action_go_forward.set_defaults(func=cmd_action_go_forward)
+
+    action_wait_url = action_subparsers.add_parser(
+        "wait-url",
+        help="Wait until the current URL matches text or a regex",
+    )
+    _add_session_target_args(action_wait_url)
+    action_wait_url.add_argument("--url", required=True)
+    action_wait_url.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+    )
+    action_wait_url.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_url.add_argument("--poll-ms", type=float, default=250)
+    action_wait_url.set_defaults(func=cmd_action_wait_url)
+
+    action_wait_load_state = action_subparsers.add_parser(
+        "wait-load-state",
+        help="Wait until document.readyState reaches a requested state",
+    )
+    _add_session_target_args(action_wait_load_state)
+    action_wait_load_state.add_argument(
+        "--state",
+        choices=["loading", "interactive", "complete", "domcontentloaded", "load"],
+        default="complete",
+        help="Ready state to wait for. domcontentloaded maps to interactive; load maps to complete.",
+    )
+    action_wait_load_state.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_load_state.add_argument("--poll-ms", type=float, default=250)
+    action_wait_load_state.set_defaults(func=cmd_action_wait_load_state)
+
+    action_wait_network_idle = action_subparsers.add_parser(
+        "wait-network-idle",
+        help="Wait until observed fetch/XHR/resource activity is quiet",
+    )
+    _add_session_target_args(action_wait_network_idle)
+    action_wait_network_idle.add_argument(
+        "--idle-ms",
+        type=float,
+        default=500,
+        help="Required quiet period before the page is considered idle.",
+    )
+    action_wait_network_idle.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_network_idle.add_argument("--poll-ms", type=float, default=100)
+    action_wait_network_idle.add_argument(
+        "--max-inflight",
+        type=int,
+        default=0,
+        help="Maximum observed in-flight requests allowed during the quiet period.",
+    )
+    action_wait_network_idle.set_defaults(func=cmd_action_wait_network_idle)
+
+    action_get_text = action_subparsers.add_parser(
+        "get-text",
+        help="Read visible text from a selector",
+    )
+    _add_session_target_args(action_get_text)
+    action_get_text.add_argument("--selector", required=True)
+    action_get_text.set_defaults(func=cmd_action_get_text)
+
+    action_exists = action_subparsers.add_parser(
+        "exists",
+        help="Check whether a selector exists",
+    )
+    _add_session_target_args(action_exists)
+    action_exists.add_argument("--selector", required=True)
+    action_exists.set_defaults(func=cmd_action_exists)
+
+    action_count = action_subparsers.add_parser(
+        "count",
+        help="Count selector matches",
+    )
+    _add_session_target_args(action_count)
+    action_count.add_argument("--selector", required=True)
+    action_count.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in the count.",
+    )
+    action_count.set_defaults(func=cmd_action_count)
+
+    action_wait_count = action_subparsers.add_parser(
+        "wait-count",
+        help="Wait until a selector count reaches a comparison",
+    )
+    _add_session_target_args(action_wait_count)
+    action_wait_count.add_argument("--selector", required=True)
+    action_wait_count.add_argument("--count", type=int, required=True)
+    action_wait_count.add_argument(
+        "--comparison",
+        choices=["eq", "gt", "gte", "lt", "lte"],
+        default="eq",
+        help="How to compare the current count with --count.",
+    )
+    action_wait_count.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_count.add_argument("--poll-ms", type=float, default=250)
+    action_wait_count.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in the count.",
+    )
+    action_wait_count.set_defaults(func=cmd_action_wait_count)
+
+    action_query = action_subparsers.add_parser(
+        "query",
+        help="List selector matches with DOM-backed node metadata",
+    )
+    _add_session_target_args(action_query)
+    action_query.add_argument("--selector", required=True)
+    _add_snapshot_filter_args(action_query)
+    action_query.set_defaults(func=cmd_action_query)
+
+    action_get_attribute = action_subparsers.add_parser(
+        "get-attribute",
+        help="Read an attribute and simple reflected property from a selector",
+    )
+    _add_session_target_args(action_get_attribute)
+    action_get_attribute.add_argument("--selector", required=True)
+    action_get_attribute.add_argument("--name", required=True)
+    action_get_attribute.set_defaults(func=cmd_action_get_attribute)
+
+    action_wait_attribute = action_subparsers.add_parser(
+        "wait-attribute",
+        help="Wait until an attribute reaches a state or value",
+    )
+    _add_session_target_args(action_wait_attribute)
+    action_wait_attribute.add_argument("--selector", required=True)
+    action_wait_attribute.add_argument("--name", required=True)
+    action_wait_attribute.add_argument("--value")
+    action_wait_attribute.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Attribute presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_attribute.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_attribute.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_attribute.add_argument("--poll-ms", type=float, default=250)
+    action_wait_attribute.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_attribute.set_defaults(func=cmd_action_wait_attribute)
+
+    action_wait_text = action_subparsers.add_parser(
+        "wait-text",
+        help="Wait until text appears in the page or an optional selector",
+    )
+    _add_session_target_args(action_wait_text)
+    action_wait_text.add_argument("--text", required=True)
+    action_wait_text.add_argument(
+        "--selector",
+        help="Optional selector used to scope text candidates",
+    )
+    action_wait_text.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_text.add_argument("--poll-ms", type=float, default=250)
+    action_wait_text.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes while waiting.",
+    )
+    _add_text_match_args(action_wait_text)
+    action_wait_text.set_defaults(func=cmd_action_wait_text)
+
+    action_focus = action_subparsers.add_parser(
+        "focus",
+        help="Focus a selector",
+    )
+    _add_session_target_args(action_focus)
+    action_focus.add_argument("--selector", required=True)
+    action_focus.add_argument(
+        "--prevent-scroll",
+        action="store_true",
+        help="Focus without scrolling the element into view.",
+    )
+    action_focus.set_defaults(func=cmd_action_focus)
+
+    action_get_value = action_subparsers.add_parser(
+        "get-value",
+        help="Read the value, checked state, or selected options from a form field",
+    )
+    _add_session_target_args(action_get_value)
+    action_get_value.add_argument("--selector", required=True)
+    action_get_value.set_defaults(func=cmd_action_get_value)
+
+    action_wait_value = action_subparsers.add_parser(
+        "wait-value",
+        help="Wait until a form field value matches text",
+    )
+    _add_session_target_args(action_wait_value)
+    action_wait_value.add_argument("--selector", required=True)
+    action_wait_value.add_argument("--value", required=True)
+    action_wait_value.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match the current value.",
+    )
+    action_wait_value.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_value.add_argument("--poll-ms", type=float, default=250)
+    action_wait_value.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_value.set_defaults(func=cmd_action_wait_value)
+
+    action_blur = action_subparsers.add_parser(
+        "blur",
+        help="Blur a selector to trigger focusout/change validation",
+    )
+    _add_session_target_args(action_blur)
+    action_blur.add_argument("--selector", required=True)
+    action_blur.set_defaults(func=cmd_action_blur)
+
+    action_storage_get = action_subparsers.add_parser(
+        "storage-get",
+        help="Read localStorage or sessionStorage values",
+    )
+    _add_session_target_args(action_storage_get)
+    action_storage_get.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to read.",
+    )
+    action_storage_get.add_argument("--key")
+    action_storage_get.add_argument(
+        "--prefix",
+        help="Only list keys with this prefix when --key is omitted.",
+    )
+    action_storage_get.add_argument(
+        "--max-items",
+        type=int,
+        default=50,
+        help="Maximum number of key/value pairs to return when listing.",
+    )
+    action_storage_get.set_defaults(func=cmd_action_storage_get)
+
+    action_storage_set = action_subparsers.add_parser(
+        "storage-set",
+        help="Set a localStorage or sessionStorage value",
+    )
+    _add_session_target_args(action_storage_set)
+    action_storage_set.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to write.",
+    )
+    action_storage_set.add_argument("--key", required=True)
+    action_storage_set.add_argument("--value", required=True)
+    action_storage_set.set_defaults(func=cmd_action_storage_set)
+
+    action_storage_remove = action_subparsers.add_parser(
+        "storage-remove",
+        help="Remove a localStorage or sessionStorage value",
+    )
+    _add_session_target_args(action_storage_remove)
+    action_storage_remove.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to update.",
+    )
+    action_storage_remove.add_argument("--key", required=True)
+    action_storage_remove.set_defaults(func=cmd_action_storage_remove)
+
+    action_storage_clear = action_subparsers.add_parser(
+        "storage-clear",
+        help="Clear localStorage or sessionStorage values",
+    )
+    _add_session_target_args(action_storage_clear)
+    action_storage_clear.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to clear.",
+    )
+    action_storage_clear.add_argument(
+        "--prefix",
+        help="Only clear keys with this prefix.",
+    )
+    action_storage_clear.set_defaults(func=cmd_action_storage_clear)
+
+    action_wait_storage = action_subparsers.add_parser(
+        "wait-storage",
+        help="Wait until localStorage or sessionStorage reaches a key/value state",
+    )
+    _add_session_target_args(action_wait_storage)
+    action_wait_storage.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to wait on.",
+    )
+    action_wait_storage.add_argument("--key", required=True)
+    action_wait_storage.add_argument("--value")
+    action_wait_storage.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_storage.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_storage.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_storage.add_argument("--poll-ms", type=float, default=250)
+    action_wait_storage.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_storage.set_defaults(func=cmd_action_wait_storage)
+
+    action_cookie_get = action_subparsers.add_parser(
+        "cookie-get",
+        help="Read document.cookie-visible cookies",
+    )
+    _add_session_target_args(action_cookie_get)
+    action_cookie_get.add_argument("--name")
+    action_cookie_get.add_argument(
+        "--prefix",
+        help="Only list cookie names with this prefix when --name is omitted.",
+    )
+    action_cookie_get.add_argument(
+        "--max-items",
+        type=int,
+        default=50,
+        help="Maximum number of cookies to return when listing.",
+    )
+    action_cookie_get.set_defaults(func=cmd_action_cookie_get)
+
+    action_cookie_set = action_subparsers.add_parser(
+        "cookie-set",
+        help="Set a document.cookie-visible cookie",
+    )
+    _add_session_target_args(action_cookie_set)
+    action_cookie_set.add_argument("--name", required=True)
+    action_cookie_set.add_argument("--value", required=True)
+    action_cookie_set.add_argument("--path")
+    action_cookie_set.add_argument("--domain")
+    action_cookie_set.add_argument("--max-age", type=int)
+    action_cookie_set.add_argument(
+        "--expires",
+        help="Cookie Expires attribute, e.g. 'Wed, 21 Oct 2026 07:28:00 GMT'.",
+    )
+    action_cookie_set.add_argument(
+        "--same-site",
+        choices=["lax", "strict", "none"],
+        help="Cookie SameSite attribute.",
+    )
+    action_cookie_set.add_argument(
+        "--secure",
+        action="store_true",
+        help="Add the Secure attribute.",
+    )
+    action_cookie_set.set_defaults(func=cmd_action_cookie_set)
+
+    action_cookie_delete = action_subparsers.add_parser(
+        "cookie-delete",
+        help="Delete one document.cookie-visible cookie",
+    )
+    _add_session_target_args(action_cookie_delete)
+    action_cookie_delete.add_argument("--name", required=True)
+    action_cookie_delete.add_argument("--path")
+    action_cookie_delete.add_argument("--domain")
+    action_cookie_delete.set_defaults(func=cmd_action_cookie_delete)
+
+    action_cookie_clear = action_subparsers.add_parser(
+        "cookie-clear",
+        help="Clear document.cookie-visible cookies",
+    )
+    _add_session_target_args(action_cookie_clear)
+    action_cookie_clear.add_argument(
+        "--prefix",
+        help="Only clear cookie names with this prefix.",
+    )
+    action_cookie_clear.add_argument("--path")
+    action_cookie_clear.add_argument("--domain")
+    action_cookie_clear.set_defaults(func=cmd_action_cookie_clear)
+
+    action_wait_cookie = action_subparsers.add_parser(
+        "wait-cookie",
+        help="Wait until a document.cookie-visible cookie reaches a state",
+    )
+    _add_session_target_args(action_wait_cookie)
+    action_wait_cookie.add_argument("--name", required=True)
+    action_wait_cookie.add_argument("--value")
+    action_wait_cookie.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_cookie.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_cookie.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_cookie.add_argument("--poll-ms", type=float, default=250)
+    action_wait_cookie.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_cookie.set_defaults(func=cmd_action_wait_cookie)
+
+    action_clear = action_subparsers.add_parser(
+        "clear",
+        help="Clear a form field or editable element",
+    )
+    _add_session_target_args(action_clear)
+    action_clear.add_argument("--selector", required=True)
+    action_clear.set_defaults(func=cmd_action_clear)
+
+    action_set_value = action_subparsers.add_parser(
+        "set-value",
+        help="Set a form field or editable element value and dispatch input/change",
+    )
+    _add_session_target_args(action_set_value)
+    action_set_value.add_argument("--selector", required=True)
+    action_set_value.add_argument("--value", required=True)
+    action_set_value.add_argument(
+        "--no-events",
+        action="store_true",
+        help="Do not dispatch input/change after setting the value.",
+    )
+    action_set_value.set_defaults(func=cmd_action_set_value)
+
+    action_dispatch_event = action_subparsers.add_parser(
+        "dispatch-event",
+        help="Dispatch common DOM events for a selector",
+    )
+    _add_session_target_args(action_dispatch_event)
+    action_dispatch_event.add_argument("--selector", required=True)
+    action_dispatch_event.add_argument(
+        "--event",
+        action="append",
+        choices=COMMON_DOM_EVENT_NAMES,
+        required=True,
+        help="Event name to dispatch. May be repeated.",
+    )
+    action_dispatch_event.add_argument(
+        "--no-bubbles",
+        action="store_true",
+        help="Dispatch synthetic Event objects with bubbles=false.",
+    )
+    action_dispatch_event.add_argument(
+        "--cancelable",
+        action="store_true",
+        help="Dispatch synthetic Event objects with cancelable=true.",
+    )
+    action_dispatch_event.set_defaults(func=cmd_action_dispatch_event)
+
+    action_submit = action_subparsers.add_parser(
+        "submit",
+        help="Submit the nearest form for a selector",
+    )
+    _add_session_target_args(action_submit)
+    action_submit.add_argument("--selector", required=True)
+    action_submit.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Use form.submit() instead of requestSubmit().",
+    )
+    action_submit.set_defaults(func=cmd_action_submit)
+
+    action_scroll = action_subparsers.add_parser(
+        "scroll",
+        help="Scroll the page or one scrollable selector",
+    )
+    _add_session_target_args(action_scroll)
+    action_scroll.add_argument("--selector")
+    action_scroll.add_argument("--x", type=float, default=0)
+    action_scroll.add_argument("--y", type=float, default=600)
+    action_scroll.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+    )
+    action_scroll.set_defaults(func=cmd_action_scroll)
+
+    action_bounding_box = action_subparsers.add_parser(
+        "bounding-box",
+        help="Read selector geometry and viewport position",
+    )
+    _add_session_target_args(action_bounding_box)
+    action_bounding_box.add_argument("--selector", required=True)
+    action_bounding_box.set_defaults(func=cmd_action_bounding_box)
+
+    action_scroll_into_view = action_subparsers.add_parser(
+        "scroll-into-view",
+        help="Scroll one selector into the viewport",
+    )
+    _add_session_target_args(action_scroll_into_view)
+    action_scroll_into_view.add_argument("--selector", required=True)
+    action_scroll_into_view.add_argument(
+        "--block",
+        choices=["start", "center", "end", "nearest"],
+        default="center",
+        help="Vertical alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view.add_argument(
+        "--inline",
+        choices=["start", "center", "end", "nearest"],
+        default="nearest",
+        help="Horizontal alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+    )
+    action_scroll_into_view.set_defaults(func=cmd_action_scroll_into_view)
+
+    action_select_option = action_subparsers.add_parser(
+        "select-option",
+        help="Set the value of a select-like element",
+    )
+    _add_session_target_args(action_select_option)
+    action_select_option.add_argument("--selector", required=True)
+    action_select_option.add_argument("--value", required=True)
+    action_select_option.set_defaults(func=cmd_action_select_option)
+
+    action_check = action_subparsers.add_parser(
+        "check",
+        help="Check a checkbox-like element",
+    )
+    _add_session_target_args(action_check)
+    action_check.add_argument("--selector", required=True)
+    action_check.set_defaults(func=cmd_action_check)
+
+    action_uncheck = action_subparsers.add_parser(
+        "uncheck",
+        help="Uncheck a checkbox-like element",
+    )
+    _add_session_target_args(action_uncheck)
+    action_uncheck.add_argument("--selector", required=True)
+    action_uncheck.set_defaults(func=cmd_action_uncheck)
+
+    action_hover = action_subparsers.add_parser(
+        "hover",
+        help="Dispatch hover events for a selector",
+    )
+    _add_session_target_args(action_hover)
+    action_hover.add_argument("--selector", required=True)
+    action_hover.set_defaults(func=cmd_action_hover)
+
+    action_press = action_subparsers.add_parser(
+        "press",
+        help="Focus a selector and dispatch key events",
+    )
+    _add_session_target_args(action_press)
+    action_press.add_argument("--selector", required=True)
+    action_press.add_argument("--key", required=True)
+    action_press.set_defaults(func=cmd_action_press)
+
+    action_click_text = action_subparsers.add_parser(
+        "click-text",
+        help="Click the first visible interactive element matching text",
+    )
+    _add_session_target_args(action_click_text)
+    action_click_text.add_argument("--text", required=True)
+    action_click_text.add_argument(
+        "--selector",
+        help="Optional selector used to scope candidate elements",
+    )
+    _add_text_match_args(action_click_text)
+    action_click_text.set_defaults(func=cmd_action_click_text)
+
+    action_click_role = action_subparsers.add_parser(
+        "click-role",
+        help="Click the first visible element matching role and optional name",
+    )
+    _add_session_target_args(action_click_role)
+    action_click_role.add_argument("--role", required=True)
+    action_click_role.add_argument("--name")
+    _add_text_match_args(action_click_role)
+    action_click_role.set_defaults(func=cmd_action_click_role)
+
+    action_click_index = action_subparsers.add_parser(
+        "click-index",
+        help="Click the visible selector match at a zero-based index",
+    )
+    _add_session_target_args(action_click_index)
+    action_click_index.add_argument("--selector", required=True)
+    action_click_index.add_argument("--index", required=True, type=_non_negative_int)
+    action_click_index.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Allow hidden DOM nodes to be counted and clicked.",
+    )
+    action_click_index.set_defaults(func=cmd_action_click_index)
+
+    action_fill_label = action_subparsers.add_parser(
+        "fill-label",
+        help="Fill a form field matched by label, aria-label, or placeholder",
+    )
+    _add_session_target_args(action_fill_label)
+    action_fill_label.add_argument("--label", required=True)
+    action_fill_label.add_argument("--text", required=True)
+    _add_text_match_args(action_fill_label)
+    action_fill_label.set_defaults(func=cmd_action_fill_label)
+
+    action_form_snapshot = action_subparsers.add_parser(
+        "form-snapshot",
+        help="Capture form fields, labels, values, and select options",
+    )
+    _add_session_target_args(action_form_snapshot)
+    action_form_snapshot.add_argument(
+        "--selector",
+        help="Optional form or container selector used to scope fields.",
+    )
+    _add_snapshot_filter_args(action_form_snapshot)
+    action_form_snapshot.add_argument(
+        "--reveal-sensitive-values",
+        action="store_true",
+        help="Reveal password and hidden field values. Default masks them.",
+    )
+    action_form_snapshot.set_defaults(func=cmd_action_form_snapshot)
+
+    action_accessibility_snapshot = action_subparsers.add_parser(
+        "accessibility-snapshot",
+        help="Capture a DOM-backed accessibility-like snapshot",
+    )
+    _add_session_target_args(action_accessibility_snapshot)
+    _add_snapshot_filter_args(action_accessibility_snapshot)
+    action_accessibility_snapshot.set_defaults(func=cmd_action_accessibility_snapshot)
+
+    action_interactive_snapshot = action_subparsers.add_parser(
+        "interactive-snapshot",
+        help="Capture visible interactive elements",
+    )
+    _add_session_target_args(action_interactive_snapshot)
+    _add_snapshot_filter_args(action_interactive_snapshot)
+    action_interactive_snapshot.set_defaults(func=cmd_action_interactive_snapshot)
+
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case = subparsers.add_parser("case", help="Validate or run a browser case file")
-    case_subparsers = case.add_subparsers(
-        dest="case_command",
-        required=True,
-        parser_class=BrowserCliArgumentParser,
-    )
+    case_subparsers = case.add_subparsers(dest="case_command", required=True)
 
     case_validate = case_subparsers.add_parser("validate", help="Validate a case file")
     case_validate.add_argument(
@@ -2730,15 +5263,82 @@ def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case_run.set_defaults(func=cmd_case_run)
 
 
-def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    auth = subparsers.add_parser(
+        "auth",
+        help="Inspect and configure local Lexmount credentials",
+    )
+    auth_subparsers = auth.add_subparsers(dest="auth_command", required=True)
+
+    auth_status = auth_subparsers.add_parser(
+        "status",
+        help="Show local Lexmount credential environment status without secrets",
+    )
+    auth_status.set_defaults(func=cmd_auth_status)
+
+    auth_export_env = auth_subparsers.add_parser(
+        "export-env",
+        help="Print safe shell export commands for Lexmount credentials",
+    )
+    auth_export_env.add_argument(
+        "--shell",
+        choices=["posix", "fish", "powershell"],
+        default="posix",
+        help="Shell syntax to emit.",
+    )
+    auth_export_env.add_argument(
+        "--from-current",
+        action="store_true",
+        help="Populate commands from current environment values where available.",
+    )
+    auth_export_env.add_argument(
+        "--reveal-secrets",
+        action="store_true",
+        help="Print current LEXMOUNT_API_KEY in the generated commands. Use only locally.",
+    )
+    auth_export_env.add_argument(
+        "--include-base-url",
+        action="store_true",
+        help="Include LEXMOUNT_BASE_URL in the generated commands.",
+    )
+    auth_export_env.add_argument(
+        "--include-region",
+        action="store_true",
+        help="Include LEXMOUNT_REGION in the generated commands.",
+    )
+    auth_export_env.set_defaults(func=cmd_auth_export_env)
+
+    auth_login = auth_subparsers.add_parser(
+        "login",
+        help="Show browser.lexmount.cn login and environment setup guidance",
+    )
+    auth_login.add_argument(
+        "--project-id",
+        help=(
+            "Project ID to include in the planned Connect from Codex URL. "
+            "Defaults to LEXMOUNT_PROJECT_ID when set."
+        ),
+    )
+    auth_login.add_argument(
+        "--scope",
+        action="append",
+        help=(
+            "Requested Connect from Codex credential scope. May be repeated; "
+            "defaults to browser session, context, and action scopes."
+        ),
+    )
+    auth_login.add_argument(
+        "--expires-in",
+        default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
+    )
+    auth_login.set_defaults(func=cmd_auth_login)
+
+
+def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     doctor = subparsers.add_parser(
         "doctor",
-        help="Check local browser-cli and Lexmount API configuration",
-    )
-    doctor.add_argument(
-        "--json",
-        action="store_true",
-        help="Emit JSON output. JSON is the default for all browser-cli commands.",
+        help="Check browser-cli install, credentials, direct URL, and API connectivity",
     )
     doctor.add_argument(
         "--skip-api",
@@ -2746,18 +5346,14 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Skip the live Lexmount API connectivity check.",
     )
     doctor.add_argument(
-        "--smoke-session",
+        "--reveal-connect-url",
         action="store_true",
-        help="Create and close a light browser session to verify session lifecycle.",
-    )
-    doctor.add_argument(
-        "--smoke-browser-mode",
-        default="light",
-        type=_normalize_browser_mode,
-        help="Browser mode used by --smoke-session. Default: light.",
+        help="Print the full direct URL including api_key. Default output masks secrets.",
     )
     doctor.set_defaults(func=cmd_doctor)
 
+
+def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     prepare = subparsers.add_parser(
         "prepare",
         help="Backward-compatible alias for session create",
@@ -2795,26 +5391,18 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build the browser-cli parser."""
 
-    parser = BrowserCliArgumentParser(
-        prog="browser-cli",
+    parser = JsonArgumentParser(
         description="Lexmount browser operation CLI",
+        prog="browser-cli",
     )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {_package_version()}",
-    )
-    subparsers = parser.add_subparsers(
-        dest="command",
-        required=True,
-        parser_class=BrowserCliArgumentParser,
-    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-    _add_auth_commands(subparsers)
     _add_session_commands(subparsers)
     _add_context_commands(subparsers)
     _add_action_commands(subparsers)
     _add_case_commands(subparsers)
+    _add_auth_commands(subparsers)
+    _add_doctor_command(subparsers)
     _add_alias_commands(subparsers)
 
     return parser
@@ -2823,8 +5411,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     """Run the Lexmount browser operation CLI."""
 
-    global _current_parse_argv
-    _current_parse_argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)
