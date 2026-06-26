@@ -19,7 +19,8 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
     assert "`click-index` for a chosen repeated selector match" in normalized
-    assert "`fill-label` for labeled form fields" in normalized
+    assert "`fill-label` for labeled text fields" in normalized
+    assert "`select-label` for labeled native selects" in normalized
     assert "`check-label` for labeled checkbox or switch controls" in normalized
     assert (
         "Use `eval` only for page-local work not covered by a first-class action"
@@ -120,6 +121,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`scroll-into-view`",
         "`bounding-box`",
         "`select-option`",
+        "`select-label`",
         "`check`",
         "`uncheck`",
         "`check-label`",
@@ -154,6 +156,9 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`bounding_box`" in normalized
     assert "`in_viewport`" in normalized
     assert "`index`" in normalized
+    assert "`requested_option_label`" in normalized
+    assert "`option_found`" in normalized
+    assert "`option_label`" in normalized
     assert "`requested_checked`" in normalized
     assert "`previous_checked`" in normalized
     assert "`changed`" in normalized
@@ -171,6 +176,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`clear` before replacement text" in normalized
     assert "`get-value` or `wait-value` to confirm form state" in normalized
     assert "use `blur` for focus-driven validation" in normalized
+    assert "`select-label` for labeled selects" in normalized
     assert "`select-option` or `check`" in normalized
     assert "prefer `check-label` for labeled controls" in normalized
     assert "`dispatch-event --event input --event change`" in normalized

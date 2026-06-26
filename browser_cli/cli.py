@@ -1231,6 +1231,101 @@ def _check_label_expression(
 """.strip()
 
 
+def _select_label_expression(
+    *,
+    label: str,
+    value: str | None,
+    option_label: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_label_control_helpers_expression()}
+  const requestedLabel = {_js_literal(label)};
+  const requestedValueInput = {_js_literal(value)};
+  const requestedOptionLabel = {_js_literal(option_label)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const match = findFieldByLabel(requestedLabel, exact, caseSensitive, "select");
+  const element = match.element;
+  if (!element) {{
+    return {{
+      found: false,
+      selectable: false,
+      selected: false,
+      label: requestedLabel,
+      requested_value: requestedValueInput,
+      requested_option_label: requestedOptionLabel
+    }};
+  }}
+  if (element.tagName.toLowerCase() !== "select") {{
+    return {{
+      found: true,
+      selectable: false,
+      selected: false,
+      label: requestedLabel,
+      requested_value: requestedValueInput,
+      requested_option_label: requestedOptionLabel,
+      element: nodeInfo(element),
+      label_element: match.label_element
+    }};
+  }}
+  const options = [...element.options];
+  const previousValue = element.value;
+  const previousOptionLabel = element.selectedOptions[0]
+    ? textOf(element.selectedOptions[0])
+    : null;
+  let requestedValue = requestedValueInput;
+  let optionFound = null;
+  if (requestedOptionLabel !== null) {{
+    const option = options.find((candidate) =>
+      matchesText(textOf(candidate), requestedOptionLabel, exact, caseSensitive)
+    );
+    optionFound = Boolean(option);
+    if (!option) {{
+      return {{
+        found: true,
+        selectable: true,
+        selected: false,
+        label: requestedLabel,
+        requested_value: null,
+        requested_option_label: requestedOptionLabel,
+        option_found: false,
+        value: element.value,
+        previous_value: previousValue,
+        previous_option_label: previousOptionLabel,
+        element: nodeInfo(element),
+        label_element: match.label_element
+      }};
+    }}
+    requestedValue = option.value;
+  }}
+  element.value = requestedValue;
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const selectedOption = element.selectedOptions[0] || null;
+  return {{
+    found: true,
+    selectable: true,
+    selected: element.value === requestedValue,
+    label: requestedLabel,
+    requested_value: requestedValue,
+    requested_option_label: requestedOptionLabel,
+    option_found: optionFound,
+    value: element.value,
+    option_label: selectedOption ? textOf(selectedOption) : null,
+    previous_value: previousValue,
+    previous_option_label: previousOptionLabel,
+    changed: previousValue !== element.value,
+    element: nodeInfo(element),
+    label_element: match.label_element
+  }};
+}}
+""".strip()
+
+
 def _click_index_expression(
     *,
     selector: str,
@@ -3785,6 +3880,20 @@ def cmd_action_uncheck_label(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_select_label(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.select-label",
+        _select_label_expression(
+            label=args.label,
+            value=args.value,
+            option_label=args.option_label,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def _run_checkbox_action(
     args: argparse.Namespace,
     *,
@@ -5234,6 +5343,18 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_select_option.add_argument("--selector", required=True)
     action_select_option.add_argument("--value", required=True)
     action_select_option.set_defaults(func=cmd_action_select_option)
+
+    action_select_label = action_subparsers.add_parser(
+        "select-label",
+        help="Select an option in a native select matched by label or accessible name",
+    )
+    _add_session_target_args(action_select_label)
+    action_select_label.add_argument("--label", required=True)
+    select_label_value = action_select_label.add_mutually_exclusive_group(required=True)
+    select_label_value.add_argument("--value")
+    select_label_value.add_argument("--option-label")
+    _add_text_match_args(action_select_label)
+    action_select_label.set_defaults(func=cmd_action_select_label)
 
     action_check = action_subparsers.add_parser(
         "check",
