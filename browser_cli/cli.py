@@ -5383,6 +5383,107 @@ def cmd_action_press(args: argparse.Namespace) -> None:
     )
 
 
+def _press_key_expression(
+    *,
+    key: str,
+    code: str | None,
+    alt_key: bool,
+    ctrl_key: bool,
+    meta_key: bool,
+    shift_key: bool,
+) -> str:
+    key_literal = _js_literal(key)
+    code_literal = _js_literal(code or key)
+    return f"""
+() => {{
+  const key = {key_literal};
+  const code = {code_literal};
+  const modifiers = {{
+    alt_key: {_js_literal(alt_key)},
+    ctrl_key: {_js_literal(ctrl_key)},
+    meta_key: {_js_literal(meta_key)},
+    shift_key: {_js_literal(shift_key)}
+  }};
+  const activeElement = document.activeElement;
+  let target = activeElement || document.body || document.documentElement || window;
+  let targetKind = "active_element";
+  if (target === document.body) {{
+    targetKind = "body";
+  }} else if (target === document.documentElement) {{
+    target = document.body || document.documentElement || window;
+    targetKind = target === window ? "window" : (
+      target === document.body ? "body" : "document_element"
+    );
+  }} else if (target === window) {{
+    targetKind = "window";
+  }}
+  const describeElement = (element) => {{
+    if (!element || !(element instanceof Element)) {{
+      return null;
+    }}
+    return {{
+      tag_name: element.tagName.toLowerCase(),
+      id: element.id || null,
+      name: element.getAttribute("name") || null,
+      role: element.getAttribute("role") || null,
+      type: element.getAttribute("type") || null,
+      contenteditable: element.getAttribute("contenteditable") || null
+    }};
+  }};
+  const init = {{
+    key,
+    code,
+    altKey: modifiers.alt_key,
+    ctrlKey: modifiers.ctrl_key,
+    metaKey: modifiers.meta_key,
+    shiftKey: modifiers.shift_key,
+    bubbles: true,
+    cancelable: true
+  }};
+  const events = [];
+  for (const type of ["keydown", "keypress", "keyup"]) {{
+    try {{
+      events.push({{
+        type,
+        accepted: target.dispatchEvent(new KeyboardEvent(type, init))
+      }});
+    }} catch (error) {{
+      events.push({{
+        type,
+        accepted: false,
+        error: String(error.message || error)
+      }});
+    }}
+  }}
+  return {{
+    key,
+    code,
+    pressed: events.every((event) => !event.error),
+    target: targetKind,
+    target_info: describeElement(target),
+    modifiers,
+    events,
+    keydown_accepted: events[0] ? Boolean(events[0].accepted) : null
+  }};
+}}
+""".strip()
+
+
+def cmd_action_press_key(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.press-key",
+        _press_key_expression(
+            key=args.key,
+            code=args.code,
+            alt_key=args.alt_key,
+            ctrl_key=args.ctrl_key,
+            meta_key=args.meta_key,
+            shift_key=args.shift_key,
+        ),
+    )
+
+
 def cmd_action_click_text(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -7260,6 +7361,22 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_press.add_argument("--selector", required=True)
     action_press.add_argument("--key", required=True)
     action_press.set_defaults(func=cmd_action_press)
+
+    action_press_key = action_subparsers.add_parser(
+        "press-key",
+        help="Dispatch key events to the active element or page",
+    )
+    _add_session_target_args(action_press_key)
+    action_press_key.add_argument("--key", required=True)
+    action_press_key.add_argument(
+        "--code",
+        help="KeyboardEvent.code value. Defaults to --key.",
+    )
+    action_press_key.add_argument("--alt-key", action="store_true")
+    action_press_key.add_argument("--ctrl-key", action="store_true")
+    action_press_key.add_argument("--meta-key", action="store_true")
+    action_press_key.add_argument("--shift-key", action="store_true")
+    action_press_key.set_defaults(func=cmd_action_press_key)
 
     action_click_text = action_subparsers.add_parser(
         "click-text",

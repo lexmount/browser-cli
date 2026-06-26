@@ -207,6 +207,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "context.pick",
         "action.open-url",
         "action.page-info",
+        "action.press-key",
         "action.click-role",
         "action.fill-label",
         "action.interactive-snapshot",
@@ -244,6 +245,7 @@ def test_commands_catalog_filters_group_and_names_only(
     }
     assert "action.open-url" in payload["commands"]
     assert "action.page-info" in payload["commands"]
+    assert "action.press-key" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
     assert all(command.startswith("action.") for command in payload["commands"])
@@ -3241,6 +3243,58 @@ def test_action_set_file_input_missing_file_is_json(
                 "focused": True,
                 "key": "Enter",
                 "pressed": True,
+                "keydown_accepted": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "press-key",
+                "--session-id",
+                "s1",
+                "--key",
+                "Escape",
+                "--shift-key",
+            ],
+            "action.press-key",
+            {
+                "key": "Escape",
+                "code": "Escape",
+                "pressed": True,
+                "target": "body",
+                "target_info": {"tag_name": "body"},
+                "modifiers": {
+                    "alt_key": False,
+                    "ctrl_key": False,
+                    "meta_key": False,
+                    "shift_key": True,
+                },
+                "events": [
+                    {"type": "keydown", "accepted": True},
+                    {"type": "keypress", "accepted": True},
+                    {"type": "keyup", "accepted": True},
+                ],
+                "keydown_accepted": True,
+            },
+            {
+                "key": "Escape",
+                "code": "Escape",
+                "pressed": True,
+                "target": "body",
+                "target_info": {"tag_name": "body"},
+                "modifiers": {
+                    "alt_key": False,
+                    "ctrl_key": False,
+                    "meta_key": False,
+                    "shift_key": True,
+                },
+                "events": [
+                    {"type": "keydown", "accepted": True},
+                    {"type": "keypress", "accepted": True},
+                    {"type": "keyup", "accepted": True},
+                ],
                 "keydown_accepted": True,
                 "url": "https://example.test",
                 "fallback": "cdp",

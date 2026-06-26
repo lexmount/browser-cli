@@ -173,6 +173,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`uncheck`",
         "`check-label`",
         "`uncheck-label`",
+        "`press-key`",
         "`form-snapshot`",
         "`click-index`",
     ):
@@ -217,6 +218,12 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`requested_checked`" in normalized
     assert "`previous_checked`" in normalized
     assert "`changed`" in normalized
+    assert "`code`" in normalized
+    assert "`target`" in normalized
+    assert "`target_info`" in normalized
+    assert "`modifiers`" in normalized
+    assert "`events`" in normalized
+    assert "`keydown_accepted`" in normalized
     assert "`ready_state`" in normalized
     assert "`visibility_state`" in normalized
     assert "`viewport`" in normalized
@@ -268,7 +275,10 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `inspect` for `state.disabled`, `state.readonly`" in normalized
     assert "use `wait-count`, `wait-state`, or `wait-attribute`" in normalized
     assert "Open menus or keyboard flows" in normalized
-    assert "use `focus`, `hover` for menus, `press` for shortcuts" in normalized
+    assert (
+        "use `focus`, `hover` for menus, `press` for selector-scoped keys" in normalized
+    )
+    assert "`press-key` for active/global shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized
     assert "Read page results" in normalized
     assert "use `page-info` for URL/title/readyState/viewport checks" in normalized

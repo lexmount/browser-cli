@@ -304,6 +304,7 @@ browser-cli action check-label --session-id <session_id> --label "Remember me"
 browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
 browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
+browser-cli action press-key --session-id <session_id> --key Escape
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
@@ -321,8 +322,8 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `set-file-input`,
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
-`uncheck-label`, `hover`, `press`, `click-text`, `click-role`, `click-index`,
-`fill-label`,
+`uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
+`click-index`, `fill-label`,
 `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -337,7 +338,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `option_found`, `option_label`, `requested_checked`, `previous_checked`,
 `changed`, `total_candidate_count`, `ready_state`, `visibility_state`,
 `viewport`, `scroll`, `body_text_length`, `html_length`, `language`,
-`referrer`, or `navigation_requested` from `result`.
+`referrer`, `code`, `target`, `target_info`, `modifiers`, `events`,
+`keydown_accepted`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -491,8 +493,9 @@ Common agent recipes:
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
   confirm with `page-info`, `wait-url`, `wait-load-state`, `wait-network-idle`,
   `wait-text`, or `snapshot`.
-- Menu or keyboard flow: `focus`, `hover`, `press`, or `dispatch-event`, then
-  inspect again with `interactive-snapshot`.
+- Menu or keyboard flow: `focus`, `hover`, selector-scoped `press`,
+  active/global `press-key`, or `dispatch-event`, then inspect again with
+  `interactive-snapshot`.
 - Read results: `page-info` for URL/title/readyState/viewport checks,
   `wait-count` for dynamic lists, `wait-attribute` for DOM attributes,
   `wait-state` for enabled/visible/checked/focused states, `get-text` for known

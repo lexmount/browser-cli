@@ -272,6 +272,7 @@ browser-cli action check-label --session-id <session_id> --label "Remember me"
 browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
 browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
+browser-cli action press-key --session-id <session_id> --key Escape
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
@@ -290,7 +291,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `wait-cookie`, `clear`, `set-value`, `set-file-input`, `dispatch-event`,
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
-`uncheck-label`, `hover`, and `press` plus `click-text`, `click-role`,
+`uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
 `click-index`, `fill-label`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
@@ -303,7 +304,8 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `html_truncated`, `total_candidate_count`, `requested_option_label`, `option_found`, `option_label`,
 `requested_checked`, `previous_checked`, `changed`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
-`language`, `referrer`, and `navigation_requested`
+`language`, `referrer`, `code`, `target`, `target_info`, `modifiers`, `events`,
+`keydown_accepted`, and `navigation_requested`
 before assuming the page changed.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
 `body_text_length`, `html_length`, `language`, and `referrer` before taking a
@@ -332,8 +334,8 @@ For page work, choose actions in this order:
    document.cookie-visible cookies. Use `wait-cookie` after consent/login flows;
    do not expect HttpOnly cookies here.
 7. Use `scroll`, `scroll-into-view`, `bounding-box`, `inspect`, `hover`,
-   `press`, or `dispatch-event` for viewport, menu, keyboard, geometry, and event-triggered
-   UI flows.
+   selector-scoped `press`, active/global `press-key`, or `dispatch-event` for
+   viewport, menu, keyboard, geometry, and event-triggered UI flows.
 8. Use `eval` only for page-local work not covered by a first-class action, and
    keep the expression small.
 9. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
@@ -361,7 +363,8 @@ Common task recipes:
    `go-forward`, then confirm with `page-info`, `wait-url`, `wait-load-state`,
    `wait-network-idle`, `wait-text`, or `snapshot`.
 4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
-   shortcuts or Enter/Escape, `dispatch-event` for explicit DOM events, and
+   selector-scoped keys, `press-key` for active/global shortcuts such as
+   Enter/Escape, `dispatch-event` for explicit DOM events, and
    `blur` for focus-driven validation, then inspect again with
    `interactive-snapshot`.
 5. Read page results: use `page-info` for URL/title/readyState/viewport checks,

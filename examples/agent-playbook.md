@@ -107,7 +107,8 @@ browser-cli action snapshot --session-id <session_id>
 
 When expanded action commands are available, use them for common browser
 operations such as reading page info, checking existence, reading text,
-scrolling, selecting options, checking boxes, hovering, and pressing keys.
+scrolling, selecting options, checking boxes, hovering, pressing selector keys,
+and sending active/global shortcut keys.
 
 Prefer semantic actions such as `wait-role`, `click-role`, `click-text`,
 `fill-label`, `select-label`, `check-label`, `interactive-snapshot`, and
