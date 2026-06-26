@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -108,6 +108,10 @@ browser-cli action storage-get --session-id <session_id> --area local --key feat
 browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
 browser-cli action storage-remove --session-id <session_id> --area session --key draft
 browser-cli action storage-clear --session-id <session_id> --area session --prefix temp:
+browser-cli action cookie-get --session-id <session_id> --name consent
+browser-cli action cookie-set --session-id <session_id> --name consent --value yes --path /
+browser-cli action cookie-delete --session-id <session_id> --name consent --path /
+browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
@@ -127,15 +131,16 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-load-state`, `wait-network-idle`,
 `get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-text`, `focus`,
 `get-value`, `wait-value`, `blur`, `storage-get`, `storage-set`,
-`storage-remove`, `storage-clear`, `clear`, `submit`, `scroll`,
-`select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`,
-`click-role`, `fill-label`, `accessibility-snapshot`, and
+`storage-remove`, `storage-clear`, `cookie-get`, `cookie-set`, `cookie-delete`,
+`cookie-clear`, `clear`, `submit`, `scroll`, `select-option`, `check`,
+`uncheck`, `hover`, and `press` plus `click-text`, `click-role`, `fill-label`,
+`accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
-`removed`, `cleared`, `items`, `cleared_count`, `state`, `network_idle`,
-`quiet_ms`, `submitted`, `hovered`, `pressed`, and `navigation_requested`
-before assuming the page changed.
+`removed`, `deleted`, `cleared`, `items`, `cleared_count`, `state`,
+`network_idle`, `quiet_ms`, `submitted`, `hovered`, `pressed`, and
+`navigation_requested` before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -151,10 +156,12 @@ For page work, choose actions in this order:
    `wait-network-idle` for navigation and async refresh flows.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
    localStorage/sessionStorage state instead of writing storage JavaScript.
-6. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
-7. Use `eval` only for page-local work not covered by a first-class action, and
+6. Use `cookie-get`, `cookie-set`, `cookie-delete`, and `cookie-clear` for
+   document.cookie-visible cookies. Do not expect HttpOnly cookies here.
+7. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
+8. Use `eval` only for page-local work not covered by a first-class action, and
    keep the expression small.
-8. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
+9. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
    false, inspect again before trying a different action. For form state, parse
    `result.value` and `result.readable` before deciding whether to type again.
 
@@ -178,7 +185,9 @@ Common task recipes:
    dynamic results.
 6. Adjust browser state: use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
-   `storage-clear --prefix <prefix>` for targeted cleanup.
+   `storage-clear --prefix <prefix>` for targeted cleanup. Use `cookie-get`,
+   `cookie-set`, `cookie-delete`, or `cookie-clear` for document.cookie-visible
+   cookies such as consent or non-HttpOnly flags.
 7. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`.
 8. Capture final evidence: use `screenshot` after the action sequence and close
    the session unless the user asks to keep it open.

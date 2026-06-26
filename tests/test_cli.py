@@ -1694,6 +1694,264 @@ def test_storage_eval_backed_action_commands_emit_structured_results(
     }
 
 
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "cookie-get",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+            ],
+            "action.cookie-get",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "value": "yes",
+                "raw_value": "yes",
+                "value_length": 3,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "value": "yes",
+                "raw_value": "yes",
+                "value_length": 3,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-get",
+                "--session-id",
+                "s1",
+                "--prefix",
+                "tmp:",
+                "--max-items",
+                "10",
+            ],
+            "action.cookie-get",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": None,
+                "prefix": "tmp:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 10,
+                "truncated": False,
+                "items": [
+                    {
+                        "name": "tmp:flag",
+                        "value": "on",
+                        "raw_name": "tmp%3Aflag",
+                        "raw_value": "on",
+                        "value_length": 2,
+                    }
+                ],
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": None,
+                "prefix": "tmp:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 10,
+                "truncated": False,
+                "items": [
+                    {
+                        "name": "tmp:flag",
+                        "value": "on",
+                        "raw_name": "tmp%3Aflag",
+                        "raw_value": "on",
+                        "value_length": 2,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-set",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+                "--value",
+                "yes",
+                "--path",
+                "/",
+                "--same-site",
+                "lax",
+            ],
+            "action.cookie-set",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "yes",
+                "value_length": 3,
+                "path": "/",
+                "domain": None,
+                "max_age": None,
+                "expires": None,
+                "same_site": "lax",
+                "secure": False,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "yes",
+                "value_length": 3,
+                "path": "/",
+                "domain": None,
+                "max_age": None,
+                "expires": None,
+                "same_site": "lax",
+                "secure": False,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-delete",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+                "--path",
+                "/",
+            ],
+            "action.cookie-delete",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "deleted": True,
+                "had_cookie": True,
+                "found": True,
+                "previous_value": "yes",
+                "path": "/",
+                "domain": None,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "deleted": True,
+                "had_cookie": True,
+                "found": True,
+                "previous_value": "yes",
+                "path": "/",
+                "domain": None,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-clear",
+                "--session-id",
+                "s1",
+                "--prefix",
+                "tmp:",
+                "--path",
+                "/",
+            ],
+            "action.cookie-clear",
+            {
+                "document_cookie_scope": "document.cookie",
+                "prefix": "tmp:",
+                "path": "/",
+                "domain": None,
+                "cleared": True,
+                "cleared_count": 2,
+                "matched_count": 2,
+                "names": ["tmp:a", "tmp:b"],
+                "remaining_count": 0,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "prefix": "tmp:",
+                "path": "/",
+                "domain": None,
+                "cleared": True,
+                "cleared_count": 2,
+                "matched_count": 2,
+                "names": ["tmp:a", "tmp:b"],
+                "remaining_count": 0,
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_cookie_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
 def test_direct_url_can_reveal_secret_explicitly(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

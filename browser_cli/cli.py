@@ -1428,6 +1428,303 @@ def _storage_clear_expression(*, area: str, prefix: str | None) -> str:
 """.strip()
 
 
+def _cookie_helpers_expression() -> str:
+    return """
+  const documentCookieScope = "document.cookie";
+  const decodePart = (value) => {
+    try {
+      return decodeURIComponent(value);
+    } catch (error) {
+      return value;
+    }
+  };
+  const parseCookies = () => {
+    const raw = document.cookie || "";
+    if (!raw) return [];
+    return raw
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const separator = part.indexOf("=");
+        const rawName = separator === -1 ? part : part.slice(0, separator);
+        const rawValue = separator === -1 ? "" : part.slice(separator + 1);
+        const name = decodePart(rawName);
+        const value = decodePart(rawValue);
+        return {
+          name,
+          value,
+          raw_name: rawName,
+          raw_value: rawValue,
+          value_length: value.length
+        };
+      });
+  };
+  const findCookie = (name) =>
+    parseCookies().find((cookie) => cookie.name === name) || null;
+  const cookieAssignment = ({
+    name,
+    value,
+    path,
+    domain,
+    maxAge,
+    expires,
+    sameSite,
+    secure
+  }) => {
+    const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`];
+    if (path) parts.push(`Path=${path}`);
+    if (domain) parts.push(`Domain=${domain}`);
+    if (Number.isFinite(maxAge)) parts.push(`Max-Age=${Math.trunc(maxAge)}`);
+    if (expires) parts.push(`Expires=${expires}`);
+    if (sameSite) {
+      parts.push(`SameSite=${sameSite[0].toUpperCase()}${sameSite.slice(1).toLowerCase()}`);
+    }
+    if (secure) parts.push("Secure");
+    return parts.join("; ");
+  };
+""".rstrip()
+
+
+def _cookie_get_expression(
+    *,
+    name: str | None,
+    prefix: str | None,
+    max_items: int,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const requestedName = {name_source};
+  const prefix = {prefix_source};
+  const maxItems = Math.max(1, {_js_literal(max_items)});
+  try {{
+    if (requestedName !== null) {{
+      const cookie = findCookie(requestedName);
+      return {{
+        document_cookie_scope: documentCookieScope,
+        name: requestedName,
+        found: cookie !== null,
+        value: cookie?.value ?? null,
+        raw_value: cookie?.raw_value ?? null,
+        value_length: cookie?.value_length ?? null
+      }};
+    }}
+    const matched = parseCookies().filter((cookie) =>
+      prefix === null || cookie.name.startsWith(prefix)
+    );
+    const items = matched.slice(0, maxItems);
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name: null,
+      prefix,
+      found: true,
+      count: matched.length,
+      item_count: items.length,
+      max_items: maxItems,
+      truncated: matched.length > items.length,
+      items
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name: requestedName,
+      prefix,
+      found: false,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _cookie_set_expression(
+    *,
+    name: str,
+    value: str,
+    path: str | None,
+    domain: str | None,
+    max_age: int | None,
+    expires: str | None,
+    same_site: str | None,
+    secure: bool,
+) -> str:
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const name = {_js_literal(name)};
+  const value = {_js_literal(value)};
+  const path = {_js_literal(path)};
+  const domain = {_js_literal(domain)};
+  const maxAge = {_js_literal(max_age)};
+  const expires = {_js_literal(expires)};
+  const sameSite = {_js_literal(same_site)};
+  const secure = {_js_literal(secure)};
+  try {{
+    const previousCookie = findCookie(name);
+    const assignment = cookieAssignment({{
+      name,
+      value,
+      path,
+      domain,
+      maxAge,
+      expires,
+      sameSite,
+      secure
+    }});
+    document.cookie = assignment;
+    const currentCookie = findCookie(name);
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      set: currentCookie?.value === value,
+      found: currentCookie !== null,
+      previous_value: previousCookie?.value ?? null,
+      value: currentCookie?.value ?? null,
+      value_length: currentCookie?.value_length ?? null,
+      path,
+      domain,
+      max_age: maxAge,
+      expires,
+      same_site: sameSite,
+      secure
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      set: false,
+      found: false,
+      value: null,
+      path,
+      domain,
+      max_age: maxAge,
+      expires,
+      same_site: sameSite,
+      secure,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _cookie_delete_expression(
+    *,
+    name: str,
+    path: str | None,
+    domain: str | None,
+) -> str:
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const name = {_js_literal(name)};
+  const path = {_js_literal(path)};
+  const domain = {_js_literal(domain)};
+  try {{
+    const previousCookie = findCookie(name);
+    document.cookie = cookieAssignment({{
+      name,
+      value: "",
+      path,
+      domain,
+      maxAge: 0,
+      expires: "Thu, 01 Jan 1970 00:00:00 GMT",
+      sameSite: null,
+      secure: false
+    }});
+    const currentCookie = findCookie(name);
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      deleted: currentCookie === null,
+      had_cookie: previousCookie !== null,
+      found: previousCookie !== null,
+      previous_value: previousCookie?.value ?? null,
+      path,
+      domain
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      name,
+      deleted: false,
+      found: false,
+      path,
+      domain,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _cookie_clear_expression(
+    *,
+    prefix: str | None,
+    path: str | None,
+    domain: str | None,
+) -> str:
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_cookie_helpers_expression()}
+  const prefix = {prefix_source};
+  const path = {_js_literal(path)};
+  const domain = {_js_literal(domain)};
+  try {{
+    const matched = parseCookies().filter((cookie) =>
+      prefix === null || cookie.name.startsWith(prefix)
+    );
+    for (const cookie of matched) {{
+      document.cookie = cookieAssignment({{
+        name: cookie.name,
+        value: "",
+        path,
+        domain,
+        maxAge: 0,
+        expires: "Thu, 01 Jan 1970 00:00:00 GMT",
+        sameSite: null,
+        secure: false
+      }});
+    }}
+    const remainingNames = new Set(parseCookies().map((cookie) => cookie.name));
+    const deletedNames = matched
+      .map((cookie) => cookie.name)
+      .filter((name) => !remainingNames.has(name));
+    return {{
+      document_cookie_scope: documentCookieScope,
+      prefix,
+      path,
+      domain,
+      cleared: deletedNames.length === matched.length,
+      cleared_count: deletedNames.length,
+      matched_count: matched.length,
+      names: matched.map((cookie) => cookie.name),
+      remaining_count: matched.length - deletedNames.length
+    }};
+  }} catch (error) {{
+    return {{
+      document_cookie_scope: documentCookieScope,
+      prefix,
+      path,
+      domain,
+      cleared: false,
+      cleared_count: 0,
+      matched_count: 0,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
 def _clear_expression(selector: str) -> str:
     return _event_expression(
         selector,
@@ -1841,6 +2138,59 @@ def cmd_action_storage_clear(args: argparse.Namespace) -> None:
         _storage_clear_expression(
             area=args.area,
             prefix=args.prefix,
+        ),
+    )
+
+
+def cmd_action_cookie_get(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-get",
+        _cookie_get_expression(
+            name=args.name,
+            prefix=args.prefix,
+            max_items=args.max_items,
+        ),
+    )
+
+
+def cmd_action_cookie_set(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-set",
+        _cookie_set_expression(
+            name=args.name,
+            value=args.value,
+            path=args.path,
+            domain=args.domain,
+            max_age=args.max_age,
+            expires=args.expires,
+            same_site=args.same_site,
+            secure=args.secure,
+        ),
+    )
+
+
+def cmd_action_cookie_delete(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-delete",
+        _cookie_delete_expression(
+            name=args.name,
+            path=args.path,
+            domain=args.domain,
+        ),
+    )
+
+
+def cmd_action_cookie_clear(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.cookie-clear",
+        _cookie_clear_expression(
+            prefix=args.prefix,
+            path=args.path,
+            domain=args.domain,
         ),
     )
 
@@ -2602,6 +2952,73 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Only clear keys with this prefix.",
     )
     action_storage_clear.set_defaults(func=cmd_action_storage_clear)
+
+    action_cookie_get = action_subparsers.add_parser(
+        "cookie-get",
+        help="Read document.cookie-visible cookies",
+    )
+    _add_session_target_args(action_cookie_get)
+    action_cookie_get.add_argument("--name")
+    action_cookie_get.add_argument(
+        "--prefix",
+        help="Only list cookie names with this prefix when --name is omitted.",
+    )
+    action_cookie_get.add_argument(
+        "--max-items",
+        type=int,
+        default=50,
+        help="Maximum number of cookies to return when listing.",
+    )
+    action_cookie_get.set_defaults(func=cmd_action_cookie_get)
+
+    action_cookie_set = action_subparsers.add_parser(
+        "cookie-set",
+        help="Set a document.cookie-visible cookie",
+    )
+    _add_session_target_args(action_cookie_set)
+    action_cookie_set.add_argument("--name", required=True)
+    action_cookie_set.add_argument("--value", required=True)
+    action_cookie_set.add_argument("--path")
+    action_cookie_set.add_argument("--domain")
+    action_cookie_set.add_argument("--max-age", type=int)
+    action_cookie_set.add_argument(
+        "--expires",
+        help="Cookie Expires attribute, e.g. 'Wed, 21 Oct 2026 07:28:00 GMT'.",
+    )
+    action_cookie_set.add_argument(
+        "--same-site",
+        choices=["lax", "strict", "none"],
+        help="Cookie SameSite attribute.",
+    )
+    action_cookie_set.add_argument(
+        "--secure",
+        action="store_true",
+        help="Add the Secure attribute.",
+    )
+    action_cookie_set.set_defaults(func=cmd_action_cookie_set)
+
+    action_cookie_delete = action_subparsers.add_parser(
+        "cookie-delete",
+        help="Delete one document.cookie-visible cookie",
+    )
+    _add_session_target_args(action_cookie_delete)
+    action_cookie_delete.add_argument("--name", required=True)
+    action_cookie_delete.add_argument("--path")
+    action_cookie_delete.add_argument("--domain")
+    action_cookie_delete.set_defaults(func=cmd_action_cookie_delete)
+
+    action_cookie_clear = action_subparsers.add_parser(
+        "cookie-clear",
+        help="Clear document.cookie-visible cookies",
+    )
+    _add_session_target_args(action_cookie_clear)
+    action_cookie_clear.add_argument(
+        "--prefix",
+        help="Only clear cookie names with this prefix.",
+    )
+    action_cookie_clear.add_argument("--path")
+    action_cookie_clear.add_argument("--domain")
+    action_cookie_clear.set_defaults(func=cmd_action_cookie_clear)
 
     action_clear = action_subparsers.add_parser(
         "clear",
