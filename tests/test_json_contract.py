@@ -114,6 +114,8 @@ def test_json_contract_documents_command_alias_metadata() -> None:
 def test_json_contract_documents_agent_workflows() -> None:
     text = JSON_CONTRACT.read_text()
 
+    assert "`--workflows-only`" in text
+    assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
     assert "`success_condition`" in text
     assert "`on_failure_read`" in text

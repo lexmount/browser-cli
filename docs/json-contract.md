@@ -41,6 +41,8 @@ Command-specific fields may be added over time. Agents should check `ok` and
 returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`; `--names-only`
 returns compact command names, and `--group <name>` filters by command group.
+`--workflows-only` returns a compact payload with `workflow_count`,
+`agent_workflows`, and `agent_entrypoints` without the large `commands` array.
 `agent_workflows` describes ordered setup, one-off page, and persistent login
 state steps with `command`, `read`, `success_condition`, `on_failure_read`, and
 `cleanup` hints. Command entries may expose `aliases` on canonical commands plus

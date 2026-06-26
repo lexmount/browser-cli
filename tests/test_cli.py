@@ -269,7 +269,42 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any(
         "--smoke-session" in option["flags"] for option in commands["doctor"]["options"]
     )
+    assert any(
+        "--workflows-only" in option["flags"]
+        for option in commands["commands"]["options"]
+    )
     assert "super-secret-key" not in json.dumps(payload)
+
+
+def test_commands_catalog_returns_workflows_only(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflows-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "commands"
+    assert payload["schema_version"] == 1
+    assert payload["group"] is None
+    assert payload["workflow_count"] == 3
+    assert "commands" not in payload
+    assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
+        "browser-cli doctor --json"
+    )
+    assert payload["agent_workflows"]["one_off_page_task"]["steps"][-1] == {
+        "id": "close_session",
+        "command": "browser-cli session close --session-id <session_id>",
+        "cleanup": True,
+    }
+    assert (
+        "selection_summary.recommended_next_action"
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][0]["read"]
+    )
+    assert "browser-cli auth login" in payload["agent_entrypoints"]["setup"]
+    assert payload["json_output"]["always_json"] is True
+    assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
 
 
 def test_commands_catalog_filters_group_and_names_only(

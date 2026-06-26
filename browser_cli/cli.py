@@ -10036,6 +10036,18 @@ def cmd_commands(args: argparse.Namespace) -> None:
     catalog["commands"] = commands
     catalog["command_count"] = len(commands)
 
+    if args.workflows_only:
+        _success(
+            command,
+            schema_version=catalog["schema_version"],
+            group=args.group,
+            workflow_count=len(catalog["agent_workflows"]),
+            agent_workflows=catalog["agent_workflows"],
+            agent_entrypoints=catalog["agent_entrypoints"],
+            json_output=catalog["json_output"],
+            secret_policy=catalog["secret_policy"],
+        )
+
     if args.names_only:
         _success(
             command,
@@ -11808,10 +11820,16 @@ def _add_commands_command(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--group",
         help="Only include commands from one group, such as action, auth, or session.",
     )
-    commands.add_argument(
+    output = commands.add_mutually_exclusive_group()
+    output.add_argument(
         "--names-only",
         action="store_true",
         help="Return only command names for compact agent discovery.",
+    )
+    output.add_argument(
+        "--workflows-only",
+        action="store_true",
+        help="Return only structured agent workflows for compact agent setup.",
     )
     commands.set_defaults(func=cmd_commands)
 
