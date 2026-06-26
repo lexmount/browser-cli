@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -106,6 +109,13 @@ def _model_payload(value: Any) -> dict[str, Any]:
     return value.model_dump(mode="json")
 
 
+def _package_version(distribution: str) -> str | None:
+    try:
+        return version(distribution)
+    except PackageNotFoundError:
+        return None
+
+
 def _mask_direct_url_secret(connect_url: str) -> str:
     parsed = urlsplit(connect_url)
     query = [
@@ -135,6 +145,25 @@ def _masked_connect_url_payload(
         "connect_url": masked,
         "connect_url_masked": masked != connect_url,
     }
+
+
+def _mask_sensitive_text(text: str) -> str:
+    masked = re.sub(r"(?i)(api[_-]?key=)[^&\s]+", r"\1***", text)
+    api_key = os.environ.get("LEXMOUNT_API_KEY")
+    if api_key:
+        masked = masked.replace(api_key, "***")
+    return masked
+
+
+def _doctor_check(
+    name: str,
+    status: str,
+    message: str,
+    **details: Any,
+) -> dict[str, Any]:
+    check = {"name": name, "status": status, "message": message}
+    check.update(details)
+    return check
 
 
 def cmd_session_create(args: argparse.Namespace) -> None:
@@ -2943,6 +2972,168 @@ def cmd_action_interactive_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.interactive-snapshot", expression)
 
 
+def cmd_doctor(args: argparse.Namespace) -> None:
+    command = "doctor"
+    checks: list[dict[str, Any]] = []
+
+    browser_cli_version = _package_version("browser-cli")
+    checks.append(
+        _doctor_check(
+            "browser_cli",
+            "pass",
+            "browser-cli import succeeded",
+            version=browser_cli_version or "unknown",
+            version_known=browser_cli_version is not None,
+        )
+    )
+
+    runtime_version = _package_version("lex-browser-runtime")
+    checks.append(
+        _doctor_check(
+            "lex_browser_runtime",
+            "pass",
+            "lex-browser-runtime import succeeded",
+            version=runtime_version or "unknown",
+            version_known=runtime_version is not None,
+        )
+    )
+
+    api_key = os.environ.get("LEXMOUNT_API_KEY")
+    project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
+    base_url = os.environ.get("LEXMOUNT_BASE_URL")
+    region = os.environ.get("LEXMOUNT_REGION")
+
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_API_KEY",
+            "pass" if api_key else "fail",
+            "LEXMOUNT_API_KEY is set" if api_key else "LEXMOUNT_API_KEY is required",
+            present=api_key is not None,
+        )
+    )
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_PROJECT_ID",
+            "pass" if project_id else "fail",
+            "LEXMOUNT_PROJECT_ID is set"
+            if project_id
+            else "LEXMOUNT_PROJECT_ID is required",
+            present=project_id is not None,
+        )
+    )
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_BASE_URL",
+            "pass",
+            "LEXMOUNT_BASE_URL is set"
+            if base_url
+            else "LEXMOUNT_BASE_URL is not set; the default endpoint will be used",
+            present=base_url is not None,
+            value=base_url,
+            default="https://api.lexmount.cn",
+        )
+    )
+    checks.append(
+        _doctor_check(
+            "env.LEXMOUNT_REGION",
+            "pass",
+            "LEXMOUNT_REGION is set"
+            if region
+            else "LEXMOUNT_REGION is not set; runtime defaults apply",
+            present=region is not None,
+            value=region,
+        )
+    )
+
+    try:
+        connect_url = build_direct_connect_url()
+    except Exception as exc:
+        checks.append(
+            _doctor_check(
+                "direct_url",
+                "fail",
+                _mask_sensitive_text(str(exc)),
+                error=exc.__class__.__name__,
+            )
+        )
+    else:
+        checks.append(
+            _doctor_check(
+                "direct_url",
+                "pass",
+                "direct browser websocket URL can be built",
+                **_masked_connect_url_payload(
+                    connect_url,
+                    reveal_connect_url=args.reveal_connect_url,
+                ),
+            )
+        )
+
+    if args.skip_api:
+        checks.append(
+            _doctor_check(
+                "api_connectivity",
+                "skipped",
+                "API connectivity check skipped by --skip-api",
+            )
+        )
+    elif not api_key or not project_id:
+        checks.append(
+            _doctor_check(
+                "api_connectivity",
+                "skipped",
+                "API connectivity check requires LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID",
+            )
+        )
+    else:
+        try:
+            result = LexmountBrowserAdmin().list_sessions(status=None)
+        except Exception as exc:
+            info = getattr(exc, "lexmount_error_info", None)
+            error = (
+                info.payload().get("error")
+                if isinstance(info, LexmountErrorInfo)
+                else exc.__class__.__name__
+            )
+            checks.append(
+                _doctor_check(
+                    "api_connectivity",
+                    "fail",
+                    _mask_sensitive_text(str(exc)),
+                    error=error,
+                )
+            )
+        else:
+            payload = _model_payload(result)
+            checks.append(
+                _doctor_check(
+                    "api_connectivity",
+                    "pass",
+                    "Lexmount API is reachable",
+                    session_count=payload.get("count"),
+                    status_filter=payload.get("status_filter"),
+                )
+            )
+
+    failed = [check for check in checks if check["status"] == "fail"]
+    data: dict[str, Any] = {
+        "ok": not failed,
+        "command": command,
+        "status": "ok" if not failed else "error",
+        "checked": len(checks),
+        "failed": len(failed),
+        "checks": checks,
+    }
+    if failed:
+        data.update(
+            {
+                "error": "doctor_failed",
+                "message": "One or more doctor checks failed.",
+            }
+        )
+    _json_dump(data, exit_code=1 if failed else 0)
+
+
 def cmd_direct_url(args: argparse.Namespace) -> None:
     command = "direct-url"
     try:
@@ -3776,6 +3967,24 @@ def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case_run.set_defaults(func=cmd_case_run)
 
 
+def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="Check browser-cli install, credentials, direct URL, and API connectivity",
+    )
+    doctor.add_argument(
+        "--skip-api",
+        action="store_true",
+        help="Skip the live Lexmount API connectivity check.",
+    )
+    doctor.add_argument(
+        "--reveal-connect-url",
+        action="store_true",
+        help="Print the full direct URL including api_key. Default output masks secrets.",
+    )
+    doctor.set_defaults(func=cmd_doctor)
+
+
 def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     prepare = subparsers.add_parser(
         "prepare",
@@ -3821,6 +4030,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_context_commands(subparsers)
     _add_action_commands(subparsers)
     _add_case_commands(subparsers)
+    _add_doctor_command(subparsers)
     _add_alias_commands(subparsers)
 
     return parser

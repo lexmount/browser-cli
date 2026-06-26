@@ -24,6 +24,19 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     )
 
 
+def test_skill_uses_doctor_for_setup_checks() -> None:
+    normalized = _normalized_skill_text()
+
+    assert (
+        "verify installation, environment, and API connectivity with doctor"
+        in normalized
+    )
+    assert "browser-cli doctor" in normalized
+    assert "browser-cli doctor --skip-api" in normalized
+    assert "If setup is uncertain, run `browser-cli doctor`" in normalized
+    assert "inspect `checks` and report failed check names" in normalized
+
+
 def test_skill_lists_selector_and_input_actions() -> None:
     normalized = _normalized_skill_text()
 

@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -35,7 +35,19 @@ Do not ask the user to paste secrets into chat. Direct the user to
 defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only when a
 non-default API endpoint is needed.
 
+After credentials are configured, run:
+
+```bash
+browser-cli doctor
+```
+
+Parse failed `checks` if `doctor` returns `ok: false`. Use
+`browser-cli doctor --skip-api` only when live API access is intentionally
+unavailable.
+
 ## Workflow
+
+If setup is uncertain, run `browser-cli doctor` before creating a session.
 
 For a one-off task:
 
@@ -58,6 +70,13 @@ Always close sessions created for temporary automation unless the user asks to
 keep them open.
 
 ## Commands
+
+Diagnostics:
+
+```bash
+browser-cli doctor
+browser-cli doctor --skip-api
+```
 
 Session lifecycle:
 
@@ -221,3 +240,5 @@ the shared direct websocket path.
 Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, and command-specific fields. Do not log revealed API keys. By default,
 browser direct URLs are masked; use reveal flags only for local debugging.
+For `doctor`, inspect `checks` and report failed check names without revealing
+API keys.

@@ -37,11 +37,11 @@ CLI for you:
 8. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
 9. 运行下面命令验证：
    browser-cli --help
-   browser-cli direct-url
-   browser-cli session list
+   browser-cli doctor
 10. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
+   - browser-cli doctor 的 checks 中哪一项失败
    - LEXMOUNT_API_KEY 是否已设置
    - LEXMOUNT_PROJECT_ID 是否已设置
    - 如果设置了 LEXMOUNT_BASE_URL，它是否为正确的 API endpoint
@@ -88,7 +88,22 @@ export LEXMOUNT_REGION="<region>"
 Treat API keys as secrets. The CLI masks `api_key` in generated direct browser
 URLs unless you pass an explicit reveal flag.
 
+After credentials are configured, run the self-check:
+
+```bash
+browser-cli doctor
+```
+
+Use `browser-cli doctor --skip-api` only when the live API should not be called.
+
 ## Commands
+
+Diagnostics:
+
+```bash
+browser-cli doctor
+browser-cli doctor --skip-api
+```
 
 Session management:
 
@@ -194,11 +209,12 @@ Each action must receive exactly one browser target:
 By default, action output masks `api_key` inside resolved direct connect URLs.
 Use `--reveal-connect-url` only for local debugging.
 
-Case files and compatibility aliases:
+Diagnostics, case files, and compatibility aliases:
 
 ```bash
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
+browser-cli doctor
 browser-cli direct-url
 browser-cli prepare
 browser-cli list-contexts
@@ -231,6 +247,11 @@ Failed commands include:
 
 Agents should parse `ok`, `command`, and `error` first, then use
 command-specific fields.
+
+`browser-cli doctor` returns a `checks` array with `pass`, `fail`, or `skipped`
+statuses for install/version, environment, direct URL, and API connectivity
+checks. It masks `api_key` in direct URLs and diagnostic error messages by
+default.
 
 ## Suggested Agent Workflow
 
@@ -315,8 +336,8 @@ The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
    expiration, and one-click revoke.
 3. Provide a copyable install block:
    `uv tool install git+https://github.com/lexmount/browser-cli.git`.
-4. Add a "Verify CLI" section that tells users to run
-   `browser-cli session list` after setting env vars.
+4. Add a "Verify CLI" section that tells users to run `browser-cli doctor`
+   after setting env vars and shows how to interpret failed `checks`.
 5. Longer term, support device-code or OAuth-style authorization so Codex can
    ask the user to approve access in the browser and then receive a local,
    short-lived token without the user manually copying API keys.
