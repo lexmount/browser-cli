@@ -211,6 +211,19 @@ browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
 ```
 
+Common agent recipes:
+
+- Form submit: `interactive-snapshot` -> `fill-label` -> `select-option` or
+  `check` -> `click-role --role button --name <text>`.
+- Visible button/link: `click-role`, then `click-text`, then selector `click`
+  after `exists` confirms a stable selector.
+- Menu or keyboard flow: `hover` or `press`, then inspect again with
+  `interactive-snapshot`.
+- Read results: `get-text` for known selectors, or `snapshot` when the selector
+  is unknown.
+- Final evidence: `screenshot`, then close the session unless it should stay
+  open.
+
 Use `context create` plus `session create --context-id <context_id>` when login
 state or cookies should survive between sessions.
 

@@ -124,6 +124,20 @@ For page work, choose actions in this order:
 6. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
    false, inspect again before trying a different action.
 
+Common task recipes:
+
+1. Fill and submit a form: run `interactive-snapshot`, use `fill-label` for
+   labeled fields, use `select-option` or `check` for controls, then submit with
+   `click-role --role button --name <text>` or `click-text`.
+2. Click a visible control: prefer `click-role`, then `click-text`, then
+   selector `click` after `exists` confirms a stable selector.
+3. Open menus or keyboard flows: use `hover` for menus, `press` for shortcuts or
+   Enter/Escape, then inspect again with `interactive-snapshot`.
+4. Read page results: use `get-text` for a known selector; use `snapshot` when
+   the page structure or selector is unknown.
+5. Capture final evidence: use `screenshot` after the action sequence and close
+   the session unless the user asks to keep it open.
+
 Each action must use exactly one target:
 
 ```bash
