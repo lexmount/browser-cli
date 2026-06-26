@@ -14,6 +14,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     normalized = _normalized_skill_text()
 
     assert "Inspect with `snapshot`, then `interactive-snapshot`" in normalized
+    assert "use `form-snapshot` before filling complex forms" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
@@ -117,6 +118,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`select-option`",
         "`check`",
         "`uncheck`",
+        "`form-snapshot`",
     ):
         assert action in normalized
 
@@ -140,6 +142,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`requested_value`" in normalized
     assert "`dispatched`" in normalized
     assert "`dispatched_events`" in normalized
+    assert "`fields`" in normalized
+    assert "`value_masked`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -148,7 +152,8 @@ def test_skill_includes_common_task_recipes() -> None:
 
     assert "Common task recipes" in normalized
     assert "Fill and submit a form" in normalized
-    assert "`interactive-snapshot`, use `fill-label`" in normalized
+    assert "run `form-snapshot` or `interactive-snapshot`" in normalized
+    assert "`fill-label` for labeled fields" in normalized
     assert "`set-value` for stable selectors" in normalized
     assert "`clear` before replacement text" in normalized
     assert "`get-value` or `wait-value` to confirm form state" in normalized

@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, set form values, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, inspect form fields, set form values, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -179,6 +179,7 @@ browser-cli action press --session-id <session_id> --selector "input[name=q]" --
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
@@ -191,19 +192,19 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`,
 `wait-cookie`, `clear`, `set-value`, `dispatch-event`, `submit`, `scroll`,
 `select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`, `click-role`,
-`fill-label`, `accessibility-snapshot`, and
+`fill-label`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
 `removed`, `deleted`, `cleared`, `items`, `cleared_count`, `requested_count`,
 `state`, `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`,
-`submitted`, `hovered`, `pressed`, `dispatched`, `dispatched_events`, and
-`navigation_requested` before assuming the page changed.
+`submitted`, `hovered`, `pressed`, `dispatched`, `dispatched_events`, `fields`,
+`value_masked`, and `navigation_requested` before assuming the page changed.
 
 For page work, choose actions in this order:
 
 1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
-   are unclear.
+   are unclear; use `form-snapshot` before filling complex forms.
 2. Prefer semantic actions: `click-role` for known roles/names, `click-text` for
    visible text, and `fill-label` for labeled form fields.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
@@ -229,12 +230,13 @@ For page work, choose actions in this order:
 
 Common task recipes:
 
-1. Fill and submit a form: run `interactive-snapshot`, use `fill-label` for
-   labeled fields and `set-value` for stable selectors, `clear` before
-   replacement text when needed, use `get-value` or `wait-value` to confirm
-   form state, use `blur` for focus-driven validation, use `select-option` or
-   `check` for controls, use `dispatch-event --event input --event change`
-   when the app needs explicit events, then use `submit`,
+1. Fill and submit a form: run `form-snapshot` or `interactive-snapshot`, use
+   `fill-label` for labeled fields and `set-value` for stable selectors,
+   `clear` before replacement text when needed, use `get-value` or `wait-value`
+   to confirm form state, use `blur` for focus-driven validation, use
+   `select-option` or `check` for controls, use
+   `dispatch-event --event input --event change` when the app needs explicit
+   events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: prefer `click-role`, then `click-text`, then
    selector `click` after `exists` confirms a stable selector.

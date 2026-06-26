@@ -1138,6 +1138,98 @@ def _fill_label_expression(
 """.strip()
 
 
+def _form_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    reveal_sensitive_values: bool,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+{_form_value_helpers_expression()}
+  const rootSelector = {selector_source};
+  const revealSensitiveValues = {_js_literal(reveal_sensitive_values)};
+  const fieldSelector = "input, textarea, select, [contenteditable='true']";
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const fields = [];
+  const seen = new Set();
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(fieldSelector) ? [root] : []),
+      ...root.querySelectorAll(fieldSelector)
+    ];
+    for (const field of candidates) {{
+      if (seen.has(field) || !visible(field)) continue;
+      seen.add(field);
+      fields.push(field);
+    }}
+  }}
+  const labelTexts = (field) => {{
+    const labels = field.labels ? [...field.labels] : [];
+    const closestLabel = field.closest?.("label");
+    if (closestLabel && !labels.includes(closestLabel)) labels.push(closestLabel);
+    return labels.map((label) => textOf(label)).filter(Boolean);
+  }};
+  const optionsOf = (field) => field.tagName.toLowerCase() === "select"
+    ? [...field.options].map((option) => ({{
+        value: option.value,
+        text: textOf(option),
+        selected: Boolean(option.selected),
+        disabled: Boolean(option.disabled)
+      }}))
+    : null;
+  const fieldInfo = (field) => {{
+    const info = nodeInfo(field);
+    const tag = field.tagName.toLowerCase();
+    const type = String(field.getAttribute("type") || "").toLowerCase();
+    const rawValue = readFormValue(field);
+    const sensitive = tag === "input" && (type === "password" || type === "hidden");
+    const valuePayload = sensitive && !revealSensitiveValues
+      ? {{
+          ...rawValue,
+          value: rawValue.value === null || rawValue.value === "" ? rawValue.value : "***",
+          value_masked: rawValue.value !== null && rawValue.value !== "",
+          value_length: String(rawValue.value ?? "").length
+        }}
+      : {{ ...rawValue, value_masked: false }};
+    return {{
+      ...info,
+      type: type || null,
+      id: field.id || null,
+      name_attribute: field.getAttribute("name"),
+      labels: labelTexts(field),
+      placeholder: field.getAttribute("placeholder"),
+      disabled: Boolean(field.disabled),
+      required: Boolean(field.required),
+      readonly: Boolean(field.readOnly),
+      autocomplete: field.getAttribute("autocomplete"),
+      options: optionsOf(field),
+      ...valuePayload
+    }};
+  }};
+  const visibleFields = fields.filter(visible);
+  const nodes = limited(fields).map(fieldInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "form",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    field_count: fields.length,
+    visible_count: visibleFields.length,
+    truncated: maxNodes !== null && fields.length > nodes.length,
+    fields: nodes
+  }};
+}}
+""".strip()
+
+
 def _wait_text_expression(
     *,
     text: str,
@@ -3529,6 +3621,16 @@ def cmd_action_fill_label(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_form_snapshot(args: argparse.Namespace) -> None:
+    expression = _form_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        reveal_sensitive_values=args.reveal_sensitive_values,
+    )
+    _run_eval_backed_action_command(args, "action.form-snapshot", expression)
+
+
 def cmd_action_accessibility_snapshot(args: argparse.Namespace) -> None:
     expression = f"""
 () => {{
@@ -4865,6 +4967,23 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_fill_label.add_argument("--text", required=True)
     _add_text_match_args(action_fill_label)
     action_fill_label.set_defaults(func=cmd_action_fill_label)
+
+    action_form_snapshot = action_subparsers.add_parser(
+        "form-snapshot",
+        help="Capture form fields, labels, values, and select options",
+    )
+    _add_session_target_args(action_form_snapshot)
+    action_form_snapshot.add_argument(
+        "--selector",
+        help="Optional form or container selector used to scope fields.",
+    )
+    _add_snapshot_filter_args(action_form_snapshot)
+    action_form_snapshot.add_argument(
+        "--reveal-sensitive-values",
+        action="store_true",
+        help="Reveal password and hidden field values. Default masks them.",
+    )
+    action_form_snapshot.set_defaults(func=cmd_action_form_snapshot)
 
     action_accessibility_snapshot = action_subparsers.add_parser(
         "accessibility-snapshot",

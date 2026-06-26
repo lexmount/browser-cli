@@ -221,6 +221,7 @@ browser-cli action press --session-id <session_id> --selector "input[name=q]" --
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
@@ -233,7 +234,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
 `submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, `press`,
 `click-text`, `click-role`,
-`fill-label`, `accessibility-snapshot`, and
+`fill-label`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -241,7 +242,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
-`dispatched`, `dispatched_events`, or `navigation_requested` from `result`.
+`dispatched`, `dispatched_events`, `fields`, `value_masked`, or
+`navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -355,8 +357,8 @@ browser-cli session close --session-id <session_id>
 
 Common agent recipes:
 
-- Form submit: `interactive-snapshot` -> `fill-label`, `set-value`, or
-  `clear` -> `wait-value` or `get-value` -> `blur` if validation is
+- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`,
+  `set-value`, or `clear` -> `wait-value` or `get-value` -> `blur` if validation is
   focus-driven -> `select-option` or `check` -> `dispatch-event` if explicit
   `input`/`change` is needed -> `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
