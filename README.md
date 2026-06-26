@@ -324,6 +324,7 @@ browser-cli action text-snapshot --session-id <session_id> --selector "main" --m
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
 browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
+browser-cli action network-snapshot --session-id <session_id> --max-entries 50
 browser-cli action console-snapshot --session-id <session_id> --max-entries 50
 browser-cli action wait-console --session-id <session_id> --source pageerror --level error --timeout-ms 5000
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
@@ -342,7 +343,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -365,9 +366,10 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `readable`, `read_error`,
 `navigation`, `resources`, `resource_count`, `initiator_type`,
 `initiator_types`, `duration`, `transfer_size`, `response_status`,
-`entries`, `entry_count`, `buffered_count`, `source`, `level`, `method`,
-`text_masked`, `filename_masked`, `url_masked`, `timed_out`, `requested_source`,
-`requested_level`, `after_index`,
+`entries`, `entry_count`, `matched_count`, `buffered_count`, `source`, `level`,
+`method`, `requested_method`, `status`, `ok`, `failed`, `failed_only`,
+`request_has_body`, `duration_ms`, `text_masked`, `filename_masked`,
+`url_masked`, `timed_out`, `requested_source`, `requested_level`, `after_index`,
 `headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
 `node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
@@ -388,6 +390,8 @@ tokens, authorization codes, passwords, or secrets are masked by default. Use
 `performance-snapshot` use the same URL masking for links, frame URLs, and
 performance resource URLs found inside table cells, list items, dialog controls,
 frame metadata, or timing entries.
+`network-snapshot` masks fetch/XHR URLs and does not capture request or response
+bodies; use `request_has_body` only as a boolean hint.
 `console-snapshot` and `wait-console` mask token-like key/value text in captured
 console/page error entries and the reported page URL.
 
@@ -560,6 +564,11 @@ Common agent recipes:
   `navigation`, `resources`, `initiator_types`, `duration`, `transfer_size`,
   and `response_status`; use `--initiator-type` and `--min-duration-ms` to keep
   output focused.
+- Fetch/XHR diagnosis: run `network-snapshot --install-only` before the action,
+  trigger the page behavior, then run `network-snapshot` to read masked request
+  URLs, `method`, `status`, `ok`, `failed`, `duration_ms`, and
+  `request_has_body`; use `--source`, `--method`, or `--failed-only` to narrow
+  entries and `--clear` after collecting.
 - Console or page error diagnosis: run `console-snapshot --install-only` before
   the suspicious action, trigger the page behavior, then run `console-snapshot`
   to read `entries`, `source`, `level`, `method`, and masked `text`. Use

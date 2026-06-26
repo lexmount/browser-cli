@@ -194,6 +194,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`dialog-snapshot`",
         "`frame-snapshot`",
         "`performance-snapshot`",
+        "`network-snapshot`",
         "`console-snapshot`",
         "`wait-console`",
         "`outline-snapshot`",
@@ -285,9 +286,17 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`response_status`" in normalized
     assert "`entries`" in normalized
     assert "`entry_count`" in normalized
+    assert "`matched_count`" in normalized
     assert "`buffered_count`" in normalized
     assert "`source`" in normalized
     assert "`method`" in normalized
+    assert "`requested_method`" in normalized
+    assert "`status`" in normalized
+    assert "`ok`" in normalized
+    assert "`failed`" in normalized
+    assert "`failed_only`" in normalized
+    assert "`request_has_body`" in normalized
+    assert "`duration_ms`" in normalized
     assert "`text_masked`" in normalized
     assert "`filename_masked`" in normalized
     assert "`url_masked`" in normalized
@@ -374,6 +383,9 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
     assert "confirm with `page-info`, `wait-url`, `wait-title`" in normalized
     assert "`wait-network-idle`, `performance-snapshot`, `wait-text`" in normalized
+    assert "Diagnose fetch/XHR calls" in normalized
+    assert "`network-snapshot --install-only`" in normalized
+    assert "read `network-snapshot`" in normalized
     assert "Capture runtime errors" in normalized
     assert "`console-snapshot --install-only`" in normalized
     assert "read `console-snapshot`" in normalized

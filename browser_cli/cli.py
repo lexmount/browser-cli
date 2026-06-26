@@ -3633,6 +3633,296 @@ def _performance_snapshot_expression(
 """.strip()
 
 
+def _network_snapshot_expression(
+    *,
+    max_entries: int,
+    clear: bool,
+    install_only: bool,
+    source: str | None,
+    method: str | None,
+    failed_only: bool,
+) -> str:
+    source_filter = "null" if source is None else _js_literal(source)
+    method_filter = "null" if method is None else _js_literal(method.upper())
+    return f"""
+() => {{
+  const maxEntries = Math.max(0, {_js_literal(max_entries)});
+  const clearRequested = {_js_literal(clear)};
+  const installOnly = {_js_literal(install_only)};
+  const requestedSource = {source_filter};
+  const requestedMethod = {method_filter};
+  const failedOnly = {_js_literal(failed_only)};
+  const stateKey = "__browserCliNetworkSnapshot";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const numberOrNull = (value) => Number.isFinite(value) ? value : null;
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const urlPayload = (value) => {{
+    const raw = String(value ?? "");
+    const maskedUrl = maskUrlText(raw);
+    return {{
+      url: maskedUrl,
+      url_masked: maskedUrl !== raw,
+      ...maskedParsedUrl(raw)
+    }};
+  }};
+  const state = window[stateKey] || {{
+    installed: false,
+    installed_at: Date.now(),
+    next_index: 0,
+    buffer_limit: 500,
+    entries: [],
+    originals: {{}}
+  }};
+  window[stateKey] = state;
+  const push = (entry) => {{
+    const payload = {{
+      index: state.next_index++,
+      timestamp_ms: Date.now(),
+      elapsed_ms: performance.now(),
+      ...entry
+    }};
+    state.entries.push(payload);
+    if (state.entries.length > state.buffer_limit) {{
+      state.entries.splice(0, state.entries.length - state.buffer_limit);
+    }}
+  }};
+  const requestUrlFromFetchArgs = (input) => {{
+    if (typeof input === "string") return input;
+    if (input instanceof URL) return input.href;
+    if (input && typeof input === "object" && "url" in input) return input.url;
+    return String(input ?? "");
+  }};
+  const requestMethodFromFetchArgs = (input, init) => {{
+    if (init && init.method) return String(init.method).toUpperCase();
+    if (input && typeof input === "object" && "method" in input && input.method) {{
+      return String(input.method).toUpperCase();
+    }}
+    return "GET";
+  }};
+  const safeStatus = (xhr) => {{
+    try {{ return xhr.status || 0; }} catch (error) {{ return 0; }}
+  }};
+  const safeStatusText = (xhr) => {{
+    try {{ return xhr.statusText || ""; }} catch (error) {{ return ""; }}
+  }};
+  const install = () => {{
+    if (state.installed) return false;
+    if (typeof window.fetch === "function") {{
+      const originalFetch = window.fetch;
+      state.originals.fetch = originalFetch;
+      window.fetch = function (...args) {{
+        const input = args[0];
+        const init = args[1] || null;
+        const rawUrl = requestUrlFromFetchArgs(input);
+        const method = requestMethodFromFetchArgs(input, init);
+        const startedAt = performance.now();
+        const startedWall = Date.now();
+        const requestHasBody = Boolean(init && init.body);
+        return originalFetch.apply(this, args).then(
+          (response) => {{
+            const completedAt = Date.now();
+            push({{
+              source: "fetch",
+              method,
+              ...urlPayload(rawUrl),
+              status: response.status,
+              status_text: response.statusText || "",
+              ok: Boolean(response.ok),
+              redirected: Boolean(response.redirected),
+              response_type: response.type || null,
+              failed: false,
+              request_has_body: requestHasBody,
+              duration_ms: numberOrNull(performance.now() - startedAt),
+              started_at: startedWall,
+              completed_at: completedAt
+            }});
+            return response;
+          }},
+          (error) => {{
+            const completedAt = Date.now();
+            push({{
+              source: "fetch",
+              method,
+              ...urlPayload(rawUrl),
+              status: null,
+              status_text: "",
+              ok: false,
+              redirected: null,
+              response_type: null,
+              failed: true,
+              error_name: error && error.name ? String(error.name) : "Error",
+              error_message: String(error && error.message ? error.message : error),
+              request_has_body: requestHasBody,
+              duration_ms: numberOrNull(performance.now() - startedAt),
+              started_at: startedWall,
+              completed_at: completedAt
+            }});
+            throw error;
+          }}
+        );
+      }};
+    }}
+    if (window.XMLHttpRequest?.prototype) {{
+      const originalOpen = window.XMLHttpRequest.prototype.open;
+      const originalSend = window.XMLHttpRequest.prototype.send;
+      if (typeof originalOpen === "function" && typeof originalSend === "function") {{
+        state.originals.xhrOpen = originalOpen;
+        state.originals.xhrSend = originalSend;
+        window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {{
+          this.__browserCliNetworkRequest = {{
+            method: String(method || "GET").toUpperCase(),
+            url: String(url ?? "")
+          }};
+          return originalOpen.call(this, method, url, ...rest);
+        }};
+        window.XMLHttpRequest.prototype.send = function(body) {{
+          const meta = this.__browserCliNetworkRequest || {{
+            method: "GET",
+            url: ""
+          }};
+          const startedAt = performance.now();
+          const startedWall = Date.now();
+          let recorded = false;
+          const record = (failed, error = null) => {{
+            if (recorded) return;
+            recorded = true;
+            const status = failed && error ? null : safeStatus(this);
+            push({{
+              source: "xhr",
+              method: meta.method,
+              ...urlPayload(meta.url),
+              status,
+              status_text: failed && error ? "" : safeStatusText(this),
+              ok: status !== null ? status >= 200 && status < 400 : false,
+              failed,
+              error_name: error && error.name ? String(error.name) : null,
+              error_message: error ? String(error.message || error) : null,
+              request_has_body: body !== undefined && body !== null,
+              duration_ms: numberOrNull(performance.now() - startedAt),
+              started_at: startedWall,
+              completed_at: Date.now()
+            }});
+          }};
+          this.addEventListener("loadend", () => record(false), {{ once: true }});
+          this.addEventListener("error", () => record(true, new Error("xhr_error")), {{ once: true }});
+          this.addEventListener("timeout", () => record(true, new Error("xhr_timeout")), {{ once: true }});
+          this.addEventListener("abort", () => record(true, new Error("xhr_abort")), {{ once: true }});
+          try {{
+            return originalSend.call(this, body);
+          }} catch (error) {{
+            record(true, error);
+            throw error;
+          }}
+        }};
+      }}
+    }}
+    state.installed = true;
+    state.installed_at = Date.now();
+    return true;
+  }};
+  const newlyInstalled = install();
+  const matchesFilters = (entry) => {{
+    if (requestedSource !== null && entry.source !== requestedSource) return false;
+    if (requestedMethod !== null && entry.method !== requestedMethod) return false;
+    if (failedOnly && !entry.failed) return false;
+    return true;
+  }};
+  const bufferedCount = state.entries.length;
+  const matchedEntries = state.entries.filter(matchesFilters);
+  const entries = installOnly ? [] : matchedEntries.slice(-maxEntries);
+  const truncated = !installOnly && matchedEntries.length > entries.length;
+  if (clearRequested) {{
+    state.entries = [];
+  }}
+  const maskedLocation = maskUrlText(location.href);
+  return {{
+    url: maskedLocation,
+    url_masked: maskedLocation !== location.href,
+    title: document.title,
+    kind: "network",
+    installed: state.installed,
+    newly_installed: newlyInstalled,
+    installed_at: state.installed_at,
+    install_only: installOnly,
+    clear: clearRequested,
+    max_entries: maxEntries,
+    requested_source: requestedSource,
+    requested_method: requestedMethod,
+    failed_only: failedOnly,
+    fetch_instrumented: typeof state.originals.fetch === "function",
+    xhr_instrumented: typeof state.originals.xhrSend === "function",
+    entry_count: entries.length,
+    matched_count: matchedEntries.length,
+    buffered_count: bufferedCount,
+    buffered_count_after: state.entries.length,
+    truncated,
+    entries
+  }};
+}}
+""".strip()
+
+
 def _console_snapshot_expression(
     *,
     max_entries: int,
@@ -7628,6 +7918,18 @@ def cmd_action_performance_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.performance-snapshot", expression)
 
 
+def cmd_action_network_snapshot(args: argparse.Namespace) -> None:
+    expression = _network_snapshot_expression(
+        max_entries=args.max_entries,
+        clear=args.clear,
+        install_only=args.install_only,
+        source=args.source,
+        method=args.method,
+        failed_only=args.failed_only,
+    )
+    _run_eval_backed_action_command(args, "action.network-snapshot", expression)
+
+
 def cmd_action_console_snapshot(args: argparse.Namespace) -> None:
     expression = _console_snapshot_expression(
         max_entries=args.max_entries,
@@ -9809,6 +10111,43 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Only return resource entries whose duration is at least this many milliseconds.",
     )
     action_performance_snapshot.set_defaults(func=cmd_action_performance_snapshot)
+
+    action_network_snapshot = action_subparsers.add_parser(
+        "network-snapshot",
+        help="Install and read a fetch/XHR network event buffer with masked URLs",
+    )
+    _add_session_target_args(action_network_snapshot)
+    action_network_snapshot.add_argument(
+        "--max-entries",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum buffered network entries to return.",
+    )
+    action_network_snapshot.add_argument(
+        "--source",
+        choices=["fetch", "xhr"],
+        help="Only return entries captured from this network source.",
+    )
+    action_network_snapshot.add_argument(
+        "--method",
+        help="Only return entries with this HTTP method, such as GET or POST.",
+    )
+    action_network_snapshot.add_argument(
+        "--failed-only",
+        action="store_true",
+        help="Only return entries whose request failed before an HTTP response.",
+    )
+    action_network_snapshot.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear the page network event buffer after reading it.",
+    )
+    action_network_snapshot.add_argument(
+        "--install-only",
+        action="store_true",
+        help="Install the fetch/XHR network listener without returning buffered entries.",
+    )
+    action_network_snapshot.set_defaults(func=cmd_action_network_snapshot)
 
     action_console_snapshot = action_subparsers.add_parser(
         "console-snapshot",

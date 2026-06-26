@@ -218,6 +218,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.dialog-snapshot",
         "action.frame-snapshot",
         "action.performance-snapshot",
+        "action.network-snapshot",
         "action.console-snapshot",
         "action.wait-console",
         "action.outline-snapshot",
@@ -265,6 +266,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.dialog-snapshot" in payload["commands"]
     assert "action.frame-snapshot" in payload["commands"]
     assert "action.performance-snapshot" in payload["commands"]
+    assert "action.network-snapshot" in payload["commands"]
     assert "action.console-snapshot" in payload["commands"]
     assert "action.wait-console" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
@@ -4013,6 +4015,68 @@ def test_action_performance_snapshot_expression_extracts_timing_entries(
     assert payload["command"] == "action.performance-snapshot"
 
 
+def test_action_network_snapshot_expression_installs_fetch_and_xhr_buffer(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "network", "entries": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "network-snapshot",
+                "--session-id",
+                "s1",
+                "--max-entries",
+                "9",
+                "--source",
+                "fetch",
+                "--method",
+                "post",
+                "--failed-only",
+                "--install-only",
+                "--clear",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "const maxEntries = Math.max(0, 9)" in expression
+    assert "const clearRequested = true" in expression
+    assert "const installOnly = true" in expression
+    assert 'const requestedSource = "fetch"' in expression
+    assert 'const requestedMethod = "POST"' in expression
+    assert "const failedOnly = true" in expression
+    assert "__browserCliNetworkSnapshot" in expression
+    assert "window.fetch = function" in expression
+    assert "XMLHttpRequest.prototype.open" in expression
+    assert "XMLHttpRequest.prototype.send" in expression
+    assert "xhr_timeout" in expression
+    assert "request_has_body" in expression
+    assert "duration_ms" in expression
+    assert "absolute_url_masked" in expression
+    assert "buffered_count_after" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.network-snapshot"
+
+
 def test_action_console_snapshot_expression_installs_buffered_listener(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4885,6 +4949,70 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                         "duration": 55.5,
                         "transfer_size": 2048,
                         "response_status": 200,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "network-snapshot",
+                "--session-id",
+                "s1",
+                "--max-entries",
+                "5",
+                "--source",
+                "fetch",
+                "--method",
+                "POST",
+            ],
+            "action.network-snapshot",
+            {
+                "kind": "network",
+                "installed": True,
+                "newly_installed": False,
+                "entry_count": 1,
+                "matched_count": 1,
+                "buffered_count": 2,
+                "entries": [
+                    {
+                        "index": 1,
+                        "source": "fetch",
+                        "method": "POST",
+                        "url": "https://api.example.test/save?token=***",
+                        "url_masked": True,
+                        "absolute_url": "https://api.example.test/save?token=***",
+                        "absolute_url_masked": True,
+                        "status": 201,
+                        "ok": True,
+                        "failed": False,
+                        "request_has_body": True,
+                        "duration_ms": 42.5,
+                    }
+                ],
+            },
+            {
+                "kind": "network",
+                "installed": True,
+                "newly_installed": False,
+                "entry_count": 1,
+                "matched_count": 1,
+                "buffered_count": 2,
+                "entries": [
+                    {
+                        "index": 1,
+                        "source": "fetch",
+                        "method": "POST",
+                        "url": "https://api.example.test/save?token=***",
+                        "url_masked": True,
+                        "absolute_url": "https://api.example.test/save?token=***",
+                        "absolute_url_masked": True,
+                        "status": 201,
+                        "ok": True,
+                        "failed": False,
+                        "request_has_body": True,
+                        "duration_ms": 42.5,
                     }
                 ],
                 "url": "https://example.test",
