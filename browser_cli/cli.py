@@ -9283,6 +9283,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                     commands=[
                         "uv tool install git+https://github.com/lexmount/browser-cli.git",
                         "browser-cli --help",
+                        "browser-cli --version",
                         "browser-cli doctor",
                     ],
                     guidance=[
@@ -9293,14 +9294,15 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             )
         )
 
-    browser_cli_version = _package_version("browser-cli")
+    browser_cli_version, browser_cli_version_source = _browser_cli_version()
     checks.append(
         _doctor_check(
             "browser_cli",
             "pass",
             "browser-cli import succeeded",
-            version=browser_cli_version or "unknown",
-            version_known=browser_cli_version is not None,
+            version=browser_cli_version,
+            version_known=True,
+            version_source=browser_cli_version_source,
         )
     )
 

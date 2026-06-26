@@ -116,6 +116,8 @@ Default behavior:
   `refresh_available=false`.
 - `doctor --smoke-session` may report a temporary `session_id` and cleanup
   status, but must not print direct connect URLs or token values.
+- `doctor` reports `browser_cli.version_source` to show whether the browser-cli
+  version came from installed package metadata or the package fallback.
 - `doctor` reports a `command_catalog` check with `required_commands`,
   `missing_required_commands`, `required_workflows`,
   `missing_required_workflows`, `required_workflow_steps`,

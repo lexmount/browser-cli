@@ -530,6 +530,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "path": "/usr/local/bin/browser-cli",
     }
     assert checks["browser_cli"]["version"] == "0.1.0"
+    assert checks["browser_cli"]["version_known"] is True
+    assert checks["browser_cli"]["version_source"] == "package_metadata"
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
@@ -915,12 +917,49 @@ def test_doctor_warns_when_executable_is_not_on_path(
     assert payload["repair_plan"]["recommended"] is True
     assert payload["repair_plan"]["fixes"][0]["check"] == "browser_cli_executable"
     assert "uv tool install" in payload["repair_plan"]["commands"][0]
+    assert "browser-cli --version" in payload["repair_plan"]["commands"]
     checks = _checks_by_name(payload)
     assert checks["browser_cli_executable"]["status"] == "warn"
     assert checks["browser_cli_executable"]["fix"]["code"] == (
         "install_browser_cli_on_path"
     )
     assert "uv tool install" in checks["browser_cli_executable"]["fix"]["commands"][0]
+    assert (
+        "browser-cli --version" in checks["browser_cli_executable"]["fix"]["commands"]
+    )
+
+
+def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+    monkeypatch.setattr("browser_cli.cli._package_version", lambda distribution: None)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            return DummyModel({"count": 0, "status_filter": status, "sessions": []})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    checks = _checks_by_name(payload)
+    assert checks["browser_cli"]["version"] == "0.1.0"
+    assert checks["browser_cli"]["version_known"] is True
+    assert checks["browser_cli"]["version_source"] == "package_fallback"
+    assert checks["lex_browser_runtime"]["version"] == "unknown"
+    assert checks["lex_browser_runtime"]["version_known"] is False
     assert checks["api_connectivity"]["status"] == "pass"
 
 
