@@ -19,7 +19,9 @@ CLI for you:
 约束：
 1. 不要让我把 API Key 或 Project ID 粘贴到聊天里。
 2. 只指导我在本机 shell 中设置环境变量，或写入本机 shell 配置文件。
-3. 不要把 API Key 输出到日志、README、提交记录或聊天回复里。
+3. 不要在聊天回复、日志、README、测试、提交记录或 PR 描述里输出 API Key。
+4. 如果命令输出中出现 masked/revealed/contains_secrets/usable 字段，请按这些字段判断是否可以复制到聊天里；revealed secret 永远不要复制到聊天。
+5. 不要复述任何 secret 的真实值。
 
 步骤：
 1. 检查本机是否已经安装 uv：
@@ -38,12 +40,17 @@ CLI for you:
    browser-cli auth export-env
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-9. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-10. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-11. 运行下面命令验证：
+9. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
+   browser-cli auth export-env --from-current --reveal-secrets
+   browser-cli auth export-env --reveal-secrets
+   并提醒我不要把该输出粘贴到聊天里。
+10. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+11. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+12. 运行下面命令验证：
    browser-cli --help
    browser-cli doctor
-12. 如果验证失败，请按顺序排查：
+   browser-cli session list
+13. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - browser-cli auth status 是否显示 configured 为 true
@@ -51,11 +58,14 @@ CLI for you:
    - LEXMOUNT_API_KEY 是否已设置
    - LEXMOUNT_PROJECT_ID 是否已设置
    - 如果设置了 LEXMOUNT_BASE_URL，它是否为正确的 API endpoint
+   - browser.lexmount.cn 中选择的 Project 是否和 LEXMOUNT_PROJECT_ID 一致
+   - API Key 是否已过期、被 revoke，或缺少 browser session/context/action 权限
 
 完成后告诉我：
 - browser-cli 的安装路径
 - 验证命令是否通过
 - 我还需要手动做什么
+- 不要复述任何 secret 的真实值
 ```
 
 ## Manual Install

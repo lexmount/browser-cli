@@ -50,16 +50,26 @@ a trusted local terminal.
 After credentials are configured, run:
 
 ```bash
-browser-cli doctor
+browser-cli doctor --json
 ```
 
-Parse failed `checks` if `doctor` returns `ok: false`. Use
-`browser-cli doctor --skip-api` only when live API access is intentionally
-unavailable.
+Run `browser-cli doctor --json` before the first browser action in a thread,
+after credential changes, or when a session/context/action command fails for an
+unclear reason. Parse the JSON before deciding what to do:
+
+- `status: "pass"`: continue with browser work.
+- `status: "warn"`: continue only when all failed checks have `severity:
+  "warning"` and the warning does not block the requested task.
+- `status: "fail"` or `ok: false`: stop before creating sessions and follow
+  `next_steps`.
+
+Use `browser-cli doctor --skip-api` only for offline setup checks or when the
+user explicitly asks to avoid a live API call. Do not treat a skipped API check
+as proof that browser sessions will work.
 
 ## Workflow
 
-If setup is uncertain, run `browser-cli auth status`, then `browser-cli doctor`
+If setup is uncertain, run `browser-cli auth status`, then `browser-cli doctor --json`
 before creating a session. If credentials are missing, run
 `browser-cli auth login` and guide the user to set local environment variables.
 
@@ -69,6 +79,7 @@ For a one-off task:
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
+browser-cli action wait-selector --session-id <session_id> --selector <selector>
 browser-cli session close --session-id <session_id>
 ```
 
@@ -76,16 +87,30 @@ Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
 ```bash
+browser-cli context create
+browser-cli session create --context-id <context_id> --context-mode read_write
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
 ```
+
+Use `read_write` for login/setup work that should update cookies or storage. Use
+`read_only` when inspecting an existing logged-in state. Before deleting a context,
+confirm that the task no longer needs its login state.
 
 Parse `context_reuse` from the session result. Reuse only when
 `context_reuse.selected` is true; if candidates include `locked: true`, report
 that a busy context was skipped. Use `context status --context-id <context_id>`
 before reuse when the context id came from older notes.
 
+If a command fails, parse the JSON error first. For configuration or credential
+errors, stop browser work and guide the user to configure local environment
+variables. For missing selectors, take a fresh snapshot or screenshot before
+choosing another selector.
+
+Write custom Playwright only when the CLI cannot express the task and explain
+why the CLI was insufficient.
+
 Always close sessions created for temporary automation unless the user asks to
-keep them open.
+keep them open. Always close temporary sessions.
 
 ## Commands
 
@@ -102,6 +127,7 @@ Diagnostics:
 
 ```bash
 browser-cli doctor
+browser-cli doctor --json
 browser-cli doctor --skip-api
 ```
 
@@ -286,8 +312,10 @@ the shared direct websocket path.
 ## Output
 
 Parse command output as JSON. Check `ok` first, then inspect `command`,
-`error`, and command-specific fields. Do not log revealed API keys. By default,
-browser direct URLs are masked; use reveal flags only for local debugging.
+`error`, `message`, and command-specific fields. Do not log revealed API keys.
+Do not paste API keys, Project IDs, or full direct connect URLs into chat, docs,
+commits, screenshots, or test fixtures. By default, browser direct URLs are
+masked. Use reveal flags only for local debugging in a trusted shell.
 Failure messages and payloads mask `api_key`, token-like query parameters, and
 the current `LEXMOUNT_API_KEY` value.
 If `error` is `argument_error`, read the JSON `usage` field and rerun a
