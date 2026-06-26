@@ -102,6 +102,10 @@ Default behavior:
 - `doctor` reports a `command_catalog` check with `required_commands`,
   `missing_required_commands`, `schema_version`, and `command_count` so agents
   can detect an installed CLI that is too old for the Skill workflow.
+- Credential-related `doctor` fixes and the aggregated `repair_plan` may report
+  `connect_from_codex` with a safe `/connect/codex` URL, `open_command`,
+  requested scopes, setup blocks, and verification commands. This handoff must
+  not contain API key values or direct connect URLs.
 - `auth logout` may report local credential file deletion metadata, but must
   not print token values or unset environment variables.
 

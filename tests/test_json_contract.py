@@ -111,6 +111,14 @@ def test_json_contract_documents_command_alias_metadata() -> None:
     assert "`canonical_name`" in text
 
 
+def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
+    text = JSON_CONTRACT.read_text()
+
+    assert "`repair_plan`" in text
+    assert "`connect_from_codex`" in text
+    assert "`open_command`" in text
+
+
 def test_error_output_contract_for_configuration_errors(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

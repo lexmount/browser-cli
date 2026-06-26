@@ -159,6 +159,10 @@ Expected behavior after the website page exists:
 - `browser-cli doctor --json` checks local env, package availability, command
   catalog compatibility, API connectivity, and optionally session creation when
   the user opts in.
+- When credentials are missing, `browser-cli doctor --json` reports
+  `repair_plan.connect_from_codex` with the same safe `/connect/codex` URL,
+  requested scopes, setup blocks, and verification commands used by
+  `browser-cli auth login`.
 - The command catalog compatibility check reports when an installed CLI is too
   old for the current Codex Skill workflow.
 - `browser-cli doctor --smoke-session` creates and closes a temporary browser
@@ -228,6 +232,9 @@ The page can explain expected success criteria:
 If doctor fails, the page and support docs should point users to
 `repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance` instead of
 asking them to interpret raw check details.
+When present, `repair_plan.connect_from_codex.url` should be treated as the
+preferred recovery link because it can include the selected Project ID and
+requested scopes.
 
 For copy/paste UX, keep doctor output in the terminal. The page should not ask
 users to upload doctor JSON unless an explicit support flow sanitizes secrets.

@@ -536,6 +536,7 @@ def _doctor_fix(
     commands: list[str] | None = None,
     env: list[str] | None = None,
     guidance: list[str] | None = None,
+    connect_from_codex: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     fix: dict[str, Any] = {"code": code}
     if commands:
@@ -544,6 +545,8 @@ def _doctor_fix(
         fix["env"] = env
     if guidance:
         fix["guidance"] = guidance
+    if connect_from_codex:
+        fix["connect_from_codex"] = connect_from_codex
     return fix
 
 
@@ -561,6 +564,7 @@ def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
     env: list[str] = []
     guidance: list[str] = []
     fixes: list[dict[str, Any]] = []
+    connect_from_codex: dict[str, Any] | None = None
 
     for check in checks:
         if check.get("status") not in statuses:
@@ -578,13 +582,18 @@ def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
             values = fix.get(key)
             if isinstance(values, list):
                 item[key] = values
+        fix_connect_from_codex = fix.get("connect_from_codex")
+        if isinstance(fix_connect_from_codex, dict):
+            item["connect_from_codex"] = fix_connect_from_codex
+            if connect_from_codex is None:
+                connect_from_codex = fix_connect_from_codex
         fixes.append(item)
 
         commands.extend(str(value) for value in fix.get("commands", []))
         env.extend(str(value) for value in fix.get("env", []))
         guidance.extend(str(value) for value in fix.get("guidance", []))
 
-    return {
+    repair_plan: dict[str, Any] = {
         "required": bool(_doctor_check_names(checks, status="fail")),
         "recommended": bool(fixes),
         "commands": _dedupe_preserving_order(commands),
@@ -592,6 +601,9 @@ def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
         "guidance": _dedupe_preserving_order(guidance),
         "fixes": fixes,
     }
+    if connect_from_codex:
+        repair_plan["connect_from_codex"] = connect_from_codex
+    return repair_plan
 
 
 def _doctor_command_catalog_check() -> dict[str, Any]:
@@ -762,24 +774,6 @@ def _doctor_smoke_session_check(admin: Any) -> dict[str, Any]:
         created=True,
         closed=True,
         session_id=session_id,
-    )
-
-
-def _credential_doctor_fix(*env: str) -> dict[str, Any]:
-    return _doctor_fix(
-        "configure_credentials",
-        env=list(env),
-        commands=[
-            "browser-cli auth login",
-            "browser-cli auth export-env",
-            "browser-cli auth status",
-            AGENT_DOCTOR_COMMAND,
-        ],
-        guidance=[
-            "Get Project ID and API key from https://browser.lexmount.cn.",
-            "Set credentials only in the local shell, not in chat.",
-            "Run doctor again after exporting credentials.",
-        ],
     )
 
 
@@ -1633,6 +1627,54 @@ def _auth_login_handoff(
             ],
         },
     }
+
+
+def _doctor_connect_from_codex_fix() -> dict[str, Any]:
+    project_id = os.environ.get("LEXMOUNT_PROJECT_ID") or None
+    project_id_source = "env" if project_id else "unset"
+    scopes = list(DEFAULT_CODEX_CONNECT_SCOPES)
+    expires_in = DEFAULT_CODEX_CONNECT_EXPIRES_IN
+    connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=expires_in,
+    )
+    return {
+        "available": False,
+        "url": connect_url,
+        "open_command": "browser-cli auth login --open",
+        "auth_login_command": "browser-cli auth login",
+        "project_id": project_id,
+        "project_id_source": project_id_source,
+        "requested_scopes": scopes,
+        "requested_scope_details": _scope_details(scopes),
+        "requested_expires_in": expires_in,
+        "setup_blocks": _auth_login_setup_blocks(project_id),
+        "verification": {
+            "status_command": "browser-cli auth status",
+            "doctor_command": AGENT_DOCTOR_COMMAND,
+            "success_condition": "auth.status configured is true and doctor ok is true",
+        },
+    }
+
+
+def _credential_doctor_fix(*env: str) -> dict[str, Any]:
+    return _doctor_fix(
+        "configure_credentials",
+        env=list(env),
+        commands=[
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            "browser-cli auth status",
+            AGENT_DOCTOR_COMMAND,
+        ],
+        guidance=[
+            "Get Project ID and API key from https://browser.lexmount.cn.",
+            "Set credentials only in the local shell, not in chat.",
+            "Run doctor again after exporting credentials.",
+        ],
+        connect_from_codex=_doctor_connect_from_codex_fix(),
+    )
 
 
 def _quote_env_value(value: str, shell: str) -> str:

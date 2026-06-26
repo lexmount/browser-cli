@@ -49,6 +49,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "repair_plan.commands" in text
     assert "repair_plan.env" in text
     assert "repair_plan.guidance" in text
+    assert "repair_plan.connect_from_codex" in text
+    assert "repair_plan.connect_from_codex.url" in text
     assert "context pick --dry-run" in text
     assert "selection_summary" in text
     assert "locked_matches" in text

@@ -659,6 +659,27 @@ def test_doctor_fails_missing_required_env(
     assert "LEXMOUNT_API_KEY" in payload["repair_plan"]["env"]
     assert "LEXMOUNT_PROJECT_ID" in payload["repair_plan"]["env"]
     assert "browser-cli auth login" in payload["repair_plan"]["commands"]
+    connect = payload["repair_plan"]["connect_from_codex"]
+    assert connect["available"] is False
+    assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
+    assert connect["open_command"] == "browser-cli auth login --open"
+    assert connect["project_id"] is None
+    assert connect["project_id_source"] == "unset"
+    assert connect["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert connect["requested_expires_in"] == "7d"
+    assert connect["verification"]["doctor_command"] == "browser-cli doctor --json"
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert "project_id" not in query
+    assert query["response"] == ["env"]
+    assert query["scope"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
 
     checks = _checks_by_name(payload)
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "fail"
@@ -668,9 +689,36 @@ def test_doctor_fails_missing_required_env(
     assert checks["env.LEXMOUNT_API_KEY"]["fix"]["code"] == "configure_credentials"
     assert checks["env.LEXMOUNT_API_KEY"]["fix"]["env"] == ["LEXMOUNT_API_KEY"]
     assert "browser-cli auth login" in checks["env.LEXMOUNT_API_KEY"]["fix"]["commands"]
+    assert checks["env.LEXMOUNT_API_KEY"]["fix"]["connect_from_codex"] == connect
     assert checks["env.LEXMOUNT_PROJECT_ID"]["fix"]["env"] == ["LEXMOUNT_PROJECT_ID"]
     assert checks["direct_url"]["fix"]["code"] == "fix_direct_url_configuration"
     assert checks["api_connectivity"]["fix"]["code"] == "run_live_api_check"
+
+
+def test_doctor_connect_from_codex_repair_uses_env_project_id(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "doctor-project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    connect = payload["repair_plan"]["connect_from_codex"]
+    assert connect["project_id"] == "doctor-project"
+    assert connect["project_id_source"] == "env"
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["project_id"] == ["doctor-project"]
+    assert connect["setup_blocks"][2]["commands"] == [
+        "browser-cli auth export-env",
+        "export LEXMOUNT_API_KEY='<api-key>'",
+        "export LEXMOUNT_PROJECT_ID=doctor-project",
+    ]
 
 
 def test_doctor_reports_device_token_without_treating_it_as_runtime_auth(
