@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -33,6 +34,9 @@ from lex_browser_runtime.browser.models import (
     BrowserParallelLimitError,
     BrowserRuntimeError,
 )
+
+DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
+LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
 
 
 def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
@@ -164,6 +168,60 @@ def _doctor_check(
     check = {"name": name, "status": status, "message": message}
     check.update(details)
     return check
+
+
+def _env_value_status(
+    name: str,
+    *,
+    secret: bool = False,
+    default: str | None = None,
+) -> dict[str, Any]:
+    value = os.environ.get(name)
+    present = bool(value)
+    payload: dict[str, Any] = {"present": present}
+    if secret:
+        payload.update(
+            {
+                "masked_value": "***" if present else None,
+                "length": len(value) if value else 0,
+            }
+        )
+    else:
+        payload["value"] = value
+    if default is not None:
+        payload["default"] = default
+        payload["effective_value"] = value or default
+        payload["using_default"] = not present
+    return payload
+
+
+def _auth_next_steps(*, configured: bool) -> list[str]:
+    if configured:
+        return [
+            "Run `browser-cli doctor` to verify live API connectivity.",
+            "Create a session with `browser-cli session create`.",
+        ]
+    return [
+        "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+        "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+        "Run `browser-cli doctor` after setting credentials.",
+    ]
+
+
+def _quote_env_value(value: str, shell: str) -> str:
+    if shell in {"posix", "fish"}:
+        return shlex.quote(value)
+    escaped = value.replace("'", "''")
+    return f"'{escaped}'"
+
+
+def _export_command(name: str, value: str, shell: str) -> str:
+    quoted = _quote_env_value(value, shell)
+    if shell == "fish":
+        return f"set -gx {name} {quoted}"
+    if shell == "powershell":
+        return f"$env:{name} = {quoted}"
+    return f"export {name}={quoted}"
 
 
 def cmd_session_create(args: argparse.Namespace) -> None:
@@ -3030,7 +3088,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             else "LEXMOUNT_BASE_URL is not set; the default endpoint will be used",
             present=base_url is not None,
             value=base_url,
-            default="https://api.lexmount.cn",
+            default=DEFAULT_LEXMOUNT_BASE_URL,
         )
     )
     checks.append(
@@ -3132,6 +3190,159 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             }
         )
     _json_dump(data, exit_code=1 if failed else 0)
+
+
+def cmd_auth_status(args: argparse.Namespace) -> None:
+    command = "auth.status"
+    api_key = os.environ.get("LEXMOUNT_API_KEY")
+    project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
+    configured = bool(api_key and project_id)
+
+    _success(
+        command,
+        configured=configured,
+        api_key=_env_value_status("LEXMOUNT_API_KEY", secret=True),
+        project_id=_env_value_status("LEXMOUNT_PROJECT_ID"),
+        base_url=_env_value_status(
+            "LEXMOUNT_BASE_URL",
+            default=DEFAULT_LEXMOUNT_BASE_URL,
+        ),
+        region=_env_value_status("LEXMOUNT_REGION"),
+        next_steps=_auth_next_steps(configured=configured),
+    )
+
+
+def cmd_auth_export_env(args: argparse.Namespace) -> None:
+    command = "auth.export-env"
+    warnings: list[str] = []
+
+    api_key = "<api-key>"
+    api_key_source = "placeholder"
+    if args.from_current and os.environ.get("LEXMOUNT_API_KEY"):
+        api_key_source = "env"
+        if args.reveal_secrets:
+            api_key = os.environ["LEXMOUNT_API_KEY"]
+        else:
+            api_key = "<redacted-api-key>"
+            warnings.append(
+                "LEXMOUNT_API_KEY is masked. Rerun with --from-current "
+                "--reveal-secrets only in a trusted local terminal to print a usable export."
+            )
+
+    project_id = "<project-id>"
+    project_id_source = "placeholder"
+    if args.from_current and os.environ.get("LEXMOUNT_PROJECT_ID"):
+        project_id = os.environ["LEXMOUNT_PROJECT_ID"]
+        project_id_source = "env"
+
+    entries = [
+        {
+            "name": "LEXMOUNT_API_KEY",
+            "value": api_key,
+            "secret": True,
+            "source": api_key_source,
+            "usable": api_key not in {"<api-key>", "<redacted-api-key>"},
+        },
+        {
+            "name": "LEXMOUNT_PROJECT_ID",
+            "value": project_id,
+            "secret": False,
+            "source": project_id_source,
+            "usable": project_id != "<project-id>",
+        },
+    ]
+
+    if args.include_base_url:
+        current_base_url = os.environ.get("LEXMOUNT_BASE_URL")
+        base_url = (
+            current_base_url
+            if args.from_current and current_base_url
+            else DEFAULT_LEXMOUNT_BASE_URL
+        )
+        entries.append(
+            {
+                "name": "LEXMOUNT_BASE_URL",
+                "value": base_url,
+                "secret": False,
+                "source": "env"
+                if args.from_current and current_base_url
+                else "default",
+                "usable": True,
+            }
+        )
+
+    if args.include_region:
+        current_region = os.environ.get("LEXMOUNT_REGION")
+        region = current_region if args.from_current and current_region else "<region>"
+        entries.append(
+            {
+                "name": "LEXMOUNT_REGION",
+                "value": region,
+                "secret": False,
+                "source": "env"
+                if args.from_current and current_region
+                else "placeholder",
+                "usable": region != "<region>",
+            }
+        )
+
+    commands = [
+        _export_command(str(entry["name"]), str(entry["value"]), args.shell)
+        for entry in entries
+    ]
+    secrets_revealed = (
+        args.reveal_secrets
+        and api_key_source == "env"
+        and api_key not in {"<api-key>", "<redacted-api-key>"}
+    )
+    _success(
+        command,
+        shell=args.shell,
+        from_current=args.from_current,
+        secrets_revealed=secrets_revealed,
+        warnings=warnings,
+        exports=entries,
+        commands=commands,
+        script="\n".join(commands),
+        next_steps=[
+            "Run the export commands in the local shell.",
+            "Run `browser-cli doctor` to verify credentials.",
+        ],
+    )
+
+
+def cmd_auth_login(args: argparse.Namespace) -> None:
+    command = "auth.login"
+    _success(
+        command,
+        flow="manual_env",
+        login_url=LEXMOUNT_CONSOLE_URL,
+        device_code_available=False,
+        message=(
+            "Open browser.lexmount.cn, sign in, choose a project, create or copy "
+            "an API key, then set local environment variables."
+        ),
+        steps=[
+            "Open https://browser.lexmount.cn and sign in.",
+            "Select the project you want Codex or the agent to control.",
+            "Copy the Project ID from the console.",
+            "Create or copy an API key intended for local agent use.",
+            "Run `browser-cli auth export-env` for safe shell export templates.",
+            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+            "Run `browser-cli doctor` to verify the setup.",
+        ],
+        commands=[
+            "browser-cli auth export-env",
+            "browser-cli auth status",
+            "browser-cli doctor",
+        ],
+        browser_site_recommendations=[
+            "Add a Connect from Codex page with Project ID display.",
+            "Offer scoped API keys with expiration, revoke, and permission labels.",
+            "Show copyable env/install commands and a doctor verification step.",
+            "Add device-code or OAuth authorization for short-lived local tokens.",
+        ],
+    )
 
 
 def cmd_direct_url(args: argparse.Namespace) -> None:
@@ -3967,6 +4178,58 @@ def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case_run.set_defaults(func=cmd_case_run)
 
 
+def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    auth = subparsers.add_parser(
+        "auth",
+        help="Inspect and configure local Lexmount credentials",
+    )
+    auth_subparsers = auth.add_subparsers(dest="auth_command", required=True)
+
+    auth_status = auth_subparsers.add_parser(
+        "status",
+        help="Show local Lexmount credential environment status without secrets",
+    )
+    auth_status.set_defaults(func=cmd_auth_status)
+
+    auth_export_env = auth_subparsers.add_parser(
+        "export-env",
+        help="Print safe shell export commands for Lexmount credentials",
+    )
+    auth_export_env.add_argument(
+        "--shell",
+        choices=["posix", "fish", "powershell"],
+        default="posix",
+        help="Shell syntax to emit.",
+    )
+    auth_export_env.add_argument(
+        "--from-current",
+        action="store_true",
+        help="Populate commands from current environment values where available.",
+    )
+    auth_export_env.add_argument(
+        "--reveal-secrets",
+        action="store_true",
+        help="Print current LEXMOUNT_API_KEY in the generated commands. Use only locally.",
+    )
+    auth_export_env.add_argument(
+        "--include-base-url",
+        action="store_true",
+        help="Include LEXMOUNT_BASE_URL in the generated commands.",
+    )
+    auth_export_env.add_argument(
+        "--include-region",
+        action="store_true",
+        help="Include LEXMOUNT_REGION in the generated commands.",
+    )
+    auth_export_env.set_defaults(func=cmd_auth_export_env)
+
+    auth_login = auth_subparsers.add_parser(
+        "login",
+        help="Show browser.lexmount.cn login and environment setup guidance",
+    )
+    auth_login.set_defaults(func=cmd_auth_login)
+
+
 def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     doctor = subparsers.add_parser(
         "doctor",
@@ -4030,6 +4293,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_context_commands(subparsers)
     _add_action_commands(subparsers)
     _add_case_commands(subparsers)
+    _add_auth_commands(subparsers)
     _add_doctor_command(subparsers)
     _add_alias_commands(subparsers)
 

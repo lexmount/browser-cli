@@ -33,8 +33,19 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     )
     assert "browser-cli doctor" in normalized
     assert "browser-cli doctor --skip-api" in normalized
-    assert "If setup is uncertain, run `browser-cli doctor`" in normalized
+    assert "If setup is uncertain, run `browser-cli auth status`, then" in normalized
     assert "inspect `checks` and report failed check names" in normalized
+
+
+def test_skill_uses_auth_helpers_for_setup() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "guide authentication with auth status/export-env/login" in normalized
+    assert "browser-cli auth status" in normalized
+    assert "browser-cli auth login" in normalized
+    assert "browser-cli auth export-env" in normalized
+    assert "`auth export-env` prints placeholders by default" in normalized
+    assert "do not report API key values" in normalized
 
 
 def test_skill_lists_selector_and_input_actions() -> None:

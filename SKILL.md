@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -35,6 +35,18 @@ Do not ask the user to paste secrets into chat. Direct the user to
 defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only when a
 non-default API endpoint is needed.
 
+Use local auth helpers instead of handling secrets in chat:
+
+```bash
+browser-cli auth status
+browser-cli auth login
+browser-cli auth export-env
+```
+
+`auth export-env` prints placeholders by default. With `--from-current`, it
+still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
+a trusted local terminal.
+
 After credentials are configured, run:
 
 ```bash
@@ -47,7 +59,9 @@ unavailable.
 
 ## Workflow
 
-If setup is uncertain, run `browser-cli doctor` before creating a session.
+If setup is uncertain, run `browser-cli auth status`, then `browser-cli doctor`
+before creating a session. If credentials are missing, run
+`browser-cli auth login` and guide the user to set local environment variables.
 
 For a one-off task:
 
@@ -70,6 +84,15 @@ Always close sessions created for temporary automation unless the user asks to
 keep them open.
 
 ## Commands
+
+Authentication:
+
+```bash
+browser-cli auth status
+browser-cli auth login
+browser-cli auth export-env
+browser-cli auth export-env --from-current --include-base-url
+```
 
 Diagnostics:
 
@@ -240,5 +263,8 @@ the shared direct websocket path.
 Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, and command-specific fields. Do not log revealed API keys. By default,
 browser direct URLs are masked; use reveal flags only for local debugging.
+For `auth`, report credential presence, missing variables, and next steps; do
+not report API key values. For `auth export-env`, use placeholders or masked
+commands unless the user explicitly asked to reveal secrets locally.
 For `doctor`, inspect `checks` and report failed check names without revealing
 API keys.

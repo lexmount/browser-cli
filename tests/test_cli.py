@@ -180,6 +180,134 @@ def test_doctor_masks_api_error_messages(
     assert checks["api_connectivity"]["error"] == "RuntimeError"
 
 
+def test_auth_status_reports_env_without_revealing_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv("LEXMOUNT_BASE_URL", "https://api.example.test")
+    monkeypatch.setenv("LEXMOUNT_REGION", "cn")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "local-secret" not in json.dumps(payload)
+    assert payload["ok"] is True
+    assert payload["command"] == "auth.status"
+    assert payload["configured"] is True
+    assert payload["api_key"] == {
+        "present": True,
+        "masked_value": "***",
+        "length": len("local-secret"),
+    }
+    assert payload["project_id"]["value"] == "project"
+    assert payload["base_url"] == {
+        "present": True,
+        "value": "https://api.example.test",
+        "default": "https://api.lexmount.cn",
+        "effective_value": "https://api.example.test",
+        "using_default": False,
+    }
+    assert payload["region"]["value"] == "cn"
+    assert "browser-cli doctor" in payload["next_steps"][0]
+
+
+def test_auth_export_env_emits_safe_placeholders(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "export-env"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.export-env"
+    assert payload["shell"] == "posix"
+    assert payload["secrets_revealed"] is False
+    assert payload["warnings"] == []
+    assert payload["commands"] == [
+        "export LEXMOUNT_API_KEY='<api-key>'",
+        "export LEXMOUNT_PROJECT_ID='<project-id>'",
+    ]
+    assert payload["exports"][0]["usable"] is False
+    assert payload["exports"][1]["usable"] is False
+
+
+def test_auth_export_env_from_current_masks_api_key_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv("LEXMOUNT_BASE_URL", "https://api.example.test")
+    monkeypatch.setenv("LEXMOUNT_REGION", "cn")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "export-env",
+                "--from-current",
+                "--include-base-url",
+                "--include-region",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "local-secret" not in serialized
+    assert payload["commands"] == [
+        "export LEXMOUNT_API_KEY='<redacted-api-key>'",
+        "export LEXMOUNT_PROJECT_ID=project",
+        "export LEXMOUNT_BASE_URL=https://api.example.test",
+        "export LEXMOUNT_REGION=cn",
+    ]
+    assert payload["warnings"]
+    assert payload["exports"][0]["source"] == "env"
+    assert payload["exports"][0]["usable"] is False
+    assert payload["exports"][1]["source"] == "env"
+    assert payload["exports"][1]["usable"] is True
+
+
+def test_auth_export_env_can_reveal_current_secret_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "export-env", "--from-current", "--reveal-secrets"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["secrets_revealed"] is True
+    assert payload["warnings"] == []
+    assert "local-secret" in payload["script"]
+    assert payload["exports"][0]["usable"] is True
+
+
+def test_auth_login_guides_manual_browser_flow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.login"
+    assert payload["flow"] == "manual_env"
+    assert payload["login_url"] == "https://browser.lexmount.cn"
+    assert payload["device_code_available"] is False
+    assert "browser-cli doctor" in payload["commands"]
+    assert any(
+        "scoped API keys" in item for item in payload["browser_site_recommendations"]
+    )
+
+
 def test_session_list_passes_status_filter(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
