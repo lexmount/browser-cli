@@ -458,6 +458,159 @@ def cmd_auth_device_code(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_auth_connect_spec(args: argparse.Namespace) -> None:
+    scopes = args.scopes or list(DEFAULT_CODEX_AUTH_SCOPES)
+
+    _success(
+        "auth.connect-spec",
+        name="Connect from Codex",
+        available=False,
+        status="spec_only",
+        console_url=DEFAULT_BROWSER_CONSOLE_URL,
+        authorization_url=args.authorization_url,
+        install_command="uv tool install git+https://github.com/lexmount/browser-cli.git",
+        verification_commands=[
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+            "browser-cli session list",
+        ],
+        required_scopes=[
+            {
+                "scope": scope,
+                "required": True,
+                "description": {
+                    "browser:sessions": "Create, list, inspect, keep alive, and close browser sessions.",
+                    "browser:contexts": "Create, list, inspect, resolve, and delete browser contexts.",
+                    "browser:actions": "Run browser page actions against approved sessions.",
+                }.get(scope, "Custom browser-cli authorization scope."),
+            }
+            for scope in scopes
+        ],
+        copy_blocks=[
+            {
+                "id": "install",
+                "title": "Install browser-cli",
+                "language": "bash",
+                "contains_secret": False,
+                "lines": [
+                    "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                    "browser-cli --help",
+                ],
+            },
+            {
+                "id": "env-posix",
+                "title": "Set local shell environment",
+                "language": "bash",
+                "contains_secret": True,
+                "secret_handling": "Only copy into the user's local trusted shell.",
+                "lines": [
+                    "export LEXMOUNT_API_KEY=<scoped-api-key>",
+                    "export LEXMOUNT_PROJECT_ID=<project-id>",
+                ],
+            },
+            {
+                "id": "verify",
+                "title": "Verify browser-cli access",
+                "language": "bash",
+                "contains_secret": False,
+                "lines": [
+                    "browser-cli auth status",
+                    "browser-cli doctor --json",
+                    "browser-cli session list",
+                ],
+            },
+        ],
+        page_sections=[
+            {
+                "id": "project",
+                "title": "Project selection",
+                "required_fields": ["project_id", "project_name"],
+                "actions": ["copy_project_id", "switch_project"],
+            },
+            {
+                "id": "scoped_api_key",
+                "title": "Scoped API key",
+                "required_fields": [
+                    "key_id",
+                    "masked_key_preview",
+                    "scopes",
+                    "expires_at",
+                ],
+                "actions": ["create", "copy_once", "revoke", "rotate"],
+            },
+            {
+                "id": "copy_env_install",
+                "title": "Copy install and env commands",
+                "required_fields": ["install_command", "env_exports", "shell"],
+                "actions": ["copy_install", "copy_env", "copy_verify"],
+            },
+            {
+                "id": "doctor_verify",
+                "title": "Doctor verification",
+                "required_fields": ["doctor_command", "expected_ok", "next_steps"],
+                "actions": ["copy_doctor_command", "show_troubleshooting"],
+            },
+            {
+                "id": "permissions",
+                "title": "Permission and expiry controls",
+                "required_fields": ["scopes", "expires_at", "revoked_at"],
+                "actions": ["edit_scopes", "extend_expiry", "revoke"],
+            },
+            {
+                "id": "device_code",
+                "title": "Device-code authorization",
+                "required_fields": [
+                    "device_authorization_endpoint",
+                    "token_endpoint",
+                    "user_code",
+                    "verification_uri",
+                ],
+                "actions": ["approve", "deny", "poll_status"],
+            },
+        ],
+        device_code_contract={
+            "device_authorization_endpoint": args.device_authorization_url,
+            "token_endpoint": args.token_url,
+            "authorization_url": args.authorization_url,
+            "response_fields": [
+                "device_code",
+                "user_code",
+                "verification_uri",
+                "verification_uri_complete",
+                "expires_in",
+                "interval",
+                "scopes",
+            ],
+            "token_success_fields": [
+                "access_token",
+                "token_type",
+                "expires_in",
+                "scope",
+                "project_id",
+            ],
+            "token_error_codes": [
+                "authorization_pending",
+                "slow_down",
+                "expired_token",
+                "access_denied",
+            ],
+        },
+        security_requirements=[
+            "Show the selected Project ID before creating credentials.",
+            "Default to least-privilege browser scopes.",
+            "Prefer short expirations for Codex credentials.",
+            "Reveal API keys only once and never store raw keys in page logs.",
+            "Support revoke, rotate, and expiration controls.",
+            "Never ask users to paste API keys into Codex chat.",
+        ],
+        next_steps=[
+            "Implement these sections on browser.lexmount.cn/connect/codex.",
+            "After endpoints are available, wire browser-cli auth device-code to request and poll them.",
+            "Keep browser-cli auth login as the manual fallback.",
+        ],
+    )
+
+
 def cmd_session_create(args: argparse.Namespace) -> None:
     command = "session.create"
     try:
@@ -845,6 +998,33 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Requested authorization scope. May be passed more than once.",
     )
     auth_device_code.set_defaults(func=cmd_auth_device_code)
+
+    auth_connect_spec = auth_subparsers.add_parser(
+        "connect-spec",
+        help="Show browser.lexmount.cn Connect from Codex page requirements",
+    )
+    auth_connect_spec.add_argument(
+        "--authorization-url",
+        default=DEFAULT_CODEX_AUTHORIZATION_URL,
+        help="Human authorization page URL.",
+    )
+    auth_connect_spec.add_argument(
+        "--device-authorization-url",
+        default=DEFAULT_CODEX_DEVICE_AUTHORIZATION_URL,
+        help="Future device authorization endpoint URL.",
+    )
+    auth_connect_spec.add_argument(
+        "--token-url",
+        default=DEFAULT_CODEX_TOKEN_URL,
+        help="Future device-code polling token endpoint URL.",
+    )
+    auth_connect_spec.add_argument(
+        "--scope",
+        dest="scopes",
+        action="append",
+        help="Required page authorization scope. May be passed more than once.",
+    )
+    auth_connect_spec.set_defaults(func=cmd_auth_connect_spec)
 
 
 def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:

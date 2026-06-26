@@ -323,6 +323,118 @@ def test_auth_device_code_can_open_authorization_url_and_override_scopes(
     assert payload["requested_scopes"] == ["browser:sessions", "browser:actions"]
 
 
+def test_auth_connect_spec_returns_browser_console_requirements(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "connect-spec"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.connect-spec"
+    assert payload["name"] == "Connect from Codex"
+    assert payload["available"] is False
+    assert payload["status"] == "spec_only"
+    assert payload["authorization_url"] == "https://browser.lexmount.cn/connect/codex"
+    assert (
+        payload["install_command"]
+        == "uv tool install git+https://github.com/lexmount/browser-cli.git"
+    )
+    assert payload["verification_commands"] == [
+        "browser-cli auth status",
+        "browser-cli doctor --json",
+        "browser-cli session list",
+    ]
+    assert [item["scope"] for item in payload["required_scopes"]] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    section_ids = {section["id"] for section in payload["page_sections"]}
+    assert {
+        "project",
+        "scoped_api_key",
+        "copy_env_install",
+        "doctor_verify",
+        "permissions",
+        "device_code",
+    }.issubset(section_ids)
+    env_lines = next(
+        block["lines"] for block in payload["copy_blocks"] if block["id"] == "env-posix"
+    )
+    assert "LEXMOUNT_API_KEY=<scoped-api-key>" in "\n".join(env_lines)
+    assert payload["device_code_contract"] == {
+        "device_authorization_endpoint": (
+            "https://browser.lexmount.cn/connect/codex/device"
+        ),
+        "token_endpoint": "https://browser.lexmount.cn/connect/codex/token",
+        "authorization_url": "https://browser.lexmount.cn/connect/codex",
+        "response_fields": [
+            "device_code",
+            "user_code",
+            "verification_uri",
+            "verification_uri_complete",
+            "expires_in",
+            "interval",
+            "scopes",
+        ],
+        "token_success_fields": [
+            "access_token",
+            "token_type",
+            "expires_in",
+            "scope",
+            "project_id",
+        ],
+        "token_error_codes": [
+            "authorization_pending",
+            "slow_down",
+            "expired_token",
+            "access_denied",
+        ],
+    }
+
+
+def test_auth_connect_spec_accepts_custom_scopes_and_endpoints(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "connect-spec",
+                "--scope",
+                "browser:sessions",
+                "--scope",
+                "browser:actions",
+                "--authorization-url",
+                "https://browser.lexmount.cn/connect/custom",
+                "--device-authorization-url",
+                "https://browser.lexmount.cn/connect/custom/device",
+                "--token-url",
+                "https://browser.lexmount.cn/connect/custom/token",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [item["scope"] for item in payload["required_scopes"]] == [
+        "browser:sessions",
+        "browser:actions",
+    ]
+    assert (
+        payload["device_code_contract"]["authorization_url"]
+        == "https://browser.lexmount.cn/connect/custom"
+    )
+    assert (
+        payload["device_code_contract"]["device_authorization_endpoint"]
+        == "https://browser.lexmount.cn/connect/custom/device"
+    )
+    assert (
+        payload["device_code_contract"]["token_endpoint"]
+        == "https://browser.lexmount.cn/connect/custom/token"
+    )
+
+
 def test_session_list_passes_status_filter(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

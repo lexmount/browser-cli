@@ -37,21 +37,24 @@ CLI for you:
 6. 如果我在联调未来的 Connect from Codex/device-code 流程，运行：
    browser-cli auth device-code
    如果输出 available=false，说明当前还需要 manual login/setup。
-7. 引导我打开 https://browser.lexmount.cn 并登录账号。
-8. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
-9. 引导我在本机 shell 中设置：
+7. 如果我在实现 browser.lexmount.cn 的 Connect from Codex 页面，运行：
+   browser-cli auth connect-spec
+   并按输出的 page_sections、copy_blocks、device_code_contract 实现页面。
+8. 引导我打开 https://browser.lexmount.cn 并登录账号。
+9. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
+10. 引导我在本机 shell 中设置：
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-10. 可以运行下面命令生成本机 shell 配置片段，但不要把 revealed API Key 粘贴到聊天里：
+11. 可以运行下面命令生成本机 shell 配置片段，但不要把 revealed API Key 粘贴到聊天里：
    browser-cli auth export-env
-11. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-12. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-13. 运行下面命令验证：
+12. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+13. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+14. 运行下面命令验证：
    browser-cli --help
    browser-cli auth status
    browser-cli direct-url
    browser-cli session list
-14. 如果验证失败，请按顺序排查：
+15. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - LEXMOUNT_API_KEY 是否已设置
@@ -107,6 +110,7 @@ browser-cli auth status
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth device-code
+browser-cli auth connect-spec
 browser-cli auth export-env
 browser-cli auth export-env --reveal-secrets
 browser-cli auth export-env --shell fish
@@ -118,7 +122,11 @@ printing API keys by default. `auth login` gives browser.lexmount.cn onboarding
 steps, and `auth login --open` opens the Connect from Codex page in the local
 browser. `auth device-code` returns a machine-readable future device-code/OAuth
 contract. Until browser.lexmount.cn implements the required endpoints, it reports
-`available: false` and agents should fall back to `auth login`. `auth export-env`
+`available: false` and agents should fall back to `auth login`.
+`auth connect-spec` returns the machine-readable Connect from Codex page
+requirements for browser.lexmount.cn, including Project ID display, scoped API
+key creation, copyable install/env/verify blocks, doctor verification,
+revoke/expiry controls, and the device-code endpoint contract. `auth export-env`
 returns JSON containing shell lines; they are masked by default, and become
 directly usable only with `--reveal-secrets` in a trusted local shell.
 
@@ -131,6 +139,7 @@ browser-cli auth status
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth device-code
+browser-cli auth connect-spec
 browser-cli auth export-env
 browser-cli auth export-env --include-base-url --reveal-secrets
 ```
@@ -270,3 +279,7 @@ The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
    with pending/slow-down/expired/denied states, return scoped expiring
    credentials for the selected Project ID, and expose revoke/expiration
    controls.
+8. Use `browser-cli auth connect-spec` as the implementation checklist for the
+   Connect from Codex page. It returns required page sections, copy blocks,
+   verification commands, scopes, security requirements, and device-code
+   endpoint fields as JSON.
