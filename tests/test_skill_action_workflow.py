@@ -41,6 +41,10 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`get-value`",
         "`wait-value`",
         "`blur`",
+        "`storage-get`",
+        "`storage-set`",
+        "`storage-remove`",
+        "`storage-clear`",
         "`clear`",
         "`submit`",
         "`select-option`",
@@ -59,6 +63,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`result.filled`" in normalized
     assert "`result.value`" in normalized
     assert "`result.readable`" in normalized
+    assert "`removed`" in normalized
+    assert "`cleared_count`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -86,5 +92,8 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Read page results" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` before reading dynamic results" in normalized
+    assert "Adjust browser state" in normalized
+    assert "use `storage-get` for local/session storage" in normalized
+    assert "`storage-clear --prefix <prefix>` for targeted cleanup" in normalized
     assert "Capture final evidence" in normalized
     assert "use `screenshot` after the action sequence" in normalized

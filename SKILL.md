@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, URLs, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, URLs, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -102,6 +102,10 @@ browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "query"
 browser-cli action blur --session-id <session_id> --selector "input[name=q]"
+browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
+browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
+browser-cli action storage-remove --session-id <session_id> --area session --key draft
+browser-cli action storage-clear --session-id <session_id> --area session --prefix temp:
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
@@ -120,13 +124,14 @@ browser-cli action interactive-snapshot --session-id <session_id>
 Prefer these built-in actions over writing custom JavaScript. `reload`,
 `go-back`, `go-forward`, `wait-url`, `get-text`, `exists`, `count`, `query`,
 `get-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`, `blur`,
-`clear`, `submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, and
-`press` plus `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
+`storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `clear`,
+`submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, and `press`
+plus `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
-`clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `cleared`,
-`submitted`, `hovered`, `pressed`, and `navigation_requested` before assuming
-the page changed.
+`clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
+`removed`, `cleared`, `items`, `cleared_count`, `submitted`, `hovered`,
+`pressed`, and `navigation_requested` before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -139,10 +144,12 @@ For page work, choose actions in this order:
    `type`, `focus`, `get-value`, `wait-value`, `blur`, `clear`, `submit`,
    `select-option`, `check`, and `uncheck`.
 4. Use `reload`, `go-back`, `go-forward`, and `wait-url` for navigation flows.
-5. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
-6. Use `eval` only for page-local work not covered by a first-class action, and
+5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
+   localStorage/sessionStorage state instead of writing storage JavaScript.
+6. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
+7. Use `eval` only for page-local work not covered by a first-class action, and
    keep the expression small.
-7. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
+8. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
    false, inspect again before trying a different action. For form state, parse
    `result.value` and `result.readable` before deciding whether to type again.
 
@@ -163,8 +170,11 @@ Common task recipes:
 5. Read page results: use `get-text` for a known selector; use `snapshot` when
    the page structure or selector is unknown; use `wait-text` before reading
    dynamic results.
-6. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`.
-7. Capture final evidence: use `screenshot` after the action sequence and close
+6. Adjust browser state: use `storage-get` for local/session storage,
+   `storage-set` for feature flags or onboarding state, and `storage-remove` or
+   `storage-clear --prefix <prefix>` for targeted cleanup.
+7. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`.
+8. Capture final evidence: use `screenshot` after the action sequence and close
    the session unless the user asks to keep it open.
 
 Each action must use exactly one target:

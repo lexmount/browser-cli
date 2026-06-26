@@ -1036,6 +1036,185 @@ def _blur_expression(selector: str) -> str:
     )
 
 
+def _storage_area_expression(area: str) -> str:
+    return f"""
+  const area = {_js_literal(area)};
+  const storageForArea = () => area === "session" ? window.sessionStorage : window.localStorage;
+""".rstrip()
+
+
+def _storage_get_expression(
+    *,
+    area: str,
+    key: str | None,
+    prefix: str | None,
+    max_items: int,
+) -> str:
+    key_source = "null" if key is None else _js_literal(key)
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const requestedKey = {key_source};
+  const prefix = {prefix_source};
+  const maxItems = Math.max(1, {_js_literal(max_items)});
+  try {{
+    const storage = storageForArea();
+    if (requestedKey !== null) {{
+      const value = storage.getItem(requestedKey);
+      return {{
+        area,
+        key: requestedKey,
+        found: value !== null,
+        value,
+        value_length: value === null ? null : value.length
+      }};
+    }}
+    const keys = [];
+    for (let index = 0; index < storage.length; index += 1) {{
+      const candidate = storage.key(index);
+      if (candidate !== null && (prefix === null || candidate.startsWith(prefix))) {{
+        keys.push(candidate);
+      }}
+    }}
+    const items = keys.slice(0, maxItems).map((candidate) => {{
+      const value = storage.getItem(candidate);
+      return {{
+        key: candidate,
+        value,
+        value_length: value === null ? null : value.length
+      }};
+    }});
+    return {{
+      area,
+      key: null,
+      prefix,
+      found: true,
+      count: keys.length,
+      item_count: items.length,
+      max_items: maxItems,
+      truncated: keys.length > items.length,
+      items
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      key: requestedKey,
+      prefix,
+      found: false,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _storage_set_expression(*, area: str, key: str, value: str) -> str:
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const key = {_js_literal(key)};
+  const value = {_js_literal(value)};
+  try {{
+    const storage = storageForArea();
+    const previousValue = storage.getItem(key);
+    storage.setItem(key, value);
+    const currentValue = storage.getItem(key);
+    return {{
+      area,
+      key,
+      set: currentValue === value,
+      found: true,
+      previous_value: previousValue,
+      value: currentValue,
+      value_length: currentValue === null ? null : currentValue.length
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      key,
+      set: false,
+      found: false,
+      value: null,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _storage_remove_expression(*, area: str, key: str) -> str:
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const key = {_js_literal(key)};
+  try {{
+    const storage = storageForArea();
+    const previousValue = storage.getItem(key);
+    storage.removeItem(key);
+    return {{
+      area,
+      key,
+      removed: storage.getItem(key) === null,
+      had_key: previousValue !== null,
+      found: previousValue !== null,
+      previous_value: previousValue
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      key,
+      removed: false,
+      found: false,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
+def _storage_clear_expression(*, area: str, prefix: str | None) -> str:
+    prefix_source = "null" if prefix is None else _js_literal(prefix)
+    return f"""
+() => {{
+{_storage_area_expression(area)}
+  const prefix = {prefix_source};
+  try {{
+    const storage = storageForArea();
+    const keys = [];
+    for (let index = 0; index < storage.length; index += 1) {{
+      const candidate = storage.key(index);
+      if (candidate !== null && (prefix === null || candidate.startsWith(prefix))) {{
+        keys.push(candidate);
+      }}
+    }}
+    for (const key of keys) {{
+      storage.removeItem(key);
+    }}
+    return {{
+      area,
+      prefix,
+      cleared: true,
+      cleared_count: keys.length,
+      keys
+    }};
+  }} catch (error) {{
+    return {{
+      area,
+      prefix,
+      cleared: false,
+      cleared_count: 0,
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+}}
+""".strip()
+
+
 def _clear_expression(selector: str) -> str:
     return _event_expression(
         selector,
@@ -1378,6 +1557,53 @@ def cmd_action_blur(args: argparse.Namespace) -> None:
         args,
         "action.blur",
         _blur_expression(args.selector),
+    )
+
+
+def cmd_action_storage_get(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-get",
+        _storage_get_expression(
+            area=args.area,
+            key=args.key,
+            prefix=args.prefix,
+            max_items=args.max_items,
+        ),
+    )
+
+
+def cmd_action_storage_set(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-set",
+        _storage_set_expression(
+            area=args.area,
+            key=args.key,
+            value=args.value,
+        ),
+    )
+
+
+def cmd_action_storage_remove(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-remove",
+        _storage_remove_expression(
+            area=args.area,
+            key=args.key,
+        ),
+    )
+
+
+def cmd_action_storage_clear(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.storage-clear",
+        _storage_clear_expression(
+            area=args.area,
+            prefix=args.prefix,
+        ),
     )
 
 
@@ -2032,6 +2258,76 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_blur)
     action_blur.add_argument("--selector", required=True)
     action_blur.set_defaults(func=cmd_action_blur)
+
+    action_storage_get = action_subparsers.add_parser(
+        "storage-get",
+        help="Read localStorage or sessionStorage values",
+    )
+    _add_session_target_args(action_storage_get)
+    action_storage_get.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to read.",
+    )
+    action_storage_get.add_argument("--key")
+    action_storage_get.add_argument(
+        "--prefix",
+        help="Only list keys with this prefix when --key is omitted.",
+    )
+    action_storage_get.add_argument(
+        "--max-items",
+        type=int,
+        default=50,
+        help="Maximum number of key/value pairs to return when listing.",
+    )
+    action_storage_get.set_defaults(func=cmd_action_storage_get)
+
+    action_storage_set = action_subparsers.add_parser(
+        "storage-set",
+        help="Set a localStorage or sessionStorage value",
+    )
+    _add_session_target_args(action_storage_set)
+    action_storage_set.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to write.",
+    )
+    action_storage_set.add_argument("--key", required=True)
+    action_storage_set.add_argument("--value", required=True)
+    action_storage_set.set_defaults(func=cmd_action_storage_set)
+
+    action_storage_remove = action_subparsers.add_parser(
+        "storage-remove",
+        help="Remove a localStorage or sessionStorage value",
+    )
+    _add_session_target_args(action_storage_remove)
+    action_storage_remove.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to update.",
+    )
+    action_storage_remove.add_argument("--key", required=True)
+    action_storage_remove.set_defaults(func=cmd_action_storage_remove)
+
+    action_storage_clear = action_subparsers.add_parser(
+        "storage-clear",
+        help="Clear localStorage or sessionStorage values",
+    )
+    _add_session_target_args(action_storage_clear)
+    action_storage_clear.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to clear.",
+    )
+    action_storage_clear.add_argument(
+        "--prefix",
+        help="Only clear keys with this prefix.",
+    )
+    action_storage_clear.set_defaults(func=cmd_action_storage_clear)
 
     action_clear = action_subparsers.add_parser(
         "clear",

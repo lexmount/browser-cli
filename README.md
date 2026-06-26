@@ -136,6 +136,10 @@ browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "hello"
 browser-cli action blur --session-id <session_id> --selector "input[name=q]"
+browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
+browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
+browser-cli action storage-remove --session-id <session_id> --area session --key draft
+browser-cli action storage-clear --session-id <session_id> --area session --prefix temp:
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
@@ -154,15 +158,15 @@ browser-cli action interactive-snapshot --session-id <session_id>
 
 `reload`, `go-back`, `go-forward`, `wait-url`, `get-text`, `exists`, `count`,
 `query`, `get-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`,
-`blur`, `clear`, `submit`, `scroll`, `select-option`, `check`, `uncheck`,
-`hover`, `press`, `click-text`, `click-role`, `fill-label`,
-`accessibility-snapshot`, and
+`blur`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
+`clear`, `submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`,
+`press`, `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
-`focused`, `value`, `readable`, `blurred`, `cleared`, `submitted`, or
-`navigation_requested` from `result`.
+`focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
+`items`, `cleared_count`, `submitted`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -228,6 +232,7 @@ browser-cli action wait-text --session-id <session_id> --text <text>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
 browser-cli action get-text --session-id <session_id> --selector <selector>
 browser-cli action get-value --session-id <session_id> --selector <selector>
+browser-cli action storage-get --session-id <session_id> --area local --key <key>
 browser-cli action query --session-id <session_id> --selector <selector>
 browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
@@ -248,6 +253,9 @@ Common agent recipes:
   `interactive-snapshot`.
 - Read results: `get-text` for known selectors, or `snapshot` when the selector
   is unknown.
+- Browser state: use `storage-get` to inspect local/session storage, `storage-set`
+  to adjust feature flags or onboarding state, and `storage-remove` or
+  `storage-clear --prefix <prefix>` for targeted cleanup.
 - Debug candidate selectors: use `count` for cardinality, `query` for node
   metadata, and `get-attribute` for href/value/aria checks.
 - Final evidence: `screenshot`, then close the session unless it should stay

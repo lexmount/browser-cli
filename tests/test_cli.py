@@ -1384,6 +1384,236 @@ def test_navigation_and_form_eval_backed_action_commands_emit_structured_results
     }
 
 
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "storage-get",
+                "--session-id",
+                "s1",
+                "--area",
+                "local",
+                "--key",
+                "featureFlag",
+            ],
+            "action.storage-get",
+            {
+                "area": "local",
+                "key": "featureFlag",
+                "found": True,
+                "value": "enabled",
+                "value_length": 7,
+            },
+            {
+                "area": "local",
+                "key": "featureFlag",
+                "found": True,
+                "value": "enabled",
+                "value_length": 7,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-get",
+                "--session-id",
+                "s1",
+                "--area",
+                "session",
+                "--prefix",
+                "auth:",
+                "--max-items",
+                "20",
+            ],
+            "action.storage-get",
+            {
+                "area": "session",
+                "key": None,
+                "prefix": "auth:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 20,
+                "truncated": False,
+                "items": [
+                    {
+                        "key": "auth:mode",
+                        "value": "test",
+                        "value_length": 4,
+                    }
+                ],
+            },
+            {
+                "area": "session",
+                "key": None,
+                "prefix": "auth:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 20,
+                "truncated": False,
+                "items": [
+                    {
+                        "key": "auth:mode",
+                        "value": "test",
+                        "value_length": 4,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-set",
+                "--session-id",
+                "s1",
+                "--area",
+                "local",
+                "--key",
+                "seenIntro",
+                "--value",
+                "true",
+            ],
+            "action.storage-set",
+            {
+                "area": "local",
+                "key": "seenIntro",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "true",
+                "value_length": 4,
+            },
+            {
+                "area": "local",
+                "key": "seenIntro",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "true",
+                "value_length": 4,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-remove",
+                "--session-id",
+                "s1",
+                "--area",
+                "session",
+                "--key",
+                "draft",
+            ],
+            "action.storage-remove",
+            {
+                "area": "session",
+                "key": "draft",
+                "removed": True,
+                "had_key": True,
+                "found": True,
+                "previous_value": "hello",
+            },
+            {
+                "area": "session",
+                "key": "draft",
+                "removed": True,
+                "had_key": True,
+                "found": True,
+                "previous_value": "hello",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-clear",
+                "--session-id",
+                "s1",
+                "--area",
+                "session",
+                "--prefix",
+                "temp:",
+            ],
+            "action.storage-clear",
+            {
+                "area": "session",
+                "prefix": "temp:",
+                "cleared": True,
+                "cleared_count": 2,
+                "keys": ["temp:a", "temp:b"],
+            },
+            {
+                "area": "session",
+                "prefix": "temp:",
+                "cleared": True,
+                "cleared_count": 2,
+                "keys": ["temp:a", "temp:b"],
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_storage_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
 def test_direct_url_can_reveal_secret_explicitly(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
