@@ -149,6 +149,7 @@ Session management:
 browser-cli session create
 browser-cli session create --create-context
 browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing
 browser-cli session list --status active
 browser-cli session get --session-id <session_id>
 browser-cli session close --session-id <session_id>
@@ -383,12 +384,13 @@ Common agent recipes:
 - Final evidence: `screenshot`, then close the session unless it should stay
   open.
 
-Use `context pick --metadata-json '{"purpose":"codex-login"}'` plus
-`session create --context-id <context_id> --context-mode read_write` when login
-state or cookies should survive between sessions. `context pick` evaluates
-candidate contexts and only selects reusable statuses such as `available`; it
-reports `locked: true` for locked/busy/in-use contexts. Use
-`--create-if-missing` when a new persistent context should be created.
+Use `session create --context-metadata-json '{"purpose":"codex-login"}'
+--create-context-if-missing --context-mode read_write` when login state or
+cookies should survive between sessions. The command picks the first reusable
+matching context, creates one if requested, then returns `context_reuse` with
+candidate contexts, `created`, `selected`, and locked/reusable details. Use
+`context pick --metadata-json '{"purpose":"codex-login"}'` when you need to
+inspect or report candidates before creating a session.
 
 ## Codex Skill
 

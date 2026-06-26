@@ -359,6 +359,76 @@ def _context_pick_candidate(
     }
 
 
+def _select_or_create_context_for_session(
+    admin: Any,
+    *,
+    command: str,
+    metadata_filter: dict[str, Any],
+    status: str | None,
+    limit: int,
+    create_if_missing: bool,
+) -> dict[str, Any]:
+    try:
+        result = admin.list_contexts(status=status, limit=limit)
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    payload = _model_payload(result)
+    contexts = payload.get("contexts", [])
+    if not isinstance(contexts, list):
+        contexts = []
+    candidates = [
+        _context_pick_candidate(context, metadata_filter) for context in contexts
+    ]
+
+    for context, candidate in zip(contexts, candidates, strict=True):
+        if candidate["metadata_match"] and candidate["reusable"]:
+            return {
+                "selected": True,
+                "created": False,
+                "context_id": context.get("context_id"),
+                "context": context,
+                "reuse": _context_reuse_state(context),
+                "checked": len(contexts),
+                "candidates": candidates,
+                "metadata_filter": metadata_filter,
+                "status_filter": status,
+                "limit": limit,
+            }
+
+    if create_if_missing:
+        try:
+            context = admin.create_context(metadata=metadata_filter or None)
+        except Exception as exc:
+            _failure_from_exception(command, exc)
+        created_context = _model_payload(context)
+        return {
+            "selected": True,
+            "created": True,
+            "context_id": created_context.get("context_id"),
+            "context": created_context,
+            "reuse": _context_reuse_state(created_context),
+            "checked": len(contexts),
+            "candidates": candidates,
+            "metadata_filter": metadata_filter,
+            "status_filter": status,
+            "limit": limit,
+        }
+
+    _failure(
+        command,
+        "no_available_context",
+        "No reusable context matched the requested session context filters.",
+        selected=False,
+        created=False,
+        checked=len(contexts),
+        candidates=candidates,
+        metadata_filter=metadata_filter,
+        status_filter=status,
+        limit=limit,
+    )
+
+
 def _env_value_status(
     name: str,
     *,
@@ -455,17 +525,69 @@ def _export_command(name: str, value: str, shell: str) -> str:
 
 def cmd_session_create(args: argparse.Namespace) -> None:
     command = "session.create"
+    context_reuse: dict[str, Any] | None = None
+    context_metadata_filter = getattr(args, "context_metadata_filter", None)
+    if context_metadata_filter is None and (
+        args.create_context_if_missing or args.context_status is not None
+    ):
+        _failure(
+            command,
+            "argument_error",
+            (
+                "Use --create-context-if-missing or --context-status together "
+                "with --context-metadata-json."
+            ),
+            exit_code=2,
+        )
+    if context_metadata_filter is not None and (args.context_id or args.create_context):
+        _failure(
+            command,
+            "argument_error",
+            (
+                "Use --context-metadata-json without --context-id or "
+                "--create-context; pass --create-context-if-missing when a new "
+                "matching context should be created."
+            ),
+            exit_code=2,
+        )
+
     try:
-        result = LexmountBrowserAdmin().create_session(
-            context_id=args.context_id,
-            create_context=args.create_context,
+        admin = LexmountBrowserAdmin()
+        context_id = args.context_id
+        create_context = args.create_context
+
+        if context_metadata_filter is not None:
+            context_reuse = _select_or_create_context_for_session(
+                admin,
+                command=command,
+                metadata_filter=context_metadata_filter,
+                status=args.context_status,
+                limit=args.context_limit,
+                create_if_missing=args.create_context_if_missing,
+            )
+            context_id = context_reuse.get("context_id")
+            create_context = False
+            if not context_id:
+                _failure(
+                    command,
+                    "context_missing_id",
+                    "Selected context does not include a context_id.",
+                    context_reuse=context_reuse,
+                )
+
+        result = admin.create_session(
+            context_id=context_id,
+            create_context=create_context,
             context_mode=args.context_mode,
             browser_mode=args.browser_mode,
             metadata=args.metadata,
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, **_model_payload(result))
+    payload = _model_payload(result)
+    if context_reuse is not None:
+        payload["context_reuse"] = context_reuse
+    _success(command, **payload)
 
 
 def cmd_session_list(args: argparse.Namespace) -> None:
@@ -3940,6 +4062,30 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         dest="metadata",
         type=_parse_metadata_json,
         help="JSON object used when --create-context creates a context",
+    )
+    parser.add_argument(
+        "--context-metadata-json",
+        dest="context_metadata_filter",
+        type=_parse_filter_metadata_json,
+        help=(
+            "Pick a reusable context matching this metadata before creating "
+            "the session."
+        ),
+    )
+    parser.add_argument(
+        "--create-context-if-missing",
+        action="store_true",
+        help="Create a context with --context-metadata-json when no reusable match exists.",
+    )
+    parser.add_argument(
+        "--context-status",
+        help="Optional status filter used while picking a reusable context.",
+    )
+    parser.add_argument(
+        "--context-limit",
+        type=int,
+        default=20,
+        help="Maximum contexts to inspect while picking a reusable context.",
     )
 
 

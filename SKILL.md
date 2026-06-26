@@ -76,13 +76,13 @@ Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
 ```bash
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
-browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
 ```
 
-Use `context status --context-id <context_id>` before reuse when the context id
-came from older notes. Reuse only when `reusable` is true; if `locked` is true,
-pick or create a different context.
+Parse `context_reuse` from the session result. Reuse only when
+`context_reuse.selected` is true; if candidates include `locked: true`, report
+that a busy context was skipped. Use `context status --context-id <context_id>`
+before reuse when the context id came from older notes.
 
 Always close sessions created for temporary automation unless the user asks to
 keep them open.
@@ -109,6 +109,7 @@ Session lifecycle:
 
 ```bash
 browser-cli session create
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing
 browser-cli session list
 browser-cli session get --session-id <session_id>
 browser-cli session close --session-id <session_id>

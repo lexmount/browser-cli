@@ -642,6 +642,278 @@ def test_session_create_passes_context_options(
     assert payload["session"] == {"session_id": "s1", "status": "active"}
 
 
+def test_session_create_can_reuse_context_by_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list_contexts", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 2,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-locked",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex-login"},
+                        },
+                        {
+                            "context_id": "ctx-ready",
+                            "status": "available",
+                            "metadata": {"purpose": "codex-login"},
+                        },
+                    ],
+                }
+            )
+
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(
+                (
+                    "create_session",
+                    {
+                        "context_id": context_id,
+                        "create_context": create_context,
+                        "context_mode": context_mode,
+                        "browser_mode": browser_mode,
+                        "metadata": metadata,
+                    },
+                )
+            )
+            return DummyModel(
+                {
+                    "mode": "sdk",
+                    "context_id": context_id,
+                    "session": {"session_id": "s1", "status": "active"},
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+                "--context-status",
+                "available",
+                "--context-limit",
+                "5",
+                "--metadata-json",
+                '{"task":"smoke"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "session.create"
+    assert payload["context_id"] == "ctx-ready"
+    assert payload["session"] == {"session_id": "s1", "status": "active"}
+    assert payload["context_reuse"]["selected"] is True
+    assert payload["context_reuse"]["created"] is False
+    assert payload["context_reuse"]["context_id"] == "ctx-ready"
+    assert payload["context_reuse"]["reuse"]["reusable"] is True
+    assert payload["context_reuse"]["checked"] == 2
+    assert payload["context_reuse"]["metadata_filter"] == {"purpose": "codex-login"}
+    assert payload["context_reuse"]["status_filter"] == "available"
+    assert payload["context_reuse"]["limit"] == 5
+    assert calls == [
+        ("list_contexts", {"status": "available", "limit": 5}),
+        (
+            "create_session",
+            {
+                "context_id": "ctx-ready",
+                "create_context": False,
+                "context_mode": "read_write",
+                "browser_mode": "normal",
+                "metadata": {"task": "smoke"},
+            },
+        ),
+    ]
+
+
+def test_session_create_can_create_context_when_no_reusable_metadata_match(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list_contexts", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex-login"},
+                        }
+                    ],
+                }
+            )
+
+        def create_context(self, *, metadata: dict[str, Any] | None) -> DummyModel:
+            calls.append(("create_context", {"metadata": metadata}))
+            return DummyModel(
+                {
+                    "context_id": "ctx-new",
+                    "status": "available",
+                    "metadata": metadata,
+                }
+            )
+
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(
+                (
+                    "create_session",
+                    {
+                        "context_id": context_id,
+                        "create_context": create_context,
+                        "context_mode": context_mode,
+                        "browser_mode": browser_mode,
+                        "metadata": metadata,
+                    },
+                )
+            )
+            return DummyModel({"session": {"session_id": "s1"}})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+                "--create-context-if-missing",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["context_reuse"]["selected"] is True
+    assert payload["context_reuse"]["created"] is True
+    assert payload["context_reuse"]["context_id"] == "ctx-new"
+    assert payload["context_reuse"]["candidates"][0]["locked"] is True
+    assert calls == [
+        ("list_contexts", {"status": None, "limit": 20}),
+        ("create_context", {"metadata": {"purpose": "codex-login"}}),
+        (
+            "create_session",
+            {
+                "context_id": "ctx-new",
+                "create_context": False,
+                "context_mode": "read_write",
+                "browser_mode": "normal",
+                "metadata": None,
+            },
+        ),
+    ]
+
+
+def test_session_create_fails_when_metadata_context_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex-login"},
+                        }
+                    ],
+                }
+            )
+
+        def create_session(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError("session should not be created without a context")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "session.create"
+    assert payload["error"] == "no_available_context"
+    assert payload["selected"] is False
+    assert payload["created"] is False
+    assert payload["candidates"][0]["reason"] == "status_locked"
+
+
+def test_session_create_rejects_conflicting_context_reuse_options(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-id",
+                "ctx1",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "session.create"
+    assert payload["error"] == "argument_error"
+    assert "--context-metadata-json" in payload["message"]
+
+
 def test_session_get_close_and_keepalive_emit_json(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
