@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shlex
 import tomllib
 from importlib import metadata
 from pathlib import Path
@@ -35,6 +37,9 @@ from lex_browser_runtime.browser.models import (
 )
 
 PACKAGE_NAME = "browser-cli"
+DEFAULT_BROWSER_CONSOLE_URL = "https://browser.lexmount.cn"
+DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
+REQUIRED_AUTH_ENV_VARS = ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
 
 
 def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
@@ -160,6 +165,220 @@ def _masked_connect_url_payload(
         "connect_url": masked,
         "connect_url_masked": masked != connect_url,
     }
+
+
+def _env_value(name: str) -> str | None:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return None
+    return value
+
+
+def _mask_secret(value: str | None) -> str | None:
+    if not value:
+        return None
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _auth_env_var_payload(
+    name: str,
+    *,
+    secret: bool = False,
+    reveal_secrets: bool = False,
+    default: str | None = None,
+) -> dict[str, Any]:
+    raw_value = _env_value(name)
+    value = raw_value if raw_value is not None else default
+    masked = bool(secret and raw_value and not reveal_secrets)
+    if masked:
+        value = _mask_secret(raw_value)
+    return {
+        "set": raw_value is not None,
+        "value": value,
+        "masked": masked,
+        "default": raw_value is None and default is not None,
+    }
+
+
+def _auth_status_payload(*, reveal_secrets: bool) -> dict[str, Any]:
+    missing = [name for name in REQUIRED_AUTH_ENV_VARS if _env_value(name) is None]
+    return {
+        "configured": not missing,
+        "missing": missing,
+        "console_url": DEFAULT_BROWSER_CONSOLE_URL,
+        "environment": {
+            "LEXMOUNT_API_KEY": _auth_env_var_payload(
+                "LEXMOUNT_API_KEY",
+                secret=True,
+                reveal_secrets=reveal_secrets,
+            ),
+            "LEXMOUNT_PROJECT_ID": _auth_env_var_payload("LEXMOUNT_PROJECT_ID"),
+            "LEXMOUNT_BASE_URL": _auth_env_var_payload(
+                "LEXMOUNT_BASE_URL",
+                default=DEFAULT_LEXMOUNT_BASE_URL,
+            ),
+            "LEXMOUNT_REGION": _auth_env_var_payload("LEXMOUNT_REGION"),
+        },
+        "next_steps": _auth_next_steps(missing),
+    }
+
+
+def _auth_next_steps(missing: list[str]) -> list[str]:
+    if not missing:
+        return [
+            "Run browser-cli session list to verify API connectivity.",
+            "Run browser-cli auth export-env to generate shell configuration lines.",
+        ]
+    return [
+        f"Open {DEFAULT_BROWSER_CONSOLE_URL} and sign in.",
+        "Select a project, copy its Project ID, and create or copy an API key.",
+        "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+        "Run browser-cli auth status again.",
+    ]
+
+
+def _quote_env_value(value: str, *, shell: str) -> str:
+    if shell in {"posix", "fish"}:
+        return shlex.quote(value)
+    if shell == "powershell":
+        return "'" + value.replace("'", "''") + "'"
+    raise ValueError(f"Unsupported shell: {shell}")
+
+
+def _format_env_line(name: str, value: str, *, shell: str) -> str:
+    quoted = _quote_env_value(value, shell=shell)
+    if shell == "posix":
+        return f"export {name}={quoted}"
+    if shell == "fish":
+        return f"set -gx {name} {quoted}"
+    if shell == "powershell":
+        return f"$env:{name} = {quoted}"
+    raise ValueError(f"Unsupported shell: {shell}")
+
+
+def _export_env_value(
+    name: str,
+    *,
+    secret: bool,
+    reveal_secrets: bool,
+    placeholder: str,
+    placeholder_usable: bool = False,
+) -> tuple[str, bool, bool]:
+    raw_value = _env_value(name)
+    if raw_value is None:
+        return placeholder, False, placeholder_usable
+    if secret and not reveal_secrets:
+        masked = _mask_secret(raw_value) or "***"
+        return masked, True, False
+    return raw_value, False, True
+
+
+def cmd_auth_status(args: argparse.Namespace) -> None:
+    _success(
+        "auth.status",
+        **_auth_status_payload(reveal_secrets=args.reveal_secrets),
+    )
+
+
+def cmd_auth_export_env(args: argparse.Namespace) -> None:
+    command = "auth.export-env"
+    env_specs = [
+        (
+            "LEXMOUNT_API_KEY",
+            True,
+            f"<api-key from {DEFAULT_BROWSER_CONSOLE_URL}>",
+            False,
+        ),
+        (
+            "LEXMOUNT_PROJECT_ID",
+            False,
+            f"<project-id from {DEFAULT_BROWSER_CONSOLE_URL}>",
+            False,
+        ),
+    ]
+    if _env_value("LEXMOUNT_BASE_URL") or args.include_base_url:
+        env_specs.append(
+            (
+                "LEXMOUNT_BASE_URL",
+                False,
+                DEFAULT_LEXMOUNT_BASE_URL,
+                True,
+            )
+        )
+    if _env_value("LEXMOUNT_REGION"):
+        env_specs.append(("LEXMOUNT_REGION", False, "<region>", False))
+
+    missing: list[str] = []
+    lines: list[str] = []
+    masked = False
+    all_usable = True
+    contains_secrets = False
+    for name, secret, placeholder, placeholder_usable in env_specs:
+        value, value_masked, usable = _export_env_value(
+            name,
+            secret=secret,
+            reveal_secrets=args.reveal_secrets,
+            placeholder=placeholder,
+            placeholder_usable=placeholder_usable,
+        )
+        if name in REQUIRED_AUTH_ENV_VARS and _env_value(name) is None:
+            missing.append(name)
+        masked = masked or value_masked
+        all_usable = all_usable and usable
+        contains_secrets = contains_secrets or bool(secret and usable)
+        lines.append(_format_env_line(name, value, shell=args.shell))
+
+    _success(
+        command,
+        shell=args.shell,
+        lines=lines,
+        script="\n".join(lines),
+        complete=not missing,
+        missing=missing,
+        masked=masked,
+        usable=all_usable and not missing,
+        contains_secrets=contains_secrets,
+        console_url=DEFAULT_BROWSER_CONSOLE_URL,
+        next_steps=[
+            "Use --reveal-secrets only in a local trusted shell when you need usable export lines.",
+            "Do not paste revealed API keys into chat, logs, README files, or commits.",
+            "Run browser-cli auth status after exporting credentials.",
+        ],
+    )
+
+
+def cmd_auth_login(args: argparse.Namespace) -> None:
+    status = _auth_status_payload(reveal_secrets=False)
+    _success(
+        "auth.login",
+        console_url=DEFAULT_BROWSER_CONSOLE_URL,
+        configured=status["configured"],
+        missing=status["missing"],
+        required_env=list(REQUIRED_AUTH_ENV_VARS),
+        suggested_commands=[
+            "browser-cli auth status",
+            "browser-cli auth export-env",
+            "browser-cli session list",
+        ],
+        next_steps=[
+            f"Open {DEFAULT_BROWSER_CONSOLE_URL} and sign in.",
+            "Select the project Codex should use.",
+            "Create or copy a scoped API key for agent/browser automation.",
+            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+            "Run browser-cli auth status, then browser-cli session list.",
+        ],
+        future_flow={
+            "name": "Connect from Codex",
+            "needs_browser_lexmount_cn": True,
+            "description": (
+                "A future browser.lexmount.cn flow should let the user approve "
+                "Codex access and return scoped local credentials without manual "
+                "API key copying."
+            ),
+        },
+    )
 
 
 def cmd_session_create(args: argparse.Namespace) -> None:
@@ -466,6 +685,49 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    auth = subparsers.add_parser("auth", help="Inspect and configure credentials")
+    auth_subparsers = auth.add_subparsers(dest="auth_command", required=True)
+
+    auth_status = auth_subparsers.add_parser(
+        "status",
+        help="Show local Lexmount credential configuration",
+    )
+    auth_status.add_argument(
+        "--reveal-secrets",
+        action="store_true",
+        help="Print secret values instead of masked values. Use only locally.",
+    )
+    auth_status.set_defaults(func=cmd_auth_status)
+
+    auth_export_env = auth_subparsers.add_parser(
+        "export-env",
+        help="Generate shell env lines for Lexmount credentials",
+    )
+    auth_export_env.add_argument(
+        "--shell",
+        choices=["posix", "fish", "powershell"],
+        default="posix",
+    )
+    auth_export_env.add_argument(
+        "--include-base-url",
+        action="store_true",
+        help="Include LEXMOUNT_BASE_URL, using the China default if unset.",
+    )
+    auth_export_env.add_argument(
+        "--reveal-secrets",
+        action="store_true",
+        help="Print usable secret values. Do not paste this output into chat.",
+    )
+    auth_export_env.set_defaults(func=cmd_auth_export_env)
+
+    auth_login = auth_subparsers.add_parser(
+        "login",
+        help="Show browser.lexmount.cn login and configuration guidance",
+    )
+    auth_login.set_defaults(func=cmd_auth_login)
+
+
 def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     session = subparsers.add_parser("session", help="Manage browser sessions")
     session_subparsers = session.add_subparsers(
@@ -674,6 +936,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    _add_auth_commands(subparsers)
     _add_session_commands(subparsers)
     _add_context_commands(subparsers)
     _add_action_commands(subparsers)
