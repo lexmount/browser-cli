@@ -1,0 +1,86 @@
+# Agent Playbook
+
+Use this playbook when turning `browser-cli` into a Codex skill or another
+agent-facing browser tool.
+
+## First Checks
+
+Prefer CLI checks before writing browser code:
+
+```bash
+browser-cli --help
+browser-cli direct-url
+browser-cli session list
+```
+
+When available in the installed version, run:
+
+```bash
+browser-cli auth status
+browser-cli doctor --json
+```
+
+Do not ask the user to paste API keys into chat. Direct them to
+`https://browser.lexmount.cn` and keep secrets in the local shell.
+
+## One-Off Page Task
+
+Use a temporary session and close it when finished:
+
+```bash
+browser-cli session create --browser-mode light
+browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action snapshot --session-id <session_id>
+browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
+browser-cli session close --session-id <session_id>
+```
+
+## Persistent Login State
+
+Use a context only when cookies, local storage, or login state should survive:
+
+```bash
+browser-cli context create --metadata-json '{"purpose":"login"}'
+browser-cli session create --context-id <context_id> --context-mode read_write
+```
+
+When `context resolve` is available, prefer it:
+
+```bash
+browser-cli context resolve --create-if-missing
+browser-cli session create --context-id <context_id> --context-mode read_write
+```
+
+Do not reuse a locked context for a new read/write session. Close the session
+that holds it, or create a new context.
+
+## Case Files
+
+Use case files when the task is repeatable or should leave artifacts:
+
+```bash
+browser-cli case validate --file examples/cases/page-inspection.yaml
+browser-cli case run --file examples/cases/page-inspection.yaml --close-created-session
+```
+
+Case files are good for smoke tests, regression checks, and demos because they
+produce structured JSON summaries and event logs.
+
+## Action Selection
+
+Prefer built-in actions over writing JavaScript:
+
+```bash
+browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action wait-selector --session-id <session_id> --selector <selector>
+browser-cli action click --session-id <session_id> --selector <selector>
+browser-cli action type --session-id <session_id> --selector <selector> --text <text>
+browser-cli action snapshot --session-id <session_id>
+```
+
+When expanded action commands are available, use them for common browser
+operations such as checking existence, reading text, scrolling, selecting
+options, checking boxes, hovering, and pressing keys.
+
+Use `action eval` only when the CLI does not yet expose the browser operation as
+a command.
