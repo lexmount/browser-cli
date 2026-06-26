@@ -34,6 +34,8 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`query`",
         "`get-attribute`",
         "`wait-selector`",
+        "`wait-load-state`",
+        "`wait-network-idle`",
         "`wait-text`",
         "`click`",
         "`type`",
@@ -65,6 +67,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`result.readable`" in normalized
     assert "`removed`" in normalized
     assert "`cleared_count`" in normalized
+    assert "`network_idle`" in normalized
+    assert "`quiet_ms`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -82,9 +86,11 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
     assert "`click-role`, then `click-text`, then selector `click`" in normalized
-    assert "Navigate page history" in normalized
+    assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
-    assert "confirm with `wait-url`, `wait-text`, or `snapshot`" in normalized
+    assert (
+        "confirm with `wait-url`, `wait-load-state`, `wait-network-idle`" in normalized
+    )
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, and `get-attribute` before `eval`" in normalized
     assert "Open menus or keyboard flows" in normalized

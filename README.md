@@ -126,6 +126,8 @@ browser-cli action reload --session-id <session_id>
 browser-cli action go-back --session-id <session_id>
 browser-cli action go-forward --session-id <session_id>
 browser-cli action wait-url --session-id <session_id> --url /dashboard
+browser-cli action wait-load-state --session-id <session_id> --state complete
+browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
 browser-cli action count --session-id <session_id> --selector ".item"
@@ -156,17 +158,19 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-`reload`, `go-back`, `go-forward`, `wait-url`, `get-text`, `exists`, `count`,
-`query`, `get-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`,
-`blur`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
-`clear`, `submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`,
-`press`, `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
+`reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`,
+`wait-network-idle`, `get-text`, `exists`, `count`, `query`, `get-attribute`,
+`wait-text`, `focus`, `get-value`, `wait-value`, `blur`, `storage-get`,
+`storage-set`, `storage-remove`, `storage-clear`, `clear`, `submit`, `scroll`,
+`select-option`, `check`, `uncheck`, `hover`, `press`, `click-text`,
+`click-role`, `fill-label`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
-`items`, `cleared_count`, `submitted`, or `navigation_requested` from `result`.
+`items`, `cleared_count`, `state`, `network_idle`, `quiet_ms`, `submitted`, or
+`navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -225,9 +229,11 @@ For a new browser task, agents should prefer this sequence:
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
+browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action snapshot --session-id <session_id>
 browser-cli action exists --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
+browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action wait-text --session-id <session_id> --text <text>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
 browser-cli action get-text --session-id <session_id> --selector <selector>
@@ -247,8 +253,9 @@ Common agent recipes:
   `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then selector `click`
   after `exists` confirms a stable selector.
-- Navigation: use `reload`, `go-back`, or `go-forward`, then confirm with
-  `wait-url`, `wait-text`, or `snapshot`.
+- Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
+  confirm with `wait-url`, `wait-load-state`, `wait-network-idle`, `wait-text`,
+  or `snapshot`.
 - Menu or keyboard flow: `focus`, `hover`, or `press`, then inspect again with
   `interactive-snapshot`.
 - Read results: `get-text` for known selectors, or `snapshot` when the selector

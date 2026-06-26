@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, URLs, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -92,6 +92,8 @@ browser-cli action reload --session-id <session_id>
 browser-cli action go-back --session-id <session_id>
 browser-cli action go-forward --session-id <session_id>
 browser-cli action wait-url --session-id <session_id> --url /dashboard
+browser-cli action wait-load-state --session-id <session_id> --state complete
+browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button"
 browser-cli action count --session-id <session_id> --selector ".item"
@@ -122,16 +124,18 @@ browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
 Prefer these built-in actions over writing custom JavaScript. `reload`,
-`go-back`, `go-forward`, `wait-url`, `get-text`, `exists`, `count`, `query`,
-`get-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`, `blur`,
-`storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `clear`,
-`submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, and `press`
-plus `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
+`go-back`, `go-forward`, `wait-url`, `wait-load-state`, `wait-network-idle`,
+`get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-text`, `focus`,
+`get-value`, `wait-value`, `blur`, `storage-get`, `storage-set`,
+`storage-remove`, `storage-clear`, `clear`, `submit`, `scroll`,
+`select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`,
+`click-role`, `fill-label`, `accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
-`removed`, `cleared`, `items`, `cleared_count`, `submitted`, `hovered`,
-`pressed`, and `navigation_requested` before assuming the page changed.
+`removed`, `cleared`, `items`, `cleared_count`, `state`, `network_idle`,
+`quiet_ms`, `submitted`, `hovered`, `pressed`, and `navigation_requested`
+before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -143,7 +147,8 @@ For page work, choose actions in this order:
    `query`, `get-attribute`, `wait-text`, `get-text`, `wait-selector`, `click`,
    `type`, `focus`, `get-value`, `wait-value`, `blur`, `clear`, `submit`,
    `select-option`, `check`, and `uncheck`.
-4. Use `reload`, `go-back`, `go-forward`, and `wait-url` for navigation flows.
+4. Use `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`, and
+   `wait-network-idle` for navigation and async refresh flows.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
    localStorage/sessionStorage state instead of writing storage JavaScript.
 6. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
@@ -162,8 +167,9 @@ Common task recipes:
    use `submit`, `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: prefer `click-role`, then `click-text`, then
    selector `click` after `exists` confirms a stable selector.
-3. Navigate page history: use `reload`, `go-back`, or `go-forward`, then confirm
-   with `wait-url`, `wait-text`, or `snapshot`.
+3. Navigate page history or async refresh: use `reload`, `go-back`, or
+   `go-forward`, then confirm with `wait-url`, `wait-load-state`,
+   `wait-network-idle`, `wait-text`, or `snapshot`.
 4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    shortcuts or Enter/Escape, and `blur` for focus-driven validation, then
    inspect again with `interactive-snapshot`.

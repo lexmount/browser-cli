@@ -811,6 +811,219 @@ def _wait_url_expression(
 """.strip()
 
 
+def _wait_load_state_expression(
+    *,
+    state: str,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const requestedState = {_js_literal(state)};
+  const stateAliases = {{
+    domcontentloaded: "interactive",
+    load: "complete"
+  }};
+  const targetState = stateAliases[requestedState] || requestedState;
+  const ranks = {{ loading: 0, interactive: 1, complete: 2 }};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  if (!(targetState in ranks)) {{
+    resolve({{
+      found: false,
+      state: document.readyState,
+      requested_state: requestedState,
+      target_state: targetState,
+      waited_ms: 0,
+      error: "invalid_state"
+    }});
+    return;
+  }}
+  const check = () => {{
+    const currentState = document.readyState;
+    const waitedMs = Date.now() - startedAt;
+    if (ranks[currentState] >= ranks[targetState]) {{
+      resolve({{
+        found: true,
+        state: currentState,
+        requested_state: requestedState,
+        target_state: targetState,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        state: currentState,
+        requested_state: requestedState,
+        target_state: targetState,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_network_idle_expression(
+    *,
+    idle_ms: float,
+    timeout_ms: float,
+    poll_ms: float,
+    max_inflight: int,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const idleMs = Math.max(0, {_js_literal(idle_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const maxInflight = Math.max(0, {_js_literal(max_inflight)});
+  let pendingRequests = 0;
+  let observedRequestCount = 0;
+  let observedResponseCount = 0;
+  let observedFailureCount = 0;
+  let observedResourceCount = 0;
+  let lastActivityAt = Date.now();
+  let observerAvailable = false;
+  let fetchInstrumented = false;
+  let xhrInstrumented = false;
+  let observer = null;
+  const originalFetch = window.fetch;
+  const originalXhrSend = window.XMLHttpRequest?.prototype?.send;
+
+  const markActivity = () => {{
+    lastActivityAt = Date.now();
+  }};
+  const incrementPending = () => {{
+    pendingRequests += 1;
+    observedRequestCount += 1;
+    markActivity();
+  }};
+  const decrementPending = (failed) => {{
+    pendingRequests = Math.max(0, pendingRequests - 1);
+    if (failed) observedFailureCount += 1;
+    else observedResponseCount += 1;
+    markActivity();
+  }};
+  const cleanup = () => {{
+    if (observer) {{
+      try {{ observer.disconnect(); }} catch (error) {{}}
+    }}
+    if (fetchInstrumented) {{
+      window.fetch = originalFetch;
+    }}
+    if (xhrInstrumented) {{
+      window.XMLHttpRequest.prototype.send = originalXhrSend;
+    }}
+  }};
+
+  try {{
+    if (typeof PerformanceObserver === "function") {{
+      observer = new PerformanceObserver((list) => {{
+        const entries = list.getEntries();
+        if (entries.length) {{
+          observedResourceCount += entries.length;
+          markActivity();
+        }}
+      }});
+      observer.observe({{ type: "resource", buffered: false }});
+      observerAvailable = true;
+    }}
+  }} catch (error) {{
+    observerAvailable = false;
+  }}
+
+  try {{
+    if (typeof originalFetch === "function") {{
+      window.fetch = (...args) => {{
+        incrementPending();
+        return originalFetch.apply(window, args).then(
+          (response) => {{
+            decrementPending(false);
+            return response;
+          }},
+          (error) => {{
+            decrementPending(true);
+            throw error;
+          }}
+        );
+      }};
+      fetchInstrumented = true;
+    }}
+  }} catch (error) {{
+    fetchInstrumented = false;
+  }}
+
+  try {{
+    if (typeof originalXhrSend === "function") {{
+      window.XMLHttpRequest.prototype.send = function(...args) {{
+        incrementPending();
+        this.addEventListener(
+          "loadend",
+          () => decrementPending(false),
+          {{ once: true }}
+        );
+        try {{
+          return originalXhrSend.apply(this, args);
+        }} catch (error) {{
+          decrementPending(true);
+          throw error;
+        }}
+      }};
+      xhrInstrumented = true;
+    }}
+  }} catch (error) {{
+    xhrInstrumented = false;
+  }}
+
+  const finish = (found) => {{
+    const now = Date.now();
+    const waitedMs = now - startedAt;
+    const quietMs = now - lastActivityAt;
+    cleanup();
+    resolve({{
+      found,
+      network_idle: found,
+      idle_ms: idleMs,
+      quiet_ms: quietMs,
+      waited_ms: waitedMs,
+      pending_requests: pendingRequests,
+      max_inflight: maxInflight,
+      observed_request_count: observedRequestCount,
+      observed_response_count: observedResponseCount,
+      observed_failure_count: observedFailureCount,
+      observed_resource_count: observedResourceCount,
+      observer_available: observerAvailable,
+      fetch_instrumented: fetchInstrumented,
+      xhr_instrumented: xhrInstrumented
+    }});
+  }};
+
+  const check = () => {{
+    const now = Date.now();
+    const waitedMs = now - startedAt;
+    const quietMs = now - lastActivityAt;
+    if (pendingRequests <= maxInflight && quietMs >= idleMs) {{
+      finish(true);
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      finish(false);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _focus_expression(*, selector: str, prevent_scroll: bool) -> str:
     return _selector_expression(
         selector,
@@ -1408,6 +1621,31 @@ def cmd_action_wait_url(args: argparse.Namespace) -> None:
             match=args.match,
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_load_state(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-load-state",
+        _wait_load_state_expression(
+            state=args.state,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_network_idle(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-network-idle",
+        _wait_network_idle_expression(
+            idle_ms=args.idle_ms,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            max_inflight=args.max_inflight,
         ),
     )
 
@@ -2140,6 +2378,42 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_wait_url.add_argument("--timeout-ms", type=float, default=30000)
     action_wait_url.add_argument("--poll-ms", type=float, default=250)
     action_wait_url.set_defaults(func=cmd_action_wait_url)
+
+    action_wait_load_state = action_subparsers.add_parser(
+        "wait-load-state",
+        help="Wait until document.readyState reaches a requested state",
+    )
+    _add_session_target_args(action_wait_load_state)
+    action_wait_load_state.add_argument(
+        "--state",
+        choices=["loading", "interactive", "complete", "domcontentloaded", "load"],
+        default="complete",
+        help="Ready state to wait for. domcontentloaded maps to interactive; load maps to complete.",
+    )
+    action_wait_load_state.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_load_state.add_argument("--poll-ms", type=float, default=250)
+    action_wait_load_state.set_defaults(func=cmd_action_wait_load_state)
+
+    action_wait_network_idle = action_subparsers.add_parser(
+        "wait-network-idle",
+        help="Wait until observed fetch/XHR/resource activity is quiet",
+    )
+    _add_session_target_args(action_wait_network_idle)
+    action_wait_network_idle.add_argument(
+        "--idle-ms",
+        type=float,
+        default=500,
+        help="Required quiet period before the page is considered idle.",
+    )
+    action_wait_network_idle.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_network_idle.add_argument("--poll-ms", type=float, default=100)
+    action_wait_network_idle.add_argument(
+        "--max-inflight",
+        type=int,
+        default=0,
+        help="Maximum observed in-flight requests allowed during the quiet period.",
+    )
+    action_wait_network_idle.set_defaults(func=cmd_action_wait_network_idle)
 
     action_get_text = action_subparsers.add_parser(
         "get-text",
