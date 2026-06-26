@@ -437,6 +437,16 @@ def test_auth_status_masks_secret_by_default(
     assert payload["command"] == "auth.status"
     assert payload["configured"] is True
     assert payload["missing"] == []
+    assert payload["decision"] == {
+        "action": "verify_access",
+        "reason": "credentials_configured",
+        "can_attempt_api": True,
+        "can_start_browser_work": True,
+        "should_open_browser": False,
+        "missing": [],
+        "next_command": "browser-cli session list",
+        "fallback_command": "browser-cli doctor --json",
+    }
     assert payload["environment"]["LEXMOUNT_API_KEY"] == {
         "set": True,
         "value": "abcd...wxyz",
@@ -473,9 +483,119 @@ def test_auth_status_reports_missing_required_env(
     payload = json.loads(capsys.readouterr().out)
     assert payload["configured"] is False
     assert payload["missing"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+    assert payload["decision"] == {
+        "action": "login",
+        "reason": "missing_credentials",
+        "can_attempt_api": False,
+        "can_start_browser_work": False,
+        "should_open_browser": False,
+        "missing": ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"],
+        "next_command": "browser-cli auth login",
+        "optional_open_command": "browser-cli auth login --open",
+    }
     assert payload["environment"]["LEXMOUNT_API_KEY"]["value"] is None
     assert payload["environment"]["LEXMOUNT_PROJECT_ID"]["value"] is None
     assert payload["console_url"] == "https://browser.lexmount.cn"
+
+
+def test_auth_bootstrap_returns_login_workflow_when_credentials_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    opened: list[str] = []
+
+    def fake_open(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr("browser_cli.cli.webbrowser.open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "bootstrap", "--open"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert opened == ["https://browser.lexmount.cn/connect/codex"]
+    assert payload["command"] == "auth.bootstrap"
+    assert payload["configured"] is False
+    assert payload["status"]["configured"] is False
+    assert payload["status"]["missing"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+    assert payload["decision"] == {
+        "action": "login",
+        "reason": "missing_credentials",
+        "can_attempt_api": False,
+        "can_start_browser_work": False,
+        "requires_user_browser": True,
+        "requires_browser_lexmount_cn": True,
+        "missing": ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"],
+        "next_command": "browser-cli auth login --open",
+        "fallback_command": "browser-cli auth export-env",
+    }
+    assert payload["opened"] == {"requested": True, "ok": True}
+    assert payload["workflow"] == [
+        "browser-cli auth login --open",
+        "browser-cli auth export-env",
+        "browser-cli auth status",
+        "browser-cli doctor --json",
+    ]
+    assert payload["connect_from_codex"]["spec_command"] == (
+        "browser-cli auth connect-spec"
+    )
+    assert (
+        "Device-code or OAuth approval endpoint"
+        in payload["connect_from_codex"]["needs_browser_lexmount_cn"]
+    )
+    assert any(
+        "Do not ask the user to paste API keys" in rule
+        for rule in payload["safety_rules"]
+    )
+
+
+def test_auth_bootstrap_returns_verify_workflow_when_credentials_exist(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "abcd1234wxyz")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setattr(
+        "browser_cli.cli.webbrowser.open",
+        lambda url: (_ for _ in ()).throw(AssertionError("should not open browser")),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "bootstrap", "--open"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "abcd1234wxyz" not in output
+    payload = json.loads(output)
+    assert payload["configured"] is True
+    assert payload["decision"] == {
+        "action": "verify_access",
+        "reason": "credentials_configured",
+        "can_attempt_api": True,
+        "can_start_browser_work": False,
+        "requires_user_browser": False,
+        "requires_browser_lexmount_cn": False,
+        "next_command": "browser-cli doctor --json",
+        "fallback_command": "browser-cli session list",
+    }
+    assert payload["opened"] == {
+        "requested": False,
+        "ok": None,
+        "reason": "credentials_already_configured",
+    }
+    assert payload["workflow"] == [
+        "browser-cli doctor --json",
+        "browser-cli session list",
+        "browser-cli session create",
+    ]
+    assert payload["status"]["environment"]["LEXMOUNT_API_KEY"]["value"] == (
+        "abcd...wxyz"
+    )
 
 
 def test_auth_export_env_masks_secret_by_default(
@@ -545,6 +665,10 @@ def test_auth_login_returns_browser_console_guidance(
 ) -> None:
     monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
     monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.webbrowser.open",
+        lambda url: (_ for _ in ()).throw(AssertionError("should not open browser")),
+    )
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["auth", "login"])
@@ -553,11 +677,14 @@ def test_auth_login_returns_browser_console_guidance(
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "auth.login"
     assert payload["console_url"] == "https://browser.lexmount.cn"
+    assert payload["authorization_url"] == "https://browser.lexmount.cn/connect/codex"
+    assert payload["opened"] == {"requested": False, "ok": None}
     assert payload["configured"] is False
     assert payload["required_env"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
     assert payload["future_flow"] == {
         "name": "Connect from Codex",
         "needs_browser_lexmount_cn": True,
+        "prototype_command": "browser-cli auth device-code",
         "description": (
             "A future browser.lexmount.cn flow should let the user approve "
             "Codex access and return scoped local credentials without manual "
@@ -669,8 +796,297 @@ def test_subcommand_argument_error_is_json(
     assert payload["error"] == "argument_error"
     assert "invalid metadata JSON" in payload["message"]
     assert payload["usage"].startswith("usage: ")
+def test_auth_login_can_open_authorization_url(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    opened: list[str] = []
+
+    def fake_open(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr("browser_cli.cli.webbrowser.open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login", "--open"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert opened == ["https://browser.lexmount.cn/connect/codex"]
+    assert payload["opened"] == {"requested": True, "ok": True}
 
 
+def test_auth_login_reports_browser_open_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fake_open(url: str) -> bool:
+        raise RuntimeError(f"cannot open {url}")
+
+    monkeypatch.setattr("browser_cli.cli.webbrowser.open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--open",
+                "--authorization-url",
+                "https://browser.lexmount.cn/custom",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["authorization_url"] == "https://browser.lexmount.cn/custom"
+    assert payload["opened"] == {
+        "requested": True,
+        "ok": False,
+        "error": "RuntimeError",
+        "message": "cannot open https://browser.lexmount.cn/custom",
+    }
+
+
+def test_auth_device_code_returns_future_endpoint_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli.webbrowser.open",
+        lambda url: (_ for _ in ()).throw(AssertionError("should not open browser")),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "device-code"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.device-code"
+    assert payload["flow"] == "device_code"
+    assert payload["available"] is False
+    assert payload["status"] == "not_available"
+    assert payload["reason"] == "browser_lexmount_cn_endpoint_required"
+    assert payload["needs_browser_lexmount_cn"] is True
+    assert payload["authorization_url"] == "https://browser.lexmount.cn/connect/codex"
+    assert (
+        payload["device_authorization_endpoint"]
+        == "https://browser.lexmount.cn/connect/codex/device"
+    )
+    assert (
+        payload["token_endpoint"] == "https://browser.lexmount.cn/connect/codex/token"
+    )
+    assert payload["opened"] == {"requested": False, "ok": None}
+    assert payload["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert (
+        "device_code" in payload["endpoint_contract"]["device_authorization_response"]
+    )
+    assert "authorization_pending" in payload["endpoint_contract"]["token_error_codes"]
+    assert "browser-cli auth login" in payload["fallback_commands"]
+
+
+def test_auth_device_code_can_open_authorization_url_and_override_scopes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    opened: list[str] = []
+
+    def fake_open(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr("browser_cli.cli.webbrowser.open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "device-code",
+                "--open",
+                "--scope",
+                "browser:sessions",
+                "--scope",
+                "browser:actions",
+                "--authorization-url",
+                "https://browser.lexmount.cn/connect/custom",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert opened == ["https://browser.lexmount.cn/connect/custom"]
+    assert payload["opened"] == {"requested": True, "ok": True}
+    assert payload["requested_scopes"] == ["browser:sessions", "browser:actions"]
+
+
+def test_auth_connect_spec_returns_browser_console_requirements(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "connect-spec"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.connect-spec"
+    assert payload["name"] == "Connect from Codex"
+    assert payload["available"] is False
+    assert payload["status"] == "spec_only"
+    assert payload["authorization_url"] == "https://browser.lexmount.cn/connect/codex"
+    assert (
+        payload["install_command"]
+        == "uv tool install git+https://github.com/lexmount/browser-cli.git"
+    )
+    assert payload["verification_commands"] == [
+        "browser-cli auth status",
+        "browser-cli doctor --json",
+        "browser-cli session list",
+    ]
+    endpoint_ids = {endpoint["id"] for endpoint in payload["backend_endpoints"]}
+    assert {
+        "projects",
+        "scoped_api_key_create",
+        "scoped_api_key_revoke",
+        "device_authorization",
+        "device_token",
+    }.issubset(endpoint_ids)
+    create_endpoint = next(
+        endpoint
+        for endpoint in payload["backend_endpoints"]
+        if endpoint["id"] == "scoped_api_key_create"
+    )
+    assert create_endpoint["method"] == "POST"
+    assert create_endpoint["path"] == "/api/codex/api-keys"
+    assert create_endpoint["secret_response_fields"] == ["api_key"]
+    frontend_state_ids = {state["id"] for state in payload["frontend_states"]}
+    assert {
+        "signed_out",
+        "project_selected",
+        "scoped_key_created",
+        "env_ready",
+        "doctor_verified",
+        "device_code_pending",
+    }.issubset(frontend_state_ids)
+    assert payload["doctor_verification_contract"] == {
+        "command": "browser-cli doctor --json",
+        "success_criteria": [
+            "ok is true",
+            "decision.ready_for_browser_work is true",
+            "checks contains credentials, direct-url, and api",
+        ],
+        "failure_ui": [
+            "Show blocking_checks and warning_checks.",
+            "Show next_steps and decision.next_command.",
+            "Never display raw API keys from local command output.",
+        ],
+    }
+    assert [test["id"] for test in payload["acceptance_tests"]] == [
+        "manual_env_flow",
+        "device_code_contract",
+    ]
+    assert payload["credential_lifecycle"]["required_controls"] == [
+        "revoke",
+        "rotate",
+        "extend_expiry",
+        "reduce_scope",
+    ]
+    assert "codex_key_revoked" in payload["credential_lifecycle"]["audit_events"]
+    assert [item["scope"] for item in payload["required_scopes"]] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    section_ids = {section["id"] for section in payload["page_sections"]}
+    assert {
+        "project",
+        "scoped_api_key",
+        "copy_env_install",
+        "doctor_verify",
+        "permissions",
+        "device_code",
+    }.issubset(section_ids)
+    env_lines = next(
+        block["lines"] for block in payload["copy_blocks"] if block["id"] == "env-posix"
+    )
+    assert "LEXMOUNT_API_KEY=<scoped-api-key>" in "\n".join(env_lines)
+    assert payload["device_code_contract"] == {
+        "device_authorization_endpoint": (
+            "https://browser.lexmount.cn/connect/codex/device"
+        ),
+        "token_endpoint": "https://browser.lexmount.cn/connect/codex/token",
+        "authorization_url": "https://browser.lexmount.cn/connect/codex",
+        "response_fields": [
+            "device_code",
+            "user_code",
+            "verification_uri",
+            "verification_uri_complete",
+            "expires_in",
+            "interval",
+            "scopes",
+        ],
+        "token_success_fields": [
+            "access_token",
+            "token_type",
+            "expires_in",
+            "scope",
+            "project_id",
+        ],
+        "token_error_codes": [
+            "authorization_pending",
+            "slow_down",
+            "expired_token",
+            "access_denied",
+        ],
+    }
+
+
+def test_auth_connect_spec_accepts_custom_scopes_and_endpoints(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "connect-spec",
+                "--scope",
+                "browser:sessions",
+                "--scope",
+                "browser:actions",
+                "--authorization-url",
+                "https://browser.lexmount.cn/connect/custom",
+                "--device-authorization-url",
+                "https://browser.lexmount.cn/connect/custom/device",
+                "--token-url",
+                "https://browser.lexmount.cn/connect/custom/token",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [item["scope"] for item in payload["required_scopes"]] == [
+        "browser:sessions",
+        "browser:actions",
+    ]
+    assert (
+        payload["device_code_contract"]["authorization_url"]
+        == "https://browser.lexmount.cn/connect/custom"
+    )
+    assert (
+        payload["device_code_contract"]["device_authorization_endpoint"]
+        == "https://browser.lexmount.cn/connect/custom/device"
+    )
+    assert (
+        payload["device_code_contract"]["token_endpoint"]
+        == "https://browser.lexmount.cn/connect/custom/token"
+    )
+    endpoint_paths = {
+        endpoint["id"]: endpoint["path"] for endpoint in payload["backend_endpoints"]
+    }
+    assert endpoint_paths["device_authorization"] == "/connect/custom/device"
+    assert endpoint_paths["device_token"] == "/connect/custom/token"
 def test_session_list_passes_status_filter(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
