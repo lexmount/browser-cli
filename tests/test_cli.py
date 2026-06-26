@@ -213,6 +213,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.fill-label",
         "action.link-snapshot",
         "action.table-snapshot",
+        "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
     ):
@@ -252,6 +253,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.press-key" in payload["commands"]
     assert "action.link-snapshot" in payload["commands"]
     assert "action.table-snapshot" in payload["commands"]
+    assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
     assert all(command.startswith("action.") for command in payload["commands"])
@@ -3729,6 +3731,56 @@ def test_action_table_snapshot_expression_extracts_bounded_rows_and_cells(
     assert payload["command"] == "action.table-snapshot"
 
 
+def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "outline", "nodes": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "outline-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--include-hidden",
+                "--max-nodes",
+                "4",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert 'const rootSelector = "main"' in expression
+    assert "[role~='heading']" in expression
+    assert "[role~='navigation']" in expression
+    assert "semanticLandmarkRole" in expression
+    assert "headingLevel" in expression
+    assert "heading_count: headings.length" in expression
+    assert "landmark_count: landmarks.length" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.outline-snapshot"
+
+
 @pytest.mark.parametrize(
     ("argv", "command", "value", "expected_result"),
     [
@@ -4011,6 +4063,86 @@ def test_action_table_snapshot_expression_extracts_bounded_rows_and_cells(
                                 ],
                             },
                         ],
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "outline-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--max-nodes",
+                "5",
+            ],
+            "action.outline-snapshot",
+            {
+                "kind": "outline",
+                "selector": "main",
+                "node_count": 2,
+                "heading_count": 1,
+                "landmark_count": 1,
+                "headings": [
+                    {
+                        "index": 0,
+                        "node_type": "heading",
+                        "selector": "h1",
+                        "tag": "h1",
+                        "role": "heading",
+                        "level": 1,
+                        "name": "Dashboard",
+                        "text": "Dashboard",
+                        "visible": True,
+                    }
+                ],
+                "landmarks": [
+                    {
+                        "index": 1,
+                        "node_type": "landmark",
+                        "selector": "nav",
+                        "tag": "nav",
+                        "role": "navigation",
+                        "level": None,
+                        "name": "Primary",
+                        "text": "Primary",
+                        "visible": True,
+                    }
+                ],
+            },
+            {
+                "kind": "outline",
+                "selector": "main",
+                "node_count": 2,
+                "heading_count": 1,
+                "landmark_count": 1,
+                "headings": [
+                    {
+                        "index": 0,
+                        "node_type": "heading",
+                        "selector": "h1",
+                        "tag": "h1",
+                        "role": "heading",
+                        "level": 1,
+                        "name": "Dashboard",
+                        "text": "Dashboard",
+                        "visible": True,
+                    }
+                ],
+                "landmarks": [
+                    {
+                        "index": 1,
+                        "node_type": "landmark",
+                        "selector": "nav",
+                        "tag": "nav",
+                        "role": "navigation",
+                        "level": None,
+                        "name": "Primary",
+                        "text": "Primary",
+                        "visible": True,
                     }
                 ],
                 "url": "https://example.test",

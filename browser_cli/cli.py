@@ -2730,6 +2730,141 @@ def _table_snapshot_expression(
 """.strip()
 
 
+def _outline_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const outlineSelector = [
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "[role~='heading']",
+    "main",
+    "nav",
+    "header",
+    "footer",
+    "aside",
+    "section",
+    "article",
+    "form",
+    "search",
+    "[role~='main']",
+    "[role~='navigation']",
+    "[role~='banner']",
+    "[role~='contentinfo']",
+    "[role~='complementary']",
+    "[role~='region']",
+    "[role~='search']",
+    "[role~='form']"
+  ].join(",");
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const candidates = [];
+  const explicitRoleOf = (element) => normalize(element.getAttribute("role")).split(" ")[0];
+  const semanticLandmarkRole = (element) => {{
+    const explicitRole = explicitRoleOf(element);
+    if ([
+      "main",
+      "navigation",
+      "banner",
+      "contentinfo",
+      "complementary",
+      "region",
+      "search",
+      "form"
+    ].includes(explicitRole)) {{
+      return explicitRole;
+    }}
+    const tag = element.tagName.toLowerCase();
+    if (tag === "main") return "main";
+    if (tag === "nav") return "navigation";
+    if (tag === "header") return "banner";
+    if (tag === "footer") return "contentinfo";
+    if (tag === "aside") return "complementary";
+    if (tag === "form") return "form";
+    if (tag === "search") return "search";
+    if (["section", "article"].includes(tag) && accessibleName(element)) {{
+      return "region";
+    }}
+    return "";
+  }};
+  const headingLevel = (element) => {{
+    const tag = element.tagName.toLowerCase();
+    if (/^h[1-6]$/.test(tag)) return Number(tag.slice(1));
+    const value = Number(element.getAttribute("aria-level"));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }};
+  for (const root of roots) {{
+    const nodes = [
+      ...(root.matches?.(outlineSelector) ? [root] : []),
+      ...root.querySelectorAll(outlineSelector)
+    ];
+    for (const node of nodes) {{
+      if (!seen.has(node)) {{
+        seen.add(node);
+        candidates.push(node);
+      }}
+    }}
+  }}
+  const visibleNodes = candidates.filter(visible);
+  const outlineNodes = (includeHidden ? candidates : visibleNodes)
+    .map((element, index) => {{
+      const tag = element.tagName.toLowerCase();
+      const role = roleOf(element) || semanticLandmarkRole(element) || null;
+      const level = role === "heading" ? headingLevel(element) : null;
+      const nodeType = role === "heading" || level !== null
+        ? "heading"
+        : "landmark";
+      const info = nodeInfo(element);
+      return {{
+        index,
+        node_type: nodeType,
+        selector: info.selector,
+        tag,
+        role,
+        level,
+        name: info.name,
+        text: info.text,
+        visible: info.visible
+      }};
+    }})
+    .filter((node) => node.node_type === "heading" || node.role);
+  const headings = outlineNodes.filter((node) => node.node_type === "heading");
+  const landmarks = outlineNodes.filter((node) => node.node_type === "landmark");
+  const nodes = limited(outlineNodes);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "outline",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    total_count: candidates.length,
+    visible_count: visibleNodes.length,
+    outline_count: outlineNodes.length,
+    heading_count: headings.length,
+    landmark_count: landmarks.length,
+    truncated: maxNodes !== null && outlineNodes.length > nodes.length,
+    headings: limited(headings),
+    landmarks: limited(landmarks),
+    nodes
+  }};
+}}
+""".strip()
+
+
 def _wait_text_expression(
     *,
     text: str,
@@ -6180,6 +6315,15 @@ def cmd_action_table_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.table-snapshot", expression)
 
 
+def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
+    expression = _outline_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+    )
+    _run_eval_backed_action_command(args, "action.outline-snapshot", expression)
+
+
 def cmd_action_accessibility_snapshot(args: argparse.Namespace) -> None:
     expression = f"""
 () => {{
@@ -8228,6 +8372,18 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum cells to return per row.",
     )
     action_table_snapshot.set_defaults(func=cmd_action_table_snapshot)
+
+    action_outline_snapshot = action_subparsers.add_parser(
+        "outline-snapshot",
+        help="Capture page headings and landmark regions for navigation",
+    )
+    _add_session_target_args(action_outline_snapshot)
+    action_outline_snapshot.add_argument(
+        "--selector",
+        help="Optional section or container selector used to scope the outline.",
+    )
+    _add_snapshot_filter_args(action_outline_snapshot)
+    action_outline_snapshot.set_defaults(func=cmd_action_outline_snapshot)
 
     action_accessibility_snapshot = action_subparsers.add_parser(
         "accessibility-snapshot",

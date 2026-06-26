@@ -184,6 +184,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`press-key`",
         "`link-snapshot`",
         "`table-snapshot`",
+        "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
     ):
@@ -242,6 +243,13 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`cells`" in normalized
     assert "`row_count`" in normalized
     assert "`cell_count`" in normalized
+    assert "`headings`" in normalized
+    assert "`landmarks`" in normalized
+    assert "`outline_count`" in normalized
+    assert "`heading_count`" in normalized
+    assert "`landmark_count`" in normalized
+    assert "`node_type`" in normalized
+    assert "`level`" in normalized
     assert "`code`" in normalized
     assert "`target`" in normalized
     assert "`target_info`" in normalized
@@ -267,6 +275,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Common task recipes" in normalized
     assert "Fill and submit a form" in normalized
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
+    assert "use `outline-snapshot` for page structure" in normalized
     assert "`fill-label` for labeled fields" in normalized
     assert "`set-value` for stable selectors" in normalized
     assert "`set-file-input` for upload controls" in normalized
@@ -297,6 +306,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "For repeated matches, run `query` and then" in normalized
     assert "`click-index --index <n>`" in normalized
     assert "`table-snapshot` for HTML or ARIA table/report data" in normalized
+    assert "`outline-snapshot` for headings and landmarks" in normalized
     assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
     assert "confirm with `page-info`, `wait-url`, `wait-title`" in normalized

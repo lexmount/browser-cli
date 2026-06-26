@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -287,6 +287,7 @@ browser-cli action click-index --session-id <session_id> --selector ".item butto
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
+browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
@@ -302,7 +303,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
-`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `form-snapshot`,
+`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `outline-snapshot`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
@@ -315,7 +316,8 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `requested_checked`, `previous_checked`, `changed`, `links`, `link_count`,
 `href`, `href_masked`, `absolute_url`, `absolute_url_masked`, `same_origin`,
 `external`, `download`, `tables`, `table_count`, `headers`, `rows`, `cells`,
-`row_count`, `cell_count`, `ready_state`,
+`row_count`, `cell_count`, `headings`, `landmarks`, `outline_count`,
+`heading_count`, `landmark_count`, `node_type`, `level`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
 `language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
 `target_info`, `modifiers`, `events`, `keydown_accepted`, and `navigation_requested`
@@ -337,7 +339,8 @@ larger `snapshot`.
 For page work, choose actions in this order:
 
 1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
-   are unclear; use `form-snapshot` before filling complex forms.
+   are unclear; use `outline-snapshot` for page structure; use `form-snapshot`
+   before filling complex forms.
 2. Prefer semantic actions: `wait-role` for async roles/names, `click-role` for known roles/names, `click-text` for
    visible text, `click-index` for a chosen repeated selector match,
    `link-snapshot` for choosing or reporting navigation URLs, `fill-label` for
@@ -395,6 +398,7 @@ Common task recipes:
 5. Read page results: use `page-info` for URL/title/readyState/viewport checks,
    `wait-title` for async title changes, `wait-count` for dynamic lists,
    `table-snapshot` for HTML or ARIA table/report data,
+   `outline-snapshot` for headings and landmarks,
    `wait-attribute` for DOM attributes, `wait-state` for
    enabled/visible/checked/focused states, `get-text` for a known selector; use
    `snapshot` when the page structure or selector is unknown; use `wait-text`

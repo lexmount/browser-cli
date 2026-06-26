@@ -319,6 +319,7 @@ browser-cli action click-index --session-id <session_id> --selector ".item butto
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
+browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
@@ -334,7 +335,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -349,6 +350,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `changed`, `links`, `link_count`, `href`, `href_masked`, `absolute_url`,
 `absolute_url_masked`, `same_origin`, `external`, `download`,
 `tables`, `table_count`, `headers`, `rows`, `cells`, `row_count`, `cell_count`,
+`headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
+`node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
 `viewport`, `scroll`, `body_text_length`, `html_length`, `language`,
 `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
@@ -516,6 +519,8 @@ Common agent recipes:
 - Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
 - Table or report data: `table-snapshot` -> read `headers`, `rows`, and `cells`;
   use `--selector`, `--max-rows`, and `--max-cells` to keep output bounded.
+- Page structure: `outline-snapshot` -> read `headings` and `landmarks` before
+  deciding where to inspect, click, or scroll.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
   `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized
   HTML before trying another action.
