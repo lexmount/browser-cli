@@ -77,6 +77,7 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow one_off_page_task" in normalized
     assert "browser-cli commands --workflow persistent_login_state" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
+    assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert (
         "Run `browser-cli commands --workflows-only` for a compact agent workflow map"

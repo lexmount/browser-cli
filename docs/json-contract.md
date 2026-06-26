@@ -56,14 +56,19 @@ groups.
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
 `agent_workflows` describes ordered setup, Connect from Codex auth, one-off
-page, persistent login state, form interaction, and page diagnostics steps with
-`command`, `read`, `success_condition`, `on_failure_read`, and `cleanup` hints.
+page, persistent login state, form interaction, interactive targeting, and page
+diagnostics steps with `command`, `read`, `success_condition`, `on_failure_read`,
+and `cleanup` hints.
 Command entries may expose `aliases` on canonical commands plus `alias_of` and
 `canonical_name` on alias commands, so agents can map user-facing phrasing back
 to the preferred action without parsing help text.
 Workflow `read` arrays include current auth availability fields, export
 usability fields, and context reuse availability fields when those values drive
 the next agent decision.
+The interactive targeting workflow exposes `selection_order`,
+`preferred_commands`, and `alternative_commands` so agents can choose
+`click-role`, `click-text`, or `click-index` from snapshot evidence instead of
+writing JavaScript.
 The page diagnostics workflow also exposes console/network capture steps and
 visible-state fallback commands so agents can reproduce a suspected issue before
 reading `result.entries`, `result.entry_count`, and masked diagnostic fields.

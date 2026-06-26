@@ -259,6 +259,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["form_interaction"]
     )
     assert (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+        in payload["agent_entrypoints"]["interactive_targeting"]
+    )
+    assert (
         "browser-cli action console-snapshot --session-id <session_id> --install-only"
         in payload["agent_entrypoints"]["page_diagnostics"]
     )
@@ -282,6 +286,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert auth_steps[2]["local_shell_only"] is True
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
+    assert "result.nodes" in one_off_steps[3]["read"]
+    assert "result.node_count" in one_off_steps[3]["read"]
     assert one_off_steps[-1] == {
         "id": "close_session",
         "command": "browser-cli session close --session-id <session_id>",
@@ -326,6 +332,39 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert form_steps[6]["optional"] is True
     assert "found" in form_steps[6]["read"]
     assert "browser-cli action wait-text" in form_steps[6]["fallback_commands"][0]
+    targeting_steps = workflows["interactive_targeting"]["steps"]
+    assert [step["id"] for step in targeting_steps] == [
+        "inspect_interactive_targets",
+        "inspect_accessibility_context",
+        "choose_click_method",
+        "wait_target_ready",
+        "activate_target",
+        "verify_after_click",
+    ]
+    assert targeting_steps[0]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in targeting_steps[0]["read"]
+    assert "result.node_count" in targeting_steps[0]["read"]
+    assert targeting_steps[1]["optional"] is True
+    assert "result.truncated" in targeting_steps[1]["read"]
+    assert targeting_steps[2]["agent_action"] is True
+    assert targeting_steps[2]["selection_order"] == [
+        "click-role",
+        "click-text",
+        "click-index",
+    ]
+    assert (
+        "browser-cli action click-text" in targeting_steps[2]["preferred_commands"][1]
+    )
+    assert "result.element" in targeting_steps[3]["read"]
+    assert "browser-cli action wait-text" in targeting_steps[3]["fallback_commands"][0]
+    assert "result.clicked" in targeting_steps[4]["read"]
+    assert (
+        "browser-cli action click-index"
+        in targeting_steps[4]["alternative_commands"][1]
+    )
+    assert "browser-cli action wait-url" in targeting_steps[5]["fallback_commands"][0]
     diagnostics_steps = workflows["page_diagnostics"]["steps"]
     assert [step["id"] for step in diagnostics_steps] == [
         "page_info_before",
@@ -418,7 +457,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 6
+    assert payload["workflow_count"] == 7
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -432,6 +471,10 @@ def test_commands_catalog_returns_workflows_only(
         "command": "browser-cli session close --session-id <session_id>",
         "cleanup": True,
     }
+    assert (
+        "result.nodes"
+        in payload["agent_workflows"]["one_off_page_task"]["steps"][3]["read"]
+    )
     assert (
         "selection_summary.recommended_next_action"
         in payload["agent_workflows"]["persistent_login_state"]["steps"][0]["read"]
@@ -447,6 +490,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.filled"
         in payload["agent_workflows"]["form_interaction"]["steps"][1]["read"]
+    )
+    assert (
+        "result.nodes"
+        in payload["agent_workflows"]["interactive_targeting"]["steps"][0]["read"]
     )
     assert (
         "result.entries"
@@ -471,6 +518,7 @@ def test_commands_catalog_returns_single_workflow(
     assert "commands" not in payload
     assert "agent_workflows" not in payload
     assert payload["workflow"]["steps"][0]["id"] == "create_session"
+    assert "result.nodes" in payload["workflow"]["steps"][3]["read"]
     assert payload["workflow"]["steps"][-1] == {
         "id": "close_session",
         "command": "browser-cli session close --session-id <session_id>",
@@ -505,6 +553,39 @@ def test_commands_catalog_returns_form_interaction_workflow(
         "browser-cli action form-snapshot"
         in payload["agent_entrypoints"]["form_interaction"][0]
     )
+
+
+def test_commands_catalog_returns_interactive_targeting_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "interactive_targeting"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "interactive_targeting"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_interactive_targets",
+        "inspect_accessibility_context",
+        "choose_click_method",
+        "wait_target_ready",
+        "activate_target",
+        "verify_after_click",
+    ]
+    assert steps[0]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in steps[0]["read"]
+    assert steps[1]["optional"] is True
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"] == ["click-role", "click-text", "click-index"]
+    assert "browser-cli action click-role" in steps[2]["preferred_commands"][0]
+    assert "browser-cli action click-text" in steps[4]["alternative_commands"][0]
+    assert steps[-1]["id"] == "verify_after_click"
+    assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
 
 def test_commands_catalog_returns_page_diagnostics_workflow(
@@ -548,6 +629,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["available_workflows"] == [
         "connect_from_codex_auth",
         "form_interaction",
+        "interactive_targeting",
         "one_off_page_task",
         "page_diagnostics",
         "persistent_login_state",
@@ -705,13 +787,14 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 6
+    assert checks["command_catalog"]["workflow_count"] == 7
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
+        "interactive_targeting",
         "page_diagnostics",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
@@ -739,6 +822,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "wait_submit_ready",
         "submit_form",
         "verify_result",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "interactive_targeting"
+    ] == [
+        "inspect_interactive_targets",
+        "inspect_accessibility_context",
+        "choose_click_method",
+        "wait_target_ready",
+        "activate_target",
+        "verify_after_click",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["page_diagnostics"] == [
         "page_info_before",
@@ -832,6 +925,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
+        "interactive_targeting",
         "page_diagnostics",
     ]
     assert catalog["missing_required_workflow_steps"] == {}
@@ -898,6 +992,16 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "wait_submit_ready"},
                         {"id": "submit_form"},
                         {"id": "verify_result"},
+                    ],
+                },
+                "interactive_targeting": {
+                    "steps": [
+                        {"id": "inspect_interactive_targets"},
+                        {"id": "inspect_accessibility_context"},
+                        {"id": "choose_click_method"},
+                        {"id": "wait_target_ready"},
+                        {"id": "activate_target"},
+                        {"id": "verify_after_click"},
                     ],
                 },
                 "page_diagnostics": {

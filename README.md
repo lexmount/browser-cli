@@ -65,6 +65,7 @@ CLI for you:
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow persistent_login_state
    browser-cli commands --workflow form_interaction
+   browser-cli commands --workflow interactive_targeting
    browser-cli commands --workflow page_diagnostics
 17. 如果验证失败，请按顺序排查：
    - uv 是否可用
@@ -193,6 +194,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
 ```
 
@@ -270,6 +272,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
 browser-cli doctor
 browser-cli doctor --json
@@ -521,8 +524,8 @@ local reveal flag.
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`. Use `--names-only`
 for compact command discovery and `--group action` when choosing a browser
 action. Use `--workflows-only` when you only need the structured setup,
-Connect from Codex auth, one-off page task, persistent login state, and form
-interaction/page diagnostics workflows, or
+Connect from Codex auth, one-off page task, persistent login state, form
+interaction, interactive targeting, and page diagnostics workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,
@@ -616,7 +619,9 @@ Common agent recipes:
   `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
-- Visible button/link: `wait-role` when the control appears asynchronously,
+- Visible button/link: run `browser-cli commands --workflow interactive_targeting`,
+  use `interactive-snapshot` or `accessibility-snapshot` to choose the target,
+  then `wait-role` when the control appears asynchronously,
   then `click-role`, then `click-text`; run `link-snapshot` when the task is to
   choose, inspect, or report navigation URLs, then use `scroll-into-view` and
   selector `click` after `exists`, `inspect`, or `bounding-box` confirms a

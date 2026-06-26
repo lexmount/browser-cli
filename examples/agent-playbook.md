@@ -13,6 +13,7 @@ browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
 browser-cli auth status
 browser-cli auth login
@@ -92,6 +93,17 @@ browser-cli action fill-label --session-id <session_id> --label "Email" --text "
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 ```
 
+For visible buttons, links, menus, and repeated controls, read the targeting
+workflow before writing selectors:
+
+```bash
+browser-cli commands --workflow interactive_targeting
+browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
+browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120
+browser-cli action click-role --session-id <session_id> --role button --name "Submit"
+browser-cli action click-text --session-id <session_id> --text "Submit"
+```
+
 For page failures, runtime errors, or fetch/XHR issues, install diagnostics
 before reproducing the suspected action:
 
@@ -163,7 +175,8 @@ waiting on title changes, waiting for text to disappear, scrolling, selecting
 options, checking boxes, hovering, pressing selector keys, and sending
 active/global shortcut keys.
 
-Prefer semantic actions such as `wait-role`, `click-role`, `click-text`,
+Prefer `browser-cli commands --workflow interactive_targeting` and semantic
+actions such as `wait-role`, `click-role`, `click-text`,
 `fill-label`, `select-label`, `check-label`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 

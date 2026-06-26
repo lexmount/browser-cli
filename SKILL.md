@@ -176,6 +176,17 @@ Follow its `read` fields for `form-snapshot`, `fill-label`, `select-label`,
 `check-label`, `wait-role`, `click-role`, and verification steps before falling
 back to custom JavaScript.
 
+For visible buttons, links, menus, and repeated controls, prefer the interactive
+targeting workflow before writing selectors or JavaScript:
+
+```bash
+browser-cli commands --workflow interactive_targeting
+```
+
+Read `interactive-snapshot` and optional `accessibility-snapshot` fields, then
+choose `click-role`, `click-text`, or `click-index` from the workflow's
+preferred commands and verify with `page-info`, `wait-url`, or `wait-text`.
+
 For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic
 workflow before writing custom probes:
 
@@ -263,6 +274,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
 browser-cli doctor
 browser-cli doctor --json
@@ -500,7 +512,10 @@ Common task recipes:
    `dispatch-event --event input --event change` when the app needs explicit
    events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
-2. Click a visible control: use `wait-role` when the control appears asynchronously,
+2. Click a visible control: run
+   `browser-cli commands --workflow interactive_targeting`, use
+   `interactive-snapshot` or `accessibility-snapshot` to choose a target, use
+   `wait-role` when the control appears asynchronously,
    use `link-snapshot` when the task is to choose, inspect, or report navigation URLs,
    use `list-snapshot` before choosing from menus, listboxes, task lists, or search results,
    prefer `click-role`, then `click-text`, then `scroll-into-view` and selector

@@ -104,6 +104,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "one_off_page_task",
     "persistent_login_state",
     "form_interaction",
+    "interactive_targeting",
     "page_diagnostics",
 )
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
@@ -136,6 +137,14 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "wait_submit_ready",
         "submit_form",
         "verify_result",
+    ),
+    "interactive_targeting": (
+        "inspect_interactive_targets",
+        "inspect_accessibility_context",
+        "choose_click_method",
+        "wait_target_ready",
+        "activate_target",
+        "verify_after_click",
     ),
     "page_diagnostics": (
         "page_info_before",
@@ -478,6 +487,14 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
             ],
+            "interactive_targeting": [
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                'browser-cli action wait-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action click-text --session-id <session_id> --text "Submit"',
+                'browser-cli action click-index --session-id <session_id> --selector "button" --index 0',
+            ],
             "page_diagnostics": [
                 "browser-cli action console-snapshot --session-id <session_id> --install-only",
                 "browser-cli action network-snapshot --session-id <session_id> --install-only",
@@ -593,12 +610,102 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "find_targets",
                         "command": "browser-cli action interactive-snapshot --session-id <session_id>",
-                        "read": ["interactive_elements", "title", "url"],
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                            "result.title",
+                            "result.url",
+                        ],
                     },
                     {
                         "id": "close_session",
                         "command": "browser-cli session close --session-id <session_id>",
                         "cleanup": True,
+                    },
+                ],
+            },
+            "interactive_targeting": {
+                "purpose": "Find and activate visible controls with snapshot, role, text, or indexed click commands without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_interactive_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                            "result.url",
+                            "result.title",
+                        ],
+                    },
+                    {
+                        "id": "inspect_accessibility_context",
+                        "command": "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                        "optional": True,
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                        ],
+                    },
+                    {
+                        "id": "choose_click_method",
+                        "command": "<choose one preferred command using role/name/text/selector evidence from prior steps>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "click-role",
+                            "click-text",
+                            "click-index",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
+                        ],
+                    },
+                    {
+                        "id": "wait_target_ready",
+                        "command": 'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+                        ],
+                    },
+                    {
+                        "id": "activate_target",
+                        "command": 'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                            "result.element",
+                            "result.candidate_count",
+                            "result.candidates",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
+                        ],
+                    },
+                    {
+                        "id": "verify_after_click",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50",
+                        ],
                     },
                 ],
             },

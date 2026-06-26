@@ -157,6 +157,10 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`agent_workflows`" in text
     assert "Connect from Codex auth" in text
     assert "form interaction" in text
+    assert "interactive targeting" in text
+    assert "`selection_order`" in text
+    assert "`preferred_commands`" in text
+    assert "`alternative_commands`" in text
     assert "page diagnostics" in text
     assert "console/network capture steps" in normalized
     assert "`result.entries`" in text
