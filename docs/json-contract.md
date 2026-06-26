@@ -37,6 +37,12 @@ Stable fields:
 Command-specific fields may be added over time. Agents should check `ok` and
 `command` first, then inspect command-specific fields.
 
+`browser-cli --version` and `browser-cli version` both print the `version`
+command JSON. The payload includes `package`, `version`, `version_source`,
+`lex_browser_runtime_version`, `lex_browser_runtime_version_known`,
+`python_version`, and `executable` so agents can verify local installation state
+without parsing text output.
+
 `browser-cli commands` is the machine-readable command discovery surface. It
 returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`; `--names-only`

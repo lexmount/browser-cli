@@ -32,6 +32,54 @@ class DummyModel:
         return self.payload
 
 
+@pytest.mark.parametrize("argv", [["version"], ["--version"]])
+def test_version_command_outputs_json(
+    argv: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli._package_version",
+        lambda distribution: {
+            "browser-cli": "0.2.0",
+            "lex-browser-runtime": "1.2.3",
+        }.get(distribution),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "version"
+    assert payload["package"] == "browser-cli"
+    assert payload["version"] == "0.2.0"
+    assert payload["version_source"] == "package_metadata"
+    assert payload["lex_browser_runtime_version"] == "1.2.3"
+    assert payload["lex_browser_runtime_version_known"] is True
+    assert payload["python_version"]
+    assert payload["executable"]
+
+
+def test_version_command_falls_back_to_package_constant(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("browser_cli.cli._package_version", lambda distribution: None)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["version"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "version"
+    assert payload["version"] == "0.1.0"
+    assert payload["version_source"] == "package_fallback"
+    assert payload["lex_browser_runtime_version"] == "unknown"
+    assert payload["lex_browser_runtime_version_known"] is False
+
+
 def test_direct_url_masks_secret_by_default(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -82,6 +130,12 @@ def test_direct_url_masks_secret_by_default(
             ["nope"],
             "browser-cli",
             "invalid choice: 'nope'",
+            "browser-cli",
+        ),
+        (
+            [],
+            "browser-cli",
+            "the following arguments are required: command",
             "browser-cli",
         ),
         (
@@ -185,6 +239,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "action" in payload["groups"]
     assert "auth" in payload["groups"]
     assert "doctor" in payload["groups"]
+    assert "version" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
@@ -228,6 +283,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
 
     for name in (
         "commands",
+        "version",
         "auth.login",
         "auth.refresh",
         "doctor",
@@ -518,6 +574,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.interactive-only-snapshot",
         "action.wait-dialog",
         "action.wait-frame",
+        "version",
     ):
         assert command_name in checks["command_catalog"]["required_commands"]
     assert checks["command_catalog"]["missing_required_commands"] == []
@@ -576,6 +633,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
+    assert "version" in catalog["missing_required_commands"]
     assert catalog["missing_required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
@@ -1770,6 +1828,11 @@ def test_auth_login_guides_manual_browser_flow(
         "open_connect",
         "local_env",
         "verify",
+    ]
+    assert handoff["setup_blocks"][0]["commands"] == [
+        "uv tool install git+https://github.com/lexmount/browser-cli.git",
+        "browser-cli --help",
+        "browser-cli --version",
     ]
     assert handoff["setup_blocks"][2] == {
         "id": "local_env",

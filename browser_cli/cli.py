@@ -14,11 +14,12 @@ import sys
 import webbrowser
 from collections import Counter
 from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from browser_cli import __version__
 from lex_browser_runtime.browser.actions import (
     BrowserActionTarget,
     ClickRequest,
@@ -58,6 +59,7 @@ DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
 DOCTOR_REQUIRED_COMMANDS = (
     "commands",
+    "version",
     "doctor",
     "auth.status",
     "auth.login",
@@ -642,9 +644,16 @@ def _model_payload(value: Any) -> dict[str, Any]:
 
 def _package_version(distribution: str) -> str | None:
     try:
-        return version(distribution)
+        return distribution_version(distribution)
     except PackageNotFoundError:
         return None
+
+
+def _browser_cli_version() -> tuple[str, str]:
+    installed_version = _package_version("browser-cli")
+    if installed_version is not None:
+        return installed_version, "package_metadata"
+    return __version__, "package_fallback"
 
 
 def _mask_direct_url_secret(connect_url: str) -> str:
@@ -1800,6 +1809,7 @@ def _auth_login_setup_blocks(project_id: str | None) -> list[dict[str, Any]]:
             "commands": [
                 "uv tool install git+https://github.com/lexmount/browser-cli.git",
                 "browser-cli --help",
+                "browser-cli --version",
             ],
             "contains_secret_values": False,
             "contains_secret_placeholders": False,
@@ -10137,6 +10147,21 @@ def cmd_commands(args: argparse.Namespace) -> None:
     _success(command, group=args.group, **catalog)
 
 
+def cmd_version(args: argparse.Namespace) -> None:
+    cli_version, version_source = _browser_cli_version()
+    runtime_version = _package_version("lex-browser-runtime")
+    _success(
+        "version",
+        package="browser-cli",
+        version=cli_version,
+        version_source=version_source,
+        lex_browser_runtime_version=runtime_version or "unknown",
+        lex_browser_runtime_version_known=runtime_version is not None,
+        python_version=sys.version.split()[0],
+        executable=sys.executable,
+    )
+
+
 def cmd_case_validate(args: argparse.Namespace) -> None:
     command = "case.validate"
     try:
@@ -11915,6 +11940,14 @@ def _add_commands_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     commands.set_defaults(func=cmd_commands)
 
 
+def _add_version_command(subparsers: argparse._SubParsersAction[Any]) -> None:
+    version_parser = subparsers.add_parser(
+        "version",
+        help="Print browser-cli and runtime versions as JSON",
+    )
+    version_parser.set_defaults(func=cmd_version)
+
+
 def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     prepare = subparsers.add_parser(
         "prepare",
@@ -11962,8 +11995,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Accepted for compatibility; browser-cli output is always JSON.",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        dest="show_version",
+        help="Print browser-cli and runtime versions as JSON.",
+    )
+    subparsers = parser.add_subparsers(dest="command")
 
+    _add_version_command(subparsers)
     _add_session_commands(subparsers)
     _add_context_commands(subparsers)
     _add_action_commands(subparsers)
@@ -11982,6 +12022,10 @@ def main(argv: list[str] | None = None) -> None:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "show_version", False):
+        cmd_version(args)
+    if not hasattr(args, "func"):
+        parser.error("the following arguments are required: command")
     args.func(args)
 
 

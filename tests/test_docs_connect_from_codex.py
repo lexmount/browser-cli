@@ -40,6 +40,7 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "refresh_available=false" in text
     assert "refreshed=false" in text
     assert "browser-cli auth export-env" in text
+    assert "browser-cli --version" in text
     assert "browser-cli doctor --json" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "browser_smoke_session" in text

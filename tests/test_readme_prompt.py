@@ -29,6 +29,8 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
 
     assert "https://browser.lexmount.cn" in prompt
     assert "https://browser.lexmount.cn/connect/codex" in prompt
+    assert "browser-cli --version" in prompt
+    assert "browser-cli version" in prompt
     assert "browser-cli auth status" in prompt
     assert "browser-cli auth login" in prompt
     assert "browser-cli commands --workflows-only" in prompt

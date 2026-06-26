@@ -15,6 +15,7 @@ Check that the CLI is available:
 
 ```bash
 browser-cli --help
+browser-cli --version
 browser-cli commands --names-only
 browser-cli commands --workflows-only
 ```
@@ -222,6 +223,8 @@ browser-cli auth export-env --from-current --include-base-url
 Diagnostics:
 
 ```bash
+browser-cli --version
+browser-cli version
 browser-cli commands
 browser-cli commands --names-only
 browser-cli commands --group action

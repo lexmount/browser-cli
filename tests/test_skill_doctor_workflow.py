@@ -15,6 +15,8 @@ def test_skill_has_doctor_first_workflow() -> None:
 
     assert "browser-cli commands --workflows-only" in text
     assert "browser-cli commands --workflow setup_and_verify" in text
+    assert "browser-cli --version" in text
+    assert "browser-cli version" in text
     assert "browser-cli doctor --json" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "before the first browser action" in text

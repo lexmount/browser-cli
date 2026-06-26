@@ -34,6 +34,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     prompt = _quoted_yaml_value(OPENAI_YAML.read_text(), "default_prompt")
 
     assert "$browser-cli" in prompt
+    assert "version JSON" in prompt
     assert "auth status" in prompt
     assert "refresh" in prompt
     assert "login" in prompt

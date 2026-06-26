@@ -47,6 +47,7 @@ Recommended sections:
 2. Install
    - `uv tool install git+https://github.com/lexmount/browser-cli.git`
    - `browser-cli --help`
+   - `browser-cli --version`
 3. Authorize
    - Current agent key status
    - Create scoped API key button

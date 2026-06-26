@@ -74,6 +74,28 @@ def test_success_output_contract_for_session_list(
     assert output.endswith("}\n")
 
 
+def test_success_output_contract_for_version(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli._package_version",
+        lambda distribution: {
+            "browser-cli": "0.2.0",
+            "lex-browser-runtime": "1.2.3",
+        }.get(distribution),
+    )
+
+    exit_code, payload, output = run_cli_json(["--version"], capsys)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["command"] == "version"
+    assert payload["version"] == "0.2.0"
+    assert payload["lex_browser_runtime_version"] == "1.2.3"
+    assert output.endswith("}\n")
+
+
 def test_commands_catalog_output_contract(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -109,6 +131,17 @@ def test_json_contract_documents_command_alias_metadata() -> None:
     assert "`aliases`" in text
     assert "`alias_of`" in text
     assert "`canonical_name`" in text
+
+
+def test_json_contract_documents_version_output() -> None:
+    text = JSON_CONTRACT.read_text()
+
+    assert "`browser-cli --version`" in text
+    assert "`browser-cli version`" in text
+    assert "`version_source`" in text
+    assert "`lex_browser_runtime_version`" in text
+    assert "`python_version`" in text
+    assert "`executable`" in text
 
 
 def test_json_contract_documents_agent_workflows() -> None:
