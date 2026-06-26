@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -291,6 +291,7 @@ browser-cli action list-snapshot --session-id <session_id> --selector ".results"
 browser-cli action text-snapshot --session-id <session_id> --selector "main" --max-nodes 50 --max-chars 500
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
+browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -307,7 +308,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
-`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `outline-snapshot`, `form-snapshot`,
+`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `outline-snapshot`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
@@ -324,7 +325,9 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `expanded`, `texts`, `text_count`, `text_length`, `text_truncated`,
 `aria_live`, `dialogs`, `dialog_count`, `controls`, `control_count`,
 `controls_truncated`, `modal`, `frames`, `frame_count`, `src`, `src_masked`,
-`frame_url`, `frame_url_masked`, `readable`, `read_error`, `headings`, `landmarks`, `outline_count`,
+`frame_url`, `frame_url_masked`, `readable`, `read_error`, `navigation`,
+`resources`, `resource_count`, `initiator_type`, `initiator_types`, `duration`,
+`transfer_size`, `response_status`, `headings`, `landmarks`, `outline_count`,
 `heading_count`, `landmark_count`, `node_type`, `level`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
 `language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
@@ -339,9 +342,10 @@ real value into chat.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot`, `list-snapshot`, `dialog-snapshot`, and `frame-snapshot` use
-the same URL masking for links and frame URLs found inside table cells, list
-items, dialog controls, or frame metadata.
+`table-snapshot`, `list-snapshot`, `dialog-snapshot`, `frame-snapshot`, and
+`performance-snapshot` use the same URL masking for links, frame URLs, and
+performance resource URLs found inside table cells, list items, dialog controls,
+frame metadata, or timing entries.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
 `body_text_length`, `html_length`, `language`, and `referrer` before taking a
 larger `snapshot`.
@@ -367,8 +371,8 @@ For page work, choose actions in this order:
    `wait-value`, `blur`, `clear`, `set-value`, `dispatch-event`, `submit`,
    `select-option`, `check`, and `uncheck`.
 4. Use `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`,
-   `wait-title`, `wait-load-state`, and `wait-network-idle` for navigation and
-   async refresh flows.
+   `wait-title`, `wait-load-state`, `wait-network-idle`, and
+   `performance-snapshot` for navigation and async refresh flows.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
    localStorage/sessionStorage state instead of writing storage JavaScript. Use
    `wait-storage` after actions expected to create, update, or remove keys.
@@ -405,7 +409,8 @@ Common task recipes:
    selector. For repeated matches, run `query` and then `click-index --index <n>`.
 3. Navigate page history or async refresh: use `reload`, `go-back`, or
    `go-forward`, then confirm with `page-info`, `wait-url`, `wait-title`,
-   `wait-load-state`, `wait-network-idle`, `wait-text`, or `snapshot`.
+   `wait-load-state`, `wait-network-idle`, `performance-snapshot`, `wait-text`,
+   or `snapshot`.
 4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    selector-scoped keys, `press-key` for active/global shortcuts such as
    Enter/Escape, `dispatch-event` for explicit DOM events, and

@@ -217,6 +217,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.text-snapshot",
         "action.dialog-snapshot",
         "action.frame-snapshot",
+        "action.performance-snapshot",
         "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
@@ -261,6 +262,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.text-snapshot" in payload["commands"]
     assert "action.dialog-snapshot" in payload["commands"]
     assert "action.frame-snapshot" in payload["commands"]
+    assert "action.performance-snapshot" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -3952,6 +3954,61 @@ def test_action_frame_snapshot_expression_extracts_frame_metadata(
     assert payload["command"] == "action.frame-snapshot"
 
 
+def test_action_performance_snapshot_expression_extracts_timing_entries(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(
+            result={"value": {"kind": "performance", "resources": []}}
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "performance-snapshot",
+                "--session-id",
+                "s1",
+                "--max-resources",
+                "7",
+                "--initiator-type",
+                "fetch",
+                "--min-duration-ms",
+                "50",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "const maxResources = Math.max(0, 7)" in expression
+    assert 'const requestedInitiatorType = "fetch"' in expression
+    assert "const minDurationMs = Math.max(0, 50.0)" in expression
+    assert 'performance.getEntriesByType("navigation")' in expression
+    assert 'performance.getEntriesByType("resource")' in expression
+    assert "initiator_types: initiatorTypes" in expression
+    assert "response_status: responseStatus(entry)" in expression
+    assert "name_masked" in expression
+    assert "absolute_url_masked" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.performance-snapshot"
+
+
 def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4628,6 +4685,80 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                         "body_text": "Pay now",
                         "body_text_length": 7,
                         "body_text_truncated": False,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "performance-snapshot",
+                "--session-id",
+                "s1",
+                "--max-resources",
+                "5",
+                "--initiator-type",
+                "fetch",
+                "--min-duration-ms",
+                "25",
+            ],
+            "action.performance-snapshot",
+            {
+                "kind": "performance",
+                "requested_initiator_type": "fetch",
+                "min_duration_ms": 25,
+                "resource_count": 1,
+                "node_count": 1,
+                "navigation": {
+                    "name": "https://example.test/dashboard?token=***",
+                    "name_masked": True,
+                    "absolute_url": "https://example.test/dashboard?token=***",
+                    "absolute_url_masked": True,
+                    "type": "navigate",
+                    "duration": 120.5,
+                    "response_status": 200,
+                },
+                "resources": [
+                    {
+                        "index": 0,
+                        "name": "https://api.example.test/data?token=***",
+                        "name_masked": True,
+                        "absolute_url": "https://api.example.test/data?token=***",
+                        "absolute_url_masked": True,
+                        "initiator_type": "fetch",
+                        "duration": 55.5,
+                        "transfer_size": 2048,
+                        "response_status": 200,
+                    }
+                ],
+            },
+            {
+                "kind": "performance",
+                "requested_initiator_type": "fetch",
+                "min_duration_ms": 25,
+                "resource_count": 1,
+                "node_count": 1,
+                "navigation": {
+                    "name": "https://example.test/dashboard?token=***",
+                    "name_masked": True,
+                    "absolute_url": "https://example.test/dashboard?token=***",
+                    "absolute_url_masked": True,
+                    "type": "navigate",
+                    "duration": 120.5,
+                    "response_status": 200,
+                },
+                "resources": [
+                    {
+                        "index": 0,
+                        "name": "https://api.example.test/data?token=***",
+                        "name_masked": True,
+                        "absolute_url": "https://api.example.test/data?token=***",
+                        "absolute_url_masked": True,
+                        "initiator_type": "fetch",
+                        "duration": 55.5,
+                        "transfer_size": 2048,
+                        "response_status": 200,
                     }
                 ],
                 "url": "https://example.test",

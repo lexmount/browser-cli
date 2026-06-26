@@ -68,10 +68,11 @@ Default behavior:
 - `action link-snapshot` masks sensitive URL query parameter values by default
   in `href` and `absolute_url`; `action table-snapshot` and
   `action list-snapshot`, `action dialog-snapshot`, and
-  `action frame-snapshot` apply the same masking to links and frame URLs found
-  inside table cells, list items, dialog controls, or frame metadata. Parse
-  `href_masked`, `src_masked`, `frame_url_masked`, and `absolute_url_masked`
-  before copying or reporting URLs.
+  `action frame-snapshot`, and `action performance-snapshot` apply the same
+  masking to links, frame URLs, and performance resource URLs found inside table
+  cells, list items, dialog controls, frame metadata, or timing entries. Parse
+  `href_masked`, `src_masked`, `frame_url_masked`, `name_masked`, and
+  `absolute_url_masked` before copying or reporting URLs.
 - `auth status`, `auth token-info`, `auth refresh`, `auth logout`, and `doctor`
   may report local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh

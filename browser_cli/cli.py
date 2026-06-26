@@ -3465,6 +3465,174 @@ def _frame_snapshot_expression(
 """.strip()
 
 
+def _performance_snapshot_expression(
+    *,
+    max_resources: int,
+    initiator_type: str | None,
+    min_duration_ms: float,
+) -> str:
+    initiator_type_source = (
+        "null" if initiator_type is None else _js_literal(initiator_type)
+    )
+    return f"""
+() => {{
+  const maxResources = Math.max(0, {_js_literal(max_resources)});
+  const requestedInitiatorType = {initiator_type_source};
+  const minDurationMs = Math.max(0, {_js_literal(min_duration_ms)});
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const numberOrNull = (value) => Number.isFinite(value) ? value : null;
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const urlPayload = (value) => {{
+    const raw = String(value ?? "");
+    const maskedName = maskUrlText(raw);
+    return {{
+      name: maskedName,
+      name_masked: maskedName !== raw,
+      ...maskedParsedUrl(raw)
+    }};
+  }};
+  const responseStatus = (entry) =>
+    "responseStatus" in entry ? numberOrNull(entry.responseStatus) : null;
+  const timingPayload = (entry) => ({{
+    start_time: numberOrNull(entry.startTime),
+    duration: numberOrNull(entry.duration),
+    fetch_start: numberOrNull(entry.fetchStart),
+    domain_lookup_start: numberOrNull(entry.domainLookupStart),
+    domain_lookup_end: numberOrNull(entry.domainLookupEnd),
+    connect_start: numberOrNull(entry.connectStart),
+    connect_end: numberOrNull(entry.connectEnd),
+    secure_connection_start: numberOrNull(entry.secureConnectionStart),
+    request_start: numberOrNull(entry.requestStart),
+    response_start: numberOrNull(entry.responseStart),
+    response_end: numberOrNull(entry.responseEnd),
+    transfer_size: numberOrNull(entry.transferSize),
+    encoded_body_size: numberOrNull(entry.encodedBodySize),
+    decoded_body_size: numberOrNull(entry.decodedBodySize),
+    next_hop_protocol: entry.nextHopProtocol || null,
+    response_status: responseStatus(entry)
+  }});
+  const navigationEntry = performance.getEntriesByType("navigation")[0] || null;
+  const navigation = navigationEntry ? {{
+    ...urlPayload(navigationEntry.name),
+    entry_type: navigationEntry.entryType,
+    type: navigationEntry.type || null,
+    redirect_count: numberOrNull(navigationEntry.redirectCount),
+    worker_start: numberOrNull(navigationEntry.workerStart),
+    dom_interactive: numberOrNull(navigationEntry.domInteractive),
+    dom_content_loaded_event_start: numberOrNull(navigationEntry.domContentLoadedEventStart),
+    dom_content_loaded_event_end: numberOrNull(navigationEntry.domContentLoadedEventEnd),
+    dom_complete: numberOrNull(navigationEntry.domComplete),
+    load_event_start: numberOrNull(navigationEntry.loadEventStart),
+    load_event_end: numberOrNull(navigationEntry.loadEventEnd),
+    activation_start: numberOrNull(navigationEntry.activationStart),
+    ...timingPayload(navigationEntry)
+  }} : null;
+  const allResources = performance.getEntriesByType("resource");
+  const candidateResources = allResources
+    .filter((entry) =>
+      requestedInitiatorType === null || entry.initiatorType === requestedInitiatorType
+    )
+    .filter((entry) => entry.duration >= minDurationMs);
+  const resourceInfo = (entry, index) => ({{
+    index,
+    ...urlPayload(entry.name),
+    entry_type: entry.entryType,
+    initiator_type: entry.initiatorType || null,
+    render_blocking_status: entry.renderBlockingStatus || null,
+    delivery_type: "deliveryType" in entry ? entry.deliveryType || null : null,
+    worker_start: numberOrNull(entry.workerStart),
+    redirect_start: numberOrNull(entry.redirectStart),
+    redirect_end: numberOrNull(entry.redirectEnd),
+    ...timingPayload(entry)
+  }});
+  const resources = candidateResources
+    .slice(0, maxResources)
+    .map(resourceInfo);
+  const initiatorTypes = [...new Set(allResources.map((entry) => entry.initiatorType || ""))]
+    .filter(Boolean)
+    .sort();
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "performance",
+    time_origin: performance.timeOrigin,
+    now: performance.now(),
+    requested_initiator_type: requestedInitiatorType,
+    min_duration_ms: minDurationMs,
+    max_resources: maxResources,
+    navigation,
+    resource_count: candidateResources.length,
+    node_count: resources.length,
+    total_count: allResources.length,
+    initiator_types: initiatorTypes,
+    truncated: candidateResources.length > resources.length,
+    resources
+  }};
+}}
+""".strip()
+
+
 def _outline_snapshot_expression(
     *,
     selector: str | None,
@@ -7091,6 +7259,15 @@ def cmd_action_frame_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.frame-snapshot", expression)
 
 
+def cmd_action_performance_snapshot(args: argparse.Namespace) -> None:
+    expression = _performance_snapshot_expression(
+        max_resources=args.max_resources,
+        initiator_type=args.initiator_type,
+        min_duration_ms=args.min_duration_ms,
+    )
+    _run_eval_backed_action_command(args, "action.performance-snapshot", expression)
+
+
 def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
     expression = _outline_snapshot_expression(
         selector=args.selector,
@@ -9226,6 +9403,29 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum readable body text characters to return for same-origin frames.",
     )
     action_frame_snapshot.set_defaults(func=cmd_action_frame_snapshot)
+
+    action_performance_snapshot = action_subparsers.add_parser(
+        "performance-snapshot",
+        help="Capture navigation and resource timing entries with masked URLs",
+    )
+    _add_session_target_args(action_performance_snapshot)
+    action_performance_snapshot.add_argument(
+        "--max-resources",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum resource timing entries to return.",
+    )
+    action_performance_snapshot.add_argument(
+        "--initiator-type",
+        help="Only return resource entries with this initiatorType, such as fetch, xmlhttprequest, script, css, img, or iframe.",
+    )
+    action_performance_snapshot.add_argument(
+        "--min-duration-ms",
+        type=float,
+        default=0,
+        help="Only return resource entries whose duration is at least this many milliseconds.",
+    )
+    action_performance_snapshot.set_defaults(func=cmd_action_performance_snapshot)
 
     action_outline_snapshot = action_subparsers.add_parser(
         "outline-snapshot",

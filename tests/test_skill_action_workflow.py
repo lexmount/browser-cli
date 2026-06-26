@@ -192,6 +192,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`text-snapshot`",
         "`dialog-snapshot`",
         "`frame-snapshot`",
+        "`performance-snapshot`",
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
@@ -273,6 +274,12 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`frame_url_masked`" in normalized
     assert "`readable`" in normalized
     assert "`read_error`" in normalized
+    assert "`navigation`" in normalized
+    assert "`resources`" in normalized
+    assert "`resource_count`" in normalized
+    assert "`initiator_types`" in normalized
+    assert "`transfer_size`" in normalized
+    assert "`response_status`" in normalized
     assert "`headings`" in normalized
     assert "`landmarks`" in normalized
     assert "`outline_count`" in normalized
@@ -351,7 +358,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
     assert "confirm with `page-info`, `wait-url`, `wait-title`" in normalized
-    assert "`wait-network-idle`, `wait-text`, or `snapshot`" in normalized
+    assert "`wait-network-idle`, `performance-snapshot`, `wait-text`" in normalized
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, `inspect`, and `get-attribute` before" in normalized
     assert "use `inspect` for `state.disabled`, `state.readonly`" in normalized

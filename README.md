@@ -323,6 +323,7 @@ browser-cli action list-snapshot --session-id <session_id> --selector ".results"
 browser-cli action text-snapshot --session-id <session_id> --selector "main" --max-nodes 50 --max-chars 500
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
+browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -339,7 +340,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -360,6 +361,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `modal`,
 `frames`, `frame_count`, `src`, `src_masked`, `frame_url`, `frame_url_masked`,
 `readable`, `read_error`,
+`navigation`, `resources`, `resource_count`, `initiator_type`,
+`initiator_types`, `duration`, `transfer_size`, `response_status`,
 `headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
 `node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
@@ -376,9 +379,10 @@ state is correct.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot`, `list-snapshot`, `dialog-snapshot`, and `frame-snapshot` use
-the same URL masking for links and frame URLs found inside table cells, list
-items, dialog controls, or frame metadata.
+`table-snapshot`, `list-snapshot`, `dialog-snapshot`, `frame-snapshot`, and
+`performance-snapshot` use the same URL masking for links, frame URLs, and
+performance resource URLs found inside table cells, list items, dialog controls,
+frame metadata, or timing entries.
 
 Each action must receive exactly one browser target:
 
@@ -545,6 +549,10 @@ Common agent recipes:
   `frame_url`, `body_text`, `read_error`, and `bounding_box`; same-origin
   frames can expose bounded text, while cross-origin frames usually require
   using the frame's URL or reporting that direct DOM inspection is unavailable.
+- Page loading or slow resource diagnosis: `performance-snapshot` -> read
+  `navigation`, `resources`, `initiator_types`, `duration`, `transfer_size`,
+  and `response_status`; use `--initiator-type` and `--min-duration-ms` to keep
+  output focused.
 - Page structure: `outline-snapshot` -> read `headings` and `landmarks` before
   deciding where to inspect, click, or scroll.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
@@ -552,7 +560,7 @@ Common agent recipes:
   HTML before trying another action.
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
   confirm with `page-info`, `wait-url`, `wait-title`, `wait-load-state`,
-  `wait-network-idle`, `wait-text`, or `snapshot`.
+  `wait-network-idle`, `performance-snapshot`, `wait-text`, or `snapshot`.
 - Menu or keyboard flow: `focus`, `hover`, selector-scoped `press`,
   active/global `press-key`, or `dispatch-event`, then inspect again with
   `interactive-snapshot`.
