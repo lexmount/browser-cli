@@ -108,6 +108,8 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`cookie-clear`",
         "`wait-cookie`",
         "`clear`",
+        "`set-value`",
+        "`dispatch-event`",
         "`submit`",
         "`select-option`",
         "`check`",
@@ -133,6 +135,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`requested_count`" in normalized
     assert "`attribute_found`" in normalized
     assert "`requested_value`" in normalized
+    assert "`dispatched`" in normalized
+    assert "`dispatched_events`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -142,10 +146,12 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Common task recipes" in normalized
     assert "Fill and submit a form" in normalized
     assert "`interactive-snapshot`, use `fill-label`" in normalized
+    assert "`set-value` for stable selectors" in normalized
     assert "`clear` before replacement text" in normalized
     assert "`get-value` or `wait-value` to confirm form state" in normalized
     assert "use `blur` for focus-driven validation" in normalized
     assert "`select-option` or `check`" in normalized
+    assert "`dispatch-event --event input --event change`" in normalized
     assert "then use `submit`" in normalized
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
@@ -160,6 +166,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `wait-count` or `wait-attribute` for async DOM changes" in normalized
     assert "Open menus or keyboard flows" in normalized
     assert "use `focus`, `hover` for menus, `press` for shortcuts" in normalized
+    assert "`dispatch-event` for explicit DOM events" in normalized
     assert "Read page results" in normalized
     assert "use `wait-count` for dynamic lists" in normalized
     assert "`get-text` for a known selector" in normalized

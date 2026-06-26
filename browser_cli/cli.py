@@ -44,6 +44,19 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
     "browser:actions",
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
+COMMON_DOM_EVENT_NAMES = (
+    "input",
+    "change",
+    "click",
+    "focus",
+    "blur",
+    "submit",
+    "mousedown",
+    "mouseup",
+    "mouseover",
+    "mouseenter",
+    "mousemove",
+)
 CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle"}
 CONTEXT_LOCKED_STATUSES = {"locked", "busy", "in_use", "in-use", "active", "running"}
 SENSITIVE_PAYLOAD_KEYS = {
@@ -2575,6 +2588,91 @@ def _clear_expression(selector: str) -> str:
     )
 
 
+def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -> str:
+    return _event_expression(
+        selector,
+        f"""
+  const requestedValue = {_js_literal(value)};
+  const previousValue = element.isContentEditable
+    ? element.textContent
+    : ("value" in element ? element.value : null);
+  if (element.isContentEditable) {{
+    element.textContent = requestedValue;
+  }} else if ("value" in element) {{
+    element.value = requestedValue;
+  }} else {{
+    return {{
+      selector,
+      found: true,
+      writable: false,
+      set: false,
+      previous_value: previousValue,
+      value: null,
+      requested_value: requestedValue,
+      dispatched_events: []
+    }};
+  }}
+  const dispatchedEvents = [];
+  if ({_js_literal(dispatch_events)}) {{
+    for (const type of ["input", "change"]) {{
+      dispatch(new Event(type, {{ bubbles: true }}));
+      dispatchedEvents.push(type);
+    }}
+  }}
+  const currentValue = element.isContentEditable ? element.textContent : element.value;
+  return {{
+    selector,
+    found: true,
+    writable: true,
+    set: currentValue === requestedValue,
+    previous_value: previousValue,
+    value: currentValue,
+    requested_value: requestedValue,
+    dispatched_events: dispatchedEvents
+  }};
+""".rstrip(),
+    )
+
+
+def _dispatch_event_expression(
+    *,
+    selector: str,
+    events: list[str],
+    bubbles: bool,
+    cancelable: bool,
+) -> str:
+    return _event_expression(
+        selector,
+        f"""
+  const requestedEvents = {_js_literal(events)};
+  const bubbles = {_js_literal(bubbles)};
+  const cancelable = {_js_literal(cancelable)};
+  const results = [];
+  for (const type of requestedEvents) {{
+    let accepted = true;
+    if (type === "focus" && typeof element.focus === "function") {{
+      element.focus();
+    }} else if (type === "blur" && typeof element.blur === "function") {{
+      element.blur();
+    }} else if (type === "click" && typeof element.click === "function") {{
+      element.click();
+    }} else {{
+      accepted = dispatch(new Event(type, {{ bubbles, cancelable }}));
+    }}
+    results.push({{ type, accepted }});
+  }}
+  return {{
+    selector,
+    found: true,
+    dispatched: true,
+    requested_events: requestedEvents,
+    events: results,
+    focused: document.activeElement === element
+  }};
+""".rstrip(),
+    )
+
+
 def _submit_expression(*, selector: str, skip_validation: bool) -> str:
     return f"""
 () => {{
@@ -3079,6 +3177,31 @@ def cmd_action_clear(args: argparse.Namespace) -> None:
         args,
         "action.clear",
         _clear_expression(args.selector),
+    )
+
+
+def cmd_action_set_value(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.set-value",
+        _set_value_expression(
+            args.selector,
+            args.value,
+            dispatch_events=not args.no_events,
+        ),
+    )
+
+
+def cmd_action_dispatch_event(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.dispatch-event",
+        _dispatch_event_expression(
+            selector=args.selector,
+            events=args.event,
+            bubbles=not args.no_bubbles,
+            cancelable=args.cancelable,
+        ),
     )
 
 
@@ -4454,6 +4577,45 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_clear)
     action_clear.add_argument("--selector", required=True)
     action_clear.set_defaults(func=cmd_action_clear)
+
+    action_set_value = action_subparsers.add_parser(
+        "set-value",
+        help="Set a form field or editable element value and dispatch input/change",
+    )
+    _add_session_target_args(action_set_value)
+    action_set_value.add_argument("--selector", required=True)
+    action_set_value.add_argument("--value", required=True)
+    action_set_value.add_argument(
+        "--no-events",
+        action="store_true",
+        help="Do not dispatch input/change after setting the value.",
+    )
+    action_set_value.set_defaults(func=cmd_action_set_value)
+
+    action_dispatch_event = action_subparsers.add_parser(
+        "dispatch-event",
+        help="Dispatch common DOM events for a selector",
+    )
+    _add_session_target_args(action_dispatch_event)
+    action_dispatch_event.add_argument("--selector", required=True)
+    action_dispatch_event.add_argument(
+        "--event",
+        action="append",
+        choices=COMMON_DOM_EVENT_NAMES,
+        required=True,
+        help="Event name to dispatch. May be repeated.",
+    )
+    action_dispatch_event.add_argument(
+        "--no-bubbles",
+        action="store_true",
+        help="Dispatch synthetic Event objects with bubbles=false.",
+    )
+    action_dispatch_event.add_argument(
+        "--cancelable",
+        action="store_true",
+        help="Dispatch synthetic Event objects with cancelable=true.",
+    )
+    action_dispatch_event.set_defaults(func=cmd_action_dispatch_event)
 
     action_submit = action_subparsers.add_parser(
         "submit",

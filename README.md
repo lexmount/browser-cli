@@ -207,6 +207,8 @@ browser-cli action cookie-delete --session-id <session_id> --name consent --path
 browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
 browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "hello"
+browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
@@ -227,8 +229,9 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `wait-count`, `wait-attribute`, `wait-text`, `focus`, `get-value`,
 `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
-`cookie-clear`, `wait-cookie`, `clear`, `submit`, `scroll`, `select-option`,
-`check`, `uncheck`, `hover`, `press`, `click-text`, `click-role`,
+`cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
+`submit`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, `press`,
+`click-text`, `click-role`,
 `fill-label`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -237,7 +240,7 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
-or `navigation_requested` from `result`.
+`dispatched`, `dispatched_events`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -351,9 +354,10 @@ browser-cli session close --session-id <session_id>
 
 Common agent recipes:
 
-- Form submit: `interactive-snapshot` -> `fill-label` or `clear` ->
-  `wait-value` or `get-value` -> `blur` if validation is focus-driven ->
-  `select-option` or `check` -> `submit --selector <form-or-field>`,
+- Form submit: `interactive-snapshot` -> `fill-label`, `set-value`, or
+  `clear` -> `wait-value` or `get-value` -> `blur` if validation is
+  focus-driven -> `select-option` or `check` -> `dispatch-event` if explicit
+  `input`/`change` is needed -> `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then selector `click`
@@ -361,8 +365,8 @@ Common agent recipes:
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
   confirm with `wait-url`, `wait-load-state`, `wait-network-idle`, `wait-text`,
   or `snapshot`.
-- Menu or keyboard flow: `focus`, `hover`, or `press`, then inspect again with
-  `interactive-snapshot`.
+- Menu or keyboard flow: `focus`, `hover`, `press`, or `dispatch-event`, then
+  inspect again with `interactive-snapshot`.
 - Read results: `wait-count` for dynamic lists, `wait-attribute` for DOM state
   changes, `get-text` for known selectors, or `snapshot` when the selector is
   unknown.

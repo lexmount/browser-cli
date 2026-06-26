@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, type, focus, blur, clear, set form values, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -166,6 +166,8 @@ browser-cli action cookie-delete --session-id <session_id> --name consent --path
 browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
 browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "query"
+browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
 browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
@@ -186,16 +188,16 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `wait-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`, `blur`,
 `storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
 `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`,
-`wait-cookie`, `clear`, `submit`, `scroll`, `select-option`, `check`,
-`uncheck`, `hover`, and `press` plus `click-text`, `click-role`,
+`wait-cookie`, `clear`, `set-value`, `dispatch-event`, `submit`, `scroll`,
+`select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`, `click-role`,
 `fill-label`, `accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
 `removed`, `deleted`, `cleared`, `items`, `cleared_count`, `requested_count`,
 `state`, `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`,
-`submitted`, `hovered`, `pressed`, and `navigation_requested` before assuming
-the page changed.
+`submitted`, `hovered`, `pressed`, `dispatched`, `dispatched_events`, and
+`navigation_requested` before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -206,8 +208,8 @@ For page work, choose actions in this order:
 3. Use selector actions when a stable selector is known: `exists`, `count`,
    `wait-count`, `query`, `get-attribute`, `wait-attribute`, `wait-text`,
    `get-text`, `wait-selector`, `click`, `type`, `focus`, `get-value`,
-   `wait-value`, `blur`, `clear`, `submit`, `select-option`, `check`, and
-   `uncheck`.
+   `wait-value`, `blur`, `clear`, `set-value`, `dispatch-event`, `submit`,
+   `select-option`, `check`, and `uncheck`.
 4. Use `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`, and
    `wait-network-idle` for navigation and async refresh flows.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
@@ -216,7 +218,8 @@ For page work, choose actions in this order:
 6. Use `cookie-get`, `cookie-set`, `cookie-delete`, and `cookie-clear` for
    document.cookie-visible cookies. Use `wait-cookie` after consent/login flows;
    do not expect HttpOnly cookies here.
-7. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
+7. Use `scroll`, `hover`, `press`, or `dispatch-event` for viewport, menu,
+   keyboard, and event-triggered UI flows.
 8. Use `eval` only for page-local work not covered by a first-class action, and
    keep the expression small.
 9. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
@@ -226,18 +229,21 @@ For page work, choose actions in this order:
 Common task recipes:
 
 1. Fill and submit a form: run `interactive-snapshot`, use `fill-label` for
-   labeled fields, `clear` before replacement text when needed, use
-   `get-value` or `wait-value` to confirm form state, use `blur` for
-   focus-driven validation, use `select-option` or `check` for controls, then
-   use `submit`, `click-role --role button --name <text>` or `click-text`.
+   labeled fields and `set-value` for stable selectors, `clear` before
+   replacement text when needed, use `get-value` or `wait-value` to confirm
+   form state, use `blur` for focus-driven validation, use `select-option` or
+   `check` for controls, use `dispatch-event --event input --event change`
+   when the app needs explicit events, then use `submit`,
+   `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: prefer `click-role`, then `click-text`, then
    selector `click` after `exists` confirms a stable selector.
 3. Navigate page history or async refresh: use `reload`, `go-back`, or
    `go-forward`, then confirm with `wait-url`, `wait-load-state`,
    `wait-network-idle`, `wait-text`, or `snapshot`.
 4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
-   shortcuts or Enter/Escape, and `blur` for focus-driven validation, then
-   inspect again with `interactive-snapshot`.
+   shortcuts or Enter/Escape, `dispatch-event` for explicit DOM events, and
+   `blur` for focus-driven validation, then inspect again with
+   `interactive-snapshot`.
 5. Read page results: use `wait-count` for dynamic lists, `wait-attribute` for
    DOM state changes, `get-text` for a known selector; use `snapshot` when the
    page structure or selector is unknown; use `wait-text` before reading
