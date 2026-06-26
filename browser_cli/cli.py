@@ -3633,6 +3633,222 @@ def _performance_snapshot_expression(
 """.strip()
 
 
+def _console_snapshot_expression(
+    *,
+    max_entries: int,
+    clear: bool,
+    install_only: bool,
+) -> str:
+    return f"""
+() => {{
+  const maxEntries = Math.max(0, {_js_literal(max_entries)});
+  const clearRequested = {_js_literal(clear)};
+  const installOnly = {_js_literal(install_only)};
+  const stateKey = "__browserCliConsoleSnapshot";
+  const sensitiveNamePattern =
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token|code/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const sensitivePairPattern =
+    /((?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s,;&}}]+)/gi;
+  const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const truncate = (value, maxLength = 1000) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxLength) {{
+      return {{ text, truncated: false }};
+    }}
+    return {{ text: text.slice(0, maxLength), truncated: true }};
+  }};
+  const maskText = (value) => String(value ?? "")
+    .replace(sensitiveUrlParamPattern, "$1***")
+    .replace(sensitivePairPattern, "$1***");
+  const maskedTextPayload = (value, maxLength = 1000) => {{
+    const raw = String(value ?? "");
+    const masked = maskText(raw);
+    const truncated = truncate(masked, maxLength);
+    return {{
+      text: truncated.text,
+      text_masked: masked !== raw,
+      text_truncated: truncated.truncated,
+      text_length: raw.length
+    }};
+  }};
+  const elementPayload = (element) => ({{
+    tag: element.tagName.toLowerCase(),
+    id: element.id || null,
+    class_name: element.className || null,
+    role: element.getAttribute("role"),
+    name: element.getAttribute("aria-label") || element.getAttribute("title") || null
+  }});
+  const state = window[stateKey] || {{
+    installed: false,
+    installed_at: Date.now(),
+    next_index: 0,
+    buffer_limit: 500,
+    entries: [],
+    originals: {{}},
+    listeners: {{}}
+  }};
+  window[stateKey] = state;
+  const push = (entry) => {{
+    const payload = {{
+      index: state.next_index++,
+      timestamp_ms: Date.now(),
+      elapsed_ms: performance.now(),
+      ...entry
+    }};
+    state.entries.push(payload);
+    if (state.entries.length > state.buffer_limit) {{
+      state.entries.splice(0, state.entries.length - state.buffer_limit);
+    }}
+  }};
+  const sanitizeValue = (value, depth = 0, seen = new WeakSet()) => {{
+    if (value === null) return null;
+    const type = typeof value;
+    if (type === "string") {{
+      const masked = maskText(value);
+      return masked.length > 500 ? `${{masked.slice(0, 500)}}...` : masked;
+    }}
+    if (["number", "boolean", "undefined", "bigint"].includes(type)) {{
+      return String(value);
+    }}
+    if (type === "function") return "[Function]";
+    if (value instanceof Error) {{
+      return {{
+        name: value.name || "Error",
+        message: maskText(value.message || ""),
+        stack: maskText(value.stack || "")
+      }};
+    }}
+    if (value instanceof Element) return elementPayload(value);
+    if (depth >= 2) return `[${{Object.prototype.toString.call(value)}}]`;
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    if (Array.isArray(value)) {{
+      return value.slice(0, 10).map((item) => sanitizeValue(item, depth + 1, seen));
+    }}
+    const result = {{}};
+    for (const [key, nestedValue] of Object.entries(value).slice(0, 20)) {{
+      result[key] = sensitiveNamePattern.test(key)
+        ? "***"
+        : sanitizeValue(nestedValue, depth + 1, seen);
+    }}
+    return result;
+  }};
+  const argPayload = (value) => {{
+    const type = value === null
+      ? "null"
+      : Array.isArray(value)
+        ? "array"
+        : typeof value;
+    let sanitized;
+    try {{
+      sanitized = sanitizeValue(value);
+    }} catch (error) {{
+      sanitized = `[Unserializable: ${{String(error.message || error)}}]`;
+    }}
+    const textValue = type === "string"
+      ? value
+      : value instanceof Error
+        ? `${{value.name || "Error"}}: ${{value.message || ""}}`
+        : (() => {{
+            try {{
+              return JSON.stringify(sanitized);
+            }} catch (error) {{
+              return String(value);
+            }}
+          }})();
+    return {{
+      type,
+      value: sanitized,
+      ...maskedTextPayload(textValue, 1000)
+    }};
+  }};
+  const entryText = (args) => normalize(args.map((arg) => arg.text).join(" "));
+  const entryTextPayload = (args) => ({{
+    text: entryText(args),
+    text_masked: args.some((arg) => Boolean(arg.text_masked)),
+    text_truncated: args.some((arg) => Boolean(arg.text_truncated))
+  }});
+  const install = () => {{
+    if (state.installed) return false;
+    for (const method of ["debug", "log", "info", "warn", "error"]) {{
+      const original = console[method];
+      state.originals[method] = original;
+      console[method] = function (...args) {{
+        const argPayloads = args.map(argPayload);
+        push({{
+          source: "console",
+          level: method === "log" ? "info" : method,
+          method,
+          ...entryTextPayload(argPayloads),
+          args: argPayloads
+        }});
+        return original.apply(this, args);
+      }};
+    }}
+    state.listeners.error = (event) => {{
+      const error = event.error || null;
+      const argPayloads = error ? [argPayload(error)] : [argPayload(event.message || "")];
+      const textPayload = maskedTextPayload(event.message || entryText(argPayloads));
+      const maskedFilename = maskText(event.filename || "");
+      push({{
+        source: "pageerror",
+        level: "error",
+        method: "error",
+        ...textPayload,
+        args: argPayloads,
+        filename: maskedFilename,
+        filename_masked: maskedFilename !== String(event.filename || ""),
+        lineno: event.lineno || null,
+        colno: event.colno || null
+      }});
+    }};
+    state.listeners.unhandledrejection = (event) => {{
+      const argPayloads = [argPayload(event.reason)];
+      push({{
+        source: "unhandledrejection",
+        level: "error",
+        method: "unhandledrejection",
+        ...entryTextPayload(argPayloads),
+        args: argPayloads
+      }});
+    }};
+    window.addEventListener("error", state.listeners.error);
+    window.addEventListener("unhandledrejection", state.listeners.unhandledrejection);
+    state.installed = true;
+    state.installed_at = Date.now();
+    return true;
+  }};
+  const newlyInstalled = install();
+  const maskedLocation = maskText(location.href);
+  const bufferedCount = state.entries.length;
+  const entries = installOnly ? [] : state.entries.slice(-maxEntries);
+  const truncated = !installOnly && bufferedCount > entries.length;
+  if (clearRequested) {{
+    state.entries = [];
+  }}
+  return {{
+    url: maskedLocation,
+    url_masked: maskedLocation !== location.href,
+    title: document.title,
+    kind: "console",
+    installed: state.installed,
+    newly_installed: newlyInstalled,
+    installed_at: state.installed_at,
+    install_only: installOnly,
+    clear: clearRequested,
+    max_entries: maxEntries,
+    entry_count: entries.length,
+    buffered_count: bufferedCount,
+    buffered_count_after: state.entries.length,
+    truncated,
+    entries
+  }};
+}}
+""".strip()
+
+
 def _outline_snapshot_expression(
     *,
     selector: str | None,
@@ -7268,6 +7484,15 @@ def cmd_action_performance_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.performance-snapshot", expression)
 
 
+def cmd_action_console_snapshot(args: argparse.Namespace) -> None:
+    expression = _console_snapshot_expression(
+        max_entries=args.max_entries,
+        clear=args.clear,
+        install_only=args.install_only,
+    )
+    _run_eval_backed_action_command(args, "action.console-snapshot", expression)
+
+
 def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
     expression = _outline_snapshot_expression(
         selector=args.selector,
@@ -9426,6 +9651,29 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Only return resource entries whose duration is at least this many milliseconds.",
     )
     action_performance_snapshot.set_defaults(func=cmd_action_performance_snapshot)
+
+    action_console_snapshot = action_subparsers.add_parser(
+        "console-snapshot",
+        help="Install and read a page console/error buffer with masked values",
+    )
+    _add_session_target_args(action_console_snapshot)
+    action_console_snapshot.add_argument(
+        "--max-entries",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum buffered console/error entries to return.",
+    )
+    action_console_snapshot.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear the page console/error buffer after reading it.",
+    )
+    action_console_snapshot.add_argument(
+        "--install-only",
+        action="store_true",
+        help="Install the page console/error listener without returning buffered entries.",
+    )
+    action_console_snapshot.set_defaults(func=cmd_action_console_snapshot)
 
     action_outline_snapshot = action_subparsers.add_parser(
         "outline-snapshot",

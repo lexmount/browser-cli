@@ -218,6 +218,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.dialog-snapshot",
         "action.frame-snapshot",
         "action.performance-snapshot",
+        "action.console-snapshot",
         "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
@@ -263,6 +264,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.dialog-snapshot" in payload["commands"]
     assert "action.frame-snapshot" in payload["commands"]
     assert "action.performance-snapshot" in payload["commands"]
+    assert "action.console-snapshot" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -4009,6 +4011,61 @@ def test_action_performance_snapshot_expression_extracts_timing_entries(
     assert payload["command"] == "action.performance-snapshot"
 
 
+def test_action_console_snapshot_expression_installs_buffered_listener(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "console", "entries": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "console-snapshot",
+                "--session-id",
+                "s1",
+                "--max-entries",
+                "9",
+                "--install-only",
+                "--clear",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "const maxEntries = Math.max(0, 9)" in expression
+    assert "const clearRequested = true" in expression
+    assert "const installOnly = true" in expression
+    assert "__browserCliConsoleSnapshot" in expression
+    assert 'window.addEventListener("error"' in expression
+    assert 'window.addEventListener("unhandledrejection"' in expression
+    assert "console[method] = function" in expression
+    assert "sensitivePairPattern" in expression
+    assert "entryTextPayload" in expression
+    assert "filename_masked" in expression
+    assert "url_masked" in expression
+    assert "text_masked" in expression
+    assert "buffered_count_after" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.console-snapshot"
+
+
 def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4760,6 +4817,92 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                         "transfer_size": 2048,
                         "response_status": 200,
                     }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "console-snapshot",
+                "--session-id",
+                "s1",
+                "--max-entries",
+                "5",
+            ],
+            "action.console-snapshot",
+            {
+                "kind": "console",
+                "installed": True,
+                "newly_installed": False,
+                "entry_count": 2,
+                "buffered_count": 2,
+                "entries": [
+                    {
+                        "index": 0,
+                        "source": "console",
+                        "level": "warn",
+                        "method": "warn",
+                        "text": "token=***",
+                        "text_masked": True,
+                        "text_truncated": False,
+                        "args": [
+                            {
+                                "type": "string",
+                                "text": "token=***",
+                                "text_masked": True,
+                            }
+                        ],
+                    },
+                    {
+                        "index": 1,
+                        "source": "pageerror",
+                        "level": "error",
+                        "method": "error",
+                        "text": "Boom",
+                        "text_masked": False,
+                        "text_truncated": False,
+                        "filename": "https://example.test/app.js",
+                        "filename_masked": False,
+                        "lineno": 12,
+                    },
+                ],
+            },
+            {
+                "kind": "console",
+                "installed": True,
+                "newly_installed": False,
+                "entry_count": 2,
+                "buffered_count": 2,
+                "entries": [
+                    {
+                        "index": 0,
+                        "source": "console",
+                        "level": "warn",
+                        "method": "warn",
+                        "text": "token=***",
+                        "text_masked": True,
+                        "text_truncated": False,
+                        "args": [
+                            {
+                                "type": "string",
+                                "text": "token=***",
+                                "text_masked": True,
+                            }
+                        ],
+                    },
+                    {
+                        "index": 1,
+                        "source": "pageerror",
+                        "level": "error",
+                        "method": "error",
+                        "text": "Boom",
+                        "text_masked": False,
+                        "text_truncated": False,
+                        "filename": "https://example.test/app.js",
+                        "filename_masked": False,
+                        "lineno": 12,
+                    },
                 ],
                 "url": "https://example.test",
             },

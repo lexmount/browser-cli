@@ -19,6 +19,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "use `text-snapshot` for bounded visible text" in normalized
     assert "use `dialog-snapshot` for modals" in normalized
     assert "use `frame-snapshot`" in normalized
+    assert "For runtime errors, run `console-snapshot --install-only`" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
     assert "`click-role` for known roles/names" in normalized
@@ -193,6 +194,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`dialog-snapshot`",
         "`frame-snapshot`",
         "`performance-snapshot`",
+        "`console-snapshot`",
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
@@ -280,6 +282,14 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`initiator_types`" in normalized
     assert "`transfer_size`" in normalized
     assert "`response_status`" in normalized
+    assert "`entries`" in normalized
+    assert "`entry_count`" in normalized
+    assert "`buffered_count`" in normalized
+    assert "`source`" in normalized
+    assert "`method`" in normalized
+    assert "`text_masked`" in normalized
+    assert "`filename_masked`" in normalized
+    assert "`url_masked`" in normalized
     assert "`headings`" in normalized
     assert "`landmarks`" in normalized
     assert "`outline_count`" in normalized
@@ -359,6 +369,9 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
     assert "confirm with `page-info`, `wait-url`, `wait-title`" in normalized
     assert "`wait-network-idle`, `performance-snapshot`, `wait-text`" in normalized
+    assert "Capture runtime errors" in normalized
+    assert "`console-snapshot --install-only`" in normalized
+    assert "read `console-snapshot`" in normalized
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, `inspect`, and `get-attribute` before" in normalized
     assert "use `inspect` for `state.disabled`, `state.readonly`" in normalized

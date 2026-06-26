@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -292,6 +292,7 @@ browser-cli action text-snapshot --session-id <session_id> --selector "main" --m
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
 browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
+browser-cli action console-snapshot --session-id <session_id> --max-entries 50
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -308,7 +309,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
-`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `outline-snapshot`, `form-snapshot`,
+`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `performance-snapshot`, `console-snapshot`, `outline-snapshot`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
@@ -327,7 +328,8 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `controls_truncated`, `modal`, `frames`, `frame_count`, `src`, `src_masked`,
 `frame_url`, `frame_url_masked`, `readable`, `read_error`, `navigation`,
 `resources`, `resource_count`, `initiator_type`, `initiator_types`, `duration`,
-`transfer_size`, `response_status`, `headings`, `landmarks`, `outline_count`,
+`transfer_size`, `response_status`, `entries`, `entry_count`, `buffered_count`,
+`source`, `level`, `method`, `text_masked`, `filename_masked`, `url_masked`, `headings`, `landmarks`, `outline_count`,
 `heading_count`, `landmark_count`, `node_type`, `level`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
 `language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
@@ -346,6 +348,8 @@ tokens, authorization codes, passwords, or secrets are masked by default. Use
 `performance-snapshot` use the same URL masking for links, frame URLs, and
 performance resource URLs found inside table cells, list items, dialog controls,
 frame metadata, or timing entries.
+`console-snapshot` masks token-like key/value text in captured console/page
+error entries and the reported page URL.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
 `body_text_length`, `html_length`, `language`, and `referrer` before taking a
 larger `snapshot`.
@@ -373,6 +377,8 @@ For page work, choose actions in this order:
 4. Use `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`,
    `wait-title`, `wait-load-state`, `wait-network-idle`, and
    `performance-snapshot` for navigation and async refresh flows.
+   For runtime errors, run `console-snapshot --install-only`, trigger the
+   behavior, then run `console-snapshot` and parse `entries`.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
    localStorage/sessionStorage state instead of writing storage JavaScript. Use
    `wait-storage` after actions expected to create, update, or remove keys.
@@ -411,7 +417,10 @@ Common task recipes:
    `go-forward`, then confirm with `page-info`, `wait-url`, `wait-title`,
    `wait-load-state`, `wait-network-idle`, `performance-snapshot`, `wait-text`,
    or `snapshot`.
-4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
+4. Capture runtime errors: run `console-snapshot --install-only`, trigger the
+   suspected action, read `console-snapshot`, then use `text-snapshot`,
+   `dialog-snapshot`, or `inspect` to correlate visible state with JS errors.
+5. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    selector-scoped keys, `press-key` for active/global shortcuts such as
    Enter/Escape, `dispatch-event` for explicit DOM events, and
    `blur` for focus-driven validation, then inspect again with
@@ -420,7 +429,7 @@ Common task recipes:
    use `click-role`, `click-text`, or `click-index`. For iframe or embedded app
    issues, run `frame-snapshot` and parse `readable`, `same_origin`, `frame_url`,
    and `read_error` before deciding whether direct DOM inspection is possible.
-5. Read page results: use `page-info` for URL/title/readyState/viewport checks,
+6. Read page results: use `page-info` for URL/title/readyState/viewport checks,
    `wait-title` for async title changes, `wait-count` for dynamic lists,
    `list-snapshot` for menu/listbox/search-result/task-list content,
    `text-snapshot` for visible paragraphs, alerts, status messages, and bounded readable text,
@@ -431,7 +440,7 @@ Common task recipes:
    `snapshot` when the page structure or selector is unknown; use `wait-text`
    or `wait-role` before reading dynamic results, and use
    `wait-text --state absent` when loading, toast, or error text should disappear.
-6. Adjust browser state: use `storage-get` for local/session storage,
+7. Adjust browser state: use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
    `storage-clear --prefix <prefix>` for targeted cleanup; use `wait-storage`
    when the page updates keys asynchronously. Use `cookie-get`, `cookie-set`,
