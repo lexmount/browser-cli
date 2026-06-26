@@ -6,6 +6,9 @@ import argparse
 import json
 import os
 import shlex
+import shutil
+import subprocess
+import sys
 import tomllib
 from importlib import metadata
 from pathlib import Path
@@ -84,6 +87,19 @@ def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
     if isinstance(exc, BrowserRuntimeError):
         _failure(command, exc.__class__.__name__, str(exc))
     _failure(command, exc.__class__.__name__, str(exc))
+
+
+def _exception_brief(exc: Exception) -> dict[str, Any]:
+    info = getattr(exc, "lexmount_error_info", None)
+    if isinstance(info, LexmountErrorInfo):
+        payload: dict[str, Any] = {
+            "error": info.code,
+            "exception_message": info.message,
+        }
+        if info.status_code is not None:
+            payload["status_code"] = info.status_code
+        return payload
+    return {"error": exc.__class__.__name__, "exception_message": str(exc)}
 
 
 def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
@@ -379,6 +395,259 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             ),
         },
     )
+
+
+def _browser_cli_version() -> str | None:
+    version = _package_version()
+    return None if version == "unknown" else version
+
+
+def _uv_status() -> dict[str, Any]:
+    path = shutil.which("uv")
+    result: dict[str, Any] = {
+        "available": bool(path),
+        "path": path,
+        "version": None,
+    }
+    if path is None:
+        result["message"] = "uv was not found in PATH."
+        return result
+
+    try:
+        completed = subprocess.run(
+            [path, "--version"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=5,
+        )
+    except Exception as exc:
+        result.update(
+            {
+                "available": False,
+                "message": f"Failed to run uv --version: {exc}",
+            }
+        )
+        return result
+
+    version_text = (completed.stdout or completed.stderr).strip()
+    result["version"] = version_text or None
+    if completed.returncode != 0:
+        result.update(
+            {
+                "available": False,
+                "message": f"uv --version exited with {completed.returncode}.",
+            }
+        )
+    return result
+
+
+def _doctor_check(
+    checks: list[dict[str, Any]],
+    *,
+    name: str,
+    ok: bool,
+    severity: str,
+    message: str,
+    **payload: Any,
+) -> None:
+    check = {
+        "name": name,
+        "ok": ok,
+        "severity": "info" if ok else severity,
+        "message": message,
+    }
+    check.update(payload)
+    checks.append(check)
+
+
+def _doctor_overall_ok(checks: list[dict[str, Any]]) -> bool:
+    return all(check["ok"] or check["severity"] != "error" for check in checks)
+
+
+def _doctor_status(checks: list[dict[str, Any]]) -> str:
+    if not _doctor_overall_ok(checks):
+        return "fail"
+    if any(not check["ok"] for check in checks):
+        return "warn"
+    return "pass"
+
+
+def cmd_doctor(args: argparse.Namespace) -> None:
+    command = "doctor"
+    checks: list[dict[str, Any]] = []
+    next_steps: list[str] = []
+
+    version = _browser_cli_version()
+    _doctor_check(
+        checks,
+        name="browser-cli",
+        ok=version is not None,
+        severity="warning",
+        message=(
+            f"browser-cli package version is {version}."
+            if version
+            else "browser-cli package metadata was not found."
+        ),
+        version=version,
+    )
+
+    _doctor_check(
+        checks,
+        name="python",
+        ok=True,
+        severity="info",
+        message=f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        executable=sys.executable,
+        version=sys.version.split()[0],
+    )
+
+    uv = _uv_status()
+    uv_payload = {key: value for key, value in uv.items() if key != "message"}
+    _doctor_check(
+        checks,
+        name="uv",
+        ok=bool(uv["available"]),
+        severity="warning",
+        message=uv.get("message")
+        or (
+            f"uv is available: {uv['version']}" if uv["version"] else "uv is available."
+        ),
+        **uv_payload,
+    )
+    if not uv["available"]:
+        next_steps.append("Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh")
+
+    env_status = {
+        "LEXMOUNT_API_KEY": {"set": bool(os.getenv("LEXMOUNT_API_KEY"))},
+        "LEXMOUNT_PROJECT_ID": {"set": bool(os.getenv("LEXMOUNT_PROJECT_ID"))},
+        "LEXMOUNT_BASE_URL": {
+            "set": bool(os.getenv("LEXMOUNT_BASE_URL")),
+            "value": os.getenv("LEXMOUNT_BASE_URL") or "https://api.lexmount.cn",
+            "defaulted": not bool(os.getenv("LEXMOUNT_BASE_URL")),
+        },
+        "LEXMOUNT_REGION": {
+            "set": bool(os.getenv("LEXMOUNT_REGION")),
+            "value": os.getenv("LEXMOUNT_REGION"),
+        },
+    }
+    missing_required = [
+        name
+        for name in ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
+        if not env_status[name]["set"]
+    ]
+    _doctor_check(
+        checks,
+        name="credentials",
+        ok=not missing_required,
+        severity="error",
+        message=(
+            "Required Lexmount environment variables are set."
+            if not missing_required
+            else "Missing required Lexmount environment variables: "
+            + ", ".join(missing_required)
+        ),
+        missing=missing_required,
+    )
+    if missing_required:
+        next_steps.append(
+            "Log in to https://browser.lexmount.cn and export LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID."
+        )
+
+    direct_url_payload: dict[str, Any] | None = None
+    try:
+        direct_url = build_direct_connect_url()
+        direct_url_payload = {
+            "connect_url": _mask_direct_url_secret(direct_url),
+            "masked": True,
+        }
+        _doctor_check(
+            checks,
+            name="direct-url",
+            ok=True,
+            severity="info",
+            message="Direct websocket URL can be built from configuration.",
+            **direct_url_payload,
+        )
+    except Exception as exc:
+        _doctor_check(
+            checks,
+            name="direct-url",
+            ok=False,
+            severity="error",
+            message="Failed to build direct websocket URL.",
+            **_exception_brief(exc),
+        )
+
+    api_payload: dict[str, Any] | None = None
+    if args.skip_api:
+        _doctor_check(
+            checks,
+            name="api",
+            ok=False,
+            severity="warning",
+            message="API connectivity check was skipped.",
+            skipped=True,
+        )
+        next_steps.append(
+            "Run browser-cli doctor without --skip-api to verify API access."
+        )
+    elif missing_required:
+        _doctor_check(
+            checks,
+            name="api",
+            ok=False,
+            severity="error",
+            message="API connectivity check skipped because credentials are missing.",
+            skipped=True,
+        )
+    else:
+        try:
+            sessions = LexmountBrowserAdmin().list_sessions(status=None)
+            api_payload = {
+                "session_count": sessions.count,
+                "pagination": (
+                    sessions.pagination.model_dump(mode="json")
+                    if sessions.pagination is not None
+                    else None
+                ),
+            }
+            _doctor_check(
+                checks,
+                name="api",
+                ok=True,
+                severity="info",
+                message="Lexmount API is reachable with current credentials.",
+                **api_payload,
+            )
+        except Exception as exc:
+            _doctor_check(
+                checks,
+                name="api",
+                ok=False,
+                severity="error",
+                message="Lexmount API connectivity check failed.",
+                **_exception_brief(exc),
+            )
+            next_steps.append(
+                "Check credentials, project access, network connectivity, and LEXMOUNT_BASE_URL."
+            )
+
+    ok = _doctor_overall_ok(checks)
+    data = {
+        "ok": ok,
+        "command": command,
+        "status": _doctor_status(checks),
+        "version": {"browser_cli": version},
+        "configuration": {"environment": env_status},
+        "checks": checks,
+        "next_steps": next_steps,
+    }
+    if direct_url_payload is not None:
+        data["direct_url"] = direct_url_payload
+    if api_payload is not None:
+        data["api"] = api_payload
+    _json_dump(data, exit_code=0 if ok else 1)
 
 
 def cmd_session_create(args: argparse.Namespace) -> None:
@@ -888,6 +1157,22 @@ def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
 
 def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="Check local browser-cli and Lexmount API configuration",
+    )
+    doctor.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit JSON output. JSON is the default for all browser-cli commands.",
+    )
+    doctor.add_argument(
+        "--skip-api",
+        action="store_true",
+        help="Skip the live Lexmount API connectivity check.",
+    )
+    doctor.set_defaults(func=cmd_doctor)
+
     prepare = subparsers.add_parser(
         "prepare",
         help="Backward-compatible alias for session create",

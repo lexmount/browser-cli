@@ -21,6 +21,7 @@ Check that the CLI is available:
 ```bash
 browser-cli --help
 browser-cli auth status
+browser-cli doctor --json
 ```
 
 If it is not installed, install it with:
@@ -57,12 +58,29 @@ browser-cli auth export-env
 Only use `browser-cli auth export-env --reveal-secrets` in a trusted local
 shell, and never paste revealed output into chat, logs, docs, or commits.
 
+## Doctor
+
+Run `browser-cli doctor --json` before the first browser action in a thread,
+after credential changes, or when a session/context/action command fails for an
+unclear reason. Parse the JSON before deciding what to do:
+
+- `status: "pass"`: continue with browser work.
+- `status: "warn"`: continue only when all failed checks have `severity:
+  "warning"` and the warning does not block the requested task.
+- `status: "fail"` or `ok: false`: stop before creating sessions and follow
+  `next_steps`. Ask the user to fix local setup or credentials when needed.
+
+Use `browser-cli doctor --skip-api` only for offline setup checks or when the
+user explicitly asks to avoid a live API call. Do not treat a skipped API check
+as proof that browser sessions will work.
+
 ## Workflow
 
 For a one-off task, create a temporary session, inspect before acting, and close
 the session when done:
 
 ```bash
+browser-cli doctor --json
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
@@ -94,6 +112,7 @@ Session lifecycle:
 
 ```bash
 browser-cli auth status
+browser-cli doctor --json
 browser-cli session create
 browser-cli session list
 browser-cli session get --session-id <session_id>
@@ -152,3 +171,6 @@ Do not log revealed API keys. Do not paste API keys, Project IDs, or full direct
 connect URLs into chat, docs, commits, screenshots, or test fixtures. By
 default, browser direct URLs are masked. Use reveal flags only for local
 debugging in a trusted shell.
+
+Run `browser-cli doctor --json` before browser work when setup may be stale. If
+`doctor` returns `ok: false`, follow its `next_steps` before creating sessions.
