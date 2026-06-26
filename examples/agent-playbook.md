@@ -12,6 +12,7 @@ browser-cli --help
 browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow form_interaction
 browser-cli auth status
 browser-cli auth login
 browser-cli auth export-env
@@ -79,6 +80,15 @@ browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli session close --session-id <session_id>
+```
+
+For forms, read the dedicated workflow before choosing fields:
+
+```bash
+browser-cli commands --workflow form_interaction
+browser-cli action form-snapshot --session-id <session_id> --selector form
+browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 ```
 
 ## Persistent Login State

@@ -103,6 +103,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "connect_from_codex_auth",
     "one_off_page_task",
     "persistent_login_state",
+    "form_interaction",
 )
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
@@ -125,6 +126,15 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "dry_run_context_pick",
         "create_session_with_context",
         "close_session",
+    ),
+    "form_interaction": (
+        "inspect_form",
+        "fill_labeled_field",
+        "choose_labeled_option",
+        "check_labeled_control",
+        "wait_submit_ready",
+        "submit_form",
+        "verify_result",
     ),
 }
 COMMAND_ALIASES = {
@@ -453,6 +463,11 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
             ],
+            "form_interaction": [
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
+            ],
         },
         "agent_workflows": {
             "setup_and_verify": {
@@ -606,6 +621,83 @@ def _command_catalog() -> dict[str, Any]:
                         "id": "close_session",
                         "command": "browser-cli session close --session-id <session_id>",
                         "cleanup": True,
+                    },
+                ],
+            },
+            "form_interaction": {
+                "purpose": "Inspect, fill, submit, and verify a common web form without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_form",
+                        "command": "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                        "read": [
+                            "result.fields",
+                            "result.field_count",
+                            "result.visible_count",
+                            "result.truncated",
+                        ],
+                    },
+                    {
+                        "id": "fill_labeled_field",
+                        "command": 'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
+                        "read": [
+                            "result.found",
+                            "result.filled",
+                            "result.value_masked",
+                        ],
+                    },
+                    {
+                        "id": "choose_labeled_option",
+                        "command": 'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.selected",
+                            "result.option_found",
+                            "result.option_label",
+                        ],
+                    },
+                    {
+                        "id": "check_labeled_control",
+                        "command": 'browser-cli action check-label --session-id <session_id> --label "<label>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.checked",
+                            "result.changed",
+                        ],
+                    },
+                    {
+                        "id": "wait_submit_ready",
+                        "command": 'browser-cli action wait-role --session-id <session_id> --role button --name "<submit text>"',
+                        "read": [
+                            "result.found",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                    },
+                    {
+                        "id": "submit_form",
+                        "command": 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                        ],
+                    },
+                    {
+                        "id": "verify_result",
+                        "command": 'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                        "optional": True,
+                        "read": [
+                            "found",
+                            "url",
+                            "requested_url",
+                            "match",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main",
+                        ],
                     },
                 ],
             },

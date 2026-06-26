@@ -166,6 +166,16 @@ browser-cli action wait-selector --session-id <session_id> --selector <selector>
 browser-cli session close --session-id <session_id>
 ```
 
+For form tasks, prefer the more specific form workflow:
+
+```bash
+browser-cli commands --workflow form_interaction
+```
+
+Follow its `read` fields for `form-snapshot`, `fill-label`, `select-label`,
+`check-label`, `wait-role`, `click-role`, and verification steps before falling
+back to custom JavaScript.
+
 Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
@@ -242,6 +252,7 @@ browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
+browser-cli commands --workflow form_interaction
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session
@@ -465,7 +476,9 @@ For page work, choose actions in this order:
 
 Common task recipes:
 
-1. Fill and submit a form: run `form-snapshot` or `interactive-snapshot`, use
+1. Fill and submit a form: run
+   `browser-cli commands --workflow form_interaction`, then run
+   `form-snapshot` or `interactive-snapshot`, use
    `fill-label` for labeled fields, `set-value` for stable selectors, and
    `set-file-input` for upload controls; `clear` before replacement text when
    needed, use `get-value` or `wait-value` to confirm form state, use

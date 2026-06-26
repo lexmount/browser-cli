@@ -64,6 +64,7 @@ CLI for you:
 16. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约：
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow persistent_login_state
+   browser-cli commands --workflow form_interaction
 17. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
@@ -190,6 +191,7 @@ browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
+browser-cli commands --workflow form_interaction
 ```
 
 `commands` returns the current parser-backed command catalog, option metadata,
@@ -265,6 +267,7 @@ browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
+browser-cli commands --workflow form_interaction
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session
@@ -515,7 +518,8 @@ local reveal flag.
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`. Use `--names-only`
 for compact command discovery and `--group action` when choosing a browser
 action. Use `--workflows-only` when you only need the structured setup,
-Connect from Codex auth, one-off page task, and persistent login state workflows, or
+Connect from Codex auth, one-off page task, persistent login state, and form
+interaction workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,

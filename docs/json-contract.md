@@ -56,7 +56,7 @@ groups.
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
 `agent_workflows` describes ordered setup, Connect from Codex auth, one-off
-page, and persistent login state steps with `command`, `read`,
+page, persistent login state, and form interaction steps with `command`, `read`,
 `success_condition`, `on_failure_read`, and `cleanup` hints. Command entries may
 expose `aliases` on canonical commands plus `alias_of` and `canonical_name` on
 alias commands, so agents can map user-facing phrasing back to the preferred

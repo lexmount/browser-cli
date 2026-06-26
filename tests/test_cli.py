@@ -254,6 +254,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
     assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][0]
+    assert (
+        "browser-cli action form-snapshot --session-id <session_id> --selector form"
+        in payload["agent_entrypoints"]["form_interaction"]
+    )
     workflows = payload["agent_workflows"]
     assert workflows["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -293,6 +297,31 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "context_reuse.selection_summary.recommended_next_action"
         in (context_steps[1]["read"])
     )
+    form_steps = workflows["form_interaction"]["steps"]
+    assert [step["id"] for step in form_steps] == [
+        "inspect_form",
+        "fill_labeled_field",
+        "choose_labeled_option",
+        "check_labeled_control",
+        "wait_submit_ready",
+        "submit_form",
+        "verify_result",
+    ]
+    assert form_steps[0]["command"] == (
+        "browser-cli action form-snapshot --session-id <session_id> --selector form"
+    )
+    assert "result.fields" in form_steps[0]["read"]
+    assert "result.field_count" in form_steps[0]["read"]
+    assert "result.filled" in form_steps[1]["read"]
+    assert form_steps[2]["optional"] is True
+    assert "result.option_found" in form_steps[2]["read"]
+    assert form_steps[3]["optional"] is True
+    assert "result.checked" in form_steps[3]["read"]
+    assert "result.element" in form_steps[4]["read"]
+    assert "result.clicked" in form_steps[5]["read"]
+    assert form_steps[6]["optional"] is True
+    assert "found" in form_steps[6]["read"]
+    assert "browser-cli action wait-text" in form_steps[6]["fallback_commands"][0]
 
     for name in (
         "commands",
@@ -364,7 +393,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 4
+    assert payload["workflow_count"] == 5
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -389,6 +418,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "unusable_exports"
         in payload["agent_workflows"]["connect_from_codex_auth"]["steps"][2]["read"]
+    )
+    assert (
+        "result.filled"
+        in payload["agent_workflows"]["form_interaction"]["steps"][1]["read"]
     )
     assert "browser-cli auth login" in payload["agent_entrypoints"]["setup"]
     assert payload["json_output"]["always_json"] is True
@@ -420,6 +453,31 @@ def test_commands_catalog_returns_single_workflow(
     )
 
 
+def test_commands_catalog_returns_form_interaction_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "form_interaction"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "form_interaction"
+    assert "agent_workflows" not in payload
+    assert payload["workflow"]["steps"][0]["id"] == "inspect_form"
+    assert payload["workflow"]["steps"][0]["command"] == (
+        "browser-cli action form-snapshot --session-id <session_id> --selector form"
+    )
+    assert payload["workflow"]["steps"][1]["id"] == "fill_labeled_field"
+    assert "result.filled" in payload["workflow"]["steps"][1]["read"]
+    assert payload["workflow"]["steps"][-1]["id"] == "verify_result"
+    assert payload["workflow"]["steps"][-1]["optional"] is True
+    assert (
+        "browser-cli action form-snapshot"
+        in payload["agent_entrypoints"]["form_interaction"][0]
+    )
+
+
 def test_commands_catalog_fails_unknown_workflow_as_json(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -434,6 +492,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["workflow"] == "missing"
     assert payload["available_workflows"] == [
         "connect_from_codex_auth",
+        "form_interaction",
         "one_off_page_task",
         "persistent_login_state",
         "setup_and_verify",
@@ -590,12 +649,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 4
+    assert checks["command_catalog"]["workflow_count"] == 5
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
         "one_off_page_task",
         "persistent_login_state",
+        "form_interaction",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
     assert checks["command_catalog"]["required_workflow_steps"][
@@ -613,6 +673,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "open_url",
         "find_targets",
         "close_session",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["form_interaction"] == [
+        "inspect_form",
+        "fill_labeled_field",
+        "choose_labeled_option",
+        "check_labeled_control",
+        "wait_submit_ready",
+        "submit_form",
+        "verify_result",
     ]
     assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
     for command_name in (
@@ -696,6 +765,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "connect_from_codex_auth",
         "one_off_page_task",
         "persistent_login_state",
+        "form_interaction",
     ]
     assert catalog["missing_required_workflow_steps"] == {}
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
@@ -750,6 +820,17 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "dry_run_context_pick"},
                         {"id": "create_session_with_context"},
                         {"id": "close_session"},
+                    ],
+                },
+                "form_interaction": {
+                    "steps": [
+                        {"id": "inspect_form"},
+                        {"id": "fill_labeled_field"},
+                        {"id": "choose_labeled_option"},
+                        {"id": "check_labeled_control"},
+                        {"id": "wait_submit_ready"},
+                        {"id": "submit_form"},
+                        {"id": "verify_result"},
                     ],
                 },
             },

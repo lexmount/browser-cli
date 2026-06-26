@@ -156,6 +156,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
     assert "Connect from Codex auth" in text
+    assert "form interaction" in text
     assert "`workflow_id`" in text
     assert "`workflow`" in text
     assert "`available_workflows`" in text

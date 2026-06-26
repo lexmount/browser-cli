@@ -27,6 +27,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow connect_from_codex_auth" in text
     assert "browser-cli commands --workflow one_off_page_task" in text
     assert "browser-cli commands --workflow persistent_login_state" in text
+    assert "browser-cli commands --workflow form_interaction" in text
     assert "browser-cli commands --group action" in text
     assert "browser-cli commands --group action --names-only" in text
     assert "agent_workflows" in text
@@ -56,6 +57,8 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "selection_summary.decision_reason" in text
     assert "selection_summary.locked_matches" in text
     assert "would_create" in text
+    assert "browser-cli action form-snapshot" in text
+    assert "browser-cli action fill-label" in text
     assert "wait-role" in text
     assert "click-role" in text
     assert "page-info" in text
