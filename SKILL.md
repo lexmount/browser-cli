@@ -111,10 +111,11 @@ Parse command output as JSON. Check `ok` first, then inspect `command`,
 browser direct URLs are masked; use reveal flags only for local debugging.
 
 Run `browser-cli doctor --json` before browser work when setup may be stale. If
-`doctor` returns `ok: false`, follow its `next_steps` before creating sessions.
-Use `browser-cli doctor --smoke-session --json` only when onboarding or
-debugging session lifecycle issues; it creates and closes a temporary browser
-session.
+`decision.ready_for_browser_work` is not `true`, follow
+`decision.recommended_action`, `decision.next_command`, and `next_steps` before
+creating sessions. Use `browser-cli doctor --smoke-session --json` only when
+onboarding or debugging session lifecycle issues; it creates and closes a
+temporary browser session.
 
 For smoke-session checks:
 

@@ -18,6 +18,15 @@ def test_skill_prefers_plain_doctor_for_routine_checks() -> None:
     assert "browser-cli doctor --smoke-session --json" in normalized
 
 
+def test_skill_uses_doctor_decision_before_creating_sessions() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "`decision.ready_for_browser_work` is not `true`" in normalized
+    assert "`decision.recommended_action`" in normalized
+    assert "`decision.next_command`" in normalized
+    assert "before creating sessions" in normalized
+
+
 def test_skill_limits_smoke_session_to_lifecycle_verification() -> None:
     normalized = _normalized_skill_text()
 

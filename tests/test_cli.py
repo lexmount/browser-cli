@@ -68,6 +68,10 @@ def test_doctor_reports_missing_credentials_without_api_call(
     ]
     assert checks["api"]["ok"] is False
     assert checks["api"]["skipped"] is True
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["api_verified"] is False
+    assert payload["decision"]["recommended_action"] == "fix_configuration"
+    assert "credentials" in payload["decision"]["blocking_checks"]
 
 
 def test_doctor_success_checks_api_and_masks_direct_url(
@@ -99,6 +103,14 @@ def test_doctor_success_checks_api_and_masks_direct_url(
         "connect_url": "wss://api.lexmount.cn/connection?project_id=project&api_key=***",
         "masked": True,
     }
+    assert payload["decision"]["ready_for_browser_work"] is True
+    assert payload["decision"]["api_verified"] is True
+    assert payload["decision"]["blocking_checks"] == []
+    assert payload["decision"]["recommended_action"] in {
+        "continue",
+        "continue_with_warnings",
+    }
+    assert payload["decision"]["next_command"] == "browser-cli session create"
     assert "secret" not in output
 
 
@@ -126,6 +138,10 @@ def test_doctor_skip_api_does_not_fail_ready_configuration(
     checks = {check["name"]: check for check in payload["checks"]}
     assert checks["api"]["severity"] == "warning"
     assert checks["api"]["skipped"] is True
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["api_verified"] is False
+    assert payload["decision"]["recommended_action"] == "run_api_check"
+    assert payload["decision"]["next_command"] == "browser-cli doctor --json"
 
 
 def test_doctor_handles_missing_uv_as_warning(
@@ -173,6 +189,9 @@ def test_doctor_api_failure_is_structured(
     assert checks["api"]["ok"] is False
     assert checks["api"]["error"] == "RuntimeError"
     assert checks["api"]["exception_message"] == "network down"
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["recommended_action"] == "fix_api_access"
+    assert payload["decision"]["blocking_checks"] == ["api"]
 
 
 def test_doctor_session_smoke_creates_and_closes_session(
@@ -220,6 +239,8 @@ def test_doctor_session_smoke_creates_and_closes_session(
     payload = json.loads(output)
     checks = {check["name"]: check for check in payload["checks"]}
     assert checks["session-smoke"]["ok"] is True
+    assert payload["decision"]["session_smoke_requested"] is True
+    assert payload["decision"]["session_smoke_verified"] is True
     assert payload["session_smoke"] == {
         "browser_mode": "light",
         "created": True,
@@ -281,6 +302,9 @@ def test_doctor_session_smoke_reports_close_failure(
     payload = json.loads(capsys.readouterr().out)
     checks = {check["name"]: check for check in payload["checks"]}
     assert checks["session-smoke"]["ok"] is False
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["recommended_action"] == "fix_session_lifecycle"
+    assert payload["decision"]["blocking_checks"] == ["session-smoke"]
     assert payload["session_smoke"]["created"] is True
     assert payload["session_smoke"]["closed"] is False
     assert payload["session_smoke"]["close_error"] == {
@@ -315,6 +339,9 @@ def test_doctor_session_smoke_skips_without_credentials(
     payload = json.loads(capsys.readouterr().out)
     checks = {check["name"]: check for check in payload["checks"]}
     assert checks["session-smoke"]["ok"] is False
+    assert payload["decision"]["session_smoke_requested"] is True
+    assert payload["decision"]["session_smoke_verified"] is False
+    assert payload["decision"]["recommended_action"] == "fix_configuration"
     assert payload["session_smoke"] == {
         "skipped": True,
         "reason": "missing_credentials",

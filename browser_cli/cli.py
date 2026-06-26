@@ -233,6 +233,56 @@ def _doctor_status(checks: list[dict[str, Any]]) -> str:
     return "pass"
 
 
+def _doctor_decision(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    checks_by_name = {check["name"]: check for check in checks}
+    blocking_checks = [
+        check["name"]
+        for check in checks
+        if not check["ok"] and check["severity"] == "error"
+    ]
+    warning_checks = [
+        check["name"]
+        for check in checks
+        if not check["ok"] and check["severity"] == "warning"
+    ]
+    api_check = checks_by_name.get("api", {})
+    session_smoke_check = checks_by_name.get("session-smoke")
+    api_verified = bool(api_check.get("ok") and not api_check.get("skipped"))
+    session_smoke_requested = session_smoke_check is not None
+    session_smoke_verified = bool(session_smoke_check and session_smoke_check.get("ok"))
+    ready_for_browser_work = not blocking_checks and api_verified
+
+    recommended_action = "continue"
+    next_command = "browser-cli session create"
+    if blocking_checks:
+        next_command = "browser-cli doctor --json"
+        if "credentials" in blocking_checks or "direct-url" in blocking_checks:
+            recommended_action = "fix_configuration"
+        elif "api" in blocking_checks:
+            recommended_action = "fix_api_access"
+        elif "session-smoke" in blocking_checks:
+            recommended_action = "fix_session_lifecycle"
+            next_command = "browser-cli doctor --smoke-session --json"
+        else:
+            recommended_action = "fix_errors"
+    elif not api_verified:
+        recommended_action = "run_api_check"
+        next_command = "browser-cli doctor --json"
+    elif warning_checks:
+        recommended_action = "continue_with_warnings"
+
+    return {
+        "ready_for_browser_work": ready_for_browser_work,
+        "api_verified": api_verified,
+        "session_smoke_requested": session_smoke_requested,
+        "session_smoke_verified": session_smoke_verified,
+        "blocking_checks": blocking_checks,
+        "warning_checks": warning_checks,
+        "recommended_action": recommended_action,
+        "next_command": next_command,
+    }
+
+
 def _doctor_session_payload(session: Any) -> dict[str, Any]:
     payload = session.model_dump(mode="json")
     return {
@@ -508,6 +558,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "version": {"browser_cli": version},
         "configuration": {"environment": env_status},
         "checks": checks,
+        "decision": _doctor_decision(checks),
         "next_steps": next_steps,
     }
     if direct_url_payload is not None:

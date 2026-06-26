@@ -117,7 +117,9 @@ browser-cli doctor --smoke-session
 environment variables, direct websocket URL construction, and live Lexmount API
 reachability through a lightweight `session list` call. It exits with code `0`
 when required checks pass and `1` when credentials, configuration, or API access
-are not ready.
+are not ready. Agents should read the `decision` object before creating browser
+sessions; `decision.ready_for_browser_work: true` means the API was verified and
+there are no blocking checks.
 
 Use `doctor --smoke-session` when onboarding or debugging deeper failures. It
 creates a temporary `light` browser session and closes it immediately, proving
@@ -202,6 +204,14 @@ command-specific fields.
   "ok": true,
   "command": "doctor",
   "status": "pass",
+  "decision": {
+    "ready_for_browser_work": true,
+    "api_verified": true,
+    "blocking_checks": [],
+    "warning_checks": [],
+    "recommended_action": "continue",
+    "next_command": "browser-cli session create"
+  },
   "checks": []
 }
 ```
