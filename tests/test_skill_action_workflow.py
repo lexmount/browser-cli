@@ -126,6 +126,10 @@ def test_skill_documents_failure_payload_masking() -> None:
     assert "Failure messages and payloads mask `api_key`" in normalized
     assert "token-like query parameters" in normalized
     assert "the current `LEXMOUNT_API_KEY` value" in normalized
+    assert "fields that look like password, token, credential, secret" in normalized
+    assert "`requested_value_masked`" in normalized
+    assert "`text_masked`" in normalized
+    assert "do not ask the user to paste the real value into chat" in normalized
 
 
 def test_skill_lists_selector_and_input_actions() -> None:

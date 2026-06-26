@@ -315,6 +315,12 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
 `target_info`, `modifiers`, `events`, `keydown_accepted`, and `navigation_requested`
 before assuming the page changed.
+For DOM/form actions, fields that look like password, token, credential, secret,
+authorization, or API-key controls are masked by default. If `value`,
+`previous_value`, `requested_value`, or `text` is `***`, inspect
+`value_masked`, `previous_value_masked`, `requested_value_masked`,
+`text_masked`, and related `*_length` fields; do not ask the user to paste the
+real value into chat.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
 `body_text_length`, `html_length`, `language`, and `referrer` before taking a
 larger `snapshot`.

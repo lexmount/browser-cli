@@ -349,6 +349,12 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
 `target_info`, `modifiers`, `events`, `keydown_accepted`, or
 `navigation_requested` from `result`.
+For DOM/form actions, values from fields that look like password, token,
+credential, secret, authorization, or API-key controls are masked by default.
+When `value`, `previous_value`, `requested_value`, or `text` is `***`, inspect
+`value_masked`, `previous_value_masked`, `requested_value_masked`,
+`text_masked`, and related `*_length` fields before deciding whether the page
+state is correct.
 
 Each action must receive exactly one browser target:
 

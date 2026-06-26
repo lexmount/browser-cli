@@ -59,6 +59,12 @@ Default behavior:
   `api_key`.
 - Diagnostic and auth commands should report whether credentials exist without
   printing secret values by default.
+- Eval-backed DOM/form actions that inspect, snapshot, read, wait for, set, fill,
+  or clear values mask sensitive fields by default when the element looks like a
+  password, token, credential, secret, authorization, or API-key field. Parse
+  `value_masked`, `previous_value_masked`, `requested_value_masked`,
+  `text_masked`, and related `*_length` fields to tell whether `***` represents
+  a hidden value rather than the literal page value.
 - `auth status`, `auth token-info`, `auth refresh`, `auth logout`, and `doctor`
   may report local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh

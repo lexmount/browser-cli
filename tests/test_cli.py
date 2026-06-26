@@ -3473,6 +3473,152 @@ def test_eval_backed_action_reports_missing_selector(
     assert payload["result"] == {"found": False, "url": "https://example.test"}
 
 
+def test_action_dom_snapshots_mask_sensitive_accessible_names(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "interactive", "nodes": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "interactive-snapshot", "--session-id", "s1"])
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "sensitiveNamePattern" in expression
+    assert "maskValue(element, element.value)" in expression
+    assert "valueNameOf(element)" in expression
+    assert "element.value ||" not in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.interactive-snapshot"
+
+
+@pytest.mark.parametrize(
+    ("argv", "snippets"),
+    [
+        (
+            ["action", "get-value", "--session-id", "s1", "--selector", "#password"],
+            ["publicValue(element, readFormValue(element))", "value_masked"],
+        ),
+        (
+            [
+                "action",
+                "wait-value",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=password]",
+                "--value",
+                "fake-secret",
+            ],
+            ["publicRequestedValue(element, requestedValue)", "requested_value_masked"],
+        ),
+        (
+            [
+                "action",
+                "set-value",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=api_key]",
+                "--value",
+                "fake-secret",
+            ],
+            ["previous_value_masked", "requested_value_masked", "value_masked"],
+        ),
+        (
+            ["action", "clear", "--session-id", "s1", "--selector", "#token"],
+            ["previous_value_masked", "value_masked"],
+        ),
+        (
+            [
+                "action",
+                "fill-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Password",
+                "--text",
+                "fake-secret",
+            ],
+            ["text_masked", "previous_value_masked", "value_masked"],
+        ),
+        (
+            [
+                "action",
+                "inspect",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=token]",
+                "--include-html",
+            ],
+            ["sensitiveElement(element) && !revealSensitiveValues", "value_masked"],
+        ),
+        (
+            [
+                "action",
+                "form-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "form",
+            ],
+            ["const sensitive = sensitiveElement(field)", "value_masked"],
+        ),
+    ],
+)
+def test_sensitive_value_action_expressions_emit_masking_metadata(
+    argv: list[str],
+    snippets: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"found": True}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "sensitiveNamePattern" in expression
+    for snippet in snippets:
+        assert snippet in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+
+
 @pytest.mark.parametrize(
     ("argv", "command", "value", "expected_result"),
     [

@@ -1717,6 +1717,51 @@ def _selector_expression(selector: str, body: str) -> str:
 """.strip()
 
 
+def _sensitive_value_helpers_expression() -> str:
+    return """
+  const sensitiveNamePattern =
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token/i;
+  const sensitiveText = (value) => sensitiveNamePattern.test(String(value ?? ""));
+  const sensitiveElement = (element) => {
+    const tag = element.tagName.toLowerCase();
+    const type = String(element.getAttribute("type") || "").toLowerCase();
+    if (tag === "input" && ["password", "hidden", "file"].includes(type)) {
+      return true;
+    }
+    return [
+      "name",
+      "id",
+      "autocomplete",
+      "aria-label",
+      "placeholder",
+      "title",
+      "data-testid",
+      "data-test",
+      "data-cy"
+    ].some((attribute) => sensitiveNamePattern.test(element.getAttribute(attribute) || ""));
+  };
+  const shouldMaskValue = (element, value) =>
+    sensitiveElement(element) && String(value ?? "") !== "";
+  const maskValue = (element, value) => shouldMaskValue(element, value) ? "***" : value;
+  const publicRequestedValue = (element, value) => {
+    const masked = shouldMaskValue(element, value);
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+  const publicSelectorRequestedValue = (selector, value) => {
+    const masked = sensitiveText(selector) && String(value ?? "") !== "";
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+""".rstrip()
+
+
 def _event_expression(selector: str, body: str) -> str:
     return _selector_expression(
         selector,
@@ -1736,6 +1781,8 @@ def _dom_helpers_expression(
     return f"""
   const includeHidden = {_js_literal(include_hidden)};
   const maxNodes = {max_nodes_source};
+  const sensitiveNamePattern =
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token/i;
   const interactiveSelector = [
     "a[href]",
     "button",
@@ -1750,6 +1797,28 @@ def _dom_helpers_expression(
   ].join(",");
 
   const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const sensitiveText = (value) => sensitiveNamePattern.test(String(value ?? ""));
+  const sensitiveElement = (element) => {{
+    const tag = element.tagName.toLowerCase();
+    const type = String(element.getAttribute("type") || "").toLowerCase();
+    if (tag === "input" && ["password", "hidden", "file"].includes(type)) {{
+      return true;
+    }}
+    return [
+      "name",
+      "id",
+      "autocomplete",
+      "aria-label",
+      "placeholder",
+      "title",
+      "data-testid",
+      "data-test",
+      "data-cy"
+    ].some((attribute) => sensitiveNamePattern.test(element.getAttribute(attribute) || ""));
+  }};
+  const shouldMaskValue = (element, value) =>
+    sensitiveElement(element) && String(value ?? "") !== "";
+  const maskValue = (element, value) => shouldMaskValue(element, value) ? "***" : value;
   const visible = (element) => {{
     if (includeHidden) return true;
     const style = window.getComputedStyle(element);
@@ -1766,7 +1835,12 @@ def _dom_helpers_expression(
       element.getClientRects().length
     );
   }};
-  const textOf = (element) => normalize(element.innerText ?? element.textContent ?? "");
+  const rawTextOf = (element) => normalize(element.innerText ?? element.textContent ?? "");
+  const textOf = (element) => maskValue(element, rawTextOf(element));
+  const valueNameOf = (element) => {{
+    if (!("value" in element)) return "";
+    return normalize(maskValue(element, element.value));
+  }};
   const nameFromLabelledBy = (element) => {{
     const labelledBy = element.getAttribute("aria-labelledby");
     if (!labelledBy) return "";
@@ -1783,7 +1857,7 @@ def _dom_helpers_expression(
     element.getAttribute("alt") ||
     element.getAttribute("title") ||
     element.getAttribute("placeholder") ||
-    element.value ||
+    valueNameOf(element) ||
     textOf(element)
   );
   const roleOf = (element) => {{
@@ -1978,13 +2052,22 @@ def _fill_label_expression(
 {_label_control_helpers_expression()}
   const requestedLabel = {_js_literal(label)};
   const text = {_js_literal(text)};
+  const labelSuggestsSensitive = sensitiveText(requestedLabel);
+  const labelSafeText = labelSuggestsSensitive && text !== "" ? "***" : text;
   const exact = {_js_literal(exact)};
   const caseSensitive = {_js_literal(case_sensitive)};
   const fieldSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true']";
   const match = findFieldByLabel(requestedLabel, exact, caseSensitive, fieldSelector);
   const element = match.element;
   if (!element) {{
-    return {{ found: false, filled: false, label: requestedLabel, text }};
+    return {{
+      found: false,
+      filled: false,
+      label: requestedLabel,
+      text: labelSafeText,
+      text_masked: labelSafeText !== text,
+      text_length: labelSafeText !== text ? String(text ?? "").length : null
+    }};
   }}
   const previousValue = element.isContentEditable ? element.textContent : element.value;
   if (element.isContentEditable) {{
@@ -1998,9 +2081,25 @@ def _fill_label_expression(
     found: true,
     filled: true,
     label: requestedLabel,
-    text,
-    previous_value: previousValue,
-    value: element.isContentEditable ? element.textContent : element.value,
+    text: maskValue(element, text),
+    text_masked: shouldMaskValue(element, text),
+    text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_masked: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_length: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    )
+      ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
+      : null,
     label_element: match.label_element,
     element: nodeInfo(element)
   }};
@@ -2261,7 +2360,8 @@ def _form_snapshot_expression(
   }};
   const optionsOf = (field) => field.tagName.toLowerCase() === "select"
     ? [...field.options].map((option) => ({{
-        value: option.value,
+        value: sensitiveElement(field) && option.value !== "" ? "***" : option.value,
+        value_masked: sensitiveElement(field) && option.value !== "",
         text: textOf(option),
         selected: Boolean(option.selected),
         disabled: Boolean(option.disabled)
@@ -2272,7 +2372,7 @@ def _form_snapshot_expression(
     const tag = field.tagName.toLowerCase();
     const type = String(field.getAttribute("type") || "").toLowerCase();
     const rawValue = readFormValue(field);
-    const sensitive = tag === "input" && (type === "password" || type === "hidden");
+    const sensitive = sensitiveElement(field);
     const valuePayload = sensitive && !revealSensitiveValues
       ? {{
           ...rawValue,
@@ -2826,15 +2926,14 @@ def _inspect_expression(
   }}
   const tag = element.tagName.toLowerCase();
   const type = String(element.getAttribute("type") || "").toLowerCase();
-  const sensitiveField = tag === "input" && ["password", "hidden"].includes(type);
   const sensitiveAttributeName = (name) =>
-    /api[-_]?key|authorization|password|secret|token/i.test(String(name || ""));
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token/i.test(String(name || ""));
   const valuePayload = () => {{
     if (!("value" in element) && !element.isContentEditable) {{
       return {{ value: null, value_masked: false, value_length: null }};
     }}
     const raw = readFormValue(element);
-    if (sensitiveField && !revealSensitiveValues) {{
+    if (sensitiveElement(element) && !revealSensitiveValues) {{
       const value = raw.value === null || raw.value === "" ? raw.value : "***";
       return {{
         ...raw,
@@ -2848,7 +2947,7 @@ def _inspect_expression(
   const attributeValue = (attribute) => {{
     if (!revealSensitiveValues && (
       sensitiveAttributeName(attribute.name) ||
-      (sensitiveField && attribute.name.toLowerCase() === "value")
+      (sensitiveElement(element) && attribute.name.toLowerCase() === "value")
     )) {{
       return attribute.value === "" ? "" : "***";
     }}
@@ -2862,13 +2961,15 @@ def _inspect_expression(
   );
   const selectedOptions = "selectedOptions" in element
     ? [...element.selectedOptions].map((option) => ({{
-        value: option.value,
+        value: sensitiveElement(element) && option.value !== "" ? "***" : option.value,
+        value_masked: sensitiveElement(element) && option.value !== "",
         text: textOf(option)
       }}))
     : null;
   const options = tag === "select"
     ? [...element.options].slice(0, 50).map((option) => ({{
-        value: option.value,
+        value: sensitiveElement(element) && option.value !== "" ? "***" : option.value,
+        value_masked: sensitiveElement(element) && option.value !== "",
         text: textOf(option),
         selected: Boolean(option.selected),
         disabled: Boolean(option.disabled)
@@ -2887,9 +2988,7 @@ def _inspect_expression(
     const clone = root.cloneNode(true);
     const nodes = [clone, ...clone.querySelectorAll("*")];
     for (const node of nodes) {{
-      const nodeTag = node.tagName.toLowerCase();
-      const nodeType = String(node.getAttribute("type") || "").toLowerCase();
-      const nodeSensitive = nodeTag === "input" && ["password", "hidden"].includes(nodeType);
+      const nodeSensitive = sensitiveElement(node);
       for (const attribute of [...node.attributes]) {{
         if (
           sensitiveAttributeName(attribute.name) ||
@@ -3407,6 +3506,51 @@ def _form_value_helpers_expression() -> str:
   const formValueText = (currentValue) => Array.isArray(currentValue)
     ? currentValue.join(",")
     : String(currentValue ?? "");
+  const hasPrintableValue = (value) => Array.isArray(value)
+    ? value.some((item) => String(item ?? "") !== "")
+    : String(value ?? "") !== "";
+  const maskedPublicValue = (value) => Array.isArray(value)
+    ? value.map((item) => String(item ?? "") === "" ? item : "***")
+    : (String(value ?? "") === "" ? value : "***");
+  const valueLength = (value) => Array.isArray(value)
+    ? value.map((item) => String(item ?? "").length)
+    : String(value ?? "").length;
+  const publicValue = (node, state) => {
+    const masked = sensitiveElement(node) && hasPrintableValue(state.value);
+    if (!masked) {
+      return { ...state, value_masked: false };
+    }
+    const selectedOptions = Array.isArray(state.selected_options)
+      ? state.selected_options.map((option) => ({
+          ...option,
+          value: String(option.value ?? "") === "" ? option.value : "***",
+          value_masked: String(option.value ?? "") !== ""
+        }))
+      : state.selected_options;
+    return {
+      ...state,
+      value: maskedPublicValue(state.value),
+      selected_options: selectedOptions,
+      value_masked: true,
+      value_length: valueLength(state.value)
+    };
+  };
+  const publicRequestedValue = (node, value) => {
+    const masked = shouldMaskValue(node, value);
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+  const publicSelectorRequestedValue = (selector, value) => {
+    const masked = sensitiveText(selector) && String(value ?? "") !== "";
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
 """.rstrip()
 
 
@@ -3423,7 +3567,7 @@ def _get_value_expression(selector: str) -> str:
   return {{
     selector,
     found: true,
-    ...readFormValue(element),
+    ...publicValue(element, readFormValue(element)),
     element: nodeInfo(element)
   }};
 }}
@@ -3445,6 +3589,7 @@ def _wait_value_expression(
 {_form_value_helpers_expression()}
   const selector = {_js_literal(selector)};
   const requestedValue = {_js_literal(value)};
+  const selectorRequestedValue = publicSelectorRequestedValue(selector, requestedValue);
   const matchMode = {_js_literal(match)};
   const caseSensitive = {_js_literal(case_sensitive)};
   const startedAt = Date.now();
@@ -3460,7 +3605,9 @@ def _wait_value_expression(
         found: false,
         selector_found: Boolean(document.querySelector(selector)),
         value: null,
-        requested_value: requestedValue,
+        requested_value: selectorRequestedValue.value,
+        requested_value_masked: selectorRequestedValue.value_masked,
+        requested_value_length: selectorRequestedValue.value_length,
         match: matchMode,
         waited_ms: 0,
         error: "invalid_regex",
@@ -3491,7 +3638,9 @@ def _wait_value_expression(
           found: false,
           selector_found: false,
           value: null,
-          requested_value: requestedValue,
+          requested_value: selectorRequestedValue.value,
+          requested_value_masked: selectorRequestedValue.value_masked,
+          requested_value_length: selectorRequestedValue.value_length,
           match: matchMode,
           waited_ms: waitedMs
         }});
@@ -3501,13 +3650,17 @@ def _wait_value_expression(
       return;
     }}
     const state = readFormValue(element);
+    const outputState = publicValue(element, state);
+    const outputRequestedValue = publicRequestedValue(element, requestedValue);
     if (!state.readable) {{
       resolve({{
         selector,
         found: false,
         selector_found: true,
-        ...state,
-        requested_value: requestedValue,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
         match: matchMode,
         waited_ms: waitedMs,
         element: nodeInfo(element)
@@ -3519,8 +3672,10 @@ def _wait_value_expression(
         selector,
         found: true,
         selector_found: true,
-        ...state,
-        requested_value: requestedValue,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
         match: matchMode,
         waited_ms: waitedMs,
         element: nodeInfo(element)
@@ -3532,8 +3687,10 @@ def _wait_value_expression(
         selector,
         found: false,
         selector_found: true,
-        ...state,
-        requested_value: requestedValue,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
         match: matchMode,
         waited_ms: waitedMs,
         element: nodeInfo(element)
@@ -4278,7 +4435,9 @@ def _wait_cookie_expression(
 def _clear_expression(selector: str) -> str:
     return _event_expression(
         selector,
-        """
+        _sensitive_value_helpers_expression()
+        + "\n"
+        + """
   const previousValue = element.isContentEditable
     ? element.textContent
     : ("value" in element ? element.value : null);
@@ -4292,7 +4451,8 @@ def _clear_expression(selector: str) -> str:
       found: true,
       clearable: false,
       cleared: false,
-      previous_value: previousValue,
+      previous_value: maskValue(element, previousValue),
+      previous_value_masked: shouldMaskValue(element, previousValue),
       value: null
     };
   }
@@ -4304,8 +4464,11 @@ def _clear_expression(selector: str) -> str:
     found: true,
     clearable: true,
     cleared: value === "",
-    previous_value: previousValue,
-    value
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, value),
+    value_masked: shouldMaskValue(element, value),
+    value_length: shouldMaskValue(element, value) ? String(value ?? "").length : null
   };
 """.rstrip(),
     )
@@ -4314,8 +4477,11 @@ def _clear_expression(selector: str) -> str:
 def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -> str:
     return _event_expression(
         selector,
-        f"""
+        _sensitive_value_helpers_expression()
+        + "\n"
+        + f"""
   const requestedValue = {_js_literal(value)};
+  const selectorRequestedValue = publicSelectorRequestedValue(selector, requestedValue);
   const previousValue = element.isContentEditable
     ? element.textContent
     : ("value" in element ? element.value : null);
@@ -4329,9 +4495,12 @@ def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -
       found: true,
       writable: false,
       set: false,
-      previous_value: previousValue,
+      previous_value: maskValue(element, previousValue),
+      previous_value_masked: shouldMaskValue(element, previousValue),
       value: null,
-      requested_value: requestedValue,
+      requested_value: selectorRequestedValue.value,
+      requested_value_masked: selectorRequestedValue.value_masked,
+      requested_value_length: selectorRequestedValue.value_length,
       dispatched_events: []
     }};
   }}
@@ -4343,14 +4512,22 @@ def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -
     }}
   }}
   const currentValue = element.isContentEditable ? element.textContent : element.value;
+  const outputRequestedValue = publicRequestedValue(element, requestedValue);
   return {{
     selector,
     found: true,
     writable: true,
     set: currentValue === requestedValue,
-    previous_value: previousValue,
-    value: currentValue,
-    requested_value: requestedValue,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, currentValue),
+    value_masked: shouldMaskValue(element, currentValue),
+    value_length: shouldMaskValue(element, currentValue)
+      ? String(currentValue ?? "").length
+      : null,
+    requested_value: outputRequestedValue.value,
+    requested_value_masked: outputRequestedValue.value_masked,
+    requested_value_length: outputRequestedValue.value_length,
     dispatched_events: dispatchedEvents
   }};
 """.rstrip(),
