@@ -97,6 +97,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "parse `available`, `reason`, `device_code.required_endpoints`" in normalized
     assert "manual env fallback" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
+    assert "Check top-level `usable` and `unusable_exports`" in normalized
     assert "`auth status` reports `auth_source`, `runtime_auth_usable`" in normalized
     assert "When env credentials are incomplete, read `missing_env`" in normalized
     assert "and the `fix` object instead of inventing setup steps" in normalized

@@ -73,7 +73,8 @@ manual env fallback.
 
 `auth export-env` prints placeholders by default. With `--from-current`, it
 still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
-a trusted local terminal.
+a trusted local terminal. Check top-level `usable` and `unusable_exports` before
+treating returned `commands` as directly runnable.
 
 `auth status` reports `auth_source`, `runtime_auth_usable`, and safe
 `device_token` metadata when a local scoped-token credentials file exists or

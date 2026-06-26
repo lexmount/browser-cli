@@ -9868,19 +9868,27 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
         and api_key_source == "env"
         and api_key not in {"<api-key>", "<redacted-api-key>"}
     )
+    unusable_exports = [
+        str(entry["name"]) for entry in entries if not bool(entry.get("usable"))
+    ]
+    next_steps = [
+        "Run the export commands in the local shell."
+        if not unusable_exports
+        else "Replace placeholder or redacted export values before running the commands in the local shell.",
+        f"Run `{AGENT_DOCTOR_COMMAND}` to verify credentials.",
+    ]
     _success(
         command,
         shell=args.shell,
         from_current=args.from_current,
         secrets_revealed=secrets_revealed,
+        usable=not unusable_exports,
+        unusable_exports=unusable_exports,
         warnings=warnings,
         exports=entries,
         commands=commands,
         script="\n".join(commands),
-        next_steps=[
-            "Run the export commands in the local shell.",
-            f"Run `{AGENT_DOCTOR_COMMAND}` to verify credentials.",
-        ],
+        next_steps=next_steps,
     )
 
 

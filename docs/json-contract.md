@@ -116,6 +116,9 @@ Default behavior:
 - When env API-key credentials are incomplete, `auth status` reports
   `missing_env` plus a `fix` object with safe Connect from Codex setup commands
   and no API key values.
+- `auth export-env` reports top-level `usable` and `unusable_exports` so agents
+  can distinguish directly runnable export commands from placeholder or masked
+  commands.
 - `auth refresh` may report `refresh_needed`, `has_refresh_token`,
   `refresh_available`, `refreshed`, and `reason`, but must not print token
   values. Until the remote refresh endpoint exists, it reports

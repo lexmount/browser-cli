@@ -1836,6 +1836,11 @@ def test_auth_export_env_emits_safe_placeholders(
     assert payload["command"] == "auth.export-env"
     assert payload["shell"] == "posix"
     assert payload["secrets_revealed"] is False
+    assert payload["usable"] is False
+    assert payload["unusable_exports"] == [
+        "LEXMOUNT_API_KEY",
+        "LEXMOUNT_PROJECT_ID",
+    ]
     assert payload["warnings"] == []
     assert payload["commands"] == [
         "export LEXMOUNT_API_KEY='<api-key>'",
@@ -1843,6 +1848,7 @@ def test_auth_export_env_emits_safe_placeholders(
     ]
     assert payload["exports"][0]["usable"] is False
     assert payload["exports"][1]["usable"] is False
+    assert "Replace placeholder or redacted export values" in payload["next_steps"][0]
     assert payload["next_steps"][-1] == (
         "Run `browser-cli doctor --json` to verify credentials."
     )
@@ -1879,6 +1885,9 @@ def test_auth_export_env_from_current_masks_api_key_by_default(
         "export LEXMOUNT_REGION=cn",
     ]
     assert payload["warnings"]
+    assert payload["usable"] is False
+    assert payload["unusable_exports"] == ["LEXMOUNT_API_KEY"]
+    assert "Replace placeholder or redacted export values" in payload["next_steps"][0]
     assert payload["exports"][0]["source"] == "env"
     assert payload["exports"][0]["usable"] is False
     assert payload["exports"][1]["source"] == "env"
@@ -1898,6 +1907,9 @@ def test_auth_export_env_can_reveal_current_secret_explicitly(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["secrets_revealed"] is True
+    assert payload["usable"] is True
+    assert payload["unusable_exports"] == []
+    assert payload["next_steps"][0] == "Run the export commands in the local shell."
     assert payload["warnings"] == []
     assert "local-secret" in payload["script"]
     assert payload["exports"][0]["usable"] is True
