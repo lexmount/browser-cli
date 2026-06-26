@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, click, type, screenshot, evaluate JavaScript, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors or URLs, click, type, focus, clear, submit forms, navigate history, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -88,12 +88,19 @@ browser-cli action type --session-id <session_id> --selector "input[name=q]" --t
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action reload --session-id <session_id>
+browser-cli action go-back --session-id <session_id>
+browser-cli action go-forward --session-id <session_id>
+browser-cli action wait-url --session-id <session_id> --url /dashboard
 browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button"
 browser-cli action count --session-id <session_id> --selector ".item"
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
+browser-cli action focus --session-id <session_id> --selector "input[name=q]"
+browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
@@ -107,13 +114,15 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-Prefer these built-in actions over writing custom JavaScript. `get-text`,
-`exists`, `count`, `query`, `get-attribute`, `wait-text`, `scroll`,
+Prefer these built-in actions over writing custom JavaScript. `reload`,
+`go-back`, `go-forward`, `wait-url`, `get-text`, `exists`, `count`, `query`,
+`get-attribute`, `wait-text`, `focus`, `clear`, `submit`, `scroll`,
 `select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`,
-`click-role`, `fill-label`, `accessibility-snapshot`, and `interactive-snapshot`
-are DOM/eval backed, so always parse their structured `result` fields such as
-`found`, `exists`, `count`, `checked`, `selected`, `clicked`, `filled`,
-`hovered`, and `pressed` before assuming the page changed.
+`click-role`, `fill-label`, `accessibility-snapshot`, and
+`interactive-snapshot` are DOM/eval backed, so always parse their structured
+`result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
+`clicked`, `filled`, `focused`, `cleared`, `submitted`, `hovered`, `pressed`,
+and `navigation_requested` before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -122,28 +131,32 @@ For page work, choose actions in this order:
 2. Prefer semantic actions: `click-role` for known roles/names, `click-text` for
    visible text, and `fill-label` for labeled form fields.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
-   `query`, `get-attribute`, `wait-text`, `get-text`,
-   `wait-selector`, `click`, `type`, `select-option`, `check`, and `uncheck`.
-4. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
-5. Use `eval` only for page-local work not covered by a first-class action, and
+   `query`, `get-attribute`, `wait-text`, `get-text`, `wait-selector`, `click`,
+   `type`, `focus`, `clear`, `submit`, `select-option`, `check`, and `uncheck`.
+4. Use `reload`, `go-back`, `go-forward`, and `wait-url` for navigation flows.
+5. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
+6. Use `eval` only for page-local work not covered by a first-class action, and
    keep the expression small.
-6. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
+7. If `result.found`, `result.exists`, `result.clicked`, or `result.filled` is
    false, inspect again before trying a different action.
 
 Common task recipes:
 
 1. Fill and submit a form: run `interactive-snapshot`, use `fill-label` for
-   labeled fields, use `select-option` or `check` for controls, then submit with
+   labeled fields, `clear` before replacement text when needed, use
+   `select-option` or `check` for controls, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: prefer `click-role`, then `click-text`, then
    selector `click` after `exists` confirms a stable selector.
-3. Open menus or keyboard flows: use `hover` for menus, `press` for shortcuts or
-   Enter/Escape, then inspect again with `interactive-snapshot`.
-4. Read page results: use `get-text` for a known selector; use `snapshot` when
+3. Navigate page history: use `reload`, `go-back`, or `go-forward`, then confirm
+   with `wait-url`, `wait-text`, or `snapshot`.
+4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
+   shortcuts or Enter/Escape, then inspect again with `interactive-snapshot`.
+5. Read page results: use `get-text` for a known selector; use `snapshot` when
    the page structure or selector is unknown; use `wait-text` before reading
    dynamic results.
-5. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`.
-6. Capture final evidence: use `screenshot` after the action sequence and close
+6. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`.
+7. Capture final evidence: use `screenshot` after the action sequence and close
    the session unless the user asks to keep it open.
 
 Each action must use exactly one target:

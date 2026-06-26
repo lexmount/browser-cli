@@ -1080,6 +1080,222 @@ def test_third_batch_eval_backed_action_commands_emit_structured_results(
     }
 
 
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            ["action", "reload", "--session-id", "s1"],
+            "action.reload",
+            {
+                "action": "reload",
+                "navigation_requested": True,
+                "reloaded": True,
+                "before_url": "https://example.test",
+            },
+            {
+                "action": "reload",
+                "navigation_requested": True,
+                "reloaded": True,
+                "before_url": "https://example.test",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            ["action", "go-back", "--session-id", "s1"],
+            "action.go-back",
+            {
+                "action": "back",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page2",
+                "history_length": 2,
+            },
+            {
+                "action": "back",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page2",
+                "history_length": 2,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            ["action", "go-forward", "--session-id", "s1"],
+            "action.go-forward",
+            {
+                "action": "forward",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page1",
+                "history_length": 2,
+            },
+            {
+                "action": "forward",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page1",
+                "history_length": 2,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-url",
+                "--session-id",
+                "s1",
+                "--url",
+                "/dashboard",
+                "--match",
+                "contains",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-url",
+            {
+                "found": True,
+                "requested_url": "/dashboard",
+                "match": "contains",
+                "waited_ms": 50,
+            },
+            {
+                "found": True,
+                "requested_url": "/dashboard",
+                "match": "contains",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "focus",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+                "--prevent-scroll",
+            ],
+            "action.focus",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "prevent_scroll": True,
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "prevent_scroll": True,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            ["action", "clear", "--session-id", "s1", "--selector", "input[name=q]"],
+            "action.clear",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "clearable": True,
+                "cleared": True,
+                "previous_value": "query",
+                "value": "",
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "clearable": True,
+                "cleared": True,
+                "previous_value": "query",
+                "value": "",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "submit",
+                "--session-id",
+                "s1",
+                "--selector",
+                "form",
+                "--skip-validation",
+            ],
+            "action.submit",
+            {
+                "selector": "form",
+                "found": True,
+                "form_found": True,
+                "submitted": True,
+                "skip_validation": True,
+                "used_request_submit": False,
+            },
+            {
+                "selector": "form",
+                "found": True,
+                "form_found": True,
+                "submitted": True,
+                "skip_validation": True,
+                "used_request_submit": False,
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_navigation_and_form_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
 def test_direct_url_can_reveal_secret_explicitly(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

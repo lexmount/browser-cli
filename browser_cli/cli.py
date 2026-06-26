@@ -707,6 +707,216 @@ def _query_expression(
 """.strip()
 
 
+def _reload_expression() -> str:
+    return """
+() => {
+  const beforeUrl = location.href;
+  const beforeTitle = document.title;
+  setTimeout(() => window.location.reload(), 0);
+  return {
+    action: "reload",
+    navigation_requested: true,
+    reloaded: true,
+    before_url: beforeUrl,
+    url: beforeUrl,
+    title: beforeTitle
+  };
+}
+""".strip()
+
+
+def _history_expression(action: str) -> str:
+    method = "back" if action == "back" else "forward"
+    return f"""
+() => {{
+  const beforeUrl = location.href;
+  const beforeTitle = document.title;
+  const historyLength = history.length;
+  setTimeout(() => history.{method}(), 0);
+  return {{
+    action: {_js_literal(action)},
+    navigation_requested: true,
+    before_url: beforeUrl,
+    url: beforeUrl,
+    title: beforeTitle,
+    history_length: historyLength
+  }};
+}}
+""".strip()
+
+
+def _wait_url_expression(
+    *,
+    url: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const requestedUrl = {_js_literal(url)};
+  const matchMode = {_js_literal(match)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedUrl);
+    }} catch (error) {{
+      resolve({{
+        found: false,
+        url: location.href,
+        requested_url: requestedUrl,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (candidate) => {{
+    if (matchMode === "exact") return candidate === requestedUrl;
+    if (matchMode === "regex") return pattern.test(candidate);
+    return candidate.includes(requestedUrl);
+  }};
+  const check = () => {{
+    const currentUrl = location.href;
+    const waitedMs = Date.now() - startedAt;
+    if (matches(currentUrl)) {{
+      resolve({{
+        found: true,
+        url: currentUrl,
+        requested_url: requestedUrl,
+        match: matchMode,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        url: currentUrl,
+        requested_url: requestedUrl,
+        match: matchMode,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _focus_expression(*, selector: str, prevent_scroll: bool) -> str:
+    return _selector_expression(
+        selector,
+        f"""
+  element.focus({{ preventScroll: {_js_literal(prevent_scroll)} }});
+  return {{
+    selector,
+    found: true,
+    focused: document.activeElement === element,
+    prevent_scroll: {_js_literal(prevent_scroll)}
+  }};
+""".rstrip(),
+    )
+
+
+def _clear_expression(selector: str) -> str:
+    return _event_expression(
+        selector,
+        """
+  const previousValue = element.isContentEditable
+    ? element.textContent
+    : ("value" in element ? element.value : null);
+  if (element.isContentEditable) {
+    element.textContent = "";
+  } else if ("value" in element) {
+    element.value = "";
+  } else {
+    return {
+      selector,
+      found: true,
+      clearable: false,
+      cleared: false,
+      previous_value: previousValue,
+      value: null
+    };
+  }
+  dispatch(new Event("input", { bubbles: true }));
+  dispatch(new Event("change", { bubbles: true }));
+  const value = element.isContentEditable ? element.textContent : element.value;
+  return {
+    selector,
+    found: true,
+    clearable: true,
+    cleared: value === "",
+    previous_value: previousValue,
+    value
+  };
+""".rstrip(),
+    )
+
+
+def _submit_expression(*, selector: str, skip_validation: bool) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const skipValidation = {_js_literal(skip_validation)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false, form_found: false, submitted: false }};
+  }}
+  const form = element.matches("form") ? element : element.closest("form");
+  if (!form) {{
+    return {{
+      selector,
+      found: true,
+      form_found: false,
+      submitted: false,
+      element: nodeInfo(element)
+    }};
+  }}
+  const nativeRequestSubmit = HTMLFormElement.prototype.requestSubmit;
+  const nativeSubmit = HTMLFormElement.prototype.submit;
+  const useRequestSubmit = !skipValidation && typeof nativeRequestSubmit === "function";
+  try {{
+    if (useRequestSubmit) {{
+      nativeRequestSubmit.call(form);
+    }} else {{
+      nativeSubmit.call(form);
+    }}
+  }} catch (error) {{
+    return {{
+      selector,
+      found: true,
+      form_found: true,
+      submitted: false,
+      skip_validation: skipValidation,
+      used_request_submit: useRequestSubmit,
+      error: String(error.name || "Error"),
+      message: String(error.message || error),
+      form: nodeInfo(form)
+    }};
+  }}
+  return {{
+    selector,
+    found: true,
+    form_found: true,
+    submitted: true,
+    skip_validation: skipValidation,
+    used_request_submit: useRequestSubmit,
+    form: nodeInfo(form)
+  }};
+}}
+""".strip()
+
+
 def cmd_action_open_url(args: argparse.Namespace) -> None:
     _run_action_command(
         args,
@@ -781,6 +991,35 @@ def cmd_action_snapshot(args: argparse.Namespace) -> None:
         args,
         "action.snapshot",
         SnapshotRequest(timeout_ms=args.timeout_ms, max_chars=args.max_chars),
+    )
+
+
+def cmd_action_reload(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(args, "action.reload", _reload_expression())
+
+
+def cmd_action_go_back(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(args, "action.go-back", _history_expression("back"))
+
+
+def cmd_action_go_forward(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.go-forward",
+        _history_expression("forward"),
+    )
+
+
+def cmd_action_wait_url(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-url",
+        _wait_url_expression(
+            url=args.url,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
     )
 
 
@@ -886,6 +1125,36 @@ def cmd_action_wait_text(args: argparse.Namespace) -> None:
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
             include_hidden=args.include_hidden,
+        ),
+    )
+
+
+def cmd_action_focus(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.focus",
+        _focus_expression(
+            selector=args.selector,
+            prevent_scroll=args.prevent_scroll,
+        ),
+    )
+
+
+def cmd_action_clear(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.clear",
+        _clear_expression(args.selector),
+    )
+
+
+def cmd_action_submit(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.submit",
+        _submit_expression(
+            selector=args.selector,
+            skip_validation=args.skip_validation,
         ),
     )
 
@@ -1369,6 +1638,42 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_snapshot.add_argument("--max-chars", type=int, default=8000)
     action_snapshot.set_defaults(func=cmd_action_snapshot)
 
+    action_reload = action_subparsers.add_parser(
+        "reload",
+        help="Reload the current page",
+    )
+    _add_session_target_args(action_reload)
+    action_reload.set_defaults(func=cmd_action_reload)
+
+    action_go_back = action_subparsers.add_parser(
+        "go-back",
+        help="Request browser history back navigation",
+    )
+    _add_session_target_args(action_go_back)
+    action_go_back.set_defaults(func=cmd_action_go_back)
+
+    action_go_forward = action_subparsers.add_parser(
+        "go-forward",
+        help="Request browser history forward navigation",
+    )
+    _add_session_target_args(action_go_forward)
+    action_go_forward.set_defaults(func=cmd_action_go_forward)
+
+    action_wait_url = action_subparsers.add_parser(
+        "wait-url",
+        help="Wait until the current URL matches text or a regex",
+    )
+    _add_session_target_args(action_wait_url)
+    action_wait_url.add_argument("--url", required=True)
+    action_wait_url.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+    )
+    action_wait_url.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_url.add_argument("--poll-ms", type=float, default=250)
+    action_wait_url.set_defaults(func=cmd_action_wait_url)
+
     action_get_text = action_subparsers.add_parser(
         "get-text",
         help="Read visible text from a selector",
@@ -1435,6 +1740,40 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     _add_text_match_args(action_wait_text)
     action_wait_text.set_defaults(func=cmd_action_wait_text)
+
+    action_focus = action_subparsers.add_parser(
+        "focus",
+        help="Focus a selector",
+    )
+    _add_session_target_args(action_focus)
+    action_focus.add_argument("--selector", required=True)
+    action_focus.add_argument(
+        "--prevent-scroll",
+        action="store_true",
+        help="Focus without scrolling the element into view.",
+    )
+    action_focus.set_defaults(func=cmd_action_focus)
+
+    action_clear = action_subparsers.add_parser(
+        "clear",
+        help="Clear a form field or editable element",
+    )
+    _add_session_target_args(action_clear)
+    action_clear.add_argument("--selector", required=True)
+    action_clear.set_defaults(func=cmd_action_clear)
+
+    action_submit = action_subparsers.add_parser(
+        "submit",
+        help="Submit the nearest form for a selector",
+    )
+    _add_session_target_args(action_submit)
+    action_submit.add_argument("--selector", required=True)
+    action_submit.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Use form.submit() instead of requestSubmit().",
+    )
+    action_submit.set_defaults(func=cmd_action_submit)
 
     action_scroll = action_subparsers.add_parser(
         "scroll",

@@ -122,12 +122,19 @@ browser-cli action type --session-id <session_id> --selector "input[name=q]" --t
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action reload --session-id <session_id>
+browser-cli action go-back --session-id <session_id>
+browser-cli action go-forward --session-id <session_id>
+browser-cli action wait-url --session-id <session_id> --url /dashboard
 browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
 browser-cli action count --session-id <session_id> --selector ".item"
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
+browser-cli action focus --session-id <session_id> --selector "input[name=q]"
+browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
@@ -142,14 +149,15 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-`get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-text`, `scroll`,
+`reload`, `go-back`, `go-forward`, `wait-url`, `get-text`, `exists`, `count`,
+`query`, `get-attribute`, `wait-text`, `focus`, `clear`, `submit`, `scroll`,
 `select-option`, `check`, `uncheck`, `hover`, `press`, `click-text`,
-`click-role`, `fill-label`, `accessibility-snapshot`, and `interactive-snapshot`
-are implemented as eval-backed DOM actions while the
+`click-role`, `fill-label`, `accessibility-snapshot`, and
+`interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
-such as `found`, `exists`, `checked`, `selected`, `clicked`, or `filled` from
-`result`.
+such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
+`focused`, `cleared`, `submitted`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -207,6 +215,7 @@ For a new browser task, agents should prefer this sequence:
 ```bash
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
 browser-cli action snapshot --session-id <session_id>
 browser-cli action exists --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
@@ -220,11 +229,15 @@ browser-cli session close --session-id <session_id>
 
 Common agent recipes:
 
-- Form submit: `interactive-snapshot` -> `fill-label` -> `select-option` or
-  `check` -> `wait-text` when the form reacts -> `click-role --role button --name <text>`.
+- Form submit: `interactive-snapshot` -> `fill-label` or `clear` -> `select-option`
+  or `check` -> `submit --selector <form-or-field>`,
+  `click-role --role button --name <text>` or `click-text` -> `wait-url` or
+  `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then selector `click`
   after `exists` confirms a stable selector.
-- Menu or keyboard flow: `hover` or `press`, then inspect again with
+- Navigation: use `reload`, `go-back`, or `go-forward`, then confirm with
+  `wait-url`, `wait-text`, or `snapshot`.
+- Menu or keyboard flow: `focus`, `hover`, or `press`, then inspect again with
   `interactive-snapshot`.
 - Read results: `get-text` for known selectors, or `snapshot` when the selector
   is unknown.

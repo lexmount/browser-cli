@@ -37,6 +37,9 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`wait-text`",
         "`click`",
         "`type`",
+        "`focus`",
+        "`clear`",
+        "`submit`",
         "`select-option`",
         "`check`",
         "`uncheck`",
@@ -60,14 +63,19 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Common task recipes" in normalized
     assert "Fill and submit a form" in normalized
     assert "`interactive-snapshot`, use `fill-label`" in normalized
+    assert "`clear` before replacement text" in normalized
     assert "`select-option` or `check`" in normalized
+    assert "then use `submit`" in normalized
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
     assert "`click-role`, then `click-text`, then selector `click`" in normalized
+    assert "Navigate page history" in normalized
+    assert "use `reload`, `go-back`, or `go-forward`" in normalized
+    assert "confirm with `wait-url`, `wait-text`, or `snapshot`" in normalized
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, and `get-attribute` before `eval`" in normalized
     assert "Open menus or keyboard flows" in normalized
-    assert "`hover` for menus, `press` for shortcuts" in normalized
+    assert "use `focus`, `hover` for menus, `press` for shortcuts" in normalized
     assert "Read page results" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` before reading dynamic results" in normalized
