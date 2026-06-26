@@ -105,11 +105,13 @@ Default behavior:
 - `doctor --smoke-session` may report a temporary `session_id` and cleanup
   status, but must not print direct connect URLs or token values.
 - `doctor` reports a `command_catalog` check with `required_commands`,
-  `missing_required_commands`, `schema_version`, and `command_count` so agents
-  can detect an installed CLI that is too old for the Skill workflow. The
-  required set covers setup commands plus core browser actions such as press,
-  hover, scroll, get-text, exists, select-option, check, uncheck, click-text,
-  click-role, fill-label, accessibility snapshot, and interactive-only snapshot.
+  `missing_required_commands`, `required_workflows`,
+  `missing_required_workflows`, `schema_version`, `command_count`, and
+  `workflow_count` so agents can detect an installed CLI that is too old for
+  the Skill workflow. The required command set covers setup commands plus core
+  browser actions such as press, hover, scroll, get-text, exists, select-option,
+  check, uncheck, click-text, click-role, fill-label, accessibility snapshot,
+  and interactive-only snapshot.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
   `connect_from_codex` with a safe `/connect/codex` URL, `open_command`,
   requested scopes, setup blocks, and verification commands. This handoff must

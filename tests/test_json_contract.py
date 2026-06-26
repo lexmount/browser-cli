@@ -120,6 +120,14 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`cleanup`" in text
 
 
+def test_json_contract_documents_doctor_required_workflows() -> None:
+    text = JSON_CONTRACT.read_text()
+
+    assert "`required_workflows`" in text
+    assert "`missing_required_workflows`" in text
+    assert "`workflow_count`" in text
+
+
 def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     text = JSON_CONTRACT.read_text()
 

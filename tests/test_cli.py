@@ -386,6 +386,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
+    assert checks["command_catalog"]["workflow_count"] == 3
+    assert checks["command_catalog"]["required_workflows"] == [
+        "setup_and_verify",
+        "one_off_page_task",
+        "persistent_login_state",
+    ]
+    assert checks["command_catalog"]["missing_required_workflows"] == []
     for command_name in (
         "action.press",
         "action.hover",
@@ -455,12 +462,19 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["status"] == "warn"
     assert catalog["schema_version"] == 1
     assert catalog["command_count"] == 3
+    assert catalog["workflow_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
+    assert catalog["missing_required_workflows"] == [
+        "setup_and_verify",
+        "one_off_page_task",
+        "persistent_login_state",
+    ]
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
+    assert "browser-cli commands" in payload["repair_plan"]["commands"]
     assert "api_connectivity" in payload["skipped_checks"]
 
 

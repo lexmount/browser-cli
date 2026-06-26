@@ -96,6 +96,11 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.console-snapshot",
     "action.wait-console",
 )
+DOCTOR_REQUIRED_WORKFLOWS = (
+    "setup_and_verify",
+    "one_off_page_task",
+    "persistent_login_state",
+)
 COMMAND_ALIASES = {
     "action.interactive-only-snapshot": "action.interactive-snapshot",
 }
@@ -748,27 +753,39 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         for command in catalog.get("commands", [])
         if isinstance(command, dict)
     }
-    missing = [
+    workflows = catalog.get("agent_workflows")
+    workflow_names = set(workflows) if isinstance(workflows, dict) else set()
+    missing_commands = [
         command for command in DOCTOR_REQUIRED_COMMANDS if command not in command_names
     ]
-    if missing:
+    missing_workflows = [
+        workflow
+        for workflow in DOCTOR_REQUIRED_WORKFLOWS
+        if workflow not in workflow_names
+    ]
+    if missing_commands or missing_workflows:
         return _doctor_check(
             "command_catalog",
             "warn",
-            "Command catalog is missing commands expected by the Codex Skill.",
+            "Command catalog is missing commands or workflows expected by the Codex Skill.",
             schema_version=catalog.get("schema_version"),
             command_count=len(command_names),
+            workflow_count=len(workflow_names),
             required_commands=list(DOCTOR_REQUIRED_COMMANDS),
-            missing_required_commands=missing,
+            missing_required_commands=missing_commands,
+            required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
+            missing_required_workflows=missing_workflows,
             fix=_doctor_fix(
                 "upgrade_browser_cli_command_surface",
                 commands=[
                     "browser-cli commands --names-only",
+                    "browser-cli commands",
                     "uv tool install git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
                     "Upgrade browser-cli before relying on the full Codex Skill workflow.",
                     "Use `browser-cli commands --group action --names-only` to inspect available actions.",
+                    "Use `browser-cli commands` to inspect structured agent_workflows.",
                 ],
             ),
         )
@@ -779,8 +796,11 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         "Command catalog includes the commands expected by the Codex Skill.",
         schema_version=catalog.get("schema_version"),
         command_count=len(command_names),
+        workflow_count=len(workflow_names),
         required_commands=list(DOCTOR_REQUIRED_COMMANDS),
         missing_required_commands=[],
+        required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
+        missing_required_workflows=[],
     )
 
 
