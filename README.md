@@ -193,9 +193,10 @@ browser target requirements, JSON/secret policies, and agent entrypoint recipes.
 Agents should use `--workflows-only` for compact setup/task flow discovery,
 `--workflow <id>` for one concrete task path, and the command catalog when
 deciding whether a first-class action exists before writing custom JavaScript.
-Unknown groups return JSON with `error=unknown_group` and `available_groups` so
-agents can repair typos instead of treating an empty command list as capability
-absence.
+Unknown groups return JSON with `error=unknown_group`, `available_groups`, and a
+`fix` object so agents can repair typos instead of treating an empty command
+list as capability absence. Unknown workflows similarly return
+`error=unknown_workflow`, `available_workflows`, and a workflow-discovery `fix`.
 
 ## Commands
 

@@ -10103,6 +10103,16 @@ def cmd_commands(args: argparse.Namespace) -> None:
                 f"Unknown command group: {args.group}",
                 group=args.group,
                 available_groups=available_groups,
+                fix=_doctor_fix(
+                    "inspect_available_command_groups",
+                    commands=[
+                        "browser-cli commands",
+                        "browser-cli commands --names-only",
+                    ],
+                    guidance=[
+                        "Choose one of available_groups, then rerun commands with that --group value."
+                    ],
+                ),
             )
         commands = [
             item for item in commands if str(item.get("group")) == str(args.group)
@@ -10122,6 +10132,13 @@ def cmd_commands(args: argparse.Namespace) -> None:
                 f"Unknown agent workflow: {args.workflow}",
                 workflow=args.workflow,
                 available_workflows=sorted(catalog["agent_workflows"]),
+                fix=_doctor_fix(
+                    "inspect_available_agent_workflows",
+                    commands=["browser-cli commands --workflows-only"],
+                    guidance=[
+                        "Choose one of available_workflows, then rerun commands with that --workflow value."
+                    ],
+                ),
             )
         _success(
             command,

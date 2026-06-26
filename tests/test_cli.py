@@ -417,6 +417,13 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "persistent_login_state",
         "setup_and_verify",
     ]
+    assert payload["fix"] == {
+        "code": "inspect_available_agent_workflows",
+        "commands": ["browser-cli commands --workflows-only"],
+        "guidance": [
+            "Choose one of available_workflows, then rerun commands with that --workflow value."
+        ],
+    }
 
 
 def test_commands_catalog_fails_unknown_group_as_json(
@@ -434,6 +441,16 @@ def test_commands_catalog_fails_unknown_group_as_json(
     assert "action" in payload["available_groups"]
     assert "auth" in payload["available_groups"]
     assert "version" in payload["available_groups"]
+    assert payload["fix"] == {
+        "code": "inspect_available_command_groups",
+        "commands": [
+            "browser-cli commands",
+            "browser-cli commands --names-only",
+        ],
+        "guidance": [
+            "Choose one of available_groups, then rerun commands with that --group value."
+        ],
+    }
 
 
 def test_commands_catalog_filters_group_and_names_only(

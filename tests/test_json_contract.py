@@ -146,11 +146,13 @@ def test_json_contract_documents_version_output() -> None:
 
 def test_json_contract_documents_agent_workflows() -> None:
     text = JSON_CONTRACT.read_text()
+    normalized = " ".join(text.split())
 
     assert "`--workflows-only`" in text
     assert "`--workflow <id>`" in text
     assert "`error=unknown_group`" in text
     assert "`available_groups`" in text
+    assert "commands for inspecting valid groups" in normalized
     assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
     assert "Connect from Codex auth" in text
@@ -158,6 +160,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`workflow`" in text
     assert "`available_workflows`" in text
     assert "`error=unknown_workflow`" in text
+    assert "commands for inspecting valid workflows" in normalized
     assert "`success_condition`" in text
     assert "`on_failure_read`" in text
     assert "`cleanup`" in text

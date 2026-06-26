@@ -47,13 +47,14 @@ without parsing text output.
 returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`; `--names-only`
 returns compact command names, and `--group <name>` filters by command group.
-Unknown command groups fail as JSON with `error=unknown_group` and
-`available_groups`.
+Unknown command groups fail as JSON with `error=unknown_group`,
+`available_groups`, and a `fix` object with commands for inspecting valid
+groups.
 `--workflows-only` returns a compact payload with `workflow_count`,
 `agent_workflows`, and `agent_entrypoints` without the large `commands` array.
 `--workflow <id>` returns one workflow as `workflow_id` and `workflow`; unknown
-workflow ids fail as JSON with `error=unknown_workflow` and
-`available_workflows`.
+workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
+and a `fix` object with commands for inspecting valid workflows.
 `agent_workflows` describes ordered setup, Connect from Codex auth, one-off
 page, and persistent login state steps with `command`, `read`,
 `success_condition`, `on_failure_read`, and `cleanup` hints. Command entries may
