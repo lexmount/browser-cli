@@ -21,7 +21,10 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     text = (REPO_ROOT / "examples" / "agent-playbook.md").read_text()
 
     assert "browser-cli doctor --json" in text
+    assert "browser-cli doctor --smoke-session" in text
     assert "ready_for_browser_actions" in text
+    assert "browser_smoke_session.status" in text
+    assert "`fix.commands`" in text
     assert "repair_plan.commands" in text
     assert "browser-cli context pick --metadata-json" in text
     assert "browser-cli session create --context-metadata-json" in text

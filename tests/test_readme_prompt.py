@@ -28,10 +28,16 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     prompt = _codex_install_prompt()
 
     assert "https://browser.lexmount.cn" in prompt
+    assert "https://browser.lexmount.cn/connect/codex" in prompt
     assert "browser-cli auth status" in prompt
     assert "browser-cli auth login" in prompt
+    assert "connect_from_codex.url" in prompt
     assert "browser-cli auth export-env" in prompt
     assert "browser-cli auth export-env --reveal-secrets" in prompt
+    assert "browser-cli doctor --json" in prompt
+    assert "browser-cli doctor --smoke-session" in prompt
+    assert "ready_for_browser_actions=true" in prompt
+    assert "browser_smoke_session.status 应该是 pass" in prompt
     assert "browser-cli session list" in prompt
 
 
@@ -43,3 +49,5 @@ def test_codex_install_prompt_mentions_project_and_key_validation() -> None:
     assert "LEXMOUNT_API_KEY" in prompt
     assert "Project 是否和 LEXMOUNT_PROJECT_ID 一致" in prompt
     assert "API Key 是否已过期、被 revoke" in prompt
+    assert "scoped API Key" in prompt
+    assert "created=true、closed=true" in prompt

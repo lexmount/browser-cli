@@ -36,8 +36,8 @@ CLI for you:
    browser-cli auth login
 6. 如果我希望直接打开本机浏览器，可以让我运行：
    browser-cli auth login --open
-7. 引导我打开 https://browser.lexmount.cn 并登录账号。
-8. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
+7. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
+8. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
 9. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
    browser-cli auth export-env
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
@@ -50,13 +50,16 @@ CLI for you:
 12. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
 13. 运行下面命令验证：
    browser-cli --help
-   browser-cli doctor
+   browser-cli doctor --json
+   browser-cli doctor --smoke-session
    browser-cli session list
+   其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
 14. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - browser-cli auth status 是否显示 configured 为 true
    - browser-cli doctor 的 checks 中哪一项 fail 或 warn
+   - browser-cli doctor --smoke-session 的 browser_smoke_session 是否创建或关闭失败；如果 created=true 且 closed=false，按 fix.commands 手动关闭临时 session
    - LEXMOUNT_API_KEY 是否已设置
    - LEXMOUNT_PROJECT_ID 是否已设置
    - 如果设置了 LEXMOUNT_BASE_URL，它是否为正确的 API endpoint
@@ -498,8 +501,10 @@ The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
    expiration, and one-click revoke.
 3. Provide a copyable install block:
    `uv tool install git+https://github.com/lexmount/browser-cli.git`.
-4. Add a "Verify CLI" section that tells users to run `browser-cli doctor`
-   after setting env vars and shows how to interpret failed `checks`.
+4. Add a "Verify CLI" section that tells users to run
+   `browser-cli doctor --json` and `browser-cli doctor --smoke-session` after
+   setting env vars, then explains `ready_for_browser_actions` and
+   `browser_smoke_session`.
 5. Show the selected `Project ID`, scoped credential status, copyable
    `browser-cli auth export-env` / `export ...` commands, and revoke/expiration
    details for the issued credential.

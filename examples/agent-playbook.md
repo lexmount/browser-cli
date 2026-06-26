@@ -24,6 +24,17 @@ Use `ready_for_browser_actions` before starting browser work. If it is false,
 follow `repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance`
 instead of guessing setup repairs from raw error text.
 
+When validating a fresh local setup, run the stronger live check:
+
+```bash
+browser-cli doctor --smoke-session
+```
+
+Treat `browser_smoke_session.status == "pass"` with `created=true` and
+`closed=true` as proof that credentials can create and close a temporary browser
+session. If the smoke session was created but not closed, follow the returned
+`fix.commands` before creating more sessions.
+
 Do not ask the user to paste API keys into chat. Direct them to
 `https://browser.lexmount.cn` and keep secrets in the local shell.
 
