@@ -43,6 +43,20 @@ browser-cli auth login
 browser-cli auth login --open
 ```
 
+For credential setup, use this decision flow:
+
+1. Run `browser-cli auth status` and parse JSON.
+2. If `configured` is true, continue to browser work.
+3. If `missing` includes `LEXMOUNT_API_KEY` or `LEXMOUNT_PROJECT_ID`, run
+   `browser-cli auth login`. Use `browser-cli auth login --open` only when it is
+   appropriate to open the user's local browser; otherwise show the returned
+   `authorization_url`.
+4. Direct the user to set credentials in their local shell, not in chat.
+5. Use `browser-cli auth export-env` for masked shell snippets and
+   `browser-cli auth export-env --reveal-secrets` only in a trusted local shell.
+6. Treat `usable: false`, `masked: true`, or `contains_secrets: true` as a signal
+   not to paste output into chat, logs, docs, tests, or commits.
+
 Use this to generate local shell configuration snippets when credentials are
 already available in the user's trusted shell:
 
