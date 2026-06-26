@@ -119,7 +119,9 @@ reachability through a lightweight `session list` call. It exits with code `0`
 when required checks pass and `1` when credentials, configuration, or API access
 are not ready. Agents should read the `decision` object before creating browser
 sessions; `decision.ready_for_browser_work: true` means the API was verified and
-there are no blocking checks.
+there are no blocking checks. The `workflow` object gives the safer next command
+sequence: run `workflow.primary_command` first, parse its JSON, then continue
+only when `workflow.can_start_browser_work` is true.
 
 Use `doctor --smoke-session` when onboarding or debugging deeper failures. It
 creates a temporary `light` browser session and closes it immediately, proving
@@ -211,6 +213,16 @@ command-specific fields.
     "warning_checks": [],
     "recommended_action": "continue",
     "next_command": "browser-cli session create"
+  },
+  "workflow": {
+    "next_step": "start_browser_session",
+    "can_start_browser_work": true,
+    "primary_command": "browser-cli session create",
+    "commands": [
+      "browser-cli session create",
+      "browser-cli doctor --smoke-session --json"
+    ],
+    "smoke_session_recommended": true
   },
   "checks": []
 }

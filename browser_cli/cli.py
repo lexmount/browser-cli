@@ -283,6 +283,65 @@ def _doctor_decision(checks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _doctor_workflow(decision: dict[str, Any]) -> dict[str, Any]:
+    recommended_action = decision["recommended_action"]
+    blocking_checks = list(decision["blocking_checks"])
+    warning_checks = list(decision["warning_checks"])
+    can_start_session = bool(decision["ready_for_browser_work"])
+
+    commands: list[str]
+    next_step: str
+    if can_start_session:
+        next_step = "start_browser_session"
+        commands = ["browser-cli session create"]
+        if not decision["session_smoke_verified"]:
+            commands.append("browser-cli doctor --smoke-session --json")
+    elif recommended_action == "run_api_check":
+        next_step = "verify_api"
+        commands = ["browser-cli doctor --json"]
+    elif recommended_action == "fix_configuration":
+        next_step = "configure_credentials"
+        commands = [
+            "browser-cli auth bootstrap",
+            "browser-cli auth login",
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+        ]
+    elif recommended_action == "fix_api_access":
+        next_step = "fix_api_access"
+        commands = [
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+            "browser-cli session list",
+        ]
+    elif recommended_action == "fix_session_lifecycle":
+        next_step = "debug_session_lifecycle"
+        commands = [
+            "browser-cli doctor --smoke-session --json",
+            "browser-cli session list --status active",
+        ]
+    else:
+        next_step = "fix_doctor_errors"
+        commands = [decision["next_command"]]
+
+    return {
+        "next_step": next_step,
+        "can_start_browser_work": can_start_session,
+        "primary_command": commands[0],
+        "commands": commands,
+        "blocking_checks": blocking_checks,
+        "warning_checks": warning_checks,
+        "smoke_session_recommended": bool(
+            can_start_session and not decision["session_smoke_verified"]
+        ),
+        "notes": [
+            "Use primary_command first; parse its JSON before continuing.",
+            "Run smoke-session only for onboarding or session lifecycle debugging.",
+            "Do not ask the user to paste API keys into chat.",
+        ],
+    }
+
+
 def _doctor_session_payload(session: Any) -> dict[str, Any]:
     payload = session.model_dump(mode="json")
     return {
@@ -551,6 +610,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 )
 
     ok = _doctor_overall_ok(checks)
+    decision = _doctor_decision(checks)
     data = {
         "ok": ok,
         "command": command,
@@ -558,7 +618,8 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "version": {"browser_cli": version},
         "configuration": {"environment": env_status},
         "checks": checks,
-        "decision": _doctor_decision(checks),
+        "decision": decision,
+        "workflow": _doctor_workflow(decision),
         "next_steps": next_steps,
     }
     if direct_url_payload is not None:

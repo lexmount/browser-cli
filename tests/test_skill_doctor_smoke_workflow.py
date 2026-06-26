@@ -24,6 +24,11 @@ def test_skill_uses_doctor_decision_before_creating_sessions() -> None:
     assert "`decision.ready_for_browser_work` is not `true`" in normalized
     assert "`decision.recommended_action`" in normalized
     assert "`decision.next_command`" in normalized
+    assert "`workflow.primary_command`" in normalized
+    assert (
+        "only continue to browser work when `workflow.can_start_browser_work` is true"
+        in normalized
+    )
     assert "before creating sessions" in normalized
 
 

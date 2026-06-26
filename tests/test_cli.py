@@ -72,6 +72,25 @@ def test_doctor_reports_missing_credentials_without_api_call(
     assert payload["decision"]["api_verified"] is False
     assert payload["decision"]["recommended_action"] == "fix_configuration"
     assert "credentials" in payload["decision"]["blocking_checks"]
+    assert payload["workflow"] == {
+        "next_step": "configure_credentials",
+        "can_start_browser_work": False,
+        "primary_command": "browser-cli auth bootstrap",
+        "commands": [
+            "browser-cli auth bootstrap",
+            "browser-cli auth login",
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+        ],
+        "blocking_checks": ["credentials", "direct-url", "api"],
+        "warning_checks": [],
+        "smoke_session_recommended": False,
+        "notes": [
+            "Use primary_command first; parse its JSON before continuing.",
+            "Run smoke-session only for onboarding or session lifecycle debugging.",
+            "Do not ask the user to paste API keys into chat.",
+        ],
+    }
 
 
 def test_doctor_success_checks_api_and_masks_direct_url(
@@ -111,6 +130,14 @@ def test_doctor_success_checks_api_and_masks_direct_url(
         "continue_with_warnings",
     }
     assert payload["decision"]["next_command"] == "browser-cli session create"
+    assert payload["workflow"]["next_step"] == "start_browser_session"
+    assert payload["workflow"]["can_start_browser_work"] is True
+    assert payload["workflow"]["primary_command"] == "browser-cli session create"
+    assert payload["workflow"]["commands"] == [
+        "browser-cli session create",
+        "browser-cli doctor --smoke-session --json",
+    ]
+    assert payload["workflow"]["smoke_session_recommended"] is True
     assert "secret" not in output
 
 
@@ -142,6 +169,9 @@ def test_doctor_skip_api_does_not_fail_ready_configuration(
     assert payload["decision"]["api_verified"] is False
     assert payload["decision"]["recommended_action"] == "run_api_check"
     assert payload["decision"]["next_command"] == "browser-cli doctor --json"
+    assert payload["workflow"]["next_step"] == "verify_api"
+    assert payload["workflow"]["primary_command"] == "browser-cli doctor --json"
+    assert payload["workflow"]["commands"] == ["browser-cli doctor --json"]
 
 
 def test_doctor_handles_missing_uv_as_warning(
@@ -305,6 +335,11 @@ def test_doctor_session_smoke_reports_close_failure(
     assert payload["decision"]["ready_for_browser_work"] is False
     assert payload["decision"]["recommended_action"] == "fix_session_lifecycle"
     assert payload["decision"]["blocking_checks"] == ["session-smoke"]
+    assert payload["workflow"]["next_step"] == "debug_session_lifecycle"
+    assert payload["workflow"]["commands"] == [
+        "browser-cli doctor --smoke-session --json",
+        "browser-cli session list --status active",
+    ]
     assert payload["session_smoke"]["created"] is True
     assert payload["session_smoke"]["closed"] is False
     assert payload["session_smoke"]["close_error"] == {
