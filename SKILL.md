@@ -97,8 +97,10 @@ browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button"
 browser-cli action count --session-id <session_id> --selector ".item"
+browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
+browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
@@ -131,18 +133,20 @@ browser-cli action interactive-snapshot --session-id <session_id>
 
 Prefer these built-in actions over writing custom JavaScript. `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-load-state`, `wait-network-idle`,
-`get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-text`, `focus`,
-`get-value`, `wait-value`, `blur`, `storage-get`, `storage-set`,
-`storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`,
-`cookie-delete`, `cookie-clear`, `wait-cookie`, `clear`, `submit`, `scroll`,
-`select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`,
-`click-role`, `fill-label`, `accessibility-snapshot`, and
+`get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-count`,
+`wait-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`, `blur`,
+`storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
+`wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`,
+`wait-cookie`, `clear`, `submit`, `scroll`, `select-option`, `check`,
+`uncheck`, `hover`, and `press` plus `click-text`, `click-role`,
+`fill-label`, `accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
-`removed`, `deleted`, `cleared`, `items`, `cleared_count`, `state`,
-`requested_value`, `network_idle`, `quiet_ms`, `submitted`, `hovered`, `pressed`, and
-`navigation_requested` before assuming the page changed.
+`removed`, `deleted`, `cleared`, `items`, `cleared_count`, `requested_count`,
+`state`, `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`,
+`submitted`, `hovered`, `pressed`, and `navigation_requested` before assuming
+the page changed.
 
 For page work, choose actions in this order:
 
@@ -151,9 +155,10 @@ For page work, choose actions in this order:
 2. Prefer semantic actions: `click-role` for known roles/names, `click-text` for
    visible text, and `fill-label` for labeled form fields.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
-   `query`, `get-attribute`, `wait-text`, `get-text`, `wait-selector`, `click`,
-   `type`, `focus`, `get-value`, `wait-value`, `blur`, `clear`, `submit`,
-   `select-option`, `check`, and `uncheck`.
+   `wait-count`, `query`, `get-attribute`, `wait-attribute`, `wait-text`,
+   `get-text`, `wait-selector`, `click`, `type`, `focus`, `get-value`,
+   `wait-value`, `blur`, `clear`, `submit`, `select-option`, `check`, and
+   `uncheck`.
 4. Use `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`, and
    `wait-network-idle` for navigation and async refresh flows.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
@@ -184,8 +189,9 @@ Common task recipes:
 4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    shortcuts or Enter/Escape, and `blur` for focus-driven validation, then
    inspect again with `interactive-snapshot`.
-5. Read page results: use `get-text` for a known selector; use `snapshot` when
-   the page structure or selector is unknown; use `wait-text` before reading
+5. Read page results: use `wait-count` for dynamic lists, `wait-attribute` for
+   DOM state changes, `get-text` for a known selector; use `snapshot` when the
+   page structure or selector is unknown; use `wait-text` before reading
    dynamic results.
 6. Adjust browser state: use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
@@ -194,7 +200,8 @@ Common task recipes:
    `cookie-delete`, or `cookie-clear` for document.cookie-visible cookies such
    as consent or non-HttpOnly flags, and `wait-cookie` when cookie changes are
    async.
-7. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`.
+7. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`;
+   use `wait-count` or `wait-attribute` for async DOM changes.
 8. Capture final evidence: use `screenshot` after the action sequence and close
    the session unless the user asks to keep it open.
 

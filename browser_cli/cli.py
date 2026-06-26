@@ -678,6 +678,198 @@ def _wait_text_expression(
 """.strip()
 
 
+def _wait_count_expression(
+    *,
+    selector: str,
+    count: int,
+    comparison: str,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const selector = {_js_literal(selector)};
+  const requestedCount = Math.max(0, {_js_literal(count)});
+  const comparison = {_js_literal(comparison)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const compare = (actual, expected) => {{
+    if (comparison === "eq") return actual === expected;
+    if (comparison === "gt") return actual > expected;
+    if (comparison === "gte") return actual >= expected;
+    if (comparison === "lt") return actual < expected;
+    if (comparison === "lte") return actual <= expected;
+    return false;
+  }};
+  const check = () => {{
+    const all = [...document.querySelectorAll(selector)];
+    const visibleNodes = all.filter(visible);
+    const matched = includeHidden ? all : visibleNodes;
+    const waitedMs = Date.now() - startedAt;
+    const reached = compare(matched.length, requestedCount);
+    if (reached) {{
+      resolve({{
+        selector,
+        found: true,
+        count: matched.length,
+        requested_count: requestedCount,
+        comparison,
+        include_hidden: includeHidden,
+        total_count: all.length,
+        visible_count: visibleNodes.length,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        found: false,
+        count: matched.length,
+        requested_count: requestedCount,
+        comparison,
+        include_hidden: includeHidden,
+        total_count: all.length,
+        visible_count: visibleNodes.length,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_attribute_expression(
+    *,
+    selector: str,
+    name: str,
+    value: str | None,
+    state: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const name = {_js_literal(name)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        selector,
+        name,
+        found: false,
+        state: requestedState,
+        selector_found: Boolean(document.querySelector(selector)),
+        attribute_found: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const element = document.querySelector(selector);
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          selector,
+          name,
+          found: false,
+          state: requestedState,
+          selector_found: false,
+          attribute_found: null,
+          value: null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const currentValue = element.getAttribute(name);
+    const attributeFound = currentValue !== null;
+    const reached = requestedState === "absent"
+      ? !attributeFound
+      : attributeFound && matches(currentValue);
+    if (reached) {{
+      resolve({{
+        selector,
+        name,
+        found: true,
+        state: requestedState,
+        selector_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        name,
+        found: false,
+        state: requestedState,
+        selector_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _query_expression(
     *,
     selector: str,
@@ -2230,6 +2422,21 @@ def cmd_action_count(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.count", expression)
 
 
+def cmd_action_wait_count(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-count",
+        _wait_count_expression(
+            selector=args.selector,
+            count=args.count,
+            comparison=args.comparison,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
 def cmd_action_query(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -2268,6 +2475,23 @@ def cmd_action_get_attribute(args: argparse.Namespace) -> None:
     property_value: propertyValue
   }};
 """.rstrip(),
+        ),
+    )
+
+
+def cmd_action_wait_attribute(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-attribute",
+        _wait_attribute_expression(
+            selector=args.selector,
+            name=args.name,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
         ),
     )
 
@@ -3062,6 +3286,28 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_count.set_defaults(func=cmd_action_count)
 
+    action_wait_count = action_subparsers.add_parser(
+        "wait-count",
+        help="Wait until a selector count reaches a comparison",
+    )
+    _add_session_target_args(action_wait_count)
+    action_wait_count.add_argument("--selector", required=True)
+    action_wait_count.add_argument("--count", type=int, required=True)
+    action_wait_count.add_argument(
+        "--comparison",
+        choices=["eq", "gt", "gte", "lt", "lte"],
+        default="eq",
+        help="How to compare the current count with --count.",
+    )
+    action_wait_count.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_count.add_argument("--poll-ms", type=float, default=250)
+    action_wait_count.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in the count.",
+    )
+    action_wait_count.set_defaults(func=cmd_action_wait_count)
+
     action_query = action_subparsers.add_parser(
         "query",
         help="List selector matches with DOM-backed node metadata",
@@ -3079,6 +3325,35 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_get_attribute.add_argument("--selector", required=True)
     action_get_attribute.add_argument("--name", required=True)
     action_get_attribute.set_defaults(func=cmd_action_get_attribute)
+
+    action_wait_attribute = action_subparsers.add_parser(
+        "wait-attribute",
+        help="Wait until an attribute reaches a state or value",
+    )
+    _add_session_target_args(action_wait_attribute)
+    action_wait_attribute.add_argument("--selector", required=True)
+    action_wait_attribute.add_argument("--name", required=True)
+    action_wait_attribute.add_argument("--value")
+    action_wait_attribute.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Attribute presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_attribute.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_attribute.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_attribute.add_argument("--poll-ms", type=float, default=250)
+    action_wait_attribute.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_attribute.set_defaults(func=cmd_action_wait_attribute)
 
     action_wait_text = action_subparsers.add_parser(
         "wait-text",

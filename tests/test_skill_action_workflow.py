@@ -31,8 +31,10 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`exists`",
         "`get-text`",
         "`count`",
+        "`wait-count`",
         "`query`",
         "`get-attribute`",
+        "`wait-attribute`",
         "`wait-selector`",
         "`wait-load-state`",
         "`wait-network-idle`",
@@ -76,6 +78,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`cleared_count`" in normalized
     assert "`network_idle`" in normalized
     assert "`quiet_ms`" in normalized
+    assert "`requested_count`" in normalized
+    assert "`attribute_found`" in normalized
     assert "`requested_value`" in normalized
     assert "inspect again before trying a different action" in normalized
 
@@ -101,9 +105,11 @@ def test_skill_includes_common_task_recipes() -> None:
     )
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, and `get-attribute` before `eval`" in normalized
+    assert "use `wait-count` or `wait-attribute` for async DOM changes" in normalized
     assert "Open menus or keyboard flows" in normalized
     assert "use `focus`, `hover` for menus, `press` for shortcuts" in normalized
     assert "Read page results" in normalized
+    assert "use `wait-count` for dynamic lists" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` before reading dynamic results" in normalized
     assert "Adjust browser state" in normalized
