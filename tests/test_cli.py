@@ -80,6 +80,29 @@ def test_doctor_reports_missing_credentials_without_api_call(
     ]
     assert checks["api"]["ok"] is False
     assert checks["api"]["skipped"] is True
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["api_verified"] is False
+    assert payload["decision"]["recommended_action"] == "fix_configuration"
+    assert "credentials" in payload["decision"]["blocking_checks"]
+    assert payload["workflow"] == {
+        "next_step": "configure_credentials",
+        "can_start_browser_work": False,
+        "primary_command": "browser-cli auth bootstrap",
+        "commands": [
+            "browser-cli auth bootstrap",
+            "browser-cli auth login",
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+        ],
+        "blocking_checks": ["credentials", "direct-url", "api"],
+        "warning_checks": [],
+        "smoke_session_recommended": False,
+        "notes": [
+            "Use primary_command first; parse its JSON before continuing.",
+            "Run smoke-session only for onboarding or session lifecycle debugging.",
+            "Do not ask the user to paste API keys into chat.",
+        ],
+    }
 
 
 def test_doctor_success_checks_api_and_masks_direct_url(
@@ -111,6 +134,22 @@ def test_doctor_success_checks_api_and_masks_direct_url(
         "connect_url": "wss://api.lexmount.cn/connection?project_id=project&api_key=***",
         "masked": True,
     }
+    assert payload["decision"]["ready_for_browser_work"] is True
+    assert payload["decision"]["api_verified"] is True
+    assert payload["decision"]["blocking_checks"] == []
+    assert payload["decision"]["recommended_action"] in {
+        "continue",
+        "continue_with_warnings",
+    }
+    assert payload["decision"]["next_command"] == "browser-cli session create"
+    assert payload["workflow"]["next_step"] == "start_browser_session"
+    assert payload["workflow"]["can_start_browser_work"] is True
+    assert payload["workflow"]["primary_command"] == "browser-cli session create"
+    assert payload["workflow"]["commands"] == [
+        "browser-cli session create",
+        "browser-cli doctor --smoke-session --json",
+    ]
+    assert payload["workflow"]["smoke_session_recommended"] is True
     assert "secret" not in output
 
 
@@ -138,6 +177,13 @@ def test_doctor_skip_api_does_not_fail_ready_configuration(
     checks = {check["name"]: check for check in payload["checks"]}
     assert checks["api"]["severity"] == "warning"
     assert checks["api"]["skipped"] is True
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["api_verified"] is False
+    assert payload["decision"]["recommended_action"] == "run_api_check"
+    assert payload["decision"]["next_command"] == "browser-cli doctor --json"
+    assert payload["workflow"]["next_step"] == "verify_api"
+    assert payload["workflow"]["primary_command"] == "browser-cli doctor --json"
+    assert payload["workflow"]["commands"] == ["browser-cli doctor --json"]
 
 
 def test_doctor_handles_missing_uv_as_warning(
@@ -185,6 +231,168 @@ def test_doctor_api_failure_is_structured(
     assert checks["api"]["ok"] is False
     assert checks["api"]["error"] == "RuntimeError"
     assert checks["api"]["exception_message"] == "network down"
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["recommended_action"] == "fix_api_access"
+    assert payload["decision"]["blocking_checks"] == ["api"]
+
+
+def test_doctor_session_smoke_creates_and_closes_session(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    _mock_uv(monkeypatch)
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeSession:
+        session_id = "s1"
+
+        def model_dump(self, *, mode: str) -> dict[str, Any]:
+            assert mode == "json"
+            return {
+                "session_id": "s1",
+                "status": "active",
+                "browser_mode": "light",
+                "connect_url": "wss://secret-connect-url",
+            }
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> SimpleNamespace:
+            calls.append(("list", {"status": status}))
+            return SimpleNamespace(count=0, pagination=None)
+
+        def create_session(self, **kwargs: Any) -> SimpleNamespace:
+            calls.append(("create", kwargs))
+            return SimpleNamespace(session=FakeSession())
+
+        def close_session(self, session_id: str) -> None:
+            calls.append(("close", {"session_id": session_id}))
+
+    admin = FakeAdmin()
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: admin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--smoke-session"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "secret-connect-url" not in output
+    payload = json.loads(output)
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["session-smoke"]["ok"] is True
+    assert payload["decision"]["session_smoke_requested"] is True
+    assert payload["decision"]["session_smoke_verified"] is True
+    assert payload["session_smoke"] == {
+        "browser_mode": "light",
+        "created": True,
+        "closed": True,
+        "session": {
+            "session_id": "s1",
+            "status": "active",
+            "browser_mode": "light",
+        },
+        "session_id": "s1",
+    }
+    assert calls == [
+        ("list", {"status": None}),
+        (
+            "create",
+            {
+                "context_id": None,
+                "create_context": False,
+                "context_mode": "read_write",
+                "browser_mode": "light",
+                "metadata": None,
+            },
+        ),
+        ("close", {"session_id": "s1"}),
+    ]
+
+
+def test_doctor_session_smoke_reports_close_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    _mock_uv(monkeypatch)
+
+    class FakeSession:
+        session_id = "s1"
+
+        def model_dump(self, *, mode: str) -> dict[str, Any]:
+            assert mode == "json"
+            return {"session_id": "s1", "status": "active"}
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> SimpleNamespace:
+            return SimpleNamespace(count=0, pagination=None)
+
+        def create_session(self, **kwargs: Any) -> SimpleNamespace:
+            return SimpleNamespace(session=FakeSession())
+
+        def close_session(self, session_id: str) -> None:
+            raise RuntimeError("close failed")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--smoke-session"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["session-smoke"]["ok"] is False
+    assert payload["decision"]["ready_for_browser_work"] is False
+    assert payload["decision"]["recommended_action"] == "fix_session_lifecycle"
+    assert payload["decision"]["blocking_checks"] == ["session-smoke"]
+    assert payload["workflow"]["next_step"] == "debug_session_lifecycle"
+    assert payload["workflow"]["commands"] == [
+        "browser-cli doctor --smoke-session --json",
+        "browser-cli session list --status active",
+    ]
+    assert payload["session_smoke"]["created"] is True
+    assert payload["session_smoke"]["closed"] is False
+    assert payload["session_smoke"]["close_error"] == {
+        "error": "RuntimeError",
+        "exception_message": "close failed",
+    }
+
+
+def test_doctor_session_smoke_skips_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    _mock_uv(monkeypatch)
+
+    class FakeAdmin:
+        def list_sessions(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError("doctor should not call API without credentials")
+
+        def create_session(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError(
+                "doctor should not create sessions without credentials"
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--smoke-session"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    checks = {check["name"]: check for check in payload["checks"]}
+    assert checks["session-smoke"]["ok"] is False
+    assert payload["decision"]["session_smoke_requested"] is True
+    assert payload["decision"]["session_smoke_verified"] is False
+    assert payload["decision"]["recommended_action"] == "fix_configuration"
+    assert payload["session_smoke"] == {
+        "skipped": True,
+        "reason": "missing_credentials",
+    }
 
 
 def test_direct_url_masks_secret_by_default(

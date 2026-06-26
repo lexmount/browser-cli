@@ -690,6 +690,189 @@ def _doctor_status(checks: list[dict[str, Any]]) -> str:
     return "pass"
 
 
+def _doctor_decision(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    checks_by_name = {check["name"]: check for check in checks}
+    blocking_checks = [
+        check["name"]
+        for check in checks
+        if not check["ok"] and check["severity"] == "error"
+    ]
+    warning_checks = [
+        check["name"]
+        for check in checks
+        if not check["ok"] and check["severity"] == "warning"
+    ]
+    api_check = checks_by_name.get("api", {})
+    session_smoke_check = checks_by_name.get("session-smoke")
+    api_verified = bool(api_check.get("ok") and not api_check.get("skipped"))
+    session_smoke_requested = session_smoke_check is not None
+    session_smoke_verified = bool(session_smoke_check and session_smoke_check.get("ok"))
+    ready_for_browser_work = not blocking_checks and api_verified
+
+    recommended_action = "continue"
+    next_command = "browser-cli session create"
+    if blocking_checks:
+        next_command = "browser-cli doctor --json"
+        if "credentials" in blocking_checks or "direct-url" in blocking_checks:
+            recommended_action = "fix_configuration"
+        elif "api" in blocking_checks:
+            recommended_action = "fix_api_access"
+        elif "session-smoke" in blocking_checks:
+            recommended_action = "fix_session_lifecycle"
+            next_command = "browser-cli doctor --smoke-session --json"
+        else:
+            recommended_action = "fix_errors"
+    elif not api_verified:
+        recommended_action = "run_api_check"
+        next_command = "browser-cli doctor --json"
+    elif warning_checks:
+        recommended_action = "continue_with_warnings"
+
+    return {
+        "ready_for_browser_work": ready_for_browser_work,
+        "api_verified": api_verified,
+        "session_smoke_requested": session_smoke_requested,
+        "session_smoke_verified": session_smoke_verified,
+        "blocking_checks": blocking_checks,
+        "warning_checks": warning_checks,
+        "recommended_action": recommended_action,
+        "next_command": next_command,
+    }
+
+
+def _doctor_workflow(decision: dict[str, Any]) -> dict[str, Any]:
+    recommended_action = decision["recommended_action"]
+    blocking_checks = list(decision["blocking_checks"])
+    warning_checks = list(decision["warning_checks"])
+    can_start_session = bool(decision["ready_for_browser_work"])
+
+    commands: list[str]
+    next_step: str
+    if can_start_session:
+        next_step = "start_browser_session"
+        commands = ["browser-cli session create"]
+        if not decision["session_smoke_verified"]:
+            commands.append("browser-cli doctor --smoke-session --json")
+    elif recommended_action == "run_api_check":
+        next_step = "verify_api"
+        commands = ["browser-cli doctor --json"]
+    elif recommended_action == "fix_configuration":
+        next_step = "configure_credentials"
+        commands = [
+            "browser-cli auth bootstrap",
+            "browser-cli auth login",
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+        ]
+    elif recommended_action == "fix_api_access":
+        next_step = "fix_api_access"
+        commands = [
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+            "browser-cli session list",
+        ]
+    elif recommended_action == "fix_session_lifecycle":
+        next_step = "debug_session_lifecycle"
+        commands = [
+            "browser-cli doctor --smoke-session --json",
+            "browser-cli session list --status active",
+        ]
+    else:
+        next_step = "fix_doctor_errors"
+        commands = [decision["next_command"]]
+
+    return {
+        "next_step": next_step,
+        "can_start_browser_work": can_start_session,
+        "primary_command": commands[0],
+        "commands": commands,
+        "blocking_checks": blocking_checks,
+        "warning_checks": warning_checks,
+        "smoke_session_recommended": bool(
+            can_start_session and not decision["session_smoke_verified"]
+        ),
+        "notes": [
+            "Use primary_command first; parse its JSON before continuing.",
+            "Run smoke-session only for onboarding or session lifecycle debugging.",
+            "Do not ask the user to paste API keys into chat.",
+        ],
+    }
+
+
+def _doctor_session_payload(session: Any) -> dict[str, Any]:
+    payload = session.model_dump(mode="json")
+    return {
+        key: payload.get(key)
+        for key in (
+            "session_id",
+            "status",
+            "browser_mode",
+            "project_id",
+            "created_at",
+            "inspect_url",
+        )
+        if payload.get(key) is not None
+    }
+
+
+def _doctor_session_smoke(
+    admin: LexmountBrowserAdmin,
+    *,
+    browser_mode: str,
+) -> tuple[bool, str, dict[str, Any]]:
+    session_id: str | None = None
+    payload: dict[str, Any] = {
+        "browser_mode": browser_mode,
+        "created": False,
+        "closed": False,
+    }
+    try:
+        result = admin.create_session(
+            context_id=None,
+            create_context=False,
+            context_mode="read_write",
+            browser_mode=browser_mode,
+            metadata=None,
+        )
+        session = result.session
+        session_id = session.session_id
+        payload.update(
+            {
+                "created": True,
+                "session": _doctor_session_payload(session),
+                "session_id": session_id,
+            }
+        )
+    except Exception as exc:
+        payload.update(_exception_brief(exc))
+        return False, "Browser session smoke test failed to create a session.", payload
+
+    if not session_id:
+        return (
+            False,
+            "Browser session smoke test created a session without a session_id.",
+            payload,
+        )
+
+    try:
+        admin.close_session(session_id)
+    except Exception as exc:
+        payload.update(
+            {
+                "closed": False,
+                "close_error": _exception_brief(exc),
+            }
+        )
+        return (
+            False,
+            "Browser session smoke test created a session but failed to close it.",
+            payload,
+        )
+
+    payload["closed"] = True
+    return True, "Browser session smoke test created and closed a session.", payload
+
+
 def cmd_doctor(args: argparse.Namespace) -> None:
     command = "doctor"
     checks: list[dict[str, Any]] = []
@@ -850,7 +1033,41 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 "Check credentials, project access, network connectivity, and LEXMOUNT_BASE_URL."
             )
 
+    session_smoke_payload: dict[str, Any] | None = None
+    if args.smoke_session:
+        if missing_required:
+            session_smoke_payload = {
+                "skipped": True,
+                "reason": "missing_credentials",
+            }
+            _doctor_check(
+                checks,
+                name="session-smoke",
+                ok=False,
+                severity="error",
+                message="Browser session smoke test skipped because credentials are missing.",
+                **session_smoke_payload,
+            )
+        else:
+            smoke_ok, smoke_message, session_smoke_payload = _doctor_session_smoke(
+                LexmountBrowserAdmin(),
+                browser_mode=args.smoke_browser_mode,
+            )
+            _doctor_check(
+                checks,
+                name="session-smoke",
+                ok=smoke_ok,
+                severity="error",
+                message=smoke_message,
+                **session_smoke_payload,
+            )
+            if not smoke_ok:
+                next_steps.append(
+                    "Check browser quota, project access, active sessions, and whether any smoke-test session needs manual cleanup."
+                )
+
     ok = _doctor_overall_ok(checks)
+    decision = _doctor_decision(checks)
     data = {
         "ok": ok,
         "command": command,
@@ -858,12 +1075,16 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "version": {"browser_cli": version},
         "configuration": {"environment": env_status},
         "checks": checks,
+        "decision": decision,
+        "workflow": _doctor_workflow(decision),
         "next_steps": next_steps,
     }
     if direct_url_payload is not None:
         data["direct_url"] = direct_url_payload
     if api_payload is not None:
         data["api"] = api_payload
+    if session_smoke_payload is not None:
+        data["session_smoke"] = session_smoke_payload
     _json_dump(data, exit_code=0 if ok else 1)
 
 
@@ -1901,6 +2122,17 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--skip-api",
         action="store_true",
         help="Skip the live Lexmount API connectivity check.",
+    )
+    doctor.add_argument(
+        "--smoke-session",
+        action="store_true",
+        help="Create and close a light browser session to verify session lifecycle.",
+    )
+    doctor.add_argument(
+        "--smoke-browser-mode",
+        default="light",
+        type=_normalize_browser_mode,
+        help="Browser mode used by --smoke-session. Default: light.",
     )
     doctor.set_defaults(func=cmd_doctor)
 

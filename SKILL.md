@@ -217,4 +217,22 @@ default, browser direct URLs are masked. Use reveal flags only for local
 debugging in a trusted shell.
 
 Run `browser-cli doctor --json` before browser work when setup may be stale. If
-`doctor` returns `ok: false`, follow its `next_steps` before creating sessions.
+`decision.ready_for_browser_work` is not `true`, follow
+`decision.recommended_action`, `decision.next_command`, `workflow.primary_command`,
+and `next_steps` before creating sessions. Prefer `workflow.primary_command`
+when it is present, and only continue to browser work when
+`workflow.can_start_browser_work` is true. Use
+`browser-cli doctor --smoke-session --json` only when onboarding or debugging
+session lifecycle issues; it creates and closes a temporary browser session.
+
+For smoke-session checks:
+
+1. Prefer plain `browser-cli doctor --json` for routine readiness checks.
+2. Use `browser-cli doctor --smoke-session --json` only to prove session create
+   and close permissions, quota, and project access.
+3. If the smoke check fails after creating a session, inspect `session_smoke` and
+   follow `next_steps`; there may be a temporary session that needs cleanup.
+4. Do not run smoke checks in tight loops or before every action because they
+   consume browser session capacity.
+5. Use `--smoke-browser-mode light` unless the user explicitly needs another
+   browser mode verified.
