@@ -17,7 +17,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "use `form-snapshot` before filling complex forms" in normalized
     assert "use `list-snapshot` before choosing from menus" in normalized
     assert "use `text-snapshot` for bounded visible text" in normalized
-    assert "use `dialog-snapshot` for modals" in normalized
+    assert "use `wait-dialog` or `dialog-snapshot` for modals" in normalized
     assert "use `frame-snapshot`" in normalized
     assert "For runtime errors, run `console-snapshot --install-only`" in normalized
     assert "Prefer semantic actions" in normalized
@@ -192,6 +192,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`list-snapshot`",
         "`text-snapshot`",
         "`dialog-snapshot`",
+        "`wait-dialog`",
         "`frame-snapshot`",
         "`performance-snapshot`",
         "`network-snapshot`",
@@ -269,6 +270,9 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`aria_live`" in normalized
     assert "`dialogs`" in normalized
     assert "`dialog_count`" in normalized
+    assert "`total_dialog_count`" in normalized
+    assert "`requested_text`" in normalized
+    assert "`modal_only`" in normalized
     assert "`controls`" in normalized
     assert "`control_count`" in normalized
     assert "`controls_truncated`" in normalized
@@ -405,7 +409,8 @@ def test_skill_includes_common_task_recipes() -> None:
     )
     assert "`press-key` for active/global shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized
-    assert "run `dialog-snapshot`, choose from `controls`" in normalized
+    assert "run `wait-dialog` when the dialog appears asynchronously" in normalized
+    assert "otherwise run `dialog-snapshot`, choose from `controls`" in normalized
     assert "run `frame-snapshot` and parse `readable`" in normalized
     assert "Read page results" in normalized
     assert "use `page-info` for URL/title/readyState/viewport checks" in normalized

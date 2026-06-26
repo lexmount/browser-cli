@@ -216,6 +216,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.list-snapshot",
         "action.text-snapshot",
         "action.dialog-snapshot",
+        "action.wait-dialog",
         "action.frame-snapshot",
         "action.performance-snapshot",
         "action.network-snapshot",
@@ -265,6 +266,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.list-snapshot" in payload["commands"]
     assert "action.text-snapshot" in payload["commands"]
     assert "action.dialog-snapshot" in payload["commands"]
+    assert "action.wait-dialog" in payload["commands"]
     assert "action.frame-snapshot" in payload["commands"]
     assert "action.performance-snapshot" in payload["commands"]
     assert "action.network-snapshot" in payload["commands"]
@@ -3909,6 +3911,71 @@ def test_action_dialog_snapshot_expression_extracts_dialog_controls(
     assert payload["command"] == "action.dialog-snapshot"
 
 
+def test_action_wait_dialog_expression_waits_for_matching_dialogs(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "dialog_wait"}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "wait-dialog",
+                "--session-id",
+                "s1",
+                "--selector",
+                "body",
+                "--text",
+                "Delete",
+                "--match",
+                "regex",
+                "--modal-only",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+                "--max-controls",
+                "8",
+                "--max-chars",
+                "240",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert "new Promise" in expression
+    assert "const collectDialogs = () =>" in expression
+    assert 'const rootSelector = "body"' in expression
+    assert 'const requestedText = "Delete"' in expression
+    assert 'const matchMode = "regex"' in expression
+    assert "const modalOnly = true" in expression
+    assert "const timeoutMs = Math.max(0, 1000.0)" in expression
+    assert "const maxControls = Math.max(0, 8)" in expression
+    assert "dialogText" in expression
+    assert "total_dialog_count" in expression
+    assert 'error: "invalid_regex"' in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.wait-dialog"
+
+
 def test_action_frame_snapshot_expression_extracts_frame_metadata(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4874,6 +4941,125 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                                 "absolute_url": "https://example.test/delete?token=***",
                                 "absolute_url_masked": True,
                             },
+                        ],
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-dialog",
+                "--session-id",
+                "s1",
+                "--selector",
+                "body",
+                "--text",
+                "Delete",
+                "--modal-only",
+            ],
+            "action.wait-dialog",
+            {
+                "kind": "dialog_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_text": "Delete",
+                "match": "contains",
+                "case_sensitive": False,
+                "modal_only": True,
+                "dialog_count": 1,
+                "total_dialog_count": 1,
+                "dialog": {
+                    "dialog_index": 0,
+                    "selector": "[role=dialog]",
+                    "role": "dialog",
+                    "title": "Confirm",
+                    "modal": True,
+                    "text": "Confirm Delete this item?",
+                    "controls": [
+                        {
+                            "control_index": 1,
+                            "selector": "a.confirm",
+                            "role": "link",
+                            "name": "Delete",
+                            "text": "Delete",
+                            "href": "/delete?token=***",
+                            "href_masked": True,
+                        }
+                    ],
+                },
+                "dialogs": [
+                    {
+                        "dialog_index": 0,
+                        "selector": "[role=dialog]",
+                        "role": "dialog",
+                        "title": "Confirm",
+                        "modal": True,
+                        "text": "Confirm Delete this item?",
+                        "controls": [
+                            {
+                                "control_index": 1,
+                                "selector": "a.confirm",
+                                "role": "link",
+                                "name": "Delete",
+                                "text": "Delete",
+                                "href": "/delete?token=***",
+                                "href_masked": True,
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "kind": "dialog_wait",
+                "found": True,
+                "matched": True,
+                "timed_out": False,
+                "requested_text": "Delete",
+                "match": "contains",
+                "case_sensitive": False,
+                "modal_only": True,
+                "dialog_count": 1,
+                "total_dialog_count": 1,
+                "dialog": {
+                    "dialog_index": 0,
+                    "selector": "[role=dialog]",
+                    "role": "dialog",
+                    "title": "Confirm",
+                    "modal": True,
+                    "text": "Confirm Delete this item?",
+                    "controls": [
+                        {
+                            "control_index": 1,
+                            "selector": "a.confirm",
+                            "role": "link",
+                            "name": "Delete",
+                            "text": "Delete",
+                            "href": "/delete?token=***",
+                            "href_masked": True,
+                        }
+                    ],
+                },
+                "dialogs": [
+                    {
+                        "dialog_index": 0,
+                        "selector": "[role=dialog]",
+                        "role": "dialog",
+                        "title": "Confirm",
+                        "modal": True,
+                        "text": "Confirm Delete this item?",
+                        "controls": [
+                            {
+                                "control_index": 1,
+                                "selector": "a.confirm",
+                                "role": "link",
+                                "name": "Delete",
+                                "text": "Delete",
+                                "href": "/delete?token=***",
+                                "href_masked": True,
+                            }
                         ],
                     }
                 ],

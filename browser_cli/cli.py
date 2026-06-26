@@ -3265,6 +3265,132 @@ def _dialog_snapshot_expression(
 """.strip()
 
 
+def _wait_dialog_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_controls: int,
+    max_chars: int,
+    text: str | None,
+    match: str,
+    case_sensitive: bool,
+    modal_only: bool,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    text_source = "null" if text is None else _js_literal(text)
+    return f"""
+() => new Promise((resolve) => {{
+  const collectDialogs = {
+        _dialog_snapshot_expression(
+            selector=selector,
+            include_hidden=include_hidden,
+            max_nodes=max_nodes,
+            max_controls=max_controls,
+            max_chars=max_chars,
+        )
+    };
+  const requestedText = {text_source};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const modalOnly = {_js_literal(modal_only)};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const requestedTextString = requestedText === null ? null : String(requestedText);
+  const hasTextFilter = requestedTextString !== null && requestedTextString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let pattern = null;
+  if (hasTextFilter && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedTextString, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const snapshot = collectDialogs();
+      resolve({{
+        url: snapshot.url,
+        title: snapshot.title,
+        kind: "dialog_wait",
+        found: false,
+        matched: false,
+        timed_out: false,
+        requested_text: requestedText,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        modal_only: modalOnly,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        waited_ms: Date.now() - startedAt,
+        dialog_count: 0,
+        total_dialog_count: snapshot.dialog_count,
+        dialog: null,
+        dialogs: [],
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const dialogText = (dialog) => [
+    dialog.name,
+    dialog.title,
+    dialog.description,
+    dialog.text,
+    ...(dialog.controls || []).flatMap((control) => [control.name, control.text])
+  ].filter(Boolean).join(" ");
+  const textMatches = (dialog) => {{
+    if (!hasTextFilter) return true;
+    const candidate = dialogText(dialog);
+    if (matchMode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requestedTextString);
+    if (matchMode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const matchingDialogs = (snapshot) => (snapshot.dialogs || [])
+    .filter((dialog) => !modalOnly || dialog.modal === true)
+    .filter(textMatches);
+  const finish = (found, snapshot, dialogs) => {{
+    resolve({{
+      url: snapshot.url,
+      title: snapshot.title,
+      kind: "dialog_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_text: requestedText,
+      match: matchMode,
+      case_sensitive: caseSensitive,
+      modal_only: modalOnly,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: Date.now() - startedAt,
+      dialog_count: dialogs.length,
+      total_dialog_count: snapshot.dialog_count,
+      dialog: dialogs.length ? dialogs[0] : null,
+      dialogs: dialogs.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    const snapshot = collectDialogs();
+    const dialogs = matchingDialogs(snapshot);
+    if (dialogs.length > 0) {{
+      finish(true, snapshot, dialogs);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false, snapshot, dialogs);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _frame_snapshot_expression(
     *,
     selector: str | None,
@@ -8058,6 +8184,23 @@ def cmd_action_dialog_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.dialog-snapshot", expression)
 
 
+def cmd_action_wait_dialog(args: argparse.Namespace) -> None:
+    expression = _wait_dialog_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_controls=args.max_controls,
+        max_chars=args.max_chars,
+        text=args.text,
+        match=args.match,
+        case_sensitive=args.case_sensitive,
+        modal_only=args.modal_only,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-dialog", expression)
+
+
 def cmd_action_frame_snapshot(args: argparse.Namespace) -> None:
     expression = _frame_snapshot_expression(
         selector=args.selector,
@@ -10245,6 +10388,52 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum characters to return per dialog text body.",
     )
     action_dialog_snapshot.set_defaults(func=cmd_action_dialog_snapshot)
+
+    action_wait_dialog = action_subparsers.add_parser(
+        "wait-dialog",
+        help="Wait for a modal/dialog entry and return its structure and controls",
+    )
+    _add_session_target_args(action_wait_dialog)
+    action_wait_dialog.add_argument(
+        "--selector",
+        help="Optional dialog or container selector used to scope dialogs.",
+    )
+    _add_snapshot_filter_args(action_wait_dialog)
+    action_wait_dialog.add_argument(
+        "--max-controls",
+        type=_non_negative_int,
+        default=30,
+        help="Maximum interactive controls to return per dialog.",
+    )
+    action_wait_dialog.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters to return per dialog text body.",
+    )
+    action_wait_dialog.add_argument(
+        "--text",
+        help="Optional text to match against dialog title, description, body, or controls.",
+    )
+    action_wait_dialog.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --text should match dialog text.",
+    )
+    action_wait_dialog.add_argument(
+        "--modal-only",
+        action="store_true",
+        help="Only match dialogs that report modal=true.",
+    )
+    action_wait_dialog.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_dialog.add_argument("--poll-ms", type=float, default=100)
+    action_wait_dialog.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make text matching case-sensitive.",
+    )
+    action_wait_dialog.set_defaults(func=cmd_action_wait_dialog)
 
     action_frame_snapshot = action_subparsers.add_parser(
         "frame-snapshot",
