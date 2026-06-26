@@ -2730,6 +2730,209 @@ def _table_snapshot_expression(
 """.strip()
 
 
+def _list_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_items: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxItems = Math.max(0, {_js_literal(max_items)});
+  const listSelector = [
+    "ul",
+    "ol",
+    "menu",
+    "[role~='list']",
+    "[role~='listbox']",
+    "[role~='menu']",
+    "[role~='tree']"
+  ].join(",");
+  const itemSelector = [
+    "li",
+    "[role~='listitem']",
+    "[role~='option']",
+    "[role~='menuitem']",
+    "[role~='menuitemcheckbox']",
+    "[role~='menuitemradio']",
+    "[role~='treeitem']"
+  ].join(",");
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{ absolute_url: raw, absolute_url_masked: false }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        same_origin: parsed.origin === location.origin
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        same_origin: null
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allLists = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(listSelector) ? [root] : []),
+      ...root.querySelectorAll(listSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allLists.push(candidate);
+      }}
+    }}
+  }}
+  const directItemsOf = (list) => {{
+    const items = [...list.querySelectorAll(itemSelector)];
+    const direct = items.filter((item) => item.closest(listSelector) === list);
+    return direct.length ? direct : items;
+  }};
+  const selectedState = (item) => {{
+    const ariaSelected = item.getAttribute("aria-selected");
+    if (ariaSelected === "true") return true;
+    if (ariaSelected === "false") return false;
+    return "selected" in item ? Boolean(item.selected) : null;
+  }};
+  const checkedState = (item) => {{
+    const ariaChecked = item.getAttribute("aria-checked");
+    if (ariaChecked === "true") return true;
+    if (ariaChecked === "false") return false;
+    if (ariaChecked === "mixed") return "mixed";
+    const input = item.matches?.("input[type=checkbox],input[type=radio]")
+      ? item
+      : item.querySelector("input[type=checkbox],input[type=radio]");
+    return input ? Boolean(input.checked) : null;
+  }};
+  const expandedState = (item) => {{
+    const ariaExpanded = item.getAttribute("aria-expanded");
+    if (ariaExpanded === "true") return true;
+    if (ariaExpanded === "false") return false;
+    return null;
+  }};
+  const disabledState = (item) =>
+    Boolean(item.disabled) || item.getAttribute("aria-disabled") === "true";
+  const itemLevel = (item, list) => {{
+    let level = 1;
+    let current = item.parentElement;
+    while (current && current !== list) {{
+      if (current.matches?.(listSelector)) level += 1;
+      current = current.parentElement;
+    }}
+    return level;
+  }};
+  const linkInfo = (link) => {{
+    const rawHref = link.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    return {{
+      text: textOf(link),
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...maskedParsedUrl(rawHref)
+    }};
+  }};
+  const linksOf = (item) => {{
+    const links = [
+      ...(item.matches?.(linkSelector) ? [item] : []),
+      ...item.querySelectorAll(linkSelector)
+    ];
+    return links.map(linkInfo);
+  }};
+  const itemInfo = (item, itemIndex, list) => {{
+    const info = nodeInfo(item);
+    return {{
+      item_index: itemIndex,
+      ...info,
+      level: itemLevel(item, list),
+      selected: selectedState(item),
+      checked: checkedState(item),
+      expanded: expandedState(item),
+      disabled: disabledState(item),
+      links: linksOf(item)
+    }};
+  }};
+  const listInfo = (list, listIndex) => {{
+    const tag = list.tagName.toLowerCase();
+    const rawItems = directItemsOf(list);
+    const visibleItems = rawItems.filter(visible);
+    const candidateItems = includeHidden ? rawItems : visibleItems;
+    const items = candidateItems
+      .slice(0, maxItems)
+      .map((item, itemIndex) => itemInfo(item, itemIndex, list));
+    return {{
+      list_index: listIndex,
+      ...nodeInfo(list),
+      ordered: tag === "ol",
+      start: tag === "ol" ? Number(list.getAttribute("start") || 1) : null,
+      reversed: tag === "ol" ? Boolean(list.reversed) : null,
+      item_count: candidateItems.length,
+      visible_item_count: visibleItems.length,
+      node_count: items.length,
+      truncated: candidateItems.length > items.length,
+      items
+    }};
+  }};
+  const visibleLists = allLists.filter(visible);
+  const candidateLists = includeHidden ? allLists : visibleLists;
+  const lists = limited(candidateLists).map(listInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "lists",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_items: maxItems,
+    list_count: candidateLists.length,
+    node_count: lists.length,
+    total_count: allLists.length,
+    visible_count: visibleLists.length,
+    truncated: maxNodes !== null && candidateLists.length > lists.length,
+    lists
+  }};
+}}
+""".strip()
+
+
 def _outline_snapshot_expression(
     *,
     selector: str | None,
@@ -6315,6 +6518,16 @@ def cmd_action_table_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.table-snapshot", expression)
 
 
+def cmd_action_list_snapshot(args: argparse.Namespace) -> None:
+    expression = _list_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_items=args.max_items,
+    )
+    _run_eval_backed_action_command(args, "action.list-snapshot", expression)
+
+
 def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
     expression = _outline_snapshot_expression(
         selector=args.selector,
@@ -8372,6 +8585,24 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum cells to return per row.",
     )
     action_table_snapshot.set_defaults(func=cmd_action_table_snapshot)
+
+    action_list_snapshot = action_subparsers.add_parser(
+        "list-snapshot",
+        help="Capture native and ARIA lists, menus, listboxes, and tree items",
+    )
+    _add_session_target_args(action_list_snapshot)
+    action_list_snapshot.add_argument(
+        "--selector",
+        help="Optional list or container selector used to scope lists.",
+    )
+    _add_snapshot_filter_args(action_list_snapshot)
+    action_list_snapshot.add_argument(
+        "--max-items",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum items to return per list.",
+    )
+    action_list_snapshot.set_defaults(func=cmd_action_list_snapshot)
 
     action_outline_snapshot = action_subparsers.add_parser(
         "outline-snapshot",

@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -287,6 +287,7 @@ browser-cli action click-index --session-id <session_id> --selector ".item butto
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
+browser-cli action list-snapshot --session-id <session_id> --selector ".results" --max-items 50
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -303,7 +304,7 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, and `press-key` plus `click-text`, `click-role`,
-`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `outline-snapshot`, `form-snapshot`,
+`click-index`, `fill-label`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `outline-snapshot`, `form-snapshot`,
 `accessibility-snapshot`, and `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
@@ -316,7 +317,8 @@ Prefer these built-in actions over writing custom JavaScript. `page-info`, `relo
 `requested_checked`, `previous_checked`, `changed`, `links`, `link_count`,
 `href`, `href_masked`, `absolute_url`, `absolute_url_masked`, `same_origin`,
 `external`, `download`, `tables`, `table_count`, `headers`, `rows`, `cells`,
-`row_count`, `cell_count`, `headings`, `landmarks`, `outline_count`,
+`row_count`, `cell_count`, `lists`, `list_count`, `items`, `item_count`,
+`expanded`, `headings`, `landmarks`, `outline_count`,
 `heading_count`, `landmark_count`, `node_type`, `level`, `ready_state`,
 `visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
 `language`, `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
@@ -331,7 +333,8 @@ real value into chat.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot` uses the same URL masking for links found inside table cells.
+`table-snapshot` and `list-snapshot` use the same URL masking for links found
+inside table cells or list items.
 For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
 `body_text_length`, `html_length`, `language`, and `referrer` before taking a
 larger `snapshot`.
@@ -340,10 +343,12 @@ For page work, choose actions in this order:
 
 1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
    are unclear; use `outline-snapshot` for page structure; use `form-snapshot`
-   before filling complex forms.
+   before filling complex forms; use `list-snapshot` before choosing from menus,
+   search results, listboxes, or task lists.
 2. Prefer semantic actions: `wait-role` for async roles/names, `click-role` for known roles/names, `click-text` for
    visible text, `click-index` for a chosen repeated selector match,
-   `link-snapshot` for choosing or reporting navigation URLs, `fill-label` for
+   `link-snapshot` for choosing or reporting navigation URLs, `list-snapshot`
+   for reading list/menu item state, `fill-label` for
    labeled text fields, `select-label` for labeled native selects, and
    `check-label` for labeled checkbox or switch controls.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
@@ -384,6 +389,7 @@ Common task recipes:
    `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: use `wait-role` when the control appears asynchronously,
    use `link-snapshot` when the task is to choose, inspect, or report navigation URLs,
+   use `list-snapshot` before choosing from menus, listboxes, task lists, or search results,
    prefer `click-role`, then `click-text`, then `scroll-into-view` and selector
    `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
    selector. For repeated matches, run `query` and then `click-index --index <n>`.
@@ -397,6 +403,7 @@ Common task recipes:
    `interactive-snapshot`.
 5. Read page results: use `page-info` for URL/title/readyState/viewport checks,
    `wait-title` for async title changes, `wait-count` for dynamic lists,
+   `list-snapshot` for menu/listbox/search-result/task-list content,
    `table-snapshot` for HTML or ARIA table/report data,
    `outline-snapshot` for headings and landmarks,
    `wait-attribute` for DOM attributes, `wait-state` for

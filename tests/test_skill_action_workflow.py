@@ -15,6 +15,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
 
     assert "Inspect with `snapshot`, then `interactive-snapshot`" in normalized
     assert "use `form-snapshot` before filling complex forms" in normalized
+    assert "use `list-snapshot` before choosing from menus" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
     assert "`click-role` for known roles/names" in normalized
@@ -184,6 +185,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`press-key`",
         "`link-snapshot`",
         "`table-snapshot`",
+        "`list-snapshot`",
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
@@ -243,6 +245,11 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`cells`" in normalized
     assert "`row_count`" in normalized
     assert "`cell_count`" in normalized
+    assert "`lists`" in normalized
+    assert "`list_count`" in normalized
+    assert "`items`" in normalized
+    assert "`item_count`" in normalized
+    assert "`expanded`" in normalized
     assert "`headings`" in normalized
     assert "`landmarks`" in normalized
     assert "`outline_count`" in normalized
@@ -300,11 +307,18 @@ def test_skill_includes_common_task_recipes() -> None:
         in normalized
     )
     assert (
+        "use `list-snapshot` before choosing from menus, listboxes, task lists, or search results"
+        in normalized
+    )
+    assert (
         "prefer `click-role`, then `click-text`, then `scroll-into-view`" in normalized
     )
     assert "after `exists`, `inspect`, or `bounding-box`" in normalized
     assert "For repeated matches, run `query` and then" in normalized
     assert "`click-index --index <n>`" in normalized
+    assert (
+        "`list-snapshot` for menu/listbox/search-result/task-list content" in normalized
+    )
     assert "`table-snapshot` for HTML or ARIA table/report data" in normalized
     assert "`outline-snapshot` for headings and landmarks" in normalized
     assert "Navigate page history or async refresh" in normalized

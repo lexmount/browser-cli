@@ -319,6 +319,7 @@ browser-cli action click-index --session-id <session_id> --selector ".item butto
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
+browser-cli action list-snapshot --session-id <session_id> --selector ".results" --max-items 50
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -335,7 +336,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -350,6 +351,7 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `changed`, `links`, `link_count`, `href`, `href_masked`, `absolute_url`,
 `absolute_url_masked`, `same_origin`, `external`, `download`,
 `tables`, `table_count`, `headers`, `rows`, `cells`, `row_count`, `cell_count`,
+`lists`, `list_count`, `items`, `item_count`, `selected`, `checked`, `expanded`,
 `headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
 `node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
@@ -366,7 +368,8 @@ state is correct.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot` uses the same URL masking for links found inside table cells.
+`table-snapshot` and `list-snapshot` use the same URL masking for links found
+inside table cells or list items.
 
 Each action must receive exactly one browser target:
 
@@ -516,7 +519,11 @@ Common agent recipes:
   choose, inspect, or report navigation URLs, then use `scroll-into-view` and
   selector `click` after `exists`, `inspect`, or `bounding-box` confirms a
   stable selector.
-- Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
+- Repeated list item: `list-snapshot` for menus, search results, listboxes, and
+  task lists -> read `items`, `links`, `checked`, `selected`, and `expanded`;
+  use `--selector` and `--max-items` to keep output bounded. Fall back to
+  `query` -> choose a zero-based candidate -> `click-index` when the list is not
+  semantic.
 - Table or report data: `table-snapshot` -> read `headers`, `rows`, and `cells`;
   use `--selector`, `--max-rows`, and `--max-cells` to keep output bounded.
 - Page structure: `outline-snapshot` -> read `headings` and `landmarks` before
@@ -532,6 +539,7 @@ Common agent recipes:
   `interactive-snapshot`.
 - Read results: `page-info` for URL/title/readyState/viewport checks,
   `wait-title` for async title changes, `wait-count` for dynamic lists,
+  `list-snapshot` for menu/listbox/search-result/task-list content,
   `wait-attribute` for DOM attributes, `wait-state` for
   enabled/visible/checked/focused states, `get-text` for known selectors, or
   `snapshot` when the selector is unknown. Use `wait-text --state absent` when

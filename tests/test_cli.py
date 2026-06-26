@@ -213,6 +213,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.fill-label",
         "action.link-snapshot",
         "action.table-snapshot",
+        "action.list-snapshot",
         "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
@@ -253,6 +254,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.press-key" in payload["commands"]
     assert "action.link-snapshot" in payload["commands"]
     assert "action.table-snapshot" in payload["commands"]
+    assert "action.list-snapshot" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -3731,6 +3733,60 @@ def test_action_table_snapshot_expression_extracts_bounded_rows_and_cells(
     assert payload["command"] == "action.table-snapshot"
 
 
+def test_action_list_snapshot_expression_extracts_items_and_links(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "lists", "lists": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "list-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".results",
+                "--include-hidden",
+                "--max-items",
+                "7",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert 'const rootSelector = ".results"' in expression
+    assert "const maxItems = Math.max(0, 7)" in expression
+    assert "ul" in expression
+    assert "[role~='listbox']" in expression
+    assert "[role~='menuitemcheckbox']" in expression
+    assert "[role~='treeitem']" in expression
+    assert "item_count: candidateItems.length" in expression
+    assert "selected: selectedState(item)" in expression
+    assert "checked: checkedState(item)" in expression
+    assert "href_masked" in expression
+    assert "absolute_url_masked" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.list-snapshot"
+
+
 def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4060,6 +4116,98 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                                         ],
                                     },
                                     {"column_index": 1, "text": "$42"},
+                                ],
+                            },
+                        ],
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "list-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".results",
+                "--max-items",
+                "5",
+            ],
+            "action.list-snapshot",
+            {
+                "kind": "lists",
+                "selector": ".results",
+                "list_count": 1,
+                "node_count": 1,
+                "lists": [
+                    {
+                        "list_index": 0,
+                        "selector": "ul.results",
+                        "item_count": 2,
+                        "items": [
+                            {
+                                "item_index": 0,
+                                "selector": "li:nth-of-type(1)",
+                                "text": "Alpha",
+                                "checked": None,
+                                "selected": None,
+                                "links": [],
+                            },
+                            {
+                                "item_index": 1,
+                                "selector": "li:nth-of-type(2)",
+                                "text": "Beta",
+                                "checked": True,
+                                "selected": False,
+                                "links": [
+                                    {
+                                        "text": "Details",
+                                        "href": "/details?token=***",
+                                        "href_masked": True,
+                                        "absolute_url": "https://example.test/details?token=***",
+                                        "absolute_url_masked": True,
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            },
+            {
+                "kind": "lists",
+                "selector": ".results",
+                "list_count": 1,
+                "node_count": 1,
+                "lists": [
+                    {
+                        "list_index": 0,
+                        "selector": "ul.results",
+                        "item_count": 2,
+                        "items": [
+                            {
+                                "item_index": 0,
+                                "selector": "li:nth-of-type(1)",
+                                "text": "Alpha",
+                                "checked": None,
+                                "selected": None,
+                                "links": [],
+                            },
+                            {
+                                "item_index": 1,
+                                "selector": "li:nth-of-type(2)",
+                                "text": "Beta",
+                                "checked": True,
+                                "selected": False,
+                                "links": [
+                                    {
+                                        "text": "Details",
+                                        "href": "/details?token=***",
+                                        "href_masked": True,
+                                        "absolute_url": "https://example.test/details?token=***",
+                                        "absolute_url_masked": True,
+                                    }
                                 ],
                             },
                         ],
