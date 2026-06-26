@@ -10036,6 +10036,27 @@ def cmd_commands(args: argparse.Namespace) -> None:
     catalog["commands"] = commands
     catalog["command_count"] = len(commands)
 
+    if args.workflow:
+        workflow = catalog["agent_workflows"].get(args.workflow)
+        if workflow is None:
+            _failure(
+                command,
+                "unknown_workflow",
+                f"Unknown agent workflow: {args.workflow}",
+                workflow=args.workflow,
+                available_workflows=sorted(catalog["agent_workflows"]),
+            )
+        _success(
+            command,
+            schema_version=catalog["schema_version"],
+            group=args.group,
+            workflow_id=args.workflow,
+            workflow=workflow,
+            agent_entrypoints=catalog["agent_entrypoints"],
+            json_output=catalog["json_output"],
+            secret_policy=catalog["secret_policy"],
+        )
+
     if args.workflows_only:
         _success(
             command,
@@ -11830,6 +11851,10 @@ def _add_commands_command(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--workflows-only",
         action="store_true",
         help="Return only structured agent workflows for compact agent setup.",
+    )
+    output.add_argument(
+        "--workflow",
+        help="Return a single structured agent workflow by id.",
     )
     commands.set_defaults(func=cmd_commands)
 

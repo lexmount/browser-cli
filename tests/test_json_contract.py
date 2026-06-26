@@ -115,8 +115,13 @@ def test_json_contract_documents_agent_workflows() -> None:
     text = JSON_CONTRACT.read_text()
 
     assert "`--workflows-only`" in text
+    assert "`--workflow <id>`" in text
     assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
+    assert "`workflow_id`" in text
+    assert "`workflow`" in text
+    assert "`available_workflows`" in text
+    assert "`error=unknown_workflow`" in text
     assert "`success_condition`" in text
     assert "`on_failure_read`" in text
     assert "`cleanup`" in text

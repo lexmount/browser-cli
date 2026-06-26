@@ -43,6 +43,9 @@ returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
 returns compact command names, and `--group <name>` filters by command group.
 `--workflows-only` returns a compact payload with `workflow_count`,
 `agent_workflows`, and `agent_entrypoints` without the large `commands` array.
+`--workflow <id>` returns one workflow as `workflow_id` and `workflow`; unknown
+workflow ids fail as JSON with `error=unknown_workflow` and
+`available_workflows`.
 `agent_workflows` describes ordered setup, one-off page, and persistent login
 state steps with `command`, `read`, `success_condition`, `on_failure_read`, and
 `cleanup` hints. Command entries may expose `aliases` on canonical commands plus

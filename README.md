@@ -477,8 +477,9 @@ local reveal flag.
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`. Use `--names-only`
 for compact command discovery and `--group action` when choosing a browser
 action. Use `--workflows-only` when you only need the structured setup,
-one-off page task, and persistent login state workflows. `agent_workflows` gives
-ordered steps with fields to read, success conditions, failure hints, and cleanup
+one-off page task, and persistent login state workflows, or
+`--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
+steps with fields to read, success conditions, failure hints, and cleanup
 commands. Action catalog entries include `browser_target.exactly_one_of` so
 agents can supply exactly one of `--session-id`, `--connect-url`, or
 `--direct-url`.

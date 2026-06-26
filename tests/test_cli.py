@@ -273,6 +273,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "--workflows-only" in option["flags"]
         for option in commands["commands"]["options"]
     )
+    assert any(
+        "--workflow" in option["flags"] for option in commands["commands"]["options"]
+    )
     assert "super-secret-key" not in json.dumps(payload)
 
 
@@ -305,6 +308,50 @@ def test_commands_catalog_returns_workflows_only(
     assert "browser-cli auth login" in payload["agent_entrypoints"]["setup"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
+
+
+def test_commands_catalog_returns_single_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "one_off_page_task"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "commands"
+    assert payload["workflow_id"] == "one_off_page_task"
+    assert "commands" not in payload
+    assert "agent_workflows" not in payload
+    assert payload["workflow"]["steps"][0]["id"] == "create_session"
+    assert payload["workflow"]["steps"][-1] == {
+        "id": "close_session",
+        "command": "browser-cli session close --session-id <session_id>",
+        "cleanup": True,
+    }
+    assert (
+        "browser-cli session create"
+        in payload["agent_entrypoints"]["one_off_page_task"]
+    )
+
+
+def test_commands_catalog_fails_unknown_workflow_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "missing"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "commands"
+    assert payload["error"] == "unknown_workflow"
+    assert payload["workflow"] == "missing"
+    assert payload["available_workflows"] == [
+        "one_off_page_task",
+        "persistent_login_state",
+        "setup_and_verify",
+    ]
 
 
 def test_commands_catalog_filters_group_and_names_only(
