@@ -2558,6 +2558,178 @@ def _link_snapshot_expression(
 """.strip()
 
 
+def _table_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_rows: int,
+    max_cells: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxRows = Math.max(0, {_js_literal(max_rows)});
+  const maxCells = Math.max(0, {_js_literal(max_cells)});
+  const tableSelector = "table,[role~='table'],[role~='grid']";
+  const rowSelector = "tr,[role~='row']";
+  const cellSelector = [
+    "th",
+    "td",
+    "[role~='cell']",
+    "[role~='gridcell']",
+    "[role~='columnheader']",
+    "[role~='rowheader']"
+  ].join(",");
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{ absolute_url: raw, absolute_url_masked: false }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{ absolute_url: parsed.href, absolute_url_masked: masked }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allTables = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(tableSelector) ? [root] : []),
+      ...root.querySelectorAll(tableSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allTables.push(candidate);
+      }}
+    }}
+  }}
+  const linkInfo = (link) => {{
+    const rawHref = link.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    return {{
+      text: textOf(link),
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...maskedParsedUrl(rawHref)
+    }};
+  }};
+  const numericAttribute = (element, name, fallback) => {{
+    const value = Number(element.getAttribute(name));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  }};
+  const cellInfo = (cell, cellIndex) => {{
+    const tag = cell.tagName.toLowerCase();
+    const role = roleOf(cell);
+    const links = [...cell.querySelectorAll(linkSelector)].map(linkInfo);
+    return {{
+      column_index: cellIndex,
+      selector: nodeInfo(cell).selector,
+      tag,
+      role: role || null,
+      header: tag === "th" || role === "columnheader" || role === "rowheader",
+      scope: cell.getAttribute("scope"),
+      text: textOf(cell),
+      colspan: numericAttribute(cell, "colspan", numericAttribute(cell, "aria-colspan", 1)),
+      rowspan: numericAttribute(cell, "rowspan", numericAttribute(cell, "aria-rowspan", 1)),
+      links
+    }};
+  }};
+  const rowInfo = (row, rowIndex) => {{
+    const rawCells = "cells" in row ? [...row.cells] : [...row.querySelectorAll(cellSelector)];
+    const visibleCells = rawCells.filter(visible);
+    const candidateCells = includeHidden ? rawCells : visibleCells;
+    const cells = candidateCells.slice(0, maxCells).map(cellInfo);
+    return {{
+      row_index: rowIndex,
+      selector: nodeInfo(row).selector,
+      cell_count: candidateCells.length,
+      visible_cell_count: visibleCells.length,
+      node_count: cells.length,
+      truncated: candidateCells.length > cells.length,
+      cells
+    }};
+  }};
+  const tableInfo = (table, tableIndex) => {{
+    const nativeTable = table.tagName.toLowerCase() === "table";
+    const rawRows = nativeTable ? [...table.rows] : [...table.querySelectorAll(rowSelector)];
+    const visibleRows = rawRows.filter(visible);
+    const candidateRows = includeHidden ? rawRows : visibleRows;
+    const rows = candidateRows.slice(0, maxRows).map(rowInfo);
+    const captionElement = nativeTable
+      ? table.caption
+      : table.querySelector("caption,[role~='caption']");
+    const headerRow = rows.find((row) => row.cells.some((cell) => cell.header));
+    return {{
+      table_index: tableIndex,
+      ...nodeInfo(table),
+      caption: captionElement ? textOf(captionElement) : null,
+      headers: headerRow ? headerRow.cells.map((cell) => cell.text) : [],
+      row_count: candidateRows.length,
+      visible_row_count: visibleRows.length,
+      node_count: rows.length,
+      truncated: candidateRows.length > rows.length,
+      rows
+    }};
+  }};
+  const visibleTables = allTables.filter(visible);
+  const candidateTables = includeHidden ? allTables : visibleTables;
+  const tables = limited(candidateTables).map(tableInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "tables",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_rows: maxRows,
+    max_cells: maxCells,
+    table_count: candidateTables.length,
+    node_count: tables.length,
+    total_count: allTables.length,
+    visible_count: visibleTables.length,
+    truncated: maxNodes !== null && candidateTables.length > tables.length,
+    tables
+  }};
+}}
+""".strip()
+
+
 def _wait_text_expression(
     *,
     text: str,
@@ -5997,6 +6169,17 @@ def cmd_action_link_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.link-snapshot", expression)
 
 
+def cmd_action_table_snapshot(args: argparse.Namespace) -> None:
+    expression = _table_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_rows=args.max_rows,
+        max_cells=args.max_cells,
+    )
+    _run_eval_backed_action_command(args, "action.table-snapshot", expression)
+
+
 def cmd_action_accessibility_snapshot(args: argparse.Namespace) -> None:
     expression = f"""
 () => {{
@@ -8021,6 +8204,30 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Only return links whose resolved URL has the same origin as the current page.",
     )
     action_link_snapshot.set_defaults(func=cmd_action_link_snapshot)
+
+    action_table_snapshot = action_subparsers.add_parser(
+        "table-snapshot",
+        help="Capture page tables with headers, rows, cells, and cell links",
+    )
+    _add_session_target_args(action_table_snapshot)
+    action_table_snapshot.add_argument(
+        "--selector",
+        help="Optional table or container selector used to scope tables.",
+    )
+    _add_snapshot_filter_args(action_table_snapshot)
+    action_table_snapshot.add_argument(
+        "--max-rows",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum rows to return per table.",
+    )
+    action_table_snapshot.add_argument(
+        "--max-cells",
+        type=_non_negative_int,
+        default=20,
+        help="Maximum cells to return per row.",
+    )
+    action_table_snapshot.set_defaults(func=cmd_action_table_snapshot)
 
     action_accessibility_snapshot = action_subparsers.add_parser(
         "accessibility-snapshot",

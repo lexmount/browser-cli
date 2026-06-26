@@ -212,6 +212,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.click-role",
         "action.fill-label",
         "action.link-snapshot",
+        "action.table-snapshot",
         "action.interactive-snapshot",
         "direct-url",
     ):
@@ -250,6 +251,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.wait-title" in payload["commands"]
     assert "action.press-key" in payload["commands"]
     assert "action.link-snapshot" in payload["commands"]
+    assert "action.table-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
     assert all(command.startswith("action.") for command in payload["commands"])
@@ -3671,6 +3673,62 @@ def test_action_link_snapshot_expression_masks_sensitive_url_parts(
     assert payload["command"] == "action.link-snapshot"
 
 
+def test_action_table_snapshot_expression_extracts_bounded_rows_and_cells(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "tables", "tables": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "table-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".report",
+                "--include-hidden",
+                "--max-rows",
+                "7",
+                "--max-cells",
+                "3",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert 'const rootSelector = ".report"' in expression
+    assert "const maxRows = Math.max(0, 7)" in expression
+    assert "const maxCells = Math.max(0, 3)" in expression
+    assert "table,[role~='table'],[role~='grid']" in expression
+    assert "[role~='gridcell']" in expression
+    assert (
+        "headers: headerRow ? headerRow.cells.map((cell) => cell.text) : []"
+        in expression
+    )
+    assert "sensitiveUrlParamName" in expression
+    assert "absolute_url_masked" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.table-snapshot"
+
+
 @pytest.mark.parametrize(
     ("argv", "command", "value", "expected_result"),
     [
@@ -3847,6 +3905,112 @@ def test_action_link_snapshot_expression_masks_sensitive_url_parts(
                         "absolute_url_masked": True,
                         "same_origin": True,
                         "external": False,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "table-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".results",
+                "--max-rows",
+                "5",
+                "--max-cells",
+                "4",
+            ],
+            "action.table-snapshot",
+            {
+                "kind": "tables",
+                "selector": ".results",
+                "table_count": 1,
+                "node_count": 1,
+                "tables": [
+                    {
+                        "table_index": 0,
+                        "selector": "table.results",
+                        "caption": "Invoices",
+                        "headers": ["Invoice", "Amount"],
+                        "row_count": 2,
+                        "rows": [
+                            {
+                                "row_index": 0,
+                                "cell_count": 2,
+                                "cells": [
+                                    {"column_index": 0, "text": "Invoice"},
+                                    {"column_index": 1, "text": "Amount"},
+                                ],
+                            },
+                            {
+                                "row_index": 1,
+                                "cell_count": 2,
+                                "cells": [
+                                    {
+                                        "column_index": 0,
+                                        "text": "INV-1",
+                                        "links": [
+                                            {
+                                                "text": "INV-1",
+                                                "href": "/invoice?id=1&token=***",
+                                                "href_masked": True,
+                                                "absolute_url": "https://example.test/invoice?id=1&token=***",
+                                                "absolute_url_masked": True,
+                                            }
+                                        ],
+                                    },
+                                    {"column_index": 1, "text": "$42"},
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            },
+            {
+                "kind": "tables",
+                "selector": ".results",
+                "table_count": 1,
+                "node_count": 1,
+                "tables": [
+                    {
+                        "table_index": 0,
+                        "selector": "table.results",
+                        "caption": "Invoices",
+                        "headers": ["Invoice", "Amount"],
+                        "row_count": 2,
+                        "rows": [
+                            {
+                                "row_index": 0,
+                                "cell_count": 2,
+                                "cells": [
+                                    {"column_index": 0, "text": "Invoice"},
+                                    {"column_index": 1, "text": "Amount"},
+                                ],
+                            },
+                            {
+                                "row_index": 1,
+                                "cell_count": 2,
+                                "cells": [
+                                    {
+                                        "column_index": 0,
+                                        "text": "INV-1",
+                                        "links": [
+                                            {
+                                                "text": "INV-1",
+                                                "href": "/invoice?id=1&token=***",
+                                                "href_masked": True,
+                                                "absolute_url": "https://example.test/invoice?id=1&token=***",
+                                                "absolute_url_masked": True,
+                                            }
+                                        ],
+                                    },
+                                    {"column_index": 1, "text": "$42"},
+                                ],
+                            },
+                        ],
                     }
                 ],
                 "url": "https://example.test",

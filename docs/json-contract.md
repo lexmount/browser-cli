@@ -66,7 +66,8 @@ Default behavior:
   `text_masked`, and related `*_length` fields to tell whether `***` represents
   a hidden value rather than the literal page value.
 - `action link-snapshot` masks sensitive URL query parameter values by default
-  in `href` and `absolute_url`. Parse `href_masked` and
+  in `href` and `absolute_url`; `action table-snapshot` applies the same
+  masking to links found inside table cells. Parse `href_masked` and
   `absolute_url_masked` before copying or reporting URLs.
 - `auth status`, `auth token-info`, `auth refresh`, `auth logout`, and `doctor`
   may report local `device_token` metadata such as project id, token id, scopes,

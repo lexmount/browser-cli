@@ -318,6 +318,7 @@ browser-cli action click-role --session-id <session_id> --role button --name "Su
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
+browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
@@ -333,7 +334,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -347,6 +348,7 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `option_found`, `option_label`, `requested_checked`, `previous_checked`,
 `changed`, `links`, `link_count`, `href`, `href_masked`, `absolute_url`,
 `absolute_url_masked`, `same_origin`, `external`, `download`,
+`tables`, `table_count`, `headers`, `rows`, `cells`, `row_count`, `cell_count`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
 `viewport`, `scroll`, `body_text_length`, `html_length`, `language`,
 `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
@@ -361,6 +363,7 @@ state is correct.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
+`table-snapshot` uses the same URL masking for links found inside table cells.
 
 Each action must receive exactly one browser target:
 
@@ -511,6 +514,8 @@ Common agent recipes:
   selector `click` after `exists`, `inspect`, or `bounding-box` confirms a
   stable selector.
 - Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
+- Table or report data: `table-snapshot` -> read `headers`, `rows`, and `cells`;
+  use `--selector`, `--max-rows`, and `--max-cells` to keep output bounded.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
   `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized
   HTML before trying another action.

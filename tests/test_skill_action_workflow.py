@@ -183,6 +183,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`uncheck-label`",
         "`press-key`",
         "`link-snapshot`",
+        "`table-snapshot`",
         "`form-snapshot`",
         "`click-index`",
     ):
@@ -234,6 +235,13 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`same_origin`" in normalized
     assert "`external`" in normalized
     assert "`download`" in normalized
+    assert "`tables`" in normalized
+    assert "`table_count`" in normalized
+    assert "`headers`" in normalized
+    assert "`rows`" in normalized
+    assert "`cells`" in normalized
+    assert "`row_count`" in normalized
+    assert "`cell_count`" in normalized
     assert "`code`" in normalized
     assert "`target`" in normalized
     assert "`target_info`" in normalized
@@ -288,6 +296,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "after `exists`, `inspect`, or `bounding-box`" in normalized
     assert "For repeated matches, run `query` and then" in normalized
     assert "`click-index --index <n>`" in normalized
+    assert "`table-snapshot` for HTML or ARIA table/report data" in normalized
     assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
     assert "confirm with `page-info`, `wait-url`, `wait-title`" in normalized
