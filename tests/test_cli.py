@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from browser_cli import cli as cli_module
 from browser_cli.cli import main as cli_main
 
 
@@ -38,6 +40,516 @@ def test_direct_url_masks_secret_by_default(
         "connect_url": "wss://api.lexmount.cn/connection?project_id=project&api_key=***",
         "masked": True,
     }
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "message_part", "usage_part"),
+    [
+        (
+            ["action", "open-url", "--session-id", "s1"],
+            "action.open-url",
+            "the following arguments are required: --url",
+            "browser-cli action open-url",
+        ),
+        (
+            [
+                "action",
+                "wait-selector",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--state",
+                "nope",
+            ],
+            "action.wait-selector",
+            "invalid choice: 'nope'",
+            "browser-cli action wait-selector",
+        ),
+        (
+            ["nope"],
+            "browser-cli",
+            "invalid choice: 'nope'",
+            "browser-cli",
+        ),
+        (
+            [
+                "action",
+                "click-index",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".item",
+                "--index",
+                "-1",
+            ],
+            "action.click-index",
+            "argument --index: value must be non-negative",
+            "browser-cli action click-index",
+        ),
+    ],
+)
+def test_argument_errors_emit_json(
+    argv: list[str],
+    command: str,
+    message_part: str,
+    usage_part: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["command"] == command
+    assert payload["error"] == "argument_error"
+    assert message_part in payload["message"]
+    assert usage_part in payload["usage"]
+
+
+def _checks_by_name(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {check["name"]: check for check in payload["checks"]}
+
+
+def test_doctor_checks_install_env_direct_url_and_api(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli._package_version",
+        lambda distribution: {
+            "browser-cli": "0.1.0",
+            "lex-browser-runtime": "1.2.3",
+        }.get(distribution),
+    )
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            assert status is None
+            return DummyModel(
+                {
+                    "count": 2,
+                    "status_filter": status,
+                    "sessions": [],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "doctor"
+    assert payload["status"] == "ok"
+    assert payload["failed"] == 0
+    assert "secret" not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    assert checks["browser_cli"]["version"] == "0.1.0"
+    assert checks["lex_browser_runtime"]["version"] == "1.2.3"
+    assert checks["env.LEXMOUNT_API_KEY"]["status"] == "pass"
+    assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "pass"
+    assert checks["direct_url"]["status"] == "pass"
+    assert checks["direct_url"]["connect_url"].endswith("api_key=***")
+    assert checks["direct_url"]["connect_url_masked"] is True
+    assert checks["api_connectivity"] == {
+        "name": "api_connectivity",
+        "status": "pass",
+        "message": "Lexmount API is reachable",
+        "session_count": 2,
+        "status_filter": None,
+    }
+
+
+def test_doctor_fails_missing_required_env(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.delenv("LEXMOUNT_REGION", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["error"] == "doctor_failed"
+    assert payload["failed"] >= 2
+
+    checks = _checks_by_name(payload)
+    assert checks["env.LEXMOUNT_API_KEY"]["status"] == "fail"
+    assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "fail"
+    assert checks["direct_url"]["status"] == "fail"
+    assert checks["api_connectivity"]["status"] == "skipped"
+    assert checks["env.LEXMOUNT_API_KEY"]["fix"]["code"] == "configure_credentials"
+    assert checks["env.LEXMOUNT_API_KEY"]["fix"]["env"] == ["LEXMOUNT_API_KEY"]
+    assert "browser-cli auth login" in checks["env.LEXMOUNT_API_KEY"]["fix"]["commands"]
+    assert checks["env.LEXMOUNT_PROJECT_ID"]["fix"]["env"] == ["LEXMOUNT_PROJECT_ID"]
+    assert checks["direct_url"]["fix"]["code"] == "fix_direct_url_configuration"
+    assert checks["api_connectivity"]["fix"]["code"] == "run_live_api_check"
+
+
+def test_doctor_skip_api_does_not_call_admin(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            raise AssertionError("doctor --skip-api should not call API")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    checks = _checks_by_name(payload)
+    assert payload["ok"] is True
+    assert checks["direct_url"]["status"] == "pass"
+    assert checks["api_connectivity"]["status"] == "skipped"
+    assert checks["api_connectivity"]["fix"] == {
+        "code": "run_live_api_check",
+        "commands": ["browser-cli doctor"],
+        "guidance": [
+            "Rerun doctor without --skip-api when live API access is available."
+        ],
+    }
+
+
+def test_doctor_masks_api_error_messages(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "very-secret-key")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            raise RuntimeError(
+                f"request failed api_key=very-secret-key raw very-secret-key {status}"
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "very-secret-key" not in serialized
+    assert "api_key=***" in serialized
+    checks = _checks_by_name(payload)
+    assert checks["api_connectivity"]["status"] == "fail"
+    assert checks["api_connectivity"]["error"] == "RuntimeError"
+    assert checks["api_connectivity"]["fix"]["code"] == "verify_api_connectivity"
+    assert checks["api_connectivity"]["fix"]["commands"] == [
+        "browser-cli auth status",
+        "browser-cli doctor",
+    ]
+
+
+def test_runtime_failures_mask_sensitive_values(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    connect_url = (
+        "wss://api.lexmount.cn/connection?project_id=project"
+        "&api_key=server-secret&token=session-token"
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: connect_url,
+    )
+
+    def fake_run_browser_action(**kwargs: Any) -> SimpleNamespace:
+        raise RuntimeError(
+            "failed api_key=server-secret token=session-token raw local-secret"
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "snapshot", "--session-id", "s1"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "server-secret" not in serialized
+    assert "session-token" not in serialized
+    assert "local-secret" not in serialized
+    assert "api_key=***" in serialized
+    assert "token=***" in serialized
+
+
+def test_failure_payload_masks_nested_sensitive_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_module._failure(
+            "test.command",
+            "test_error",
+            "message api_key=server-secret raw local-secret",
+            api_key="server-secret",
+            details={
+                "access_token": "access-secret",
+                "url": "https://example.test?api_key=server-secret",
+                "items": [{"token": "item-secret"}],
+            },
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "server-secret" not in serialized
+    assert "access-secret" not in serialized
+    assert "item-secret" not in serialized
+    assert "local-secret" not in serialized
+    assert payload["api_key"] == "***"
+    assert payload["details"]["access_token"] == "***"
+    assert payload["details"]["items"] == [{"token": "***"}]
+    assert payload["details"]["url"].endswith("api_key=***")
+
+
+def test_auth_status_reports_env_without_revealing_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv("LEXMOUNT_BASE_URL", "https://api.example.test")
+    monkeypatch.setenv("LEXMOUNT_REGION", "cn")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "local-secret" not in json.dumps(payload)
+    assert payload["ok"] is True
+    assert payload["command"] == "auth.status"
+    assert payload["configured"] is True
+    assert payload["api_key"] == {
+        "present": True,
+        "masked_value": "***",
+        "length": len("local-secret"),
+    }
+    assert payload["project_id"]["value"] == "project"
+    assert payload["base_url"] == {
+        "present": True,
+        "value": "https://api.example.test",
+        "default": "https://api.lexmount.cn",
+        "effective_value": "https://api.example.test",
+        "using_default": False,
+    }
+    assert payload["region"]["value"] == "cn"
+    assert "browser-cli doctor" in payload["next_steps"][0]
+
+
+def test_auth_export_env_emits_safe_placeholders(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "export-env"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.export-env"
+    assert payload["shell"] == "posix"
+    assert payload["secrets_revealed"] is False
+    assert payload["warnings"] == []
+    assert payload["commands"] == [
+        "export LEXMOUNT_API_KEY='<api-key>'",
+        "export LEXMOUNT_PROJECT_ID='<project-id>'",
+    ]
+    assert payload["exports"][0]["usable"] is False
+    assert payload["exports"][1]["usable"] is False
+
+
+def test_auth_export_env_from_current_masks_api_key_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv("LEXMOUNT_BASE_URL", "https://api.example.test")
+    monkeypatch.setenv("LEXMOUNT_REGION", "cn")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "export-env",
+                "--from-current",
+                "--include-base-url",
+                "--include-region",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "local-secret" not in serialized
+    assert payload["commands"] == [
+        "export LEXMOUNT_API_KEY='<redacted-api-key>'",
+        "export LEXMOUNT_PROJECT_ID=project",
+        "export LEXMOUNT_BASE_URL=https://api.example.test",
+        "export LEXMOUNT_REGION=cn",
+    ]
+    assert payload["warnings"]
+    assert payload["exports"][0]["source"] == "env"
+    assert payload["exports"][0]["usable"] is False
+    assert payload["exports"][1]["source"] == "env"
+    assert payload["exports"][1]["usable"] is True
+
+
+def test_auth_export_env_can_reveal_current_secret_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "export-env", "--from-current", "--reveal-secrets"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["secrets_revealed"] is True
+    assert payload["warnings"] == []
+    assert "local-secret" in payload["script"]
+    assert payload["exports"][0]["usable"] is True
+
+
+def test_auth_login_guides_manual_browser_flow(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.login"
+    assert payload["flow"] == "manual_env"
+    assert payload["login_url"] == "https://browser.lexmount.cn"
+    assert payload["device_code_available"] is False
+    assert payload["flows"][0]["name"] == "manual_env"
+    assert payload["flows"][0]["available"] is True
+    assert payload["flows"][1]["name"] == "connect_from_codex"
+    assert payload["flows"][1]["available"] is False
+    assert "browser-cli doctor" in payload["commands"]
+
+    connect = payload["connect_from_codex"]
+    assert connect["available"] is False
+    assert connect["project_id"] is None
+    assert connect["project_id_source"] == "unset"
+    assert connect["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert connect["requested_expires_in"] == "7d"
+    assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["source"] == ["browser-cli"]
+    assert query["intent"] == ["agent-browser-control"]
+    assert query["response"] == ["env"]
+    assert query["expires_in"] == ["7d"]
+    assert query["scope"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert "project_id" not in query
+    assert any(
+        "scoped API keys" in item for item in payload["browser_site_recommendations"]
+    )
+    assert any(
+        "/connect/codex" in item for item in connect["browser_site_requirements"]
+    )
+
+
+def test_auth_login_builds_connect_from_codex_contract_from_args(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "env-project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--project-id",
+                "arg-project",
+                "--scope",
+                "browser:sessions",
+                "--scope",
+                "browser:actions",
+                "--scope",
+                "browser:sessions",
+                "--expires-in",
+                "24h",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    connect = payload["connect_from_codex"]
+    assert connect["project_id"] == "arg-project"
+    assert connect["project_id_source"] == "argument"
+    assert connect["requested_scopes"] == ["browser:sessions", "browser:actions"]
+    assert connect["requested_expires_in"] == "24h"
+
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["project_id"] == ["arg-project"]
+    assert query["scope"] == ["browser:sessions", "browser:actions"]
+    assert query["expires_in"] == ["24h"]
+
+
+def test_auth_login_uses_env_project_id_for_connect_from_codex_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "env-project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    connect = payload["connect_from_codex"]
+    assert connect["project_id"] == "env-project"
+    assert connect["project_id_source"] == "env"
+
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["project_id"] == ["env-project"]
 
 
 def test_session_list_passes_status_filter(
@@ -143,6 +655,278 @@ def test_session_create_passes_context_options(
     assert payload["ok"] is True
     assert payload["command"] == "session.create"
     assert payload["session"] == {"session_id": "s1", "status": "active"}
+
+
+def test_session_create_can_reuse_context_by_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list_contexts", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 2,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-locked",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex-login"},
+                        },
+                        {
+                            "context_id": "ctx-ready",
+                            "status": "available",
+                            "metadata": {"purpose": "codex-login"},
+                        },
+                    ],
+                }
+            )
+
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(
+                (
+                    "create_session",
+                    {
+                        "context_id": context_id,
+                        "create_context": create_context,
+                        "context_mode": context_mode,
+                        "browser_mode": browser_mode,
+                        "metadata": metadata,
+                    },
+                )
+            )
+            return DummyModel(
+                {
+                    "mode": "sdk",
+                    "context_id": context_id,
+                    "session": {"session_id": "s1", "status": "active"},
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+                "--context-status",
+                "available",
+                "--context-limit",
+                "5",
+                "--metadata-json",
+                '{"task":"smoke"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "session.create"
+    assert payload["context_id"] == "ctx-ready"
+    assert payload["session"] == {"session_id": "s1", "status": "active"}
+    assert payload["context_reuse"]["selected"] is True
+    assert payload["context_reuse"]["created"] is False
+    assert payload["context_reuse"]["context_id"] == "ctx-ready"
+    assert payload["context_reuse"]["reuse"]["reusable"] is True
+    assert payload["context_reuse"]["checked"] == 2
+    assert payload["context_reuse"]["metadata_filter"] == {"purpose": "codex-login"}
+    assert payload["context_reuse"]["status_filter"] == "available"
+    assert payload["context_reuse"]["limit"] == 5
+    assert calls == [
+        ("list_contexts", {"status": "available", "limit": 5}),
+        (
+            "create_session",
+            {
+                "context_id": "ctx-ready",
+                "create_context": False,
+                "context_mode": "read_write",
+                "browser_mode": "normal",
+                "metadata": {"task": "smoke"},
+            },
+        ),
+    ]
+
+
+def test_session_create_can_create_context_when_no_reusable_metadata_match(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list_contexts", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex-login"},
+                        }
+                    ],
+                }
+            )
+
+        def create_context(self, *, metadata: dict[str, Any] | None) -> DummyModel:
+            calls.append(("create_context", {"metadata": metadata}))
+            return DummyModel(
+                {
+                    "context_id": "ctx-new",
+                    "status": "available",
+                    "metadata": metadata,
+                }
+            )
+
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(
+                (
+                    "create_session",
+                    {
+                        "context_id": context_id,
+                        "create_context": create_context,
+                        "context_mode": context_mode,
+                        "browser_mode": browser_mode,
+                        "metadata": metadata,
+                    },
+                )
+            )
+            return DummyModel({"session": {"session_id": "s1"}})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+                "--create-context-if-missing",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["context_reuse"]["selected"] is True
+    assert payload["context_reuse"]["created"] is True
+    assert payload["context_reuse"]["context_id"] == "ctx-new"
+    assert payload["context_reuse"]["candidates"][0]["locked"] is True
+    assert calls == [
+        ("list_contexts", {"status": None, "limit": 20}),
+        ("create_context", {"metadata": {"purpose": "codex-login"}}),
+        (
+            "create_session",
+            {
+                "context_id": "ctx-new",
+                "create_context": False,
+                "context_mode": "read_write",
+                "browser_mode": "normal",
+                "metadata": None,
+            },
+        ),
+    ]
+
+
+def test_session_create_fails_when_metadata_context_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex-login"},
+                        }
+                    ],
+                }
+            )
+
+        def create_session(self, **kwargs: Any) -> DummyModel:
+            raise AssertionError("session should not be created without a context")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "session.create"
+    assert payload["error"] == "no_available_context"
+    assert payload["selected"] is False
+    assert payload["created"] is False
+    assert payload["candidates"][0]["reason"] == "status_locked"
+
+
+def test_session_create_rejects_conflicting_context_reuse_options(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-id",
+                "ctx1",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "session.create"
+    assert payload["error"] == "argument_error"
+    assert "--context-metadata-json" in payload["message"]
 
 
 def test_session_get_close_and_keepalive_emit_json(
@@ -295,6 +1079,222 @@ def test_context_commands_emit_json(
         ("get", {"context_id": "ctx1"}),
         ("delete", {"context_id": "ctx1"}),
     ]
+
+
+def test_context_status_reports_reusable_and_locked_state(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def get_context(self, context_id: str) -> DummyModel:
+            return DummyModel({"context_id": context_id, "status": "locked"})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "status", "--context-id", "ctx1"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "context.status"
+    assert payload["context_id"] == "ctx1"
+    assert payload["reusable"] is False
+    assert payload["locked"] is True
+    assert payload["reuse"] == {
+        "status": "locked",
+        "reusable": False,
+        "locked": True,
+        "reason": "status_locked",
+    }
+
+
+def test_context_pick_selects_first_available_metadata_match(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            observed.update({"status": status, "limit": limit})
+            return DummyModel(
+                {
+                    "count": 3,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-locked",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex"},
+                        },
+                        {
+                            "context_id": "ctx-other",
+                            "status": "available",
+                            "metadata": {"purpose": "manual"},
+                        },
+                        {
+                            "context_id": "ctx-ready",
+                            "status": "available",
+                            "metadata": {"purpose": "codex"},
+                        },
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--limit",
+                "10",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed == {"status": None, "limit": 10}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "context.pick"
+    assert payload["selected"] is True
+    assert payload["created"] is False
+    assert payload["context_id"] == "ctx-ready"
+    assert payload["reuse"]["reusable"] is True
+    assert payload["metadata_filter"] == {"purpose": "codex"}
+    assert payload["candidates"] == [
+        {
+            "context_id": "ctx-locked",
+            "status": "locked",
+            "metadata_match": True,
+            "reusable": False,
+            "locked": True,
+            "reason": "status_locked",
+        },
+        {
+            "context_id": "ctx-other",
+            "status": "available",
+            "metadata_match": False,
+            "reusable": True,
+            "locked": False,
+            "reason": "metadata_mismatch",
+        },
+        {
+            "context_id": "ctx-ready",
+            "status": "available",
+            "metadata_match": True,
+            "reusable": True,
+            "locked": False,
+            "reason": "status_reusable",
+        },
+    ]
+
+
+def test_context_pick_can_create_when_no_reusable_context_matches(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex"},
+                        }
+                    ],
+                }
+            )
+
+        def create_context(self, *, metadata: dict[str, Any] | None) -> DummyModel:
+            calls.append(("create", {"metadata": metadata}))
+            return DummyModel(
+                {
+                    "context_id": "ctx-new",
+                    "status": "available",
+                    "metadata": metadata,
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+                "--create-if-missing",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["selected"] is True
+    assert payload["created"] is True
+    assert payload["context_id"] == "ctx-new"
+    assert payload["reuse"]["reusable"] is True
+    assert calls == [
+        ("list", {"status": None, "limit": 20}),
+        ("create", {"metadata": {"purpose": "codex"}}),
+    ]
+
+
+def test_context_pick_fails_when_no_reusable_context_matches(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-busy",
+                            "status": "busy",
+                            "metadata": {"purpose": "codex"},
+                        }
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "pick", "--metadata-json", '{"purpose":"codex"}'])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "context.pick"
+    assert payload["error"] == "no_available_context"
+    assert payload["selected"] is False
+    assert payload["checked"] == 1
+    assert payload["candidates"][0]["reason"] == "status_locked"
 
 
 def test_compatibility_aliases_still_work(
@@ -486,6 +1486,2196 @@ def test_action_eval_accepts_script_alias(
     }
     payload = json.loads(capsys.readouterr().out)
     assert payload["result"] == {"value": "Example"}
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            ["action", "get-text", "--session-id", "s1", "--selector", "main"],
+            "action.get-text",
+            {"selector": "main", "found": True, "text": "Hello"},
+            {
+                "selector": "main",
+                "found": True,
+                "text": "Hello",
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "exists", "--session-id", "s1", "--selector", "#missing"],
+            "action.exists",
+            {"selector": "#missing", "exists": False},
+            {
+                "selector": "#missing",
+                "exists": False,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "inspect",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=password]",
+                "--include-html",
+            ],
+            "action.inspect",
+            {
+                "selector": "input[name=password]",
+                "found": True,
+                "element": {
+                    "selector": "#password",
+                    "tag": "input",
+                    "role": "textbox",
+                    "name": "Password",
+                    "text": "",
+                    "visible": True,
+                },
+                "attributes": {"type": "password", "name": "password", "value": "***"},
+                "state": {
+                    "visible": True,
+                    "focused": False,
+                    "disabled": False,
+                    "readonly": False,
+                    "required": True,
+                    "checked": None,
+                    "selected": None,
+                    "multiple": None,
+                    "contenteditable": False,
+                },
+                "readable": True,
+                "value": "***",
+                "value_type": "value",
+                "value_masked": True,
+                "value_length": 8,
+                "visible": True,
+                "in_viewport": True,
+                "html": '<input id="password" type="password" value="***">',
+                "html_length": 49,
+                "html_truncated": False,
+            },
+            {
+                "selector": "input[name=password]",
+                "found": True,
+                "element": {
+                    "selector": "#password",
+                    "tag": "input",
+                    "role": "textbox",
+                    "name": "Password",
+                    "text": "",
+                    "visible": True,
+                },
+                "attributes": {"type": "password", "name": "password", "value": "***"},
+                "state": {
+                    "visible": True,
+                    "focused": False,
+                    "disabled": False,
+                    "readonly": False,
+                    "required": True,
+                    "checked": None,
+                    "selected": None,
+                    "multiple": None,
+                    "contenteditable": False,
+                },
+                "readable": True,
+                "value": "***",
+                "value_type": "value",
+                "value_masked": True,
+                "value_length": 8,
+                "visible": True,
+                "in_viewport": True,
+                "html": '<input id="password" type="password" value="***">',
+                "html_length": 49,
+                "html_truncated": False,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "scroll", "--session-id", "s1", "--y", "300"],
+            "action.scroll",
+            {
+                "selector": None,
+                "found": True,
+                "scrolled": True,
+                "x": 0,
+                "y": 300,
+                "scroll_x": 0,
+                "scroll_y": 300,
+            },
+            {
+                "selector": None,
+                "found": True,
+                "scrolled": True,
+                "x": 0,
+                "y": 300,
+                "scroll_x": 0,
+                "scroll_y": 300,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "bounding-box",
+                "--session-id",
+                "s1",
+                "--selector",
+                "button",
+            ],
+            "action.bounding-box",
+            {
+                "selector": "button",
+                "found": True,
+                "visible": True,
+                "in_viewport": True,
+                "bounding_box": {
+                    "x": 10,
+                    "y": 20,
+                    "top": 20,
+                    "right": 110,
+                    "bottom": 60,
+                    "left": 10,
+                    "width": 100,
+                    "height": 40,
+                },
+                "center": {"x": 60, "y": 40},
+            },
+            {
+                "selector": "button",
+                "found": True,
+                "visible": True,
+                "in_viewport": True,
+                "bounding_box": {
+                    "x": 10,
+                    "y": 20,
+                    "top": 20,
+                    "right": 110,
+                    "bottom": 60,
+                    "left": 10,
+                    "width": 100,
+                    "height": 40,
+                },
+                "center": {"x": 60, "y": 40},
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "scroll-into-view",
+                "--session-id",
+                "s1",
+                "--selector",
+                "button",
+                "--block",
+                "nearest",
+            ],
+            "action.scroll-into-view",
+            {
+                "selector": "button",
+                "found": True,
+                "scrolled": True,
+                "block": "nearest",
+                "inline": "nearest",
+                "behavior": "auto",
+                "in_viewport": True,
+            },
+            {
+                "selector": "button",
+                "found": True,
+                "scrolled": True,
+                "block": "nearest",
+                "inline": "nearest",
+                "behavior": "auto",
+                "in_viewport": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "click-index",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".item button",
+                "--index",
+                "2",
+            ],
+            "action.click-index",
+            {
+                "selector": ".item button",
+                "index": 2,
+                "include_hidden": False,
+                "found": True,
+                "clicked": True,
+                "count": 4,
+                "total_count": 5,
+                "visible_count": 4,
+            },
+            {
+                "selector": ".item button",
+                "index": 2,
+                "include_hidden": False,
+                "found": True,
+                "clicked": True,
+                "count": 4,
+                "total_count": 5,
+                "visible_count": 4,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "select-option",
+                "--session-id",
+                "s1",
+                "--selector",
+                "select[name=plan]",
+                "--value",
+                "pro",
+            ],
+            "action.select-option",
+            {
+                "selector": "select[name=plan]",
+                "found": True,
+                "selected": True,
+                "value": "pro",
+                "requested_value": "pro",
+                "previous_value": "free",
+            },
+            {
+                "selector": "select[name=plan]",
+                "found": True,
+                "selected": True,
+                "value": "pro",
+                "requested_value": "pro",
+                "previous_value": "free",
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "select-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Plan",
+                "--option-label",
+                "Pro",
+            ],
+            "action.select-label",
+            {
+                "found": True,
+                "selectable": True,
+                "selected": True,
+                "label": "Plan",
+                "requested_value": "pro",
+                "requested_option_label": "Pro",
+                "option_found": True,
+                "value": "pro",
+                "option_label": "Pro",
+                "previous_value": "free",
+                "previous_option_label": "Free",
+                "changed": True,
+            },
+            {
+                "found": True,
+                "selectable": True,
+                "selected": True,
+                "label": "Plan",
+                "requested_value": "pro",
+                "requested_option_label": "Pro",
+                "option_found": True,
+                "value": "pro",
+                "option_label": "Pro",
+                "previous_value": "free",
+                "previous_option_label": "Free",
+                "changed": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "select-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Plan",
+                "--value",
+                "team",
+                "--exact",
+            ],
+            "action.select-label",
+            {
+                "found": True,
+                "selectable": True,
+                "selected": True,
+                "label": "Plan",
+                "requested_value": "team",
+                "requested_option_label": None,
+                "option_found": None,
+                "value": "team",
+                "option_label": "Team",
+                "previous_value": "pro",
+                "previous_option_label": "Pro",
+                "changed": True,
+            },
+            {
+                "found": True,
+                "selectable": True,
+                "selected": True,
+                "label": "Plan",
+                "requested_value": "team",
+                "requested_option_label": None,
+                "option_found": None,
+                "value": "team",
+                "option_label": "Team",
+                "previous_value": "pro",
+                "previous_option_label": "Pro",
+                "changed": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "set-value",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+                "--value",
+                "query",
+            ],
+            "action.set-value",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "writable": True,
+                "set": True,
+                "previous_value": "",
+                "value": "query",
+                "requested_value": "query",
+                "dispatched_events": ["input", "change"],
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "writable": True,
+                "set": True,
+                "previous_value": "",
+                "value": "query",
+                "requested_value": "query",
+                "dispatched_events": ["input", "change"],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "dispatch-event",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+                "--event",
+                "input",
+                "--event",
+                "change",
+            ],
+            "action.dispatch-event",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "dispatched": True,
+                "requested_events": ["input", "change"],
+                "events": [
+                    {"type": "input", "accepted": True},
+                    {"type": "change", "accepted": True},
+                ],
+                "focused": False,
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "dispatched": True,
+                "requested_events": ["input", "change"],
+                "events": [
+                    {"type": "input", "accepted": True},
+                    {"type": "change", "accepted": True},
+                ],
+                "focused": False,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "check", "--session-id", "s1", "--selector", "#agree"],
+            "action.check",
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": True,
+            },
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "uncheck", "--session-id", "s1", "--selector", "#agree"],
+            "action.uncheck",
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": False,
+            },
+            {
+                "selector": "#agree",
+                "found": True,
+                "checkable": True,
+                "checked": False,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "check-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Remember me",
+            ],
+            "action.check-label",
+            {
+                "found": True,
+                "checkable": True,
+                "label": "Remember me",
+                "requested_checked": True,
+                "previous_checked": False,
+                "checked": True,
+                "changed": True,
+            },
+            {
+                "found": True,
+                "checkable": True,
+                "label": "Remember me",
+                "requested_checked": True,
+                "previous_checked": False,
+                "checked": True,
+                "changed": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "uncheck-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Remember me",
+                "--exact",
+            ],
+            "action.uncheck-label",
+            {
+                "found": True,
+                "checkable": True,
+                "label": "Remember me",
+                "requested_checked": False,
+                "previous_checked": True,
+                "checked": False,
+                "changed": True,
+            },
+            {
+                "found": True,
+                "checkable": True,
+                "label": "Remember me",
+                "requested_checked": False,
+                "previous_checked": True,
+                "checked": False,
+                "changed": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            ["action", "hover", "--session-id", "s1", "--selector", "button"],
+            "action.hover",
+            {"selector": "button", "found": True, "hovered": True},
+            {
+                "selector": "button",
+                "found": True,
+                "hovered": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "press",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+                "--key",
+                "Enter",
+            ],
+            "action.press",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "key": "Enter",
+                "pressed": True,
+                "keydown_accepted": True,
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "key": "Enter",
+                "pressed": True,
+                "keydown_accepted": True,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+    ],
+)
+def test_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test",
+                "value": value,
+                "fallback": "cdp",
+            }
+        )
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
+def test_eval_backed_action_reports_missing_selector(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.run_browser_action",
+        lambda **kwargs: SimpleNamespace(
+            result={"url": "https://example.test", "value": {"found": False}}
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "get-text", "--session-id", "s1", "--selector", "#x"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.get-text"
+    assert payload["result"] == {"found": False, "url": "https://example.test"}
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "click-text",
+                "--session-id",
+                "s1",
+                "--text",
+                "Save",
+                "--exact",
+            ],
+            "action.click-text",
+            {"found": True, "clicked": True, "text": "Save"},
+            {
+                "found": True,
+                "clicked": True,
+                "text": "Save",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "click-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+            ],
+            "action.click-role",
+            {"found": True, "clicked": True, "role": "button", "name": "Submit"},
+            {
+                "found": True,
+                "clicked": True,
+                "role": "button",
+                "name": "Submit",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "fill-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Email",
+                "--text",
+                "user@example.test",
+            ],
+            "action.fill-label",
+            {
+                "found": True,
+                "filled": True,
+                "label": "Email",
+                "value": "user@example.test",
+            },
+            {
+                "found": True,
+                "filled": True,
+                "label": "Email",
+                "value": "user@example.test",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "accessibility-snapshot",
+                "--session-id",
+                "s1",
+                "--max-nodes",
+                "2",
+            ],
+            "action.accessibility-snapshot",
+            {"kind": "dom-accessibility", "node_count": 2, "nodes": []},
+            {
+                "kind": "dom-accessibility",
+                "node_count": 2,
+                "nodes": [],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "form-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "form",
+                "--max-nodes",
+                "2",
+            ],
+            "action.form-snapshot",
+            {
+                "kind": "form",
+                "selector": "form",
+                "node_count": 2,
+                "field_count": 3,
+                "fields": [
+                    {
+                        "selector": "#email",
+                        "tag": "input",
+                        "type": "email",
+                        "name": "Email",
+                        "name_attribute": "email",
+                        "labels": ["Email"],
+                        "value": "user@example.test",
+                        "value_masked": False,
+                    },
+                    {
+                        "selector": "#password",
+                        "tag": "input",
+                        "type": "password",
+                        "name": "Password",
+                        "name_attribute": "password",
+                        "labels": ["Password"],
+                        "value": "***",
+                        "value_masked": True,
+                        "value_length": 12,
+                    },
+                ],
+            },
+            {
+                "kind": "form",
+                "selector": "form",
+                "node_count": 2,
+                "field_count": 3,
+                "fields": [
+                    {
+                        "selector": "#email",
+                        "tag": "input",
+                        "type": "email",
+                        "name": "Email",
+                        "name_attribute": "email",
+                        "labels": ["Email"],
+                        "value": "user@example.test",
+                        "value_masked": False,
+                    },
+                    {
+                        "selector": "#password",
+                        "tag": "input",
+                        "type": "password",
+                        "name": "Password",
+                        "name_attribute": "password",
+                        "labels": ["Password"],
+                        "value": "***",
+                        "value_masked": True,
+                        "value_length": 12,
+                    },
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "interactive-snapshot",
+                "--session-id",
+                "s1",
+                "--include-hidden",
+            ],
+            "action.interactive-snapshot",
+            {"kind": "interactive", "node_count": 1, "nodes": []},
+            {
+                "kind": "interactive",
+                "node_count": 1,
+                "nodes": [],
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_second_batch_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test",
+                "value": value,
+            }
+        )
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "count",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".item",
+            ],
+            "action.count",
+            {
+                "selector": ".item",
+                "include_hidden": False,
+                "count": 2,
+                "total_count": 3,
+                "visible_count": 2,
+            },
+            {
+                "selector": ".item",
+                "include_hidden": False,
+                "count": 2,
+                "total_count": 3,
+                "visible_count": 2,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-count",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".item",
+                "--count",
+                "3",
+                "--comparison",
+                "gte",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-count",
+            {
+                "selector": ".item",
+                "found": True,
+                "count": 3,
+                "requested_count": 3,
+                "comparison": "gte",
+                "include_hidden": False,
+                "total_count": 3,
+                "visible_count": 3,
+                "waited_ms": 50,
+            },
+            {
+                "selector": ".item",
+                "found": True,
+                "count": 3,
+                "requested_count": 3,
+                "comparison": "gte",
+                "include_hidden": False,
+                "total_count": 3,
+                "visible_count": 3,
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "query",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".item",
+                "--max-nodes",
+                "1",
+                "--include-hidden",
+            ],
+            "action.query",
+            {
+                "selector": ".item",
+                "kind": "query",
+                "count": 1,
+                "node_count": 1,
+                "nodes": [{"selector": ".item", "text": "A"}],
+                "truncated": False,
+            },
+            {
+                "selector": ".item",
+                "kind": "query",
+                "count": 1,
+                "node_count": 1,
+                "nodes": [{"selector": ".item", "text": "A"}],
+                "truncated": False,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "get-attribute",
+                "--session-id",
+                "s1",
+                "--selector",
+                "a",
+                "--name",
+                "href",
+            ],
+            "action.get-attribute",
+            {
+                "selector": "a",
+                "found": True,
+                "name": "href",
+                "value": "/docs",
+                "attribute_value": "/docs",
+                "property_value": "https://example.test/docs",
+            },
+            {
+                "selector": "a",
+                "found": True,
+                "name": "href",
+                "value": "/docs",
+                "attribute_value": "/docs",
+                "property_value": "https://example.test/docs",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-attribute",
+                "--session-id",
+                "s1",
+                "--selector",
+                "button",
+                "--name",
+                "aria-busy",
+                "--state",
+                "absent",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-attribute",
+            {
+                "selector": "button",
+                "name": "aria-busy",
+                "found": True,
+                "state": "absent",
+                "selector_found": True,
+                "attribute_found": False,
+                "value": None,
+                "requested_value": None,
+                "match": "contains",
+                "waited_ms": 50,
+            },
+            {
+                "selector": "button",
+                "name": "aria-busy",
+                "found": True,
+                "state": "absent",
+                "selector_found": True,
+                "attribute_found": False,
+                "value": None,
+                "requested_value": None,
+                "match": "contains",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-text",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--text",
+                "Ready",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-text",
+            {
+                "selector": "main",
+                "found": True,
+                "text": "Ready",
+                "waited_ms": 50,
+                "candidate_count": 1,
+            },
+            {
+                "selector": "main",
+                "found": True,
+                "text": "Ready",
+                "waited_ms": 50,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_third_batch_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            ["action", "reload", "--session-id", "s1"],
+            "action.reload",
+            {
+                "action": "reload",
+                "navigation_requested": True,
+                "reloaded": True,
+                "before_url": "https://example.test",
+            },
+            {
+                "action": "reload",
+                "navigation_requested": True,
+                "reloaded": True,
+                "before_url": "https://example.test",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            ["action", "go-back", "--session-id", "s1"],
+            "action.go-back",
+            {
+                "action": "back",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page2",
+                "history_length": 2,
+            },
+            {
+                "action": "back",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page2",
+                "history_length": 2,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            ["action", "go-forward", "--session-id", "s1"],
+            "action.go-forward",
+            {
+                "action": "forward",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page1",
+                "history_length": 2,
+            },
+            {
+                "action": "forward",
+                "navigation_requested": True,
+                "before_url": "https://example.test/page1",
+                "history_length": 2,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-url",
+                "--session-id",
+                "s1",
+                "--url",
+                "/dashboard",
+                "--match",
+                "contains",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-url",
+            {
+                "found": True,
+                "requested_url": "/dashboard",
+                "match": "contains",
+                "waited_ms": 50,
+            },
+            {
+                "found": True,
+                "requested_url": "/dashboard",
+                "match": "contains",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-load-state",
+                "--session-id",
+                "s1",
+                "--state",
+                "complete",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-load-state",
+            {
+                "found": True,
+                "state": "complete",
+                "requested_state": "complete",
+                "target_state": "complete",
+                "waited_ms": 50,
+            },
+            {
+                "found": True,
+                "state": "complete",
+                "requested_state": "complete",
+                "target_state": "complete",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-network-idle",
+                "--session-id",
+                "s1",
+                "--idle-ms",
+                "500",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--max-inflight",
+                "0",
+            ],
+            "action.wait-network-idle",
+            {
+                "found": True,
+                "network_idle": True,
+                "idle_ms": 500,
+                "quiet_ms": 500,
+                "waited_ms": 550,
+                "pending_requests": 0,
+                "max_inflight": 0,
+                "observed_request_count": 1,
+                "observed_response_count": 1,
+                "observed_failure_count": 0,
+                "observed_resource_count": 2,
+                "observer_available": True,
+                "fetch_instrumented": True,
+                "xhr_instrumented": True,
+            },
+            {
+                "found": True,
+                "network_idle": True,
+                "idle_ms": 500,
+                "quiet_ms": 500,
+                "waited_ms": 550,
+                "pending_requests": 0,
+                "max_inflight": 0,
+                "observed_request_count": 1,
+                "observed_response_count": 1,
+                "observed_failure_count": 0,
+                "observed_resource_count": 2,
+                "observer_available": True,
+                "fetch_instrumented": True,
+                "xhr_instrumented": True,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "focus",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+                "--prevent-scroll",
+            ],
+            "action.focus",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "prevent_scroll": True,
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "focused": True,
+                "prevent_scroll": True,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "get-value",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+            ],
+            "action.get-value",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-value",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=q]",
+                "--value",
+                "query",
+                "--match",
+                "exact",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+            ],
+            "action.wait-value",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "selector_found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+                "requested_value": "query",
+                "match": "exact",
+                "waited_ms": 50,
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "selector_found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+                "requested_value": "query",
+                "match": "exact",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            ["action", "blur", "--session-id", "s1", "--selector", "input[name=q]"],
+            "action.blur",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "blurred": True,
+                "was_focused": True,
+                "focused": False,
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "blurred": True,
+                "was_focused": True,
+                "focused": False,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            ["action", "clear", "--session-id", "s1", "--selector", "input[name=q]"],
+            "action.clear",
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "clearable": True,
+                "cleared": True,
+                "previous_value": "query",
+                "value": "",
+            },
+            {
+                "selector": "input[name=q]",
+                "found": True,
+                "clearable": True,
+                "cleared": True,
+                "previous_value": "query",
+                "value": "",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "submit",
+                "--session-id",
+                "s1",
+                "--selector",
+                "form",
+                "--skip-validation",
+            ],
+            "action.submit",
+            {
+                "selector": "form",
+                "found": True,
+                "form_found": True,
+                "submitted": True,
+                "skip_validation": True,
+                "used_request_submit": False,
+            },
+            {
+                "selector": "form",
+                "found": True,
+                "form_found": True,
+                "submitted": True,
+                "skip_validation": True,
+                "used_request_submit": False,
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_navigation_and_form_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "storage-get",
+                "--session-id",
+                "s1",
+                "--area",
+                "local",
+                "--key",
+                "featureFlag",
+            ],
+            "action.storage-get",
+            {
+                "area": "local",
+                "key": "featureFlag",
+                "found": True,
+                "value": "enabled",
+                "value_length": 7,
+            },
+            {
+                "area": "local",
+                "key": "featureFlag",
+                "found": True,
+                "value": "enabled",
+                "value_length": 7,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-get",
+                "--session-id",
+                "s1",
+                "--area",
+                "session",
+                "--prefix",
+                "auth:",
+                "--max-items",
+                "20",
+            ],
+            "action.storage-get",
+            {
+                "area": "session",
+                "key": None,
+                "prefix": "auth:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 20,
+                "truncated": False,
+                "items": [
+                    {
+                        "key": "auth:mode",
+                        "value": "test",
+                        "value_length": 4,
+                    }
+                ],
+            },
+            {
+                "area": "session",
+                "key": None,
+                "prefix": "auth:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 20,
+                "truncated": False,
+                "items": [
+                    {
+                        "key": "auth:mode",
+                        "value": "test",
+                        "value_length": 4,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-set",
+                "--session-id",
+                "s1",
+                "--area",
+                "local",
+                "--key",
+                "seenIntro",
+                "--value",
+                "true",
+            ],
+            "action.storage-set",
+            {
+                "area": "local",
+                "key": "seenIntro",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "true",
+                "value_length": 4,
+            },
+            {
+                "area": "local",
+                "key": "seenIntro",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "true",
+                "value_length": 4,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-remove",
+                "--session-id",
+                "s1",
+                "--area",
+                "session",
+                "--key",
+                "draft",
+            ],
+            "action.storage-remove",
+            {
+                "area": "session",
+                "key": "draft",
+                "removed": True,
+                "had_key": True,
+                "found": True,
+                "previous_value": "hello",
+            },
+            {
+                "area": "session",
+                "key": "draft",
+                "removed": True,
+                "had_key": True,
+                "found": True,
+                "previous_value": "hello",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "storage-clear",
+                "--session-id",
+                "s1",
+                "--area",
+                "session",
+                "--prefix",
+                "temp:",
+            ],
+            "action.storage-clear",
+            {
+                "area": "session",
+                "prefix": "temp:",
+                "cleared": True,
+                "cleared_count": 2,
+                "keys": ["temp:a", "temp:b"],
+            },
+            {
+                "area": "session",
+                "prefix": "temp:",
+                "cleared": True,
+                "cleared_count": 2,
+                "keys": ["temp:a", "temp:b"],
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_storage_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "cookie-get",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+            ],
+            "action.cookie-get",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "value": "yes",
+                "raw_value": "yes",
+                "value_length": 3,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "value": "yes",
+                "raw_value": "yes",
+                "value_length": 3,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-get",
+                "--session-id",
+                "s1",
+                "--prefix",
+                "tmp:",
+                "--max-items",
+                "10",
+            ],
+            "action.cookie-get",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": None,
+                "prefix": "tmp:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 10,
+                "truncated": False,
+                "items": [
+                    {
+                        "name": "tmp:flag",
+                        "value": "on",
+                        "raw_name": "tmp%3Aflag",
+                        "raw_value": "on",
+                        "value_length": 2,
+                    }
+                ],
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": None,
+                "prefix": "tmp:",
+                "found": True,
+                "count": 1,
+                "item_count": 1,
+                "max_items": 10,
+                "truncated": False,
+                "items": [
+                    {
+                        "name": "tmp:flag",
+                        "value": "on",
+                        "raw_name": "tmp%3Aflag",
+                        "raw_value": "on",
+                        "value_length": 2,
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-set",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+                "--value",
+                "yes",
+                "--path",
+                "/",
+                "--same-site",
+                "lax",
+            ],
+            "action.cookie-set",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "yes",
+                "value_length": 3,
+                "path": "/",
+                "domain": None,
+                "max_age": None,
+                "expires": None,
+                "same_site": "lax",
+                "secure": False,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "set": True,
+                "found": True,
+                "previous_value": None,
+                "value": "yes",
+                "value_length": 3,
+                "path": "/",
+                "domain": None,
+                "max_age": None,
+                "expires": None,
+                "same_site": "lax",
+                "secure": False,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-delete",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+                "--path",
+                "/",
+            ],
+            "action.cookie-delete",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "deleted": True,
+                "had_cookie": True,
+                "found": True,
+                "previous_value": "yes",
+                "path": "/",
+                "domain": None,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "deleted": True,
+                "had_cookie": True,
+                "found": True,
+                "previous_value": "yes",
+                "path": "/",
+                "domain": None,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "cookie-clear",
+                "--session-id",
+                "s1",
+                "--prefix",
+                "tmp:",
+                "--path",
+                "/",
+            ],
+            "action.cookie-clear",
+            {
+                "document_cookie_scope": "document.cookie",
+                "prefix": "tmp:",
+                "path": "/",
+                "domain": None,
+                "cleared": True,
+                "cleared_count": 2,
+                "matched_count": 2,
+                "names": ["tmp:a", "tmp:b"],
+                "remaining_count": 0,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "prefix": "tmp:",
+                "path": "/",
+                "domain": None,
+                "cleared": True,
+                "cleared_count": 2,
+                "matched_count": 2,
+                "names": ["tmp:a", "tmp:b"],
+                "remaining_count": 0,
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_cookie_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "wait-storage",
+                "--session-id",
+                "s1",
+                "--area",
+                "local",
+                "--key",
+                "authToken",
+                "--value",
+                "ready",
+                "--match",
+                "exact",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+            ],
+            "action.wait-storage",
+            {
+                "area": "local",
+                "key": "authToken",
+                "found": True,
+                "state": "present",
+                "exists": True,
+                "value": "ready",
+                "requested_value": "ready",
+                "match": "exact",
+                "waited_ms": 50,
+            },
+            {
+                "area": "local",
+                "key": "authToken",
+                "found": True,
+                "state": "present",
+                "exists": True,
+                "value": "ready",
+                "requested_value": "ready",
+                "match": "exact",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-cookie",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+                "--state",
+                "absent",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-cookie",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "state": "absent",
+                "exists": False,
+                "value": None,
+                "raw_value": None,
+                "requested_value": None,
+                "match": "contains",
+                "waited_ms": 50,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "state": "absent",
+                "exists": False,
+                "value": None,
+                "raw_value": None,
+                "requested_value": None,
+                "match": "contains",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_state_wait_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
 
 
 def test_direct_url_can_reveal_secret_explicitly(

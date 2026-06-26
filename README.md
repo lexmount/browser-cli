@@ -19,7 +19,9 @@ CLI for you:
 约束：
 1. 不要让我把 API Key 或 Project ID 粘贴到聊天里。
 2. 只指导我在本机 shell 中设置环境变量，或写入本机 shell 配置文件。
-3. 不要把 API Key 输出到日志、README、提交记录或聊天回复里。
+3. 不要在聊天回复、日志、README、测试、提交记录或 PR 描述里输出 API Key。
+4. 如果命令输出中出现 masked/revealed/contains_secrets/usable 字段，请按这些字段判断是否可以复制到聊天里；revealed secret 永远不要复制到聊天。
+5. 不要复述任何 secret 的真实值。
 
 步骤：
 1. 检查本机是否已经安装 uv：
@@ -28,28 +30,42 @@ CLI for you:
    curl -LsSf https://astral.sh/uv/install.sh | sh
 3. 安装 browser-cli：
    uv tool install git+https://github.com/lexmount/browser-cli.git
-4. 引导我打开 https://browser.lexmount.cn 并登录账号。
-5. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
-6. 引导我在本机 shell 中设置：
+4. 运行下面命令查看本机是否已经配置凭证：
+   browser-cli auth status
+5. 如果未配置，引导我运行：
+   browser-cli auth login
+6. 引导我打开 https://browser.lexmount.cn 并登录账号。
+7. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
+8. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
+   browser-cli auth export-env
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-7. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-8. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-9. 运行下面命令验证：
+9. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
+   browser-cli auth export-env --from-current --reveal-secrets
+   browser-cli auth export-env --reveal-secrets
+   并提醒我不要把该输出粘贴到聊天里。
+10. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+11. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+12. 运行下面命令验证：
    browser-cli --help
-   browser-cli direct-url
+   browser-cli doctor
    browser-cli session list
-10. 如果验证失败，请按顺序排查：
+13. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
+   - browser-cli auth status 是否显示 configured 为 true
+   - browser-cli doctor 的 checks 中哪一项失败
    - LEXMOUNT_API_KEY 是否已设置
    - LEXMOUNT_PROJECT_ID 是否已设置
    - 如果设置了 LEXMOUNT_BASE_URL，它是否为正确的 API endpoint
+   - browser.lexmount.cn 中选择的 Project 是否和 LEXMOUNT_PROJECT_ID 一致
+   - API Key 是否已过期、被 revoke，或缺少 browser session/context/action 权限
 
 完成后告诉我：
 - browser-cli 的安装路径
 - 验证命令是否通过
 - 我还需要手动做什么
+- 不要复述任何 secret 的真实值
 ```
 
 ## Manual Install
@@ -88,7 +104,54 @@ export LEXMOUNT_REGION="<region>"
 Treat API keys as secrets. The CLI masks `api_key` in generated direct browser
 URLs unless you pass an explicit reveal flag.
 
+Use these local auth helpers:
+
+```bash
+browser-cli auth status
+browser-cli auth login
+browser-cli auth login --project-id <project-id> --scope browser:actions --expires-in 24h
+browser-cli auth export-env
+browser-cli auth export-env --from-current
+```
+
+`auth export-env` prints placeholder shell commands by default. With
+`--from-current`, it reuses current environment values but still masks
+`LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly passed in a trusted
+local terminal.
+
+After credentials are configured, run the self-check:
+
+```bash
+browser-cli doctor
+```
+
+Use `browser-cli doctor --skip-api` only when the live API should not be called.
+
 ## Commands
+
+Authentication:
+
+```bash
+browser-cli auth status
+browser-cli auth login
+browser-cli auth login --project-id <project-id> --scope browser:sessions --scope browser:actions --expires-in 24h
+browser-cli auth export-env
+browser-cli auth export-env --from-current --include-base-url
+```
+
+`auth login` returns both the currently available `manual_env` flow and a
+machine-readable `connect_from_codex` contract. The latter includes the planned
+`https://browser.lexmount.cn/connect/codex` URL, optional `project_id`, repeated
+`scope` query parameters, requested `expires_in`, expected outputs, and the
+browser site requirements needed before device-code or scoped-token login can
+be marked available.
+
+Diagnostics:
+
+```bash
+browser-cli doctor
+browser-cli doctor --skip-api
+```
 
 Session management:
 
@@ -96,6 +159,7 @@ Session management:
 browser-cli session create
 browser-cli session create --create-context
 browser-cli session create --context-id <context_id> --context-mode read_write
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing
 browser-cli session list --status active
 browser-cli session get --session-id <session_id>
 browser-cli session close --session-id <session_id>
@@ -109,6 +173,9 @@ browser-cli context create
 browser-cli context create --metadata-json '{"purpose":"codex"}'
 browser-cli context list --limit 20
 browser-cli context get --context-id <context_id>
+browser-cli context status --context-id <context_id>
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
 browser-cli context delete --context-id <context_id>
 ```
 
@@ -122,7 +189,82 @@ browser-cli action type --session-id <session_id> --selector "input[name=q]" --t
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action reload --session-id <session_id>
+browser-cli action go-back --session-id <session_id>
+browser-cli action go-forward --session-id <session_id>
+browser-cli action wait-url --session-id <session_id> --url /dashboard
+browser-cli action wait-load-state --session-id <session_id> --state complete
+browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
+browser-cli action get-text --session-id <session_id> --selector "main"
+browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
+browser-cli action count --session-id <session_id> --selector ".item"
+browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
+browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
+browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
+browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
+browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
+browser-cli action focus --session-id <session_id> --selector "input[name=q]"
+browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
+browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "hello"
+browser-cli action blur --session-id <session_id> --selector "input[name=q]"
+browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
+browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
+browser-cli action storage-remove --session-id <session_id> --area session --key draft
+browser-cli action storage-clear --session-id <session_id> --area session --prefix temp:
+browser-cli action wait-storage --session-id <session_id> --area local --key authToken
+browser-cli action cookie-get --session-id <session_id> --name consent
+browser-cli action cookie-set --session-id <session_id> --name consent --value yes --path /
+browser-cli action cookie-delete --session-id <session_id> --name consent --path /
+browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
+browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
+browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "hello"
+browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
+browser-cli action submit --session-id <session_id> --selector "form"
+browser-cli action scroll --session-id <session_id> --y 600
+browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
+browser-cli action scroll-into-view --session-id <session_id> --selector "button[type=submit]"
+browser-cli action bounding-box --session-id <session_id> --selector "button[type=submit]"
+browser-cli action inspect --session-id <session_id> --selector "button[type=submit]"
+browser-cli action select-option --session-id <session_id> --selector "select" --value pro
+browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
+browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action check-label --session-id <session_id> --label "Remember me"
+browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
+browser-cli action hover --session-id <session_id> --selector ".menu"
+browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
+browser-cli action click-text --session-id <session_id> --text "Submit"
+browser-cli action click-role --session-id <session_id> --role button --name "Submit"
+browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
+browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
+browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
+browser-cli action interactive-snapshot --session-id <session_id>
 ```
+
+`reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`,
+`wait-network-idle`, `get-text`, `exists`, `count`, `query`, `get-attribute`,
+`wait-count`, `wait-attribute`, `wait-text`, `focus`, `get-value`,
+`wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
+`storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
+`cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
+`submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
+`select-option`, `select-label`, `check`, `uncheck`, `check-label`,
+`uncheck-label`, `hover`, `press`, `click-text`, `click-role`, `click-index`,
+`fill-label`,
+`form-snapshot`, `accessibility-snapshot`, and
+`interactive-snapshot` are implemented as eval-backed DOM actions while the
+runtime action surface catches up. They are intended to reduce agent-written
+JavaScript for common page work. For missing matches, parse structured fields
+such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
+`focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
+`deleted`, `items`, `cleared_count`, `requested_count`, `state`,
+`attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
+`dispatched`, `dispatched_events`, `fields`, `value_masked`, `bounding_box`,
+`in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
+`option_found`, `option_label`, `requested_checked`, `previous_checked`,
+`changed`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -135,11 +277,14 @@ Each action must receive exactly one browser target:
 By default, action output masks `api_key` inside resolved direct connect URLs.
 Use `--reveal-connect-url` only for local debugging.
 
-Case files and compatibility aliases:
+Diagnostics, case files, and compatibility aliases:
 
 ```bash
+browser-cli auth status
+browser-cli auth export-env
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
+browser-cli doctor
 browser-cli direct-url
 browser-cli prepare
 browser-cli list-contexts
@@ -171,7 +316,37 @@ Failed commands include:
 ```
 
 Agents should parse `ok`, `command`, and `error` first, then use
-command-specific fields.
+command-specific fields. Failure messages and payload fields are sanitized before
+printing: `api_key`, token-like query parameters, and the current
+`LEXMOUNT_API_KEY` value are masked unless a success command explicitly uses a
+local reveal flag.
+
+Argument parsing errors also return JSON on stdout with exit code `2`:
+
+```json
+{
+  "ok": false,
+  "command": "action.open-url",
+  "error": "argument_error",
+  "message": "the following arguments are required: --url",
+  "usage": "usage: browser-cli action open-url ..."
+}
+```
+
+Agents should use the `usage` field to repair malformed commands instead of
+parsing stderr.
+
+`browser-cli doctor` returns a `checks` array with `pass`, `fail`, or `skipped`
+statuses for install/version, environment, direct URL, and API connectivity
+checks. It masks `api_key` in direct URLs and diagnostic error messages by
+default. Failed or skipped checks may include a `fix` object with a stable
+`code`, recommended `commands`, relevant `env` names, and concise `guidance`;
+agents should prefer those fields when telling the user how to repair setup.
+
+`browser-cli auth status` reports local credential presence without revealing
+the API key. `browser-cli auth export-env` returns `commands` and `script`
+fields; generated commands are placeholders or masked unless
+`--from-current --reveal-secrets` is explicitly used locally.
 
 ## Suggested Agent Workflow
 
@@ -180,15 +355,71 @@ For a new browser task, agents should prefer this sequence:
 ```bash
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
+browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action snapshot --session-id <session_id>
+browser-cli action exists --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
+browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
+browser-cli action wait-text --session-id <session_id> --text <text>
+browser-cli action wait-count --session-id <session_id> --selector <selector> --count <n> --comparison gte
+browser-cli action wait-attribute --session-id <session_id> --selector <selector> --name <name>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
+browser-cli action get-text --session-id <session_id> --selector <selector>
+browser-cli action get-value --session-id <session_id> --selector <selector>
+browser-cli action storage-get --session-id <session_id> --area local --key <key>
+browser-cli action wait-storage --session-id <session_id> --area local --key <key>
+browser-cli action cookie-get --session-id <session_id> --name <name>
+browser-cli action wait-cookie --session-id <session_id> --name <name>
+browser-cli action query --session-id <session_id> --selector <selector>
 browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
 ```
 
-Use `context create` plus `session create --context-id <context_id>` when login
-state or cookies should survive between sessions.
+Common agent recipes:
+
+- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`,
+  `set-value`, or `clear` -> `wait-value` or `get-value` -> `blur` if validation is
+  focus-driven -> `select-label`, `select-option`, `check-label`, or `check` ->
+  `dispatch-event` if explicit `input`/`change` is needed ->
+  `submit --selector <form-or-field>`,
+  `click-role --role button --name <text>` or `click-text` -> `wait-url` or
+  `wait-text`.
+- Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`
+  and selector `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
+  selector.
+- Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
+- Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
+  `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized
+  HTML before trying another action.
+- Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
+  confirm with `wait-url`, `wait-load-state`, `wait-network-idle`, `wait-text`,
+  or `snapshot`.
+- Menu or keyboard flow: `focus`, `hover`, `press`, or `dispatch-event`, then
+  inspect again with `interactive-snapshot`.
+- Read results: `wait-count` for dynamic lists, `wait-attribute` for DOM state
+  changes, `get-text` for known selectors, or `snapshot` when the selector is
+  unknown.
+- Browser state: use `storage-get` to inspect local/session storage, `storage-set`
+  to adjust feature flags or onboarding state, and `storage-remove` or
+  `storage-clear --prefix <prefix>` for targeted cleanup. Use `wait-storage`
+  after actions that should create/remove keys. Use `cookie-get`, `cookie-set`,
+  `cookie-delete`, or `cookie-clear` for document.cookie-visible cookies, and
+  `wait-cookie` after consent/login flows; HttpOnly cookies are not visible
+  through this action surface.
+- Debug candidate selectors: use `count` for cardinality, `query` for node
+  metadata, `get-attribute` for href/value/aria checks, then `wait-count` or
+  `wait-attribute` for async DOM changes.
+- Final evidence: `screenshot`, then close the session unless it should stay
+  open.
+
+Use `session create --context-metadata-json '{"purpose":"codex-login"}'
+--create-context-if-missing --context-mode read_write` when login state or
+cookies should survive between sessions. The command picks the first reusable
+matching context, creates one if requested, then returns `context_reuse` with
+candidate contexts, `created`, `selected`, and locked/reusable details. Use
+`context pick --metadata-json '{"purpose":"codex-login"}'` when you need to
+inspect or report candidates before creating a session.
 
 ## Codex Skill
 
@@ -206,14 +437,19 @@ evolve into a Codex skill. The skill stays a thin wrapper around this CLI:
 
 The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
 
-1. Add a console page that shows the current `Project ID`, API key status, and
-   the exact `export ...` commands for the selected project.
+1. Add `/connect/codex` and accept optional `project_id`, repeated `scope`, and
+   `expires_in` query parameters generated by `browser-cli auth login`.
 2. Add a scoped API key wizard for agent use, with clear permissions, optional
    expiration, and one-click revoke.
 3. Provide a copyable install block:
    `uv tool install git+https://github.com/lexmount/browser-cli.git`.
-4. Add a "Verify CLI" section that tells users to run
-   `browser-cli session list` after setting env vars.
-5. Longer term, support device-code or OAuth-style authorization so Codex can
+4. Add a "Verify CLI" section that tells users to run `browser-cli doctor`
+   after setting env vars and shows how to interpret failed `checks`.
+5. Show the selected `Project ID`, scoped credential status, copyable
+   `browser-cli auth export-env` / `export ...` commands, and revoke/expiration
+   details for the issued credential.
+6. Show `browser-cli auth login`, `auth status`, and `auth export-env` as the
+   local setup path until device-code is available.
+7. Longer term, support device-code or OAuth-style authorization so Codex can
    ask the user to approve access in the browser and then receive a local,
    short-lived token without the user manually copying API keys.

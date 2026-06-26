@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lexmount Browser CLI"
+  short_description: "Control Lexmount browsers from Codex"
+  default_prompt: "Use $browser-cli to check auth status, run doctor, pick or create a browser context/session, and automate browser actions."
