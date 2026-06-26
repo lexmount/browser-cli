@@ -111,6 +111,15 @@ def test_json_contract_documents_command_alias_metadata() -> None:
     assert "`canonical_name`" in text
 
 
+def test_json_contract_documents_agent_workflows() -> None:
+    text = JSON_CONTRACT.read_text()
+
+    assert "`agent_workflows`" in text
+    assert "`success_condition`" in text
+    assert "`on_failure_read`" in text
+    assert "`cleanup`" in text
+
+
 def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     text = JSON_CONTRACT.read_text()
 

@@ -416,6 +416,104 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
             ],
         },
+        "agent_workflows": {
+            "setup_and_verify": {
+                "purpose": "Verify local credentials and browser action readiness before the first browser action.",
+                "steps": [
+                    {
+                        "id": "auth_status",
+                        "command": "browser-cli auth status",
+                        "read": [
+                            "configured",
+                            "auth_source",
+                            "runtime_auth_usable",
+                            "device_token.valid",
+                        ],
+                    },
+                    {
+                        "id": "doctor",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "warning_checks",
+                            "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                    {
+                        "id": "smoke_session",
+                        "command": "browser-cli doctor --smoke-session",
+                        "optional": True,
+                        "success_condition": "browser_smoke_session.status=pass",
+                        "read": [
+                            "browser_smoke_session.created",
+                            "browser_smoke_session.closed",
+                        ],
+                    },
+                ],
+            },
+            "one_off_page_task": {
+                "purpose": "Create a temporary browser session, inspect or operate one page, then close the session.",
+                "steps": [
+                    {
+                        "id": "create_session",
+                        "command": "browser-cli session create",
+                        "read": ["session_id"],
+                    },
+                    {
+                        "id": "open_url",
+                        "command": "browser-cli action open-url --session-id <session_id> --url <url>",
+                        "success_condition": "ok=true",
+                    },
+                    {
+                        "id": "inspect_page",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": ["title", "url"],
+                    },
+                    {
+                        "id": "find_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id>",
+                        "read": ["interactive_elements", "title", "url"],
+                    },
+                    {
+                        "id": "close_session",
+                        "command": "browser-cli session close --session-id <session_id>",
+                        "cleanup": True,
+                    },
+                ],
+            },
+            "persistent_login_state": {
+                "purpose": "Reuse or create a persistent context for login state, cookies, and storage.",
+                "steps": [
+                    {
+                        "id": "dry_run_context_pick",
+                        "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
+                        "read": [
+                            "selection_summary.recommended_next_action",
+                            "selection_summary.decision_reason",
+                            "selection_summary.locked_matches",
+                            "selection_summary.would_create",
+                        ],
+                    },
+                    {
+                        "id": "create_session_with_context",
+                        "command": 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
+                        "read": [
+                            "session_id",
+                            "context_reuse.selected",
+                            "context_reuse.created",
+                            "context_reuse.selection_summary.recommended_next_action",
+                        ],
+                    },
+                    {
+                        "id": "close_session",
+                        "command": "browser-cli session close --session-id <session_id>",
+                        "cleanup": True,
+                    },
+                ],
+            },
+        },
     }
 
 

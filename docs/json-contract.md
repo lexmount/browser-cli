@@ -39,11 +39,13 @@ Command-specific fields may be added over time. Agents should check `ok` and
 
 `browser-cli commands` is the machine-readable command discovery surface. It
 returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
-`secret_policy`, and `agent_entrypoints`; `--names-only` returns compact command
-names, and `--group <name>` filters by command group. Command entries may expose
-`aliases` on canonical commands plus `alias_of` and `canonical_name` on alias
-commands, so agents can map user-facing phrasing back to the preferred action
-without parsing help text.
+`secret_policy`, `agent_entrypoints`, and `agent_workflows`; `--names-only`
+returns compact command names, and `--group <name>` filters by command group.
+`agent_workflows` describes ordered setup, one-off page, and persistent login
+state steps with `command`, `read`, `success_condition`, `on_failure_read`, and
+`cleanup` hints. Command entries may expose `aliases` on canonical commands plus
+`alias_of` and `canonical_name` on alias commands, so agents can map user-facing
+phrasing back to the preferred action without parsing help text.
 
 `context pick` and session context reuse return `selection_summary` with stable
 counts such as `checked`, `metadata_matches`, `metadata_mismatches`,

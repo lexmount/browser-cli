@@ -199,6 +199,28 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
     assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][0]
+    workflows = payload["agent_workflows"]
+    assert workflows["setup_and_verify"]["steps"][1]["command"] == (
+        "browser-cli doctor --json"
+    )
+    assert (
+        "repair_plan.connect_from_codex.url"
+        in workflows["setup_and_verify"]["steps"][1]["on_failure_read"]
+    )
+    assert workflows["setup_and_verify"]["steps"][2]["optional"] is True
+    one_off_steps = workflows["one_off_page_task"]["steps"]
+    assert one_off_steps[0]["id"] == "create_session"
+    assert one_off_steps[-1] == {
+        "id": "close_session",
+        "command": "browser-cli session close --session-id <session_id>",
+        "cleanup": True,
+    }
+    context_steps = workflows["persistent_login_state"]["steps"]
+    assert "selection_summary.recommended_next_action" in context_steps[0]["read"]
+    assert (
+        "context_reuse.selection_summary.recommended_next_action"
+        in (context_steps[1]["read"])
+    )
 
     for name in (
         "commands",

@@ -474,10 +474,13 @@ local reveal flag.
 
 `browser-cli commands` returns a parser-backed command catalog with
 `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
-`secret_policy`, and `agent_entrypoints`. Use `--names-only` for compact command
-discovery and `--group action` when choosing a browser action. Action catalog
-entries include `browser_target.exactly_one_of` so agents can supply exactly one
-of `--session-id`, `--connect-url`, or `--direct-url`.
+`secret_policy`, `agent_entrypoints`, and `agent_workflows`. Use `--names-only`
+for compact command discovery and `--group action` when choosing a browser
+action. `agent_workflows` gives ordered setup, one-off page task, and persistent
+login state steps with fields to read, success conditions, failure hints, and
+cleanup commands. Action catalog entries include `browser_target.exactly_one_of`
+so agents can supply exactly one of `--session-id`, `--connect-url`, or
+`--direct-url`.
 
 Argument parsing errors also return JSON on stdout with exit code `2`:
 
