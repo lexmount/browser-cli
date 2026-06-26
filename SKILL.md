@@ -9,6 +9,11 @@ Use `browser-cli` as the primary interface for Lexmount browser automation.
 Prefer CLI commands and JSON output over importing Python internals or writing
 ad hoc Playwright scripts.
 
+Use the CLI for browser work that needs remote pages, authenticated browser
+state, screenshots, DOM inspection, form filling, or repeatable agent actions.
+Do not use this skill for local static HTML parsing when a normal file parser is
+enough.
+
 ## Setup
 
 Check that the CLI is available:
@@ -37,12 +42,14 @@ non-default API endpoint is needed.
 
 ## Workflow
 
-For a one-off task:
+For a one-off task, create a temporary session, inspect before acting, and close
+the session when done:
 
 ```bash
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
+browser-cli action wait-selector --session-id <session_id> --selector <selector>
 browser-cli session close --session-id <session_id>
 ```
 
@@ -54,8 +61,15 @@ browser-cli context create
 browser-cli session create --context-id <context_id> --context-mode read_write
 ```
 
-Always close sessions created for temporary automation unless the user asks to
-keep them open.
+Use `read_write` for login/setup work that should update cookies or storage. Use
+`read_only` when inspecting an existing logged-in state. Always close temporary sessions
+unless the user asks to keep them open. Before deleting a context, confirm that
+the task no longer needs its login state.
+
+If a command fails, parse the JSON error first. For configuration or credential
+errors, stop browser work and guide the user to configure local environment
+variables. For missing selectors, take a fresh snapshot or screenshot before
+choosing another selector.
 
 ## Commands
 
@@ -90,6 +104,15 @@ browser-cli action eval --session-id <session_id> --script "() => document.title
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
 ```
 
+Prefer built-in actions in this order:
+
+1. Use `snapshot` or `screenshot` to understand the page.
+2. Use `wait-selector`, `click`, and `type` for common DOM work.
+3. Use `eval` through `browser-cli action eval` for small page-local reads or
+   actions that are not yet first-class CLI commands.
+4. Write custom Playwright only when the CLI cannot express the task and explain
+   why the CLI was insufficient.
+
 Each action must use exactly one target:
 
 ```bash
@@ -104,6 +127,10 @@ the shared direct websocket path.
 ## Output
 
 Parse command output as JSON. Check `ok` first, then inspect `command`,
-`error`, and command-specific fields. Do not log revealed API keys. By default,
-browser direct URLs are masked; use reveal flags only for local debugging.
+`error`, `message`, and command-specific fields. Treat nonzero exits as JSON
+failures whenever output is present.
 
+Do not log revealed API keys. Do not paste API keys, Project IDs, or full direct
+connect URLs into chat, docs, commits, screenshots, or test fixtures. By
+default, browser direct URLs are masked. Use reveal flags only for local
+debugging in a trusted shell.
