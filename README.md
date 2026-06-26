@@ -196,7 +196,8 @@ Each action must receive exactly one browser target:
 ```
 
 By default, action output masks `api_key` inside resolved direct connect URLs.
-Use `--reveal-connect-url` only for local debugging.
+Use `--reveal-connect-url` only for local debugging. Reveal flags expose only
+the explicitly requested URL field; other JSON fields are still redacted.
 
 Case files and compatibility aliases:
 
@@ -233,6 +234,18 @@ Failed commands include:
 }
 ```
 
+Argument parsing errors also use JSON and exit with code `2`:
+
+```json
+{
+  "ok": false,
+  "command": "session.create",
+  "error": "argument_error",
+  "message": "...",
+  "usage": "usage: ..."
+}
+```
+
 Agents should parse `ok`, `command`, and `error` first, then use
 command-specific fields.
 
@@ -246,6 +259,10 @@ command-specific fields.
   "checks": []
 }
 ```
+
+Before printing JSON, the CLI recursively redacts known secret fields, sensitive
+URL query parameters such as `api_key` and `access_token`, and configured local
+secret env values. Explicit reveal flags are only for trusted local debugging.
 
 ## Suggested Agent Workflow
 

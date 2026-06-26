@@ -43,19 +43,139 @@ PACKAGE_NAME = "browser-cli"
 DEFAULT_BROWSER_CONSOLE_URL = "https://browser.lexmount.cn"
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 REQUIRED_AUTH_ENV_VARS = ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
+SENSITIVE_ENV_VARS = (
+    "LEXMOUNT_API_KEY",
+    "LEXMOUNT_ACCESS_TOKEN",
+    "LEXMOUNT_REFRESH_TOKEN",
+    "LEXMOUNT_TOKEN",
+)
+SENSITIVE_FIELD_NAMES = {
+    "access_token",
+    "api_key",
+    "apikey",
+    "authorization",
+    "auth_token",
+    "password",
+    "refresh_token",
+    "secret",
+    "token",
+}
+SENSITIVE_QUERY_PARAMS = {
+    "access_token",
+    "api_key",
+    "apikey",
+    "auth_token",
+    "refresh_token",
+    "token",
+}
+SUBCOMMAND_GROUPS = {"action", "auth", "case", "context", "session"}
+TOP_LEVEL_COMMANDS = SUBCOMMAND_GROUPS | {
+    "close-session",
+    "direct-url",
+    "doctor",
+    "list-contexts",
+    "prepare",
+}
+_current_parse_argv: list[str] = []
 
 
-def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
+def _mask_secret_value(value: str) -> str:
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _configured_secret_values() -> list[str]:
+    return [
+        value
+        for name in SENSITIVE_ENV_VARS
+        if (value := os.environ.get(name)) and len(value) >= 8
+    ]
+
+
+def _mask_url_query_secrets(value: str) -> str:
+    parsed = urlsplit(value)
+    if not parsed.query:
+        return value
+
+    changed = False
+    query: list[tuple[str, str]] = []
+    for key, raw_value in parse_qsl(parsed.query, keep_blank_values=True):
+        if key.lower() in SENSITIVE_QUERY_PARAMS and raw_value:
+            query.append((key, "***"))
+            changed = True
+        else:
+            query.append((key, raw_value))
+
+    if not changed:
+        return value
+    return urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            urlencode(query, safe="*"),
+            parsed.fragment,
+        )
+    )
+
+
+def _redact_string(value: str) -> str:
+    redacted = _mask_url_query_secrets(value)
+    for secret in _configured_secret_values():
+        redacted = redacted.replace(secret, _mask_secret_value(secret))
+    return redacted
+
+
+def _redact_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[Any, Any] = {}
+        for key, item in value.items():
+            if isinstance(key, str) and key.lower() in SENSITIVE_FIELD_NAMES:
+                redacted[key] = (
+                    _mask_secret_value(item) if isinstance(item, str) and item else item
+                )
+            else:
+                redacted[key] = _redact_json_value(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_json_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_json_value(item) for item in value)
+    if isinstance(value, str):
+        return _redact_string(value)
+    return value
+
+
+def _json_dump(
+    payload: dict[str, Any],
+    exit_code: int = 0,
+    *,
+    redact_secrets: bool = True,
+    reveal_fields: set[str] | None = None,
+) -> NoReturn:
+    revealed = {
+        field: payload[field] for field in reveal_fields or set() if field in payload
+    }
+    if redact_secrets:
+        payload = _redact_json_value(payload)
+    payload.update(revealed)
     print(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=str)
     )
     raise SystemExit(exit_code)
 
 
-def _success(command: str, **payload: Any) -> NoReturn:
+def _success(
+    command: str,
+    *,
+    redact_secrets: bool = True,
+    reveal_fields: set[str] | None = None,
+    **payload: Any,
+) -> NoReturn:
     data = {"ok": True, "command": command}
     data.update(payload)
-    _json_dump(data)
+    _json_dump(data, redact_secrets=redact_secrets, reveal_fields=reveal_fields)
 
 
 def _failure(
@@ -64,6 +184,8 @@ def _failure(
     message: str,
     *,
     exit_code: int = 1,
+    redact_secrets: bool = True,
+    reveal_fields: set[str] | None = None,
     **payload: Any,
 ) -> NoReturn:
     data = {
@@ -73,7 +195,37 @@ def _failure(
         "message": message,
     }
     data.update(payload)
-    _json_dump(data, exit_code=exit_code)
+    _json_dump(
+        data,
+        exit_code=exit_code,
+        redact_secrets=redact_secrets,
+        reveal_fields=reveal_fields,
+    )
+
+
+def _command_from_argv(argv: list[str]) -> str:
+    if not argv or argv[0].startswith("-"):
+        return "browser-cli"
+
+    root = argv[0]
+    if root not in TOP_LEVEL_COMMANDS:
+        return "browser-cli"
+    if root in SUBCOMMAND_GROUPS:
+        if len(argv) > 1 and not argv[1].startswith("-"):
+            return f"{root}.{argv[1]}"
+        return root
+    return root
+
+
+class BrowserCliArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        _failure(
+            _command_from_argv(_current_parse_argv),
+            "argument_error",
+            message,
+            exit_code=2,
+            usage=self.format_usage().strip(),
+        )
 
 
 def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
@@ -781,12 +933,14 @@ def _run_action_command(
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
+    reveal_connect_url = bool(getattr(args, "reveal_connect_url", False))
     _success(
         command,
+        reveal_fields={"connect_url"} if reveal_connect_url else None,
         session_id=getattr(args, "session_id", None),
         **_masked_connect_url_payload(
             connect_url,
-            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+            reveal_connect_url=reveal_connect_url,
         ),
         result=result.result,
     )
@@ -878,6 +1032,7 @@ def cmd_direct_url(args: argparse.Namespace) -> None:
     reveal_url = bool(getattr(args, "reveal_url", False))
     _success(
         command,
+        reveal_fields={"connect_url"} if reveal_url else None,
         mode="direct",
         connect_url=connect_url if reveal_url else _mask_direct_url_secret(connect_url),
         masked=not reveal_url,
@@ -1002,6 +1157,7 @@ def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     session_subparsers = session.add_subparsers(
         dest="session_command",
         required=True,
+        parser_class=BrowserCliArgumentParser,
     )
 
     session_create = session_subparsers.add_parser("create", help="Create a session")
@@ -1036,6 +1192,7 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_subparsers = context.add_subparsers(
         dest="context_command",
         required=True,
+        parser_class=BrowserCliArgumentParser,
     )
 
     context_create = context_subparsers.add_parser("create", help="Create a context")
@@ -1063,7 +1220,11 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
 def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action = subparsers.add_parser("action", help="Run browser actions")
-    action_subparsers = action.add_subparsers(dest="action_command", required=True)
+    action_subparsers = action.add_subparsers(
+        dest="action_command",
+        required=True,
+        parser_class=BrowserCliArgumentParser,
+    )
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)
@@ -1135,7 +1296,11 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case = subparsers.add_parser("case", help="Validate or run a browser case file")
-    case_subparsers = case.add_subparsers(dest="case_command", required=True)
+    case_subparsers = case.add_subparsers(
+        dest="case_command",
+        required=True,
+        parser_class=BrowserCliArgumentParser,
+    )
 
     case_validate = case_subparsers.add_parser("validate", help="Validate a case file")
     case_validate.add_argument(
@@ -1210,7 +1375,7 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build the browser-cli parser."""
 
-    parser = argparse.ArgumentParser(
+    parser = BrowserCliArgumentParser(
         prog="browser-cli",
         description="Lexmount browser operation CLI",
     )
@@ -1219,7 +1384,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="version",
         version=f"%(prog)s {_package_version()}",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        parser_class=BrowserCliArgumentParser,
+    )
 
     _add_auth_commands(subparsers)
     _add_session_commands(subparsers)
@@ -1234,6 +1403,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     """Run the Lexmount browser operation CLI."""
 
+    global _current_parse_argv
+    _current_parse_argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     args = parser.parse_args(argv)
     args.func(args)
