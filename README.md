@@ -217,6 +217,7 @@ browser-cli action query --session-id <session_id> --selector ".item" --max-node
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
+browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "hello"
@@ -260,8 +261,8 @@ browser-cli action interactive-snapshot --session-id <session_id>
 
 `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`,
 `wait-network-idle`, `get-text`, `exists`, `count`, `query`, `get-attribute`,
-`wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `focus`, `get-value`,
-`wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
+`wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`,
+`get-value`, `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `set-file-input`,
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
@@ -280,7 +281,7 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `value_masked`, `file_input`, `file_count`, `requested_files`, `bounding_box`,
 `in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
 `option_found`, `option_label`, `requested_checked`, `previous_checked`,
-`changed`, or `navigation_requested` from `result`.
+`changed`, `total_candidate_count`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -405,14 +406,14 @@ Common agent recipes:
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`,
   `set-value`, `set-file-input`, or `clear` -> `wait-value` or `get-value` ->
   `blur` if validation is focus-driven -> `select-label`, `select-option`,
-  `check-label`, or `check` -> `wait-state --state enabled` for async submit
-  buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
+  `check-label`, or `check` -> `wait-state --state enabled` or `wait-role` for
+  async submit buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
   `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
-- Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`
-  and selector `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
-  selector.
+- Visible button/link: `wait-role` when the control appears asynchronously,
+  then `click-role`, then `click-text`, then `scroll-into-view` and selector
+  `click` after `exists`, `inspect`, or `bounding-box` confirms a stable selector.
 - Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
   `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized

@@ -37,6 +37,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "auth status" in prompt
     assert "doctor" in prompt
     assert "context/session" in prompt
+    assert "wait for roles or selectors" in prompt
     assert "browser actions" in prompt
 
 

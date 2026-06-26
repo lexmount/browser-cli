@@ -1760,6 +1760,73 @@ def _wait_text_expression(
 """.strip()
 
 
+def _wait_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const candidates = () => [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const check = () => {{
+    const nodes = candidates();
+    const roleMatches = nodes.filter((candidate) => roleOf(candidate) === requestedRole);
+    const element = roleMatches.find((candidate) =>
+      requestedName === null ||
+      matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+    );
+    const waitedMs = Date.now() - startedAt;
+    if (element) {{
+      resolve({{
+        found: true,
+        role: requestedRole,
+        name: requestedName,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        candidate_count: roleMatches.length,
+        total_candidate_count: nodes.length,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        role: requestedRole,
+        name: requestedName,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        candidate_count: roleMatches.length,
+        total_candidate_count: nodes.length,
+        candidates: roleMatches.slice(0, 20).map(nodeInfo)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _wait_count_expression(
     *,
     selector: str,
@@ -4227,6 +4294,22 @@ def cmd_action_wait_text(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_wait_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-role",
+        _wait_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
 def cmd_action_focus(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -5811,6 +5894,23 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     _add_text_match_args(action_wait_text)
     action_wait_text.set_defaults(func=cmd_action_wait_text)
+
+    action_wait_role = action_subparsers.add_parser(
+        "wait-role",
+        help="Wait until an interactive element with role and optional name appears",
+    )
+    _add_session_target_args(action_wait_role)
+    action_wait_role.add_argument("--role", required=True)
+    action_wait_role.add_argument("--name")
+    action_wait_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes while waiting.",
+    )
+    _add_text_match_args(action_wait_role)
+    action_wait_role.set_defaults(func=cmd_action_wait_role)
 
     action_focus = action_subparsers.add_parser(
         "focus",

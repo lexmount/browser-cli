@@ -26,6 +26,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli context pick --metadata-json" in text
     assert "browser-cli session create --context-metadata-json" in text
     assert "`availability` is `locked` or `unavailable`" in text
+    assert "wait-role" in text
     assert "click-role" in text
     assert "interactive-snapshot" in text
     assert "context resolve" not in text

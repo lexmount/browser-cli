@@ -16,6 +16,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "Inspect with `snapshot`, then `interactive-snapshot`" in normalized
     assert "use `form-snapshot` before filling complex forms" in normalized
     assert "Prefer semantic actions" in normalized
+    assert "`wait-role` for async roles/names" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
     assert "`click-index` for a chosen repeated selector match" in normalized
@@ -119,6 +120,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`wait-load-state`",
         "`wait-network-idle`",
         "`wait-text`",
+        "`wait-role`",
         "`click`",
         "`type`",
         "`focus`",
@@ -185,6 +187,7 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`index`" in normalized
     assert "`attributes`" in normalized
     assert "`html_truncated`" in normalized
+    assert "`total_candidate_count`" in normalized
     assert "`requested_option_label`" in normalized
     assert "`option_found`" in normalized
     assert "`option_label`" in normalized
@@ -209,12 +212,19 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`select-label` for labeled selects" in normalized
     assert "`select-option` or `check`" in normalized
     assert "prefer `check-label` for labeled controls" in normalized
-    assert "`wait-state --state enabled` for async submit buttons" in normalized
+    assert (
+        "`wait-state --state enabled` or `wait-role` for async submit buttons"
+        in normalized
+    )
+    assert "or `wait-role` for async submit buttons" in normalized
     assert "`dispatch-event --event input --event change`" in normalized
     assert "then use `submit`" in normalized
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
-    assert "`click-role`, then `click-text`, then `scroll-into-view`" in normalized
+    assert "use `wait-role` when the control appears asynchronously" in normalized
+    assert (
+        "prefer `click-role`, then `click-text`, then `scroll-into-view`" in normalized
+    )
     assert "after `exists`, `inspect`, or `bounding-box`" in normalized
     assert "For repeated matches, run `query` and then" in normalized
     assert "`click-index --index <n>`" in normalized
@@ -234,7 +244,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `wait-count` for dynamic lists" in normalized
     assert "`wait-state` for enabled/visible/checked/focused states" in normalized
     assert "`get-text` for a known selector" in normalized
-    assert "use `wait-text` before reading dynamic results" in normalized
+    assert "use `wait-text` or `wait-role` before reading dynamic results" in normalized
     assert "Adjust browser state" in normalized
     assert "use `storage-get` for local/session storage" in normalized
     assert "`storage-clear --prefix <prefix>` for targeted cleanup" in normalized

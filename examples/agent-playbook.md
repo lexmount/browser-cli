@@ -87,8 +87,8 @@ When expanded action commands are available, use them for common browser
 operations such as checking existence, reading text, scrolling, selecting
 options, checking boxes, hovering, and pressing keys.
 
-Prefer semantic actions such as `click-role`, `click-text`, `fill-label`,
-`select-label`, `check-label`, `interactive-snapshot`, and
+Prefer semantic actions such as `wait-role`, `click-role`, `click-text`,
+`fill-label`, `select-label`, `check-label`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as

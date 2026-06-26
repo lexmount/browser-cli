@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, states, URLs, load state, network idle, text, or form values, click selectors or indexed matches, type, focus, blur, clear, inspect form fields, inspect element state and geometry, set form/file values, check or uncheck labeled controls, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, states, roles, URLs, load state, network idle, text, or form values, click selectors or indexed matches, type, focus, blur, clear, inspect form fields, inspect element state and geometry, set form/file values, check or uncheck labeled controls, dispatch DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -199,6 +199,7 @@ browser-cli action query --session-id <session_id> --selector ".item" --max-node
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
+browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "query"
@@ -242,7 +243,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 Prefer these built-in actions over writing custom JavaScript. `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-load-state`, `wait-network-idle`,
 `get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-count`,
-`wait-state`, `wait-attribute`, `wait-text`, `focus`, `get-value`, `wait-value`, `blur`,
+`wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `get-value`, `wait-value`, `blur`,
 `storage-get`, `storage-set`, `storage-remove`, `storage-clear`,
 `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`,
 `wait-cookie`, `clear`, `set-value`, `set-file-input`, `dispatch-event`,
@@ -258,7 +259,7 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `network_idle`, `quiet_ms`, `submitted`, `hovered`, `pressed`, `dispatched`,
 `dispatched_events`, `fields`, `value_masked`, `file_input`, `file_count`,
 `requested_files`, `bounding_box`, `in_viewport`, `index`, `attributes`,
-`html_truncated`, `requested_option_label`, `option_found`, `option_label`,
+`html_truncated`, `total_candidate_count`, `requested_option_label`, `option_found`, `option_label`,
 `requested_checked`, `previous_checked`, `changed`, and `navigation_requested`
 before assuming the page changed.
 
@@ -266,7 +267,7 @@ For page work, choose actions in this order:
 
 1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
    are unclear; use `form-snapshot` before filling complex forms.
-2. Prefer semantic actions: `click-role` for known roles/names, `click-text` for
+2. Prefer semantic actions: `wait-role` for async roles/names, `click-role` for known roles/names, `click-text` for
    visible text, `click-index` for a chosen repeated selector match,
    `fill-label` for labeled text fields, `select-label` for labeled native
    selects, and `check-label` for labeled checkbox or switch controls.
@@ -301,13 +302,13 @@ Common task recipes:
    `blur` for focus-driven validation, use
    `select-label` for labeled selects, `select-option` or `check` for stable
    selector controls, prefer `check-label` for labeled controls, use
-   `wait-state --state enabled` for async submit buttons, use
+   `wait-state --state enabled` or `wait-role` for async submit buttons, use
    `dispatch-event --event input --event change` when the app needs explicit
    events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
-2. Click a visible control: prefer `click-role`, then `click-text`, then
-   `scroll-into-view` and selector `click` after `exists`, `inspect`, or `bounding-box`
-   confirms a stable selector. For repeated matches, run `query` and then
+2. Click a visible control: use `wait-role` when the control appears asynchronously,
+   prefer `click-role`, then `click-text`, then `scroll-into-view` and selector
+   `click` after `exists`, `inspect`, or `bounding-box` confirms a stable selector. For repeated matches, run `query` and then
    `click-index --index <n>`.
 3. Navigate page history or async refresh: use `reload`, `go-back`, or
    `go-forward`, then confirm with `wait-url`, `wait-load-state`,
@@ -319,7 +320,7 @@ Common task recipes:
 5. Read page results: use `wait-count` for dynamic lists, `wait-attribute` for
    DOM attributes, `wait-state` for enabled/visible/checked/focused states,
    `get-text` for a known selector; use `snapshot` when the page structure or
-   selector is unknown; use `wait-text` before reading dynamic results.
+   selector is unknown; use `wait-text` or `wait-role` before reading dynamic results.
 6. Adjust browser state: use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
    `storage-clear --prefix <prefix>` for targeted cleanup; use `wait-storage`

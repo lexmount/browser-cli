@@ -2796,6 +2796,13 @@ def test_second_batch_eval_backed_action_commands_emit_structured_results(
     assert observed["connect_url"] == connect_url
     assert observed["action"] == "eval"
     assert observed["expression"].startswith("() =>")
+    if command == "action.wait-role":
+        assert "new Promise" in observed["expression"]
+        assert "requestedRole" in observed["expression"]
+        assert '"button"' in observed["expression"]
+        assert '"Save"' in observed["expression"]
+        assert "includeHidden" in observed["expression"]
+        assert "timeoutMs" in observed["expression"]
     payload = json.loads(capsys.readouterr().out)
     assert payload == {
         "ok": True,
@@ -3080,6 +3087,44 @@ def test_second_batch_eval_backed_action_commands_emit_structured_results(
                 "text": "Ready",
                 "waited_ms": 50,
                 "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Save",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-role",
+            {
+                "found": True,
+                "role": "button",
+                "name": "Save",
+                "waited_ms": 50,
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+                "candidate_count": 1,
+                "total_candidate_count": 4,
+            },
+            {
+                "found": True,
+                "role": "button",
+                "name": "Save",
+                "waited_ms": 50,
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+                "candidate_count": 1,
+                "total_candidate_count": 4,
                 "url": "https://example.test",
             },
         ),
