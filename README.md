@@ -272,6 +272,7 @@ browser-cli action query --session-id <session_id> --selector ".item" --max-node
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
+browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
@@ -503,7 +504,8 @@ Common agent recipes:
   `wait-title` for async title changes, `wait-count` for dynamic lists,
   `wait-attribute` for DOM attributes, `wait-state` for
   enabled/visible/checked/focused states, `get-text` for known selectors, or
-  `snapshot` when the selector is unknown.
+  `snapshot` when the selector is unknown. Use `wait-text --state absent` when
+  loading, toast, or error text should disappear.
 - Browser state: use `storage-get` to inspect local/session storage, `storage-set`
   to adjust feature flags or onboarding state, and `storage-remove` or
   `storage-clear --prefix <prefix>` for targeted cleanup. Use `wait-storage`

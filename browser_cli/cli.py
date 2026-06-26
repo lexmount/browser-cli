@@ -2317,6 +2317,7 @@ def _wait_text_expression(
     *,
     text: str,
     selector: str | None,
+    state: str,
     exact: bool,
     case_sensitive: bool,
     timeout_ms: float,
@@ -2329,6 +2330,7 @@ def _wait_text_expression(
 {_dom_helpers_expression(include_hidden=include_hidden)}
   const requestedText = {_js_literal(text)};
   const selector = {selector_source};
+  const requestedState = {_js_literal(state)};
   const exact = {_js_literal(exact)};
   const caseSensitive = {_js_literal(case_sensitive)};
   const startedAt = Date.now();
@@ -2347,24 +2349,52 @@ def _wait_text_expression(
       matchesText(accessibleName(candidate), requestedText, exact, caseSensitive)
     );
     const waitedMs = Date.now() - startedAt;
-    if (element) {{
+    const matched = Boolean(element);
+    const reached = requestedState === "absent" ? !matched : matched;
+    if (reached) {{
+      if (requestedState === "present") {{
+        resolve({{
+          found: true,
+          text: requestedText,
+          selector,
+          waited_ms: waitedMs,
+          candidate_count: nodes.length,
+          element: nodeInfo(element)
+        }});
+        return;
+      }}
       resolve({{
-        found: true,
+        found: matched,
+        matched,
+        state: requestedState,
         text: requestedText,
         selector,
         waited_ms: waitedMs,
         candidate_count: nodes.length,
-        element: nodeInfo(element)
+        element: element ? nodeInfo(element) : null
       }});
       return;
     }}
     if (waitedMs >= timeoutMs) {{
+      if (requestedState === "present") {{
+        resolve({{
+          found: false,
+          text: requestedText,
+          selector,
+          waited_ms: waitedMs,
+          candidate_count: nodes.length
+        }});
+        return;
+      }}
       resolve({{
-        found: false,
+        found: matched,
+        matched,
+        state: requestedState,
         text: requestedText,
         selector,
         waited_ms: waitedMs,
-        candidate_count: nodes.length
+        candidate_count: nodes.length,
+        element: element ? nodeInfo(element) : null
       }});
       return;
     }}
@@ -4996,6 +5026,7 @@ def cmd_action_wait_text(args: argparse.Namespace) -> None:
         _wait_text_expression(
             text=args.text,
             selector=args.selector,
+            state=args.state,
             exact=args.exact,
             case_sensitive=args.case_sensitive,
             timeout_ms=args.timeout_ms,
@@ -6990,6 +7021,12 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_wait_text.add_argument("--timeout-ms", type=float, default=30000)
     action_wait_text.add_argument("--poll-ms", type=float, default=250)
+    action_wait_text.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Text state to wait for.",
+    )
     action_wait_text.add_argument(
         "--include-hidden",
         action="store_true",

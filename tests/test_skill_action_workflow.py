@@ -290,6 +290,10 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`wait-state` for enabled/visible/checked/focused states" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` or `wait-role` before reading dynamic results" in normalized
+    assert (
+        "`wait-text --state absent` when loading, toast, or error text should disappear"
+        in normalized
+    )
     assert "Adjust browser state" in normalized
     assert "use `storage-get` for local/session storage" in normalized
     assert "`storage-clear --prefix <prefix>` for targeted cleanup" in normalized

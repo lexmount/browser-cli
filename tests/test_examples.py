@@ -36,6 +36,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "click-role" in text
     assert "page-info" in text
     assert "wait-title" in text
+    assert "waiting for text to disappear" in text
     assert "active/global shortcut keys" in text
     assert "interactive-snapshot" in text
     assert "context resolve" not in text
