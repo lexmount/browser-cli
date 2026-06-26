@@ -85,6 +85,28 @@ def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
     _failure(command, exc.__class__.__name__, str(exc))
 
 
+def _command_from_prog(prog: str) -> str:
+    parts = prog.split()
+    if parts and parts[0] == "browser-cli":
+        parts = parts[1:]
+    return ".".join(parts) if parts else "browser-cli"
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def add_subparsers(self, *args: Any, **kwargs: Any) -> Any:
+        kwargs.setdefault("parser_class", type(self))
+        return super().add_subparsers(*args, **kwargs)
+
+    def error(self, message: str) -> NoReturn:
+        _failure(
+            _command_from_prog(self.prog),
+            "argument_error",
+            message,
+            exit_code=2,
+            usage=self.format_usage().strip(),
+        )
+
+
 def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
     if not raw:
         return None
@@ -4471,7 +4493,10 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build the browser-cli parser."""
 
-    parser = argparse.ArgumentParser(description="Lexmount browser operation CLI")
+    parser = JsonArgumentParser(
+        description="Lexmount browser operation CLI",
+        prog="browser-cli",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _add_session_commands(subparsers)

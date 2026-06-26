@@ -40,6 +40,59 @@ def test_direct_url_masks_secret_by_default(
     }
 
 
+@pytest.mark.parametrize(
+    ("argv", "command", "message_part", "usage_part"),
+    [
+        (
+            ["action", "open-url", "--session-id", "s1"],
+            "action.open-url",
+            "the following arguments are required: --url",
+            "browser-cli action open-url",
+        ),
+        (
+            [
+                "action",
+                "wait-selector",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--state",
+                "nope",
+            ],
+            "action.wait-selector",
+            "invalid choice: 'nope'",
+            "browser-cli action wait-selector",
+        ),
+        (
+            ["nope"],
+            "browser-cli",
+            "invalid choice: 'nope'",
+            "browser-cli",
+        ),
+    ],
+)
+def test_argument_errors_emit_json(
+    argv: list[str],
+    command: str,
+    message_part: str,
+    usage_part: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["command"] == command
+    assert payload["error"] == "argument_error"
+    assert message_part in payload["message"]
+    assert usage_part in payload["usage"]
+
+
 def _checks_by_name(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {check["name"]: check for check in payload["checks"]}
 

@@ -58,6 +58,14 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "if `locked` is true, pick or create a different context" in normalized
 
 
+def test_skill_uses_json_argument_errors_for_command_repairs() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "`argument_error`" in normalized
+    assert "read the JSON `usage` field" in normalized
+    assert "do not parse stderr" in normalized
+
+
 def test_skill_lists_selector_and_input_actions() -> None:
     normalized = _normalized_skill_text()
 

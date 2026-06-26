@@ -282,6 +282,21 @@ Failed commands include:
 Agents should parse `ok`, `command`, and `error` first, then use
 command-specific fields.
 
+Argument parsing errors also return JSON on stdout with exit code `2`:
+
+```json
+{
+  "ok": false,
+  "command": "action.open-url",
+  "error": "argument_error",
+  "message": "the following arguments are required: --url",
+  "usage": "usage: browser-cli action open-url ..."
+}
+```
+
+Agents should use the `usage` field to repair malformed commands instead of
+parsing stderr.
+
 `browser-cli doctor` returns a `checks` array with `pass`, `fail`, or `skipped`
 statuses for install/version, environment, direct URL, and API connectivity
 checks. It masks `api_key` in direct URLs and diagnostic error messages by
