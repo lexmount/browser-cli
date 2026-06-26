@@ -228,6 +228,8 @@ browser-cli action bounding-box --session-id <session_id> --selector "button[typ
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action check-label --session-id <session_id> --label "Remember me"
+browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
 browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action click-text --session-id <session_id> --text "Submit"
@@ -246,8 +248,9 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
 `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `select-option`,
-`check`, `uncheck`, `hover`, `press`, `click-text`, `click-role`, `click-index`,
-`fill-label`, `form-snapshot`, `accessibility-snapshot`, and
+`check`, `uncheck`, `check-label`, `uncheck-label`, `hover`, `press`,
+`click-text`, `click-role`, `click-index`, `fill-label`, `form-snapshot`,
+`accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -256,7 +259,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
 `dispatched`, `dispatched_events`, `fields`, `value_masked`, `bounding_box`,
-`in_viewport`, `index`, or `navigation_requested` from `result`.
+`in_viewport`, `index`, `requested_checked`, `previous_checked`, `changed`, or
+`navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -372,8 +376,8 @@ Common agent recipes:
 
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`,
   `set-value`, or `clear` -> `wait-value` or `get-value` -> `blur` if validation is
-  focus-driven -> `select-option` or `check` -> `dispatch-event` if explicit
-  `input`/`change` is needed -> `submit --selector <form-or-field>`,
+  focus-driven -> `select-option`, `check-label`, or `check` -> `dispatch-event`
+  if explicit `input`/`change` is needed -> `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`

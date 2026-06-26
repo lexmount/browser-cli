@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, click indexed selector matches, type, focus, blur, clear, inspect form fields, inspect element geometry, set form values, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/export-env/login; verify installation, environment, and API connectivity with doctor; open pages, wait for selectors, URLs, load state, network idle, text, or form values, click, click indexed selector matches, type, focus, blur, clear, inspect form fields, inspect element geometry, set form values, check or uncheck labeled controls, dispatch common DOM events, submit forms, navigate history, read or mutate localStorage/sessionStorage and document.cookie-visible cookies, screenshot, evaluate JavaScript, inspect interactive elements, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -202,6 +202,8 @@ browser-cli action bounding-box --session-id <session_id> --selector "button"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action check-label --session-id <session_id> --label "Remember me"
+browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
 browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action click-text --session-id <session_id> --text "Submit"
@@ -221,24 +223,26 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`,
 `wait-cookie`, `clear`, `set-value`, `dispatch-event`, `submit`, `scroll`,
 `scroll-into-view`, `bounding-box`, `select-option`, `check`, `uncheck`,
-`hover`, and `press` plus `click-text`, `click-role`, `click-index`,
-`fill-label`, `form-snapshot`, `accessibility-snapshot`, and
+`check-label`, `uncheck-label`, `hover`, and `press` plus `click-text`,
+`click-role`, `click-index`, `fill-label`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are DOM/eval backed, so always parse their structured
 `result` fields such as `found`, `exists`, `count`, `checked`, `selected`,
 `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`, `set`,
 `removed`, `deleted`, `cleared`, `items`, `cleared_count`, `requested_count`,
 `state`, `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`,
 `submitted`, `hovered`, `pressed`, `dispatched`, `dispatched_events`, `fields`,
-`value_masked`, `bounding_box`, `in_viewport`, `index`, and `navigation_requested`
-before assuming the page changed.
+`value_masked`, `bounding_box`, `in_viewport`, `index`, `requested_checked`,
+`previous_checked`, `changed`, and `navigation_requested` before assuming the
+page changed.
 
 For page work, choose actions in this order:
 
 1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
    are unclear; use `form-snapshot` before filling complex forms.
 2. Prefer semantic actions: `click-role` for known roles/names, `click-text` for
-   visible text, `click-index` for a chosen repeated selector match, and
-   `fill-label` for labeled form fields.
+   visible text, `click-index` for a chosen repeated selector match,
+   `fill-label` for labeled form fields, and `check-label` for labeled
+   checkbox or switch controls.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
    `wait-count`, `query`, `get-attribute`, `wait-attribute`, `wait-text`,
    `get-text`, `wait-selector`, `click`, `type`, `focus`, `get-value`,
@@ -267,7 +271,8 @@ Common task recipes:
    `fill-label` for labeled fields and `set-value` for stable selectors,
    `clear` before replacement text when needed, use `get-value` or `wait-value`
    to confirm form state, use `blur` for focus-driven validation, use
-   `select-option` or `check` for controls, use
+   `select-option` or `check` for stable selector controls, prefer
+   `check-label` for labeled controls, use
    `dispatch-event --event input --event change` when the app needs explicit
    events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.

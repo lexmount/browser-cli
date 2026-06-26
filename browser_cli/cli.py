@@ -1001,6 +1001,33 @@ def _dom_helpers_expression(
 """.rstrip()
 
 
+def _label_control_helpers_expression() -> str:
+    return """
+  const findFieldByLabel = (requestedLabel, exact, caseSensitive, fieldSelector) => {
+    const labelElements = [...document.querySelectorAll("label")].filter(visible);
+    for (const labelElement of labelElements) {
+      if (!matchesText(textOf(labelElement), requestedLabel, exact, caseSensitive)) {
+        continue;
+      }
+      let element = null;
+      if (labelElement.htmlFor) {
+        element = document.getElementById(labelElement.htmlFor);
+      }
+      element ||= labelElement.querySelector(fieldSelector);
+      if (element) {
+        return { element, label_element: nodeInfo(labelElement) };
+      }
+    }
+    const element = [...document.querySelectorAll(fieldSelector)]
+      .filter(visible)
+      .find((candidate) =>
+        matchesText(accessibleName(candidate), requestedLabel, exact, caseSensitive)
+      );
+    return { element: element || null, label_element: null };
+  };
+""".rstrip()
+
+
 def _click_text_expression(
     *,
     text: str,
@@ -1097,32 +1124,14 @@ def _fill_label_expression(
     return f"""
 () => {{
 {_dom_helpers_expression()}
+{_label_control_helpers_expression()}
   const requestedLabel = {_js_literal(label)};
   const text = {_js_literal(text)};
   const exact = {_js_literal(exact)};
   const caseSensitive = {_js_literal(case_sensitive)};
   const fieldSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true']";
-  const labelElements = [...document.querySelectorAll("label")].filter(visible);
-  let element = null;
-  let matchedLabel = null;
-  for (const labelElement of labelElements) {{
-    if (!matchesText(textOf(labelElement), requestedLabel, exact, caseSensitive)) {{
-      continue;
-    }}
-    matchedLabel = nodeInfo(labelElement);
-    if (labelElement.htmlFor) {{
-      element = document.getElementById(labelElement.htmlFor);
-    }}
-    element ||= labelElement.querySelector(fieldSelector);
-    if (element) break;
-  }}
-  if (!element) {{
-    element = [...document.querySelectorAll(fieldSelector)]
-      .filter(visible)
-      .find((candidate) =>
-        matchesText(accessibleName(candidate), requestedLabel, exact, caseSensitive)
-      );
-  }}
+  const match = findFieldByLabel(requestedLabel, exact, caseSensitive, fieldSelector);
+  const element = match.element;
   if (!element) {{
     return {{ found: false, filled: false, label: requestedLabel, text }};
   }}
@@ -1141,8 +1150,82 @@ def _fill_label_expression(
     text,
     previous_value: previousValue,
     value: element.isContentEditable ? element.textContent : element.value,
-    label_element: matchedLabel,
+    label_element: match.label_element,
     element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _check_label_expression(
+    *,
+    label: str,
+    checked: bool,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_label_control_helpers_expression()}
+  const requestedLabel = {_js_literal(label)};
+  const requestedChecked = {_js_literal(checked)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const fieldSelector = [
+    "input[type=checkbox]",
+    "input[type=radio]",
+    "[role~=checkbox]",
+    "[role~=radio]",
+    "[role~=switch]",
+    "[aria-checked]"
+  ].join(",");
+  const match = findFieldByLabel(requestedLabel, exact, caseSensitive, fieldSelector);
+  const element = match.element;
+  if (!element) {{
+    return {{
+      found: false,
+      checkable: false,
+      label: requestedLabel,
+      requested_checked: requestedChecked
+    }};
+  }}
+  const hasNativeChecked = "checked" in element;
+  const ariaCheckable = element.hasAttribute("aria-checked") ||
+    ["checkbox", "radio", "switch"].includes(roleOf(element));
+  if (!hasNativeChecked && !ariaCheckable) {{
+    return {{
+      found: true,
+      checkable: false,
+      label: requestedLabel,
+      requested_checked: requestedChecked,
+      element: nodeInfo(element),
+      label_element: match.label_element
+    }};
+  }}
+  const previousChecked = hasNativeChecked
+    ? Boolean(element.checked)
+    : element.getAttribute("aria-checked") === "true";
+  if (hasNativeChecked) {{
+    element.checked = requestedChecked;
+  }} else {{
+    element.setAttribute("aria-checked", requestedChecked ? "true" : "false");
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const currentChecked = hasNativeChecked
+    ? Boolean(element.checked)
+    : element.getAttribute("aria-checked") === "true";
+  return {{
+    found: true,
+    checkable: true,
+    label: requestedLabel,
+    requested_checked: requestedChecked,
+    previous_checked: previousChecked,
+    checked: currentChecked,
+    changed: previousChecked !== currentChecked,
+    element: nodeInfo(element),
+    label_element: match.label_element
   }};
 }}
 """.strip()
@@ -3676,6 +3759,32 @@ def cmd_action_uncheck(args: argparse.Namespace) -> None:
     _run_checkbox_action(args, checked=False, command="action.uncheck")
 
 
+def cmd_action_check_label(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.check-label",
+        _check_label_expression(
+            label=args.label,
+            checked=True,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_uncheck_label(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.uncheck-label",
+        _check_label_expression(
+            label=args.label,
+            checked=False,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def _run_checkbox_action(
     args: argparse.Namespace,
     *,
@@ -5141,6 +5250,24 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_uncheck)
     action_uncheck.add_argument("--selector", required=True)
     action_uncheck.set_defaults(func=cmd_action_uncheck)
+
+    action_check_label = action_subparsers.add_parser(
+        "check-label",
+        help="Check a checkbox, radio, or switch matched by label or accessible name",
+    )
+    _add_session_target_args(action_check_label)
+    action_check_label.add_argument("--label", required=True)
+    _add_text_match_args(action_check_label)
+    action_check_label.set_defaults(func=cmd_action_check_label)
+
+    action_uncheck_label = action_subparsers.add_parser(
+        "uncheck-label",
+        help="Uncheck a checkbox or switch matched by label or accessible name",
+    )
+    _add_session_target_args(action_uncheck_label)
+    action_uncheck_label.add_argument("--label", required=True)
+    _add_text_match_args(action_uncheck_label)
+    action_uncheck_label.set_defaults(func=cmd_action_uncheck_label)
 
     action_hover = action_subparsers.add_parser(
         "hover",
