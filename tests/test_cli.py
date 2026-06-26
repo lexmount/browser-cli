@@ -18,6 +18,16 @@ class DummyModel:
         return self.payload
 
 
+def test_version_flag_prints_package_version(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["--version"])
+
+    assert exc_info.value.code == 0
+    assert capsys.readouterr().out == "browser-cli 0.1.0\n"
+
+
 def test_direct_url_masks_secret_by_default(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

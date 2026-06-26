@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import tomllib
+from importlib import metadata
+from pathlib import Path
 from typing import Any, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -30,6 +33,8 @@ from lex_browser_runtime.browser.models import (
     BrowserParallelLimitError,
     BrowserRuntimeError,
 )
+
+PACKAGE_NAME = "browser-cli"
 
 
 def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
@@ -104,6 +109,26 @@ def _normalize_browser_mode(value: str) -> str:
 
 def _model_payload(value: Any) -> dict[str, Any]:
     return value.model_dump(mode="json")
+
+
+def _package_version() -> str:
+    try:
+        return metadata.version(PACKAGE_NAME)
+    except metadata.PackageNotFoundError:
+        pass
+
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    try:
+        data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    except OSError:
+        return "unknown"
+
+    project = data.get("project")
+    if isinstance(project, dict):
+        version = project.get("version")
+        if isinstance(version, str):
+            return version
+    return "unknown"
 
 
 def _mask_direct_url_secret(connect_url: str) -> str:
@@ -638,7 +663,15 @@ def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     """Build the browser-cli parser."""
 
-    parser = argparse.ArgumentParser(description="Lexmount browser operation CLI")
+    parser = argparse.ArgumentParser(
+        prog="browser-cli",
+        description="Lexmount browser operation CLI",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_package_version()}",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _add_session_commands(subparsers)
