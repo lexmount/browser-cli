@@ -1746,6 +1746,150 @@ def _query_expression(
 """.strip()
 
 
+def _inspect_expression(
+    *,
+    selector: str,
+    include_html: bool,
+    max_html_chars: int,
+    reveal_sensitive_values: bool,
+) -> str:
+    rect_object = _rect_object_expression("rect")
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const includeHtml = {_js_literal(include_html)};
+  const maxHtmlChars = Math.max(0, {_js_literal(max_html_chars)});
+  const revealSensitiveValues = {_js_literal(reveal_sensitive_values)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{ selector, found: false }};
+  }}
+  const tag = element.tagName.toLowerCase();
+  const type = String(element.getAttribute("type") || "").toLowerCase();
+  const sensitiveField = tag === "input" && ["password", "hidden"].includes(type);
+  const sensitiveAttributeName = (name) =>
+    /api[-_]?key|authorization|password|secret|token/i.test(String(name || ""));
+  const valuePayload = () => {{
+    if (!("value" in element) && !element.isContentEditable) {{
+      return {{ value: null, value_masked: false, value_length: null }};
+    }}
+    const raw = readFormValue(element);
+    if (sensitiveField && !revealSensitiveValues) {{
+      const value = raw.value === null || raw.value === "" ? raw.value : "***";
+      return {{
+        ...raw,
+        value,
+        value_masked: raw.value !== null && raw.value !== "",
+        value_length: String(raw.value ?? "").length
+      }};
+    }}
+    return {{ ...raw, value_masked: false, value_length: String(raw.value ?? "").length }};
+  }};
+  const attributeValue = (attribute) => {{
+    if (!revealSensitiveValues && (
+      sensitiveAttributeName(attribute.name) ||
+      (sensitiveField && attribute.name.toLowerCase() === "value")
+    )) {{
+      return attribute.value === "" ? "" : "***";
+    }}
+    return attribute.value;
+  }};
+  const attributes = Object.fromEntries(
+    [...element.attributes].map((attribute) => [
+      attribute.name,
+      attributeValue(attribute)
+    ])
+  );
+  const selectedOptions = "selectedOptions" in element
+    ? [...element.selectedOptions].map((option) => ({{
+        value: option.value,
+        text: textOf(option)
+      }}))
+    : null;
+  const options = tag === "select"
+    ? [...element.options].slice(0, 50).map((option) => ({{
+        value: option.value,
+        text: textOf(option),
+        selected: Boolean(option.selected),
+        disabled: Boolean(option.disabled)
+      }}))
+    : null;
+  const rect = element.getBoundingClientRect();
+  const center = {{
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  }};
+  const inViewport = rect.bottom >= 0 &&
+    rect.right >= 0 &&
+    rect.top <= window.innerHeight &&
+    rect.left <= window.innerWidth;
+  const sanitizeHtml = (root) => {{
+    const clone = root.cloneNode(true);
+    const nodes = [clone, ...clone.querySelectorAll("*")];
+    for (const node of nodes) {{
+      const nodeTag = node.tagName.toLowerCase();
+      const nodeType = String(node.getAttribute("type") || "").toLowerCase();
+      const nodeSensitive = nodeTag === "input" && ["password", "hidden"].includes(nodeType);
+      for (const attribute of [...node.attributes]) {{
+        if (
+          sensitiveAttributeName(attribute.name) ||
+          (nodeSensitive && attribute.name.toLowerCase() === "value")
+        ) {{
+          node.setAttribute(attribute.name, attribute.value === "" ? "" : "***");
+        }}
+      }}
+    }}
+    return clone.outerHTML;
+  }};
+  let html = null;
+  let htmlLength = null;
+  let htmlTruncated = false;
+  if (includeHtml) {{
+    html = sanitizeHtml(element);
+    htmlLength = html.length;
+    htmlTruncated = html.length > maxHtmlChars;
+    html = html.slice(0, maxHtmlChars);
+  }}
+  return {{
+    selector,
+    found: true,
+    element: nodeInfo(element),
+    attributes,
+    state: {{
+      visible: visible(element),
+      focused: document.activeElement === element,
+      disabled: Boolean(element.disabled),
+      readonly: Boolean(element.readOnly),
+      required: Boolean(element.required),
+      checked: "checked" in element ? Boolean(element.checked) : null,
+      selected: "selected" in element ? Boolean(element.selected) : null,
+      multiple: "multiple" in element ? Boolean(element.multiple) : null,
+      contenteditable: element.isContentEditable
+    }},
+    ...valuePayload(),
+    selected_options: selectedOptions,
+    options,
+    option_count: tag === "select" ? element.options.length : null,
+    visible: visible(element),
+    in_viewport: inViewport,
+    bounding_box: {rect_object},
+    center,
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    html,
+    html_length: htmlLength,
+    html_truncated: htmlTruncated
+  }};
+}}
+""".strip()
+
+
 def _reload_expression() -> str:
     return """
 () => {
@@ -3484,6 +3628,19 @@ def cmd_action_query(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_inspect(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.inspect",
+        _inspect_expression(
+            selector=args.selector,
+            include_html=args.include_html,
+            max_html_chars=args.max_html_chars,
+            reveal_sensitive_values=args.reveal_sensitive_values,
+        ),
+    )
+
+
 def cmd_action_get_attribute(args: argparse.Namespace) -> None:
     attribute = _js_literal(args.name)
     _run_eval_backed_action_command(
@@ -4918,6 +5075,25 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_query.add_argument("--selector", required=True)
     _add_snapshot_filter_args(action_query)
     action_query.set_defaults(func=cmd_action_query)
+
+    action_inspect = action_subparsers.add_parser(
+        "inspect",
+        help="Inspect one selector match with state, attributes, value, and geometry",
+    )
+    _add_session_target_args(action_inspect)
+    action_inspect.add_argument("--selector", required=True)
+    action_inspect.add_argument(
+        "--include-html",
+        action="store_true",
+        help="Include sanitized outerHTML for the matched element.",
+    )
+    action_inspect.add_argument("--max-html-chars", type=int, default=2000)
+    action_inspect.add_argument(
+        "--reveal-sensitive-values",
+        action="store_true",
+        help="Reveal password/hidden values and sensitive attributes in local output.",
+    )
+    action_inspect.set_defaults(func=cmd_action_inspect)
 
     action_get_attribute = action_subparsers.add_parser(
         "get-attribute",

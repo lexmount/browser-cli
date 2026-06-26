@@ -225,6 +225,7 @@ browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
 browser-cli action scroll-into-view --session-id <session_id> --selector "button[type=submit]"
 browser-cli action bounding-box --session-id <session_id> --selector "button[type=submit]"
+browser-cli action inspect --session-id <session_id> --selector "button[type=submit]"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
@@ -248,9 +249,10 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `dispatch-event`,
-`submit`, `scroll`, `scroll-into-view`, `bounding-box`, `select-option`,
-`select-label`, `check`, `uncheck`, `check-label`, `uncheck-label`, `hover`,
-`press`, `click-text`, `click-role`, `click-index`, `fill-label`,
+`submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
+`select-option`, `select-label`, `check`, `uncheck`, `check-label`,
+`uncheck-label`, `hover`, `press`, `click-text`, `click-role`, `click-index`,
+`fill-label`,
 `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -260,9 +262,9 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `attribute_found`, `requested_value`, `network_idle`, `quiet_ms`, `submitted`,
 `dispatched`, `dispatched_events`, `fields`, `value_masked`, `bounding_box`,
-`in_viewport`, `index`, `requested_option_label`, `option_found`,
-`option_label`, `requested_checked`, `previous_checked`, `changed`, or
-`navigation_requested` from `result`.
+`in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
+`option_found`, `option_label`, `requested_checked`, `previous_checked`,
+`changed`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -384,9 +386,12 @@ Common agent recipes:
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: `click-role`, then `click-text`, then `scroll-into-view`
-  and selector `click` after `exists` or `bounding-box` confirms a stable
+  and selector `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
   selector.
 - Repeated list item: `query` -> choose a zero-based candidate -> `click-index`.
+- Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
+  `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized
+  HTML before trying another action.
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
   confirm with `wait-url`, `wait-load-state`, `wait-network-idle`, `wait-text`,
   or `snapshot`.

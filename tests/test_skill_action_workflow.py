@@ -92,6 +92,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`count`",
         "`wait-count`",
         "`query`",
+        "`inspect`",
         "`get-attribute`",
         "`wait-attribute`",
         "`wait-selector`",
@@ -156,6 +157,8 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`bounding_box`" in normalized
     assert "`in_viewport`" in normalized
     assert "`index`" in normalized
+    assert "`attributes`" in normalized
+    assert "`html_truncated`" in normalized
     assert "`requested_option_label`" in normalized
     assert "`option_found`" in normalized
     assert "`option_label`" in normalized
@@ -184,7 +187,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
     assert "`click-role`, then `click-text`, then `scroll-into-view`" in normalized
-    assert "after `exists` or `bounding-box` confirms a stable selector" in normalized
+    assert "after `exists`, `inspect`, or `bounding-box`" in normalized
     assert "For repeated matches, run `query` and then" in normalized
     assert "`click-index --index <n>`" in normalized
     assert "Navigate page history or async refresh" in normalized
@@ -193,7 +196,8 @@ def test_skill_includes_common_task_recipes() -> None:
         "confirm with `wait-url`, `wait-load-state`, `wait-network-idle`" in normalized
     )
     assert "Debug selectors" in normalized
-    assert "use `count`, `query`, and `get-attribute` before `eval`" in normalized
+    assert "use `count`, `query`, `inspect`, and `get-attribute` before" in normalized
+    assert "use `inspect` for `state.disabled`, `state.readonly`" in normalized
     assert "use `wait-count` or `wait-attribute` for async DOM changes" in normalized
     assert "Open menus or keyboard flows" in normalized
     assert "use `focus`, `hover` for menus, `press` for shortcuts" in normalized
