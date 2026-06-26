@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from browser_cli import cli as cli_module
 from browser_cli.cli import main as cli_main
 
 
@@ -231,6 +232,72 @@ def test_doctor_masks_api_error_messages(
     checks = _checks_by_name(payload)
     assert checks["api_connectivity"]["status"] == "fail"
     assert checks["api_connectivity"]["error"] == "RuntimeError"
+
+
+def test_runtime_failures_mask_sensitive_values(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    connect_url = (
+        "wss://api.lexmount.cn/connection?project_id=project"
+        "&api_key=server-secret&token=session-token"
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: connect_url,
+    )
+
+    def fake_run_browser_action(**kwargs: Any) -> SimpleNamespace:
+        raise RuntimeError(
+            "failed api_key=server-secret token=session-token raw local-secret"
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "snapshot", "--session-id", "s1"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "server-secret" not in serialized
+    assert "session-token" not in serialized
+    assert "local-secret" not in serialized
+    assert "api_key=***" in serialized
+    assert "token=***" in serialized
+
+
+def test_failure_payload_masks_nested_sensitive_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_module._failure(
+            "test.command",
+            "test_error",
+            "message api_key=server-secret raw local-secret",
+            api_key="server-secret",
+            details={
+                "access_token": "access-secret",
+                "url": "https://example.test?api_key=server-secret",
+                "items": [{"token": "item-secret"}],
+            },
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "server-secret" not in serialized
+    assert "access-secret" not in serialized
+    assert "item-secret" not in serialized
+    assert "local-secret" not in serialized
+    assert payload["api_key"] == "***"
+    assert payload["details"]["access_token"] == "***"
+    assert payload["details"]["items"] == [{"token": "***"}]
+    assert payload["details"]["url"].endswith("api_key=***")
 
 
 def test_auth_status_reports_env_without_revealing_api_key(

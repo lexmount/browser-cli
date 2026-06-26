@@ -280,7 +280,10 @@ Failed commands include:
 ```
 
 Agents should parse `ok`, `command`, and `error` first, then use
-command-specific fields.
+command-specific fields. Failure messages and payload fields are sanitized before
+printing: `api_key`, token-like query parameters, and the current
+`LEXMOUNT_API_KEY` value are masked unless a success command explicitly uses a
+local reveal flag.
 
 Argument parsing errors also return JSON on stdout with exit code `2`:
 

@@ -270,6 +270,8 @@ the shared direct websocket path.
 Parse command output as JSON. Check `ok` first, then inspect `command`,
 `error`, and command-specific fields. Do not log revealed API keys. By default,
 browser direct URLs are masked; use reveal flags only for local debugging.
+Failure messages and payloads mask `api_key`, token-like query parameters, and
+the current `LEXMOUNT_API_KEY` value.
 If `error` is `argument_error`, read the JSON `usage` field and rerun a
 corrected command; do not parse stderr.
 For `auth`, report credential presence, missing variables, and next steps; do

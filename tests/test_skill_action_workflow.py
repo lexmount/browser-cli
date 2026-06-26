@@ -66,6 +66,14 @@ def test_skill_uses_json_argument_errors_for_command_repairs() -> None:
     assert "do not parse stderr" in normalized
 
 
+def test_skill_documents_failure_payload_masking() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "Failure messages and payloads mask `api_key`" in normalized
+    assert "token-like query parameters" in normalized
+    assert "the current `LEXMOUNT_API_KEY` value" in normalized
+
+
 def test_skill_lists_selector_and_input_actions() -> None:
     normalized = _normalized_skill_text()
 

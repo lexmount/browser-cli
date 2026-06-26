@@ -39,6 +39,14 @@ DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
 CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle"}
 CONTEXT_LOCKED_STATUSES = {"locked", "busy", "in_use", "in-use", "active", "running"}
+SENSITIVE_PAYLOAD_KEYS = {
+    "api_key",
+    "apikey",
+    "access_token",
+    "authorization",
+    "secret",
+    "token",
+}
 
 
 def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
@@ -65,10 +73,17 @@ def _failure(
     data = {
         "ok": False,
         "command": command,
-        "error": error,
-        "message": message,
+        "error": _mask_sensitive_text(error),
+        "message": _mask_sensitive_text(message),
     }
-    data.update(payload)
+    data.update(
+        {
+            key: "***"
+            if _is_sensitive_payload_key(key)
+            else _sanitize_failure_value(value)
+            for key, value in payload.items()
+        }
+    )
     _json_dump(data, exit_code=exit_code)
 
 
@@ -181,11 +196,37 @@ def _masked_connect_url_payload(
 
 
 def _mask_sensitive_text(text: str) -> str:
-    masked = re.sub(r"(?i)(api[_-]?key=)[^&\s]+", r"\1***", text)
+    masked = re.sub(
+        r"(?i)((?:api[_-]?key|access[_-]?token|token)=)[^&\s]+",
+        r"\1***",
+        text,
+    )
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     if api_key:
         masked = masked.replace(api_key, "***")
     return masked
+
+
+def _is_sensitive_payload_key(key: Any) -> bool:
+    normalized = str(key).lower().replace("-", "_")
+    return normalized in SENSITIVE_PAYLOAD_KEYS
+
+
+def _sanitize_failure_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _mask_sensitive_text(value)
+    if isinstance(value, dict):
+        return {
+            key: "***"
+            if _is_sensitive_payload_key(key)
+            else _sanitize_failure_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_failure_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_failure_value(item) for item in value)
+    return value
 
 
 def _doctor_check(
