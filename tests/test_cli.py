@@ -216,6 +216,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.list-snapshot",
         "action.text-snapshot",
         "action.dialog-snapshot",
+        "action.frame-snapshot",
         "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
@@ -259,6 +260,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.list-snapshot" in payload["commands"]
     assert "action.text-snapshot" in payload["commands"]
     assert "action.dialog-snapshot" in payload["commands"]
+    assert "action.frame-snapshot" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -3897,6 +3899,59 @@ def test_action_dialog_snapshot_expression_extracts_dialog_controls(
     assert payload["command"] == "action.dialog-snapshot"
 
 
+def test_action_frame_snapshot_expression_extracts_frame_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "frames", "frames": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "frame-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--include-hidden",
+                "--max-chars",
+                "160",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert 'const rootSelector = "main"' in expression
+    assert "const maxChars = Math.max(0, 160)" in expression
+    assert 'const frameSelector = "iframe,frame"' in expression
+    assert "contentDocument" in expression
+    assert "readable: true" in expression
+    assert "readable: false" in expression
+    assert "frame_url_masked" in expression
+    assert "src_masked" in expression
+    assert "absolute_url_masked" in expression
+    assert "bounding_box: rectInfo(frame)" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.frame-snapshot"
+
+
 def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4501,6 +4556,78 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                                 "absolute_url_masked": True,
                             },
                         ],
+                    }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "frame-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--max-chars",
+                "80",
+            ],
+            "action.frame-snapshot",
+            {
+                "kind": "frames",
+                "selector": "main",
+                "frame_count": 1,
+                "node_count": 1,
+                "frames": [
+                    {
+                        "frame_index": 0,
+                        "selector": "iframe.checkout",
+                        "tag": "iframe",
+                        "name": "Checkout",
+                        "id": "checkout-frame",
+                        "name_attribute": "checkout",
+                        "title_attribute": "Checkout",
+                        "src": "/checkout?token=***",
+                        "src_masked": True,
+                        "absolute_url": "https://example.test/checkout?token=***",
+                        "absolute_url_masked": True,
+                        "same_origin": True,
+                        "readable": True,
+                        "frame_url": "https://example.test/checkout?token=***",
+                        "frame_url_masked": True,
+                        "frame_title": "Checkout",
+                        "body_text": "Pay now",
+                        "body_text_length": 7,
+                        "body_text_truncated": False,
+                    }
+                ],
+            },
+            {
+                "kind": "frames",
+                "selector": "main",
+                "frame_count": 1,
+                "node_count": 1,
+                "frames": [
+                    {
+                        "frame_index": 0,
+                        "selector": "iframe.checkout",
+                        "tag": "iframe",
+                        "name": "Checkout",
+                        "id": "checkout-frame",
+                        "name_attribute": "checkout",
+                        "title_attribute": "Checkout",
+                        "src": "/checkout?token=***",
+                        "src_masked": True,
+                        "absolute_url": "https://example.test/checkout?token=***",
+                        "absolute_url_masked": True,
+                        "same_origin": True,
+                        "readable": True,
+                        "frame_url": "https://example.test/checkout?token=***",
+                        "frame_url_masked": True,
+                        "frame_title": "Checkout",
+                        "body_text": "Pay now",
+                        "body_text_length": 7,
+                        "body_text_truncated": False,
                     }
                 ],
                 "url": "https://example.test",

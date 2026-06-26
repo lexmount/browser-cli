@@ -18,6 +18,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "use `list-snapshot` before choosing from menus" in normalized
     assert "use `text-snapshot` for bounded visible text" in normalized
     assert "use `dialog-snapshot` for modals" in normalized
+    assert "use `frame-snapshot`" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
     assert "`click-role` for known roles/names" in normalized
@@ -190,6 +191,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`list-snapshot`",
         "`text-snapshot`",
         "`dialog-snapshot`",
+        "`frame-snapshot`",
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
@@ -265,6 +267,12 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`control_count`" in normalized
     assert "`controls_truncated`" in normalized
     assert "`modal`" in normalized
+    assert "`frames`" in normalized
+    assert "`frame_count`" in normalized
+    assert "`src_masked`" in normalized
+    assert "`frame_url_masked`" in normalized
+    assert "`readable`" in normalized
+    assert "`read_error`" in normalized
     assert "`headings`" in normalized
     assert "`landmarks`" in normalized
     assert "`outline_count`" in normalized
@@ -355,6 +363,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`press-key` for active/global shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized
     assert "run `dialog-snapshot`, choose from `controls`" in normalized
+    assert "run `frame-snapshot` and parse `readable`" in normalized
     assert "Read page results" in normalized
     assert "use `page-info` for URL/title/readyState/viewport checks" in normalized
     assert "`wait-title` for async title changes" in normalized

@@ -322,6 +322,7 @@ browser-cli action table-snapshot --session-id <session_id> --selector ".report"
 browser-cli action list-snapshot --session-id <session_id> --selector ".results" --max-items 50
 browser-cli action text-snapshot --session-id <session_id> --selector "main" --max-nodes 50 --max-chars 500
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 30
+browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -338,7 +339,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `frame-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -357,6 +358,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `texts`, `text_count`, `text_length`, `text_truncated`, `aria_live`,
 `dialogs`, `dialog_count`, `controls`, `control_count`, `controls_truncated`,
 `modal`,
+`frames`, `frame_count`, `src`, `src_masked`, `frame_url`, `frame_url_masked`,
+`readable`, `read_error`,
 `headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
 `node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
@@ -373,8 +376,9 @@ state is correct.
 For `link-snapshot`, URL query parameters that look like API keys, access
 tokens, authorization codes, passwords, or secrets are masked by default. Use
 `href_masked` and `absolute_url_masked` before copying or reporting URLs.
-`table-snapshot`, `list-snapshot`, and `dialog-snapshot` use the same URL
-masking for links found inside table cells, list items, or dialog controls.
+`table-snapshot`, `list-snapshot`, `dialog-snapshot`, and `frame-snapshot` use
+the same URL masking for links and frame URLs found inside table cells, list
+items, dialog controls, or frame metadata.
 
 Each action must receive exactly one browser target:
 
@@ -537,6 +541,10 @@ Common agent recipes:
 - Modal or blocking prompt: `dialog-snapshot` -> read `dialogs`, `title`,
   `description`, `text`, `controls`, `control_count`, and link masks; then use
   `click-role`, `click-text`, or `click-index` for the chosen control.
+- Embedded frame: `frame-snapshot` -> read `frames`, `src`, `readable`,
+  `frame_url`, `body_text`, `read_error`, and `bounding_box`; same-origin
+  frames can expose bounded text, while cross-origin frames usually require
+  using the frame's URL or reporting that direct DOM inspection is unavailable.
 - Page structure: `outline-snapshot` -> read `headings` and `landmarks` before
   deciding where to inspect, click, or scroll.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
@@ -552,6 +560,9 @@ Common agent recipes:
   banners, and confirmation prompts; choose a control from `controls`, then
   click semantically and confirm with `wait-text`, `wait-role`, or
   `text-snapshot`.
+- Frame flow: `frame-snapshot` before writing frame-related JavaScript; use
+  `readable`, `same_origin`, `frame_url`, and `read_error` to decide whether the
+  agent can inspect the embedded page or needs a different browser workflow.
 - Read results: `page-info` for URL/title/readyState/viewport checks,
   `wait-title` for async title changes, `wait-count` for dynamic lists,
   `list-snapshot` for menu/listbox/search-result/task-list content,

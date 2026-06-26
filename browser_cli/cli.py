@@ -3265,6 +3265,206 @@ def _dialog_snapshot_expression(
 """.strip()
 
 
+def _frame_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_chars: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxChars = Math.max(0, {_js_literal(max_chars)});
+  const frameSelector = "iframe,frame";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const truncateText = (value) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxChars) {{
+      return {{ body_text: text, body_text_truncated: false }};
+    }}
+    return {{
+      body_text: text.slice(0, maxChars),
+      body_text_truncated: true
+    }};
+  }};
+  const rectInfo = (element) => {{
+    const rect = element.getBoundingClientRect();
+    return {{
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      left: rect.left,
+      bottom: rect.bottom,
+      right: rect.right,
+      in_viewport: rect.bottom > 0 &&
+        rect.right > 0 &&
+        rect.top < window.innerHeight &&
+        rect.left < window.innerWidth
+    }};
+  }};
+  const readableFrameInfo = (frame) => {{
+    try {{
+      const doc = frame.contentDocument;
+      if (!doc) {{
+        return {{
+          readable: false,
+          read_error: "contentDocument unavailable"
+        }};
+      }}
+      const frameUrl = doc.location ? doc.location.href : "";
+      const maskedFrameUrl = maskedParsedUrl(frameUrl);
+      const bodyText = doc.body
+        ? normalize(doc.body.innerText ?? doc.body.textContent ?? "")
+        : "";
+      return {{
+        readable: true,
+        read_error: null,
+        frame_url: maskedFrameUrl.absolute_url,
+        frame_url_masked: maskedFrameUrl.absolute_url_masked,
+        frame_same_origin: maskedFrameUrl.same_origin,
+        frame_title: doc.title || null,
+        ready_state: doc.readyState,
+        body_text_length: bodyText.length,
+        ...truncateText(bodyText)
+      }};
+    }} catch (error) {{
+      return {{
+        readable: false,
+        read_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allFrames = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(frameSelector) ? [root] : []),
+      ...root.querySelectorAll(frameSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allFrames.push(candidate);
+      }}
+    }}
+  }}
+  const frameInfo = (frame, frameIndex) => {{
+    const info = nodeInfo(frame);
+    const rawSrc = frame.getAttribute("src") || "";
+    const maskedSrc = maskUrlText(rawSrc);
+    return {{
+      frame_index: frameIndex,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      text: info.text,
+      id: frame.id || null,
+      name_attribute: frame.getAttribute("name"),
+      title_attribute: frame.getAttribute("title"),
+      src: maskedSrc,
+      src_masked: maskedSrc !== rawSrc,
+      ...maskedParsedUrl(rawSrc),
+      sandbox: frame.getAttribute("sandbox"),
+      allow: frame.getAttribute("allow"),
+      loading: frame.getAttribute("loading"),
+      referrer_policy: frame.getAttribute("referrerpolicy"),
+      visible: info.visible,
+      bounding_box: rectInfo(frame),
+      ...readableFrameInfo(frame)
+    }};
+  }};
+  const visibleFrames = allFrames.filter(visible);
+  const candidateFrames = includeHidden ? allFrames : visibleFrames;
+  const frames = limited(candidateFrames).map(frameInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "frames",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_chars: maxChars,
+    frame_count: candidateFrames.length,
+    node_count: frames.length,
+    total_count: allFrames.length,
+    visible_count: visibleFrames.length,
+    truncated: maxNodes !== null && candidateFrames.length > frames.length,
+    frames
+  }};
+}}
+""".strip()
+
+
 def _outline_snapshot_expression(
     *,
     selector: str | None,
@@ -6881,6 +7081,16 @@ def cmd_action_dialog_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.dialog-snapshot", expression)
 
 
+def cmd_action_frame_snapshot(args: argparse.Namespace) -> None:
+    expression = _frame_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_chars=args.max_chars,
+    )
+    _run_eval_backed_action_command(args, "action.frame-snapshot", expression)
+
+
 def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
     expression = _outline_snapshot_expression(
         selector=args.selector,
@@ -8998,6 +9208,24 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum characters to return per dialog text body.",
     )
     action_dialog_snapshot.set_defaults(func=cmd_action_dialog_snapshot)
+
+    action_frame_snapshot = action_subparsers.add_parser(
+        "frame-snapshot",
+        help="Capture iframe/frame metadata, URLs, geometry, and readable same-origin text",
+    )
+    _add_session_target_args(action_frame_snapshot)
+    action_frame_snapshot.add_argument(
+        "--selector",
+        help="Optional iframe/frame or container selector used to scope frames.",
+    )
+    _add_snapshot_filter_args(action_frame_snapshot)
+    action_frame_snapshot.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=500,
+        help="Maximum readable body text characters to return for same-origin frames.",
+    )
+    action_frame_snapshot.set_defaults(func=cmd_action_frame_snapshot)
 
     action_outline_snapshot = action_subparsers.add_parser(
         "outline-snapshot",
