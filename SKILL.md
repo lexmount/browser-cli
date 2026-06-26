@@ -41,6 +41,7 @@ If credentials are missing, run:
 ```bash
 browser-cli auth login
 browser-cli auth login --open
+browser-cli auth device-code
 ```
 
 For credential setup, use this decision flow:
@@ -51,10 +52,13 @@ For credential setup, use this decision flow:
    `browser-cli auth login`. Use `browser-cli auth login --open` only when it is
    appropriate to open the user's local browser; otherwise show the returned
    `authorization_url`.
-4. Direct the user to set credentials in their local shell, not in chat.
-5. Use `browser-cli auth export-env` for masked shell snippets and
+4. Use `browser-cli auth device-code` only to inspect or integrate the future
+   Connect from Codex device-code/OAuth contract. If it returns
+   `available: false`, fall back to `browser-cli auth login`.
+5. Direct the user to set credentials in their local shell, not in chat.
+6. Use `browser-cli auth export-env` for masked shell snippets and
    `browser-cli auth export-env --reveal-secrets` only in a trusted local shell.
-6. Treat `usable: false`, `masked: true`, or `contains_secrets: true` as a signal
+7. Treat `usable: false`, `masked: true`, or `contains_secrets: true` as a signal
    not to paste output into chat, logs, docs, tests, or commits.
 
 Use this to generate local shell configuration snippets when credentials are
@@ -98,6 +102,7 @@ Session lifecycle:
 
 ```bash
 browser-cli auth status
+browser-cli auth device-code
 browser-cli session create
 browser-cli session list
 browser-cli session get --session-id <session_id>

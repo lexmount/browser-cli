@@ -36,7 +36,16 @@ from lex_browser_runtime.browser.models import (
 
 DEFAULT_BROWSER_CONSOLE_URL = "https://browser.lexmount.cn"
 DEFAULT_CODEX_AUTHORIZATION_URL = f"{DEFAULT_BROWSER_CONSOLE_URL}/connect/codex"
+DEFAULT_CODEX_DEVICE_AUTHORIZATION_URL = (
+    f"{DEFAULT_BROWSER_CONSOLE_URL}/connect/codex/device"
+)
+DEFAULT_CODEX_TOKEN_URL = f"{DEFAULT_BROWSER_CONSOLE_URL}/connect/codex/token"
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
+DEFAULT_CODEX_AUTH_SCOPES = (
+    "browser:sessions",
+    "browser:contexts",
+    "browser:actions",
+)
 REQUIRED_AUTH_ENV_VARS = ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
 
 
@@ -374,12 +383,78 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         future_flow={
             "name": "Connect from Codex",
             "needs_browser_lexmount_cn": True,
+            "prototype_command": "browser-cli auth device-code",
             "description": (
                 "A future browser.lexmount.cn flow should let the user approve "
                 "Codex access and return scoped local credentials without manual "
                 "API key copying."
             ),
         },
+    )
+
+
+def cmd_auth_device_code(args: argparse.Namespace) -> None:
+    authorization_url = args.authorization_url
+    scopes = args.scopes or list(DEFAULT_CODEX_AUTH_SCOPES)
+    open_result = (
+        _open_authorization_url(authorization_url)
+        if args.open
+        else {"requested": False, "ok": None}
+    )
+
+    _success(
+        "auth.device-code",
+        flow="device_code",
+        available=False,
+        status="not_available",
+        reason="browser_lexmount_cn_endpoint_required",
+        needs_browser_lexmount_cn=True,
+        authorization_url=authorization_url,
+        device_authorization_endpoint=args.device_authorization_url,
+        token_endpoint=args.token_url,
+        opened=open_result,
+        requested_scopes=scopes,
+        endpoint_contract={
+            "device_authorization_response": [
+                "device_code",
+                "user_code",
+                "verification_uri",
+                "verification_uri_complete",
+                "expires_in",
+                "interval",
+                "scopes",
+            ],
+            "token_response": [
+                "access_token",
+                "token_type",
+                "expires_in",
+                "scope",
+                "project_id",
+            ],
+            "token_error_codes": [
+                "authorization_pending",
+                "slow_down",
+                "expired_token",
+                "access_denied",
+            ],
+        },
+        browser_lexmount_cn_requirements=[
+            "Issue a short-lived device_code and user_code for Codex authorization.",
+            "Show the selected Project ID and requested scopes before approval.",
+            "Return a scoped, expiring token or API key for browser automation.",
+            "Support polling with authorization_pending, slow_down, expired_token, and access_denied errors.",
+            "Expose revoke and expiration controls for issued Codex credentials.",
+        ],
+        fallback_commands=[
+            "browser-cli auth login",
+            "browser-cli auth status",
+            "browser-cli auth export-env",
+        ],
+        next_steps=[
+            "Until browser.lexmount.cn implements this contract, use browser-cli auth login for manual setup.",
+            "Do not ask the user to paste API keys into chat.",
+            "When the endpoint is available, wire this command to request and poll the device-code flow.",
+        ],
     )
 
 
@@ -738,6 +813,38 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Authorization page URL. Defaults to browser.lexmount.cn Connect from Codex.",
     )
     auth_login.set_defaults(func=cmd_auth_login)
+
+    auth_device_code = auth_subparsers.add_parser(
+        "device-code",
+        help="Show the Connect from Codex device-code authorization contract",
+    )
+    auth_device_code.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the authorization page in the local default browser.",
+    )
+    auth_device_code.add_argument(
+        "--authorization-url",
+        default=DEFAULT_CODEX_AUTHORIZATION_URL,
+        help="Human authorization page URL.",
+    )
+    auth_device_code.add_argument(
+        "--device-authorization-url",
+        default=DEFAULT_CODEX_DEVICE_AUTHORIZATION_URL,
+        help="Future device authorization endpoint URL.",
+    )
+    auth_device_code.add_argument(
+        "--token-url",
+        default=DEFAULT_CODEX_TOKEN_URL,
+        help="Future device-code polling token endpoint URL.",
+    )
+    auth_device_code.add_argument(
+        "--scope",
+        dest="scopes",
+        action="append",
+        help="Requested authorization scope. May be passed more than once.",
+    )
+    auth_device_code.set_defaults(func=cmd_auth_device_code)
 
 
 def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:

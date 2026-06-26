@@ -29,6 +29,15 @@ def test_skill_auth_flow_handles_login_open_safely() -> None:
     assert "otherwise show the returned `authorization_url`" in normalized
 
 
+def test_skill_auth_flow_treats_device_code_as_future_contract() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "browser-cli auth device-code" in normalized
+    assert "future Connect from Codex device-code/OAuth contract" in normalized
+    assert "`available: false`" in normalized
+    assert "fall back to `browser-cli auth login`" in normalized
+
+
 def test_skill_auth_flow_protects_export_env_secrets() -> None:
     normalized = _normalized_skill_text()
 
