@@ -13,6 +13,7 @@ browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow page_diagnostics
 browser-cli auth status
 browser-cli auth login
 browser-cli auth export-env
@@ -89,6 +90,18 @@ browser-cli commands --workflow form_interaction
 browser-cli action form-snapshot --session-id <session_id> --selector form
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
+```
+
+For page failures, runtime errors, or fetch/XHR issues, install diagnostics
+before reproducing the suspected action:
+
+```bash
+browser-cli commands --workflow page_diagnostics
+browser-cli action console-snapshot --session-id <session_id> --install-only
+browser-cli action network-snapshot --session-id <session_id> --install-only
+# Run the action under investigation, then read both buffers.
+browser-cli action console-snapshot --session-id <session_id> --max-entries 50
+browser-cli action network-snapshot --session-id <session_id> --max-entries 50
 ```
 
 ## Persistent Login State

@@ -176,6 +176,16 @@ Follow its `read` fields for `form-snapshot`, `fill-label`, `select-label`,
 `check-label`, `wait-role`, `click-role`, and verification steps before falling
 back to custom JavaScript.
 
+For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic
+workflow before writing custom probes:
+
+```bash
+browser-cli commands --workflow page_diagnostics
+```
+
+Install console/network capture before reproducing the issue, then read the
+workflow's console, network, and visible-state steps.
+
 Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
 
@@ -253,6 +263,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow page_diagnostics
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session
@@ -499,11 +510,15 @@ Common task recipes:
    `go-forward`, then confirm with `page-info`, `wait-url`, `wait-title`,
    `wait-load-state`, `wait-network-idle`, `performance-snapshot`, `wait-text`,
    or `snapshot`.
-4. Diagnose fetch/XHR calls: run `network-snapshot --install-only`, trigger the
+4. Diagnose fetch/XHR calls: run
+   `browser-cli commands --workflow page_diagnostics`, then run
+   `network-snapshot --install-only`, trigger the
    suspected action, read `network-snapshot` or wait with `wait-network`, and
    parse `entries`, `method`, `status`, `ok`, `failed`, `duration_ms`, and
    masked URLs; use `--failed-only` when looking for transport failures.
-5. Capture runtime errors: run `console-snapshot --install-only`, trigger the
+5. Capture runtime errors: run
+   `browser-cli commands --workflow page_diagnostics`, then run
+   `console-snapshot --install-only`, trigger the
    suspected action, read `console-snapshot` or wait with `wait-console`, then
    use `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
    `inspect` to correlate visible state with JS errors.

@@ -258,6 +258,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli action form-snapshot --session-id <session_id> --selector form"
         in payload["agent_entrypoints"]["form_interaction"]
     )
+    assert (
+        "browser-cli action console-snapshot --session-id <session_id> --install-only"
+        in payload["agent_entrypoints"]["page_diagnostics"]
+    )
     workflows = payload["agent_workflows"]
     assert workflows["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -322,6 +326,27 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert form_steps[6]["optional"] is True
     assert "found" in form_steps[6]["read"]
     assert "browser-cli action wait-text" in form_steps[6]["fallback_commands"][0]
+    diagnostics_steps = workflows["page_diagnostics"]["steps"]
+    assert [step["id"] for step in diagnostics_steps] == [
+        "page_info_before",
+        "install_console_capture",
+        "install_network_capture",
+        "reproduce_issue",
+        "read_console_entries",
+        "read_network_entries",
+        "capture_visible_state",
+    ]
+    assert diagnostics_steps[1]["command"] == (
+        "browser-cli action console-snapshot --session-id <session_id> --install-only"
+    )
+    assert "result.newly_installed" in diagnostics_steps[1]["read"]
+    assert "result.buffered_count_after" in diagnostics_steps[2]["read"]
+    assert diagnostics_steps[3]["agent_action"] is True
+    assert "result.entries" in diagnostics_steps[4]["read"]
+    assert "result.entry_count" in diagnostics_steps[5]["read"]
+    assert (
+        "browser-cli action screenshot" in diagnostics_steps[6]["fallback_commands"][0]
+    )
 
     for name in (
         "commands",
@@ -393,7 +418,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 5
+    assert payload["workflow_count"] == 6
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -422,6 +447,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.filled"
         in payload["agent_workflows"]["form_interaction"]["steps"][1]["read"]
+    )
+    assert (
+        "result.entries"
+        in payload["agent_workflows"]["page_diagnostics"]["steps"][4]["read"]
     )
     assert "browser-cli auth login" in payload["agent_entrypoints"]["setup"]
     assert payload["json_output"]["always_json"] is True
@@ -478,6 +507,32 @@ def test_commands_catalog_returns_form_interaction_workflow(
     )
 
 
+def test_commands_catalog_returns_page_diagnostics_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "page_diagnostics"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "page_diagnostics"
+    assert "agent_workflows" not in payload
+    assert payload["workflow"]["steps"][0]["id"] == "page_info_before"
+    assert payload["workflow"]["steps"][1]["command"] == (
+        "browser-cli action console-snapshot --session-id <session_id> --install-only"
+    )
+    assert payload["workflow"]["steps"][3]["id"] == "reproduce_issue"
+    assert payload["workflow"]["steps"][3]["agent_action"] is True
+    assert payload["workflow"]["steps"][4]["id"] == "read_console_entries"
+    assert "result.entries" in payload["workflow"]["steps"][4]["read"]
+    assert payload["workflow"]["steps"][-1]["id"] == "capture_visible_state"
+    assert (
+        "browser-cli action screenshot"
+        in payload["workflow"]["steps"][-1]["fallback_commands"][0]
+    )
+
+
 def test_commands_catalog_fails_unknown_workflow_as_json(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -494,6 +549,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "connect_from_codex_auth",
         "form_interaction",
         "one_off_page_task",
+        "page_diagnostics",
         "persistent_login_state",
         "setup_and_verify",
     ]
@@ -649,13 +705,14 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 5
+    assert checks["command_catalog"]["workflow_count"] == 6
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
+        "page_diagnostics",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
     assert checks["command_catalog"]["required_workflow_steps"][
@@ -682,6 +739,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "wait_submit_ready",
         "submit_form",
         "verify_result",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["page_diagnostics"] == [
+        "page_info_before",
+        "install_console_capture",
+        "install_network_capture",
+        "reproduce_issue",
+        "read_console_entries",
+        "read_network_entries",
+        "capture_visible_state",
     ]
     assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
     for command_name in (
@@ -766,6 +832,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
+        "page_diagnostics",
     ]
     assert catalog["missing_required_workflow_steps"] == {}
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
@@ -831,6 +898,17 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "wait_submit_ready"},
                         {"id": "submit_form"},
                         {"id": "verify_result"},
+                    ],
+                },
+                "page_diagnostics": {
+                    "steps": [
+                        {"id": "page_info_before"},
+                        {"id": "install_console_capture"},
+                        {"id": "install_network_capture"},
+                        {"id": "reproduce_issue"},
+                        {"id": "read_console_entries"},
+                        {"id": "read_network_entries"},
+                        {"id": "capture_visible_state"},
                     ],
                 },
             },

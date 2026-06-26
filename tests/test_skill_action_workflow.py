@@ -47,6 +47,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow setup_and_verify" in normalized
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
+    assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli commands --names-only" in normalized
     assert "browser-cli commands --group action" in normalized
     assert "`browser_target.exactly_one_of`" in normalized
@@ -164,6 +165,9 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "For form tasks, prefer the more specific form workflow" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "Follow its `read` fields for `form-snapshot`, `fill-label`" in normalized
+    assert "For page failures, fetch/XHR issues, or runtime errors" in normalized
+    assert "browser-cli commands --workflow page_diagnostics" in normalized
+    assert "workflow's console, network, and visible-state steps" in normalized
 
 
 def test_skill_documents_failure_payload_masking() -> None:
@@ -390,6 +394,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Common task recipes" in normalized
     assert "Fill and submit a form" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
+    assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
     assert "use `outline-snapshot` for page structure" in normalized
     assert "`fill-label` for labeled fields" in normalized

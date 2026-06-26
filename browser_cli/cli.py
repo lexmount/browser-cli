@@ -104,6 +104,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "one_off_page_task",
     "persistent_login_state",
     "form_interaction",
+    "page_diagnostics",
 )
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
@@ -135,6 +136,15 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "wait_submit_ready",
         "submit_form",
         "verify_result",
+    ),
+    "page_diagnostics": (
+        "page_info_before",
+        "install_console_capture",
+        "install_network_capture",
+        "reproduce_issue",
+        "read_console_entries",
+        "read_network_entries",
+        "capture_visible_state",
     ),
 }
 COMMAND_ALIASES = {
@@ -468,6 +478,12 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
             ],
+            "page_diagnostics": [
+                "browser-cli action console-snapshot --session-id <session_id> --install-only",
+                "browser-cli action network-snapshot --session-id <session_id> --install-only",
+                "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+            ],
         },
         "agent_workflows": {
             "setup_and_verify": {
@@ -697,6 +713,78 @@ def _command_catalog() -> dict[str, Any]:
                         "fallback_commands": [
                             'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
                             "browser-cli action text-snapshot --session-id <session_id> --selector main",
+                        ],
+                    },
+                ],
+            },
+            "page_diagnostics": {
+                "purpose": "Capture page state, console/page errors, and fetch/XHR activity around a suspicious browser action.",
+                "steps": [
+                    {
+                        "id": "page_info_before",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "install_console_capture",
+                        "command": "browser-cli action console-snapshot --session-id <session_id> --install-only",
+                        "read": [
+                            "result.installed",
+                            "result.newly_installed",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "install_network_capture",
+                        "command": "browser-cli action network-snapshot --session-id <session_id> --install-only",
+                        "read": [
+                            "result.installed",
+                            "result.newly_installed",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "reproduce_issue",
+                        "command": "<run the browser action that should be diagnosed, such as click-role, click-text, fill-label, or form_interaction>",
+                        "agent_action": True,
+                    },
+                    {
+                        "id": "read_console_entries",
+                        "command": "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                        "read": [
+                            "result.entry_count",
+                            "result.entries",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "read_network_entries",
+                        "command": "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+                        "read": [
+                            "result.entry_count",
+                            "result.entries",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "capture_visible_state",
+                        "command": "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                        "read": [
+                            "result.texts",
+                            "result.text_count",
+                            "result.aria_live",
+                            "result.text_truncated",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
+                            "browser-cli action page-info --session-id <session_id>",
                         ],
                     },
                 ],
