@@ -320,6 +320,7 @@ browser-cli action fill-label --session-id <session_id> --label "Email" --text "
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
 browser-cli action list-snapshot --session-id <session_id> --selector ".results" --max-items 50
+browser-cli action text-snapshot --session-id <session_id> --selector "main" --max-nodes 50 --max-chars 500
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
@@ -336,7 +337,7 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
 `interactive-snapshot` are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
@@ -352,6 +353,7 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `absolute_url_masked`, `same_origin`, `external`, `download`,
 `tables`, `table_count`, `headers`, `rows`, `cells`, `row_count`, `cell_count`,
 `lists`, `list_count`, `items`, `item_count`, `selected`, `checked`, `expanded`,
+`texts`, `text_count`, `text_length`, `text_truncated`, `aria_live`,
 `headings`, `landmarks`, `outline_count`, `heading_count`, `landmark_count`,
 `node_type`, `level`,
 `total_candidate_count`, `ready_state`, `visibility_state`,
@@ -526,6 +528,9 @@ Common agent recipes:
   semantic.
 - Table or report data: `table-snapshot` -> read `headers`, `rows`, and `cells`;
   use `--selector`, `--max-rows`, and `--max-cells` to keep output bounded.
+- Text, alerts, or status messages: `text-snapshot` -> read `texts`,
+  `kind`, `aria_live`, `text_length`, and `text_truncated`; use `--selector`,
+  `--max-nodes`, and `--max-chars` before falling back to full `snapshot`.
 - Page structure: `outline-snapshot` -> read `headings` and `landmarks` before
   deciding where to inspect, click, or scroll.
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
@@ -540,6 +545,8 @@ Common agent recipes:
 - Read results: `page-info` for URL/title/readyState/viewport checks,
   `wait-title` for async title changes, `wait-count` for dynamic lists,
   `list-snapshot` for menu/listbox/search-result/task-list content,
+  `text-snapshot` for visible paragraphs, alerts, status messages, and bounded
+  readable page text,
   `wait-attribute` for DOM attributes, `wait-state` for
   enabled/visible/checked/focused states, `get-text` for known selectors, or
   `snapshot` when the selector is unknown. Use `wait-text --state absent` when

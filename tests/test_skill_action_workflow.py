@@ -16,6 +16,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "Inspect with `snapshot`, then `interactive-snapshot`" in normalized
     assert "use `form-snapshot` before filling complex forms" in normalized
     assert "use `list-snapshot` before choosing from menus" in normalized
+    assert "use `text-snapshot` for bounded visible text" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
     assert "`click-role` for known roles/names" in normalized
@@ -186,6 +187,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`link-snapshot`",
         "`table-snapshot`",
         "`list-snapshot`",
+        "`text-snapshot`",
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
@@ -250,6 +252,11 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`items`" in normalized
     assert "`item_count`" in normalized
     assert "`expanded`" in normalized
+    assert "`texts`" in normalized
+    assert "`text_count`" in normalized
+    assert "`text_length`" in normalized
+    assert "`text_truncated`" in normalized
+    assert "`aria_live`" in normalized
     assert "`headings`" in normalized
     assert "`landmarks`" in normalized
     assert "`outline_count`" in normalized
@@ -318,6 +325,10 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`click-index --index <n>`" in normalized
     assert (
         "`list-snapshot` for menu/listbox/search-result/task-list content" in normalized
+    )
+    assert (
+        "`text-snapshot` for visible paragraphs, alerts, status messages, and bounded readable text"
+        in normalized
     )
     assert "`table-snapshot` for HTML or ARIA table/report data" in normalized
     assert "`outline-snapshot` for headings and landmarks" in normalized

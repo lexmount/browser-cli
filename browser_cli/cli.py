@@ -2933,6 +2933,129 @@ def _list_snapshot_expression(
 """.strip()
 
 
+def _text_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_chars: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxChars = Math.max(0, {_js_literal(max_chars)});
+  const textSelector = [
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "blockquote",
+    "pre",
+    "code",
+    "label",
+    "legend",
+    "summary",
+    "figcaption",
+    "caption",
+    "dt",
+    "dd",
+    "[role~='heading']",
+    "[role~='alert']",
+    "[role~='status']",
+    "[role~='log']",
+    "[role~='note']",
+    "[aria-live]"
+  ].join(",");
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allTextBlocks = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(textSelector) ? [root] : []),
+      ...root.querySelectorAll(textSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allTextBlocks.push(candidate);
+      }}
+    }}
+  }}
+  const headingLevel = (element) => {{
+    const tag = element.tagName.toLowerCase();
+    if (/^h[1-6]$/.test(tag)) return Number(tag.slice(1));
+    const value = Number(element.getAttribute("aria-level"));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }};
+  const textKind = (element) => {{
+    const role = roleOf(element);
+    if (role === "heading" || headingLevel(element) !== null) return "heading";
+    if (["alert", "status", "log"].includes(role)) return "live-region";
+    if (element.hasAttribute("aria-live")) return "live-region";
+    const tag = element.tagName.toLowerCase();
+    if (["label", "legend", "caption", "figcaption"].includes(tag)) return "label";
+    if (["pre", "code"].includes(tag)) return "code";
+    if (["dt", "dd"].includes(tag)) return "definition";
+    if (tag === "blockquote") return "quote";
+    return "text";
+  }};
+  const truncateText = (value) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxChars) {{
+      return {{ text, text_truncated: false }};
+    }}
+    return {{
+      text: text.slice(0, maxChars),
+      text_truncated: true
+    }};
+  }};
+  const textInfo = (element, index) => {{
+    const info = nodeInfo(element);
+    const rawText = info.text;
+    return {{
+      index,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      kind: textKind(element),
+      level: headingLevel(element),
+      aria_live: element.getAttribute("aria-live"),
+      aria_atomic: element.getAttribute("aria-atomic"),
+      text_length: rawText.length,
+      ...truncateText(rawText),
+      visible: info.visible
+    }};
+  }};
+  const visibleTextBlocks = allTextBlocks.filter(visible);
+  const candidateTextBlocks = includeHidden ? allTextBlocks : visibleTextBlocks;
+  const nonEmptyTextBlocks = candidateTextBlocks.filter((element) => textOf(element));
+  const texts = limited(nonEmptyTextBlocks).map(textInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "text",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_chars: maxChars,
+    text_count: nonEmptyTextBlocks.length,
+    node_count: texts.length,
+    total_count: allTextBlocks.length,
+    visible_count: visibleTextBlocks.length,
+    truncated: maxNodes !== null && nonEmptyTextBlocks.length > texts.length,
+    texts
+  }};
+}}
+""".strip()
+
+
 def _outline_snapshot_expression(
     *,
     selector: str | None,
@@ -6528,6 +6651,16 @@ def cmd_action_list_snapshot(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.list-snapshot", expression)
 
 
+def cmd_action_text_snapshot(args: argparse.Namespace) -> None:
+    expression = _text_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_chars=args.max_chars,
+    )
+    _run_eval_backed_action_command(args, "action.text-snapshot", expression)
+
+
 def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
     expression = _outline_snapshot_expression(
         selector=args.selector,
@@ -8603,6 +8736,24 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Maximum items to return per list.",
     )
     action_list_snapshot.set_defaults(func=cmd_action_list_snapshot)
+
+    action_text_snapshot = action_subparsers.add_parser(
+        "text-snapshot",
+        help="Capture bounded readable text blocks, headings, and live regions",
+    )
+    _add_session_target_args(action_text_snapshot)
+    action_text_snapshot.add_argument(
+        "--selector",
+        help="Optional text block or container selector used to scope text.",
+    )
+    _add_snapshot_filter_args(action_text_snapshot)
+    action_text_snapshot.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=500,
+        help="Maximum characters to return per text block.",
+    )
+    action_text_snapshot.set_defaults(func=cmd_action_text_snapshot)
 
     action_outline_snapshot = action_subparsers.add_parser(
         "outline-snapshot",

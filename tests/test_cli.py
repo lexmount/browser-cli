@@ -214,6 +214,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.link-snapshot",
         "action.table-snapshot",
         "action.list-snapshot",
+        "action.text-snapshot",
         "action.outline-snapshot",
         "action.interactive-snapshot",
         "direct-url",
@@ -255,6 +256,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.link-snapshot" in payload["commands"]
     assert "action.table-snapshot" in payload["commands"]
     assert "action.list-snapshot" in payload["commands"]
+    assert "action.text-snapshot" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
@@ -3787,6 +3789,57 @@ def test_action_list_snapshot_expression_extracts_items_and_links(
     assert payload["command"] == "action.list-snapshot"
 
 
+def test_action_text_snapshot_expression_extracts_bounded_text_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["expression"] = request.expression
+        return SimpleNamespace(result={"value": {"kind": "text", "texts": []}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "text-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--include-hidden",
+                "--max-chars",
+                "120",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    expression = observed["expression"]
+    assert 'const rootSelector = "main"' in expression
+    assert "const maxChars = Math.max(0, 120)" in expression
+    assert "[role~='alert']" in expression
+    assert "[role~='status']" in expression
+    assert "[aria-live]" in expression
+    assert "text_count: nonEmptyTextBlocks.length" in expression
+    assert "text_truncated" in expression
+    assert "aria_live" in expression
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.text-snapshot"
+
+
 def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -4212,6 +4265,80 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                             },
                         ],
                     }
+                ],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "text-snapshot",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--max-chars",
+                "40",
+            ],
+            "action.text-snapshot",
+            {
+                "kind": "text",
+                "selector": "main",
+                "text_count": 2,
+                "node_count": 2,
+                "texts": [
+                    {
+                        "index": 0,
+                        "selector": "h1",
+                        "tag": "h1",
+                        "role": "heading",
+                        "kind": "heading",
+                        "level": 1,
+                        "text": "Dashboard",
+                        "text_length": 9,
+                        "text_truncated": False,
+                    },
+                    {
+                        "index": 1,
+                        "selector": "[role=status]",
+                        "tag": "div",
+                        "role": "status",
+                        "kind": "live-region",
+                        "aria_live": "polite",
+                        "text": "Saved",
+                        "text_length": 5,
+                        "text_truncated": False,
+                    },
+                ],
+            },
+            {
+                "kind": "text",
+                "selector": "main",
+                "text_count": 2,
+                "node_count": 2,
+                "texts": [
+                    {
+                        "index": 0,
+                        "selector": "h1",
+                        "tag": "h1",
+                        "role": "heading",
+                        "kind": "heading",
+                        "level": 1,
+                        "text": "Dashboard",
+                        "text_length": 9,
+                        "text_truncated": False,
+                    },
+                    {
+                        "index": 1,
+                        "selector": "[role=status]",
+                        "tag": "div",
+                        "role": "status",
+                        "kind": "live-region",
+                        "aria_live": "polite",
+                        "text": "Saved",
+                        "text_length": 5,
+                        "text_truncated": False,
+                    },
                 ],
                 "url": "https://example.test",
             },
