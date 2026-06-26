@@ -354,6 +354,7 @@ def _command_catalog() -> dict[str, Any]:
             "one_off_page_task": [
                 "browser-cli session create",
                 "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action interactive-snapshot --session-id <session_id>",
                 "browser-cli session close --session-id <session_id>",
             ],
@@ -1672,6 +1673,34 @@ def _run_eval_backed_action_command(
         ),
         result=_eval_backed_result_payload(result.result),
     )
+
+
+def _page_info_expression() -> str:
+    return """
+() => {
+  const bodyText = document.body ? (document.body.innerText || document.body.textContent || "") : "";
+  const html = document.documentElement ? document.documentElement.outerHTML || "" : "";
+  return {
+    url: location.href,
+    title: document.title,
+    ready_state: document.readyState,
+    visibility_state: document.visibilityState,
+    language: document.documentElement ? document.documentElement.lang || null : null,
+    referrer: document.referrer || null,
+    body_text_length: bodyText.length,
+    html_length: html.length,
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      device_pixel_ratio: window.devicePixelRatio
+    },
+    scroll: {
+      x: window.scrollX,
+      y: window.scrollY
+    }
+  };
+}
+""".strip()
 
 
 def _selector_expression(selector: str, body: str) -> str:
@@ -4662,6 +4691,14 @@ def cmd_action_snapshot(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_page_info(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.page-info",
+        _page_info_expression(),
+    )
+
+
 def cmd_action_reload(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(args, "action.reload", _reload_expression())
 
@@ -6506,6 +6543,13 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_snapshot.add_argument("--timeout-ms", type=float, default=30000)
     action_snapshot.add_argument("--max-chars", type=int, default=8000)
     action_snapshot.set_defaults(func=cmd_action_snapshot)
+
+    action_page_info = action_subparsers.add_parser(
+        "page-info",
+        help="Read page URL, title, ready state, viewport, and text/html lengths",
+    )
+    _add_session_target_args(action_page_info)
+    action_page_info.set_defaults(func=cmd_action_page_info)
 
     action_reload = action_subparsers.add_parser(
         "reload",

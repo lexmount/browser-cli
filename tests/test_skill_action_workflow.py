@@ -130,6 +130,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
 
     for action in (
         "`exists`",
+        "`page-info`",
         "`get-text`",
         "`count`",
         "`wait-count`",
@@ -216,6 +217,14 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`requested_checked`" in normalized
     assert "`previous_checked`" in normalized
     assert "`changed`" in normalized
+    assert "`ready_state`" in normalized
+    assert "`visibility_state`" in normalized
+    assert "`viewport`" in normalized
+    assert "`scroll`" in normalized
+    assert "`body_text_length`" in normalized
+    assert "`html_length`" in normalized
+    assert "`language`" in normalized
+    assert "`referrer`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -252,9 +261,8 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`click-index --index <n>`" in normalized
     assert "Navigate page history or async refresh" in normalized
     assert "use `reload`, `go-back`, or `go-forward`" in normalized
-    assert (
-        "confirm with `wait-url`, `wait-load-state`, `wait-network-idle`" in normalized
-    )
+    assert "confirm with `page-info`, `wait-url`, `wait-load-state`" in normalized
+    assert "`wait-network-idle`, `wait-text`, or `snapshot`" in normalized
     assert "Debug selectors" in normalized
     assert "use `count`, `query`, `inspect`, and `get-attribute` before" in normalized
     assert "use `inspect` for `state.disabled`, `state.readonly`" in normalized
@@ -263,7 +271,8 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `focus`, `hover` for menus, `press` for shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized
     assert "Read page results" in normalized
-    assert "use `wait-count` for dynamic lists" in normalized
+    assert "use `page-info` for URL/title/readyState/viewport checks" in normalized
+    assert "`wait-count` for dynamic lists" in normalized
     assert "`wait-state` for enabled/visible/checked/focused states" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` or `wait-role` before reading dynamic results" in normalized

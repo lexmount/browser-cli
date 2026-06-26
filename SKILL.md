@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values, click/type/fill/select/check/hover/press/scroll, inspect/query forms/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -224,6 +224,7 @@ browser-cli action type --session-id <session_id> --selector "input[name=q]" --t
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action page-info --session-id <session_id>
 browser-cli action reload --session-id <session_id>
 browser-cli action go-back --session-id <session_id>
 browser-cli action go-forward --session-id <session_id>
@@ -280,7 +281,7 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-Prefer these built-in actions over writing custom JavaScript. `reload`,
+Prefer these built-in actions over writing custom JavaScript. `page-info`, `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-load-state`, `wait-network-idle`,
 `get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-count`,
 `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `get-value`, `wait-value`, `blur`,
@@ -300,8 +301,13 @@ Prefer these built-in actions over writing custom JavaScript. `reload`,
 `dispatched_events`, `fields`, `value_masked`, `file_input`, `file_count`,
 `requested_files`, `bounding_box`, `in_viewport`, `index`, `attributes`,
 `html_truncated`, `total_candidate_count`, `requested_option_label`, `option_found`, `option_label`,
-`requested_checked`, `previous_checked`, `changed`, and `navigation_requested`
+`requested_checked`, `previous_checked`, `changed`, `ready_state`,
+`visibility_state`, `viewport`, `scroll`, `body_text_length`, `html_length`,
+`language`, `referrer`, and `navigation_requested`
 before assuming the page changed.
+For `page-info`, parse `ready_state`, `visibility_state`, `viewport`, `scroll`,
+`body_text_length`, `html_length`, `language`, and `referrer` before taking a
+larger `snapshot`.
 
 For page work, choose actions in this order:
 
@@ -316,8 +322,9 @@ For page work, choose actions in this order:
    `get-text`, `wait-selector`, `click`, `type`, `focus`, `get-value`,
    `wait-value`, `blur`, `clear`, `set-value`, `dispatch-event`, `submit`,
    `select-option`, `check`, and `uncheck`.
-4. Use `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`, and
-   `wait-network-idle` for navigation and async refresh flows.
+4. Use `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`,
+   `wait-load-state`, and `wait-network-idle` for navigation and async refresh
+   flows.
 5. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
    localStorage/sessionStorage state instead of writing storage JavaScript. Use
    `wait-storage` after actions expected to create, update, or remove keys.
@@ -351,16 +358,17 @@ Common task recipes:
    `click` after `exists`, `inspect`, or `bounding-box` confirms a stable selector. For repeated matches, run `query` and then
    `click-index --index <n>`.
 3. Navigate page history or async refresh: use `reload`, `go-back`, or
-   `go-forward`, then confirm with `wait-url`, `wait-load-state`,
+   `go-forward`, then confirm with `page-info`, `wait-url`, `wait-load-state`,
    `wait-network-idle`, `wait-text`, or `snapshot`.
 4. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    shortcuts or Enter/Escape, `dispatch-event` for explicit DOM events, and
    `blur` for focus-driven validation, then inspect again with
    `interactive-snapshot`.
-5. Read page results: use `wait-count` for dynamic lists, `wait-attribute` for
-   DOM attributes, `wait-state` for enabled/visible/checked/focused states,
-   `get-text` for a known selector; use `snapshot` when the page structure or
-   selector is unknown; use `wait-text` or `wait-role` before reading dynamic results.
+5. Read page results: use `page-info` for URL/title/readyState/viewport checks,
+   `wait-count` for dynamic lists, `wait-attribute` for DOM attributes,
+   `wait-state` for enabled/visible/checked/focused states, `get-text` for a
+   known selector; use `snapshot` when the page structure or selector is
+   unknown; use `wait-text` or `wait-role` before reading dynamic results.
 6. Adjust browser state: use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
    `storage-clear --prefix <prefix>` for targeted cleanup; use `wait-storage`

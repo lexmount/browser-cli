@@ -34,5 +34,6 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "`availability` is `locked` or `unavailable`" in text
     assert "wait-role" in text
     assert "click-role" in text
+    assert "page-info" in text
     assert "interactive-snapshot" in text
     assert "context resolve" not in text

@@ -255,6 +255,7 @@ browser-cli action type --session-id <session_id> --selector "input[name=q]" --t
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action page-info --session-id <session_id>
 browser-cli action reload --session-id <session_id>
 browser-cli action go-back --session-id <session_id>
 browser-cli action go-forward --session-id <session_id>
@@ -312,7 +313,7 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-`reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`,
+`page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-load-state`,
 `wait-network-idle`, `get-text`, `exists`, `count`, `query`, `get-attribute`,
 `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`,
 `get-value`, `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
@@ -334,7 +335,9 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `value_masked`, `file_input`, `file_count`, `requested_files`, `bounding_box`,
 `in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
 `option_found`, `option_label`, `requested_checked`, `previous_checked`,
-`changed`, `total_candidate_count`, or `navigation_requested` from `result`.
+`changed`, `total_candidate_count`, `ready_state`, `visibility_state`,
+`viewport`, `scroll`, `body_text_length`, `html_length`, `language`,
+`referrer`, or `navigation_requested` from `result`.
 
 Each action must receive exactly one browser target:
 
@@ -448,6 +451,7 @@ browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
 browser-cli action wait-load-state --session-id <session_id> --state complete
+browser-cli action page-info --session-id <session_id>
 browser-cli action snapshot --session-id <session_id>
 browser-cli action exists --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
@@ -485,13 +489,14 @@ Common agent recipes:
   `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized
   HTML before trying another action.
 - Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
-  confirm with `wait-url`, `wait-load-state`, `wait-network-idle`, `wait-text`,
-  or `snapshot`.
+  confirm with `page-info`, `wait-url`, `wait-load-state`, `wait-network-idle`,
+  `wait-text`, or `snapshot`.
 - Menu or keyboard flow: `focus`, `hover`, `press`, or `dispatch-event`, then
   inspect again with `interactive-snapshot`.
-- Read results: `wait-count` for dynamic lists, `wait-attribute` for DOM
-  attributes, `wait-state` for enabled/visible/checked/focused states, `get-text`
-  for known selectors, or `snapshot` when the selector is unknown.
+- Read results: `page-info` for URL/title/readyState/viewport checks,
+  `wait-count` for dynamic lists, `wait-attribute` for DOM attributes,
+  `wait-state` for enabled/visible/checked/focused states, `get-text` for known
+  selectors, or `snapshot` when the selector is unknown.
 - Browser state: use `storage-get` to inspect local/session storage, `storage-set`
   to adjust feature flags or onboarding state, and `storage-remove` or
   `storage-clear --prefix <prefix>` for targeted cleanup. Use `wait-storage`

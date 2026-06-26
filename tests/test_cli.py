@@ -190,6 +190,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
     assert (
+        "browser-cli action page-info --session-id <session_id>"
+        in payload["agent_entrypoints"]["one_off_page_task"]
+    )
+    assert (
         "browser-cli context pick"
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
@@ -202,6 +206,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "session.create",
         "context.pick",
         "action.open-url",
+        "action.page-info",
         "action.click-role",
         "action.fill-label",
         "action.interactive-snapshot",
@@ -238,6 +243,7 @@ def test_commands_catalog_filters_group_and_names_only(
         "commands": payload["commands"],
     }
     assert "action.open-url" in payload["commands"]
+    assert "action.page-info" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
     assert all(command.startswith("action.") for command in payload["commands"])
@@ -3394,6 +3400,43 @@ def test_eval_backed_action_reports_missing_selector(
                 "label": "Email",
                 "value": "user@example.test",
                 "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "page-info",
+                "--session-id",
+                "s1",
+            ],
+            "action.page-info",
+            {
+                "url": "https://example.test/dashboard",
+                "title": "Dashboard",
+                "ready_state": "complete",
+                "visibility_state": "visible",
+                "body_text_length": 120,
+                "html_length": 2048,
+                "viewport": {
+                    "width": 1280,
+                    "height": 720,
+                    "device_pixel_ratio": 2,
+                },
+                "scroll": {"x": 0, "y": 240},
+            },
+            {
+                "url": "https://example.test/dashboard",
+                "title": "Dashboard",
+                "ready_state": "complete",
+                "visibility_state": "visible",
+                "body_text_length": 120,
+                "html_length": 2048,
+                "viewport": {
+                    "width": 1280,
+                    "height": 720,
+                    "device_pixel_ratio": 2,
+                },
+                "scroll": {"x": 0, "y": 240},
             },
         ),
         (
