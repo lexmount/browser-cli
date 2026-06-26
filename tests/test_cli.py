@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -429,8 +430,11 @@ def test_auth_export_env_can_reveal_current_secret_explicitly(
 
 
 def test_auth_login_guides_manual_browser_flow(
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["auth", "login"])
 
@@ -440,10 +444,97 @@ def test_auth_login_guides_manual_browser_flow(
     assert payload["flow"] == "manual_env"
     assert payload["login_url"] == "https://browser.lexmount.cn"
     assert payload["device_code_available"] is False
+    assert payload["flows"][0]["name"] == "manual_env"
+    assert payload["flows"][0]["available"] is True
+    assert payload["flows"][1]["name"] == "connect_from_codex"
+    assert payload["flows"][1]["available"] is False
     assert "browser-cli doctor" in payload["commands"]
+
+    connect = payload["connect_from_codex"]
+    assert connect["available"] is False
+    assert connect["project_id"] is None
+    assert connect["project_id_source"] == "unset"
+    assert connect["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert connect["requested_expires_in"] == "7d"
+    assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["source"] == ["browser-cli"]
+    assert query["intent"] == ["agent-browser-control"]
+    assert query["response"] == ["env"]
+    assert query["expires_in"] == ["7d"]
+    assert query["scope"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert "project_id" not in query
     assert any(
         "scoped API keys" in item for item in payload["browser_site_recommendations"]
     )
+    assert any(
+        "/connect/codex" in item for item in connect["browser_site_requirements"]
+    )
+
+
+def test_auth_login_builds_connect_from_codex_contract_from_args(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "env-project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--project-id",
+                "arg-project",
+                "--scope",
+                "browser:sessions",
+                "--scope",
+                "browser:actions",
+                "--scope",
+                "browser:sessions",
+                "--expires-in",
+                "24h",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    connect = payload["connect_from_codex"]
+    assert connect["project_id"] == "arg-project"
+    assert connect["project_id_source"] == "argument"
+    assert connect["requested_scopes"] == ["browser:sessions", "browser:actions"]
+    assert connect["requested_expires_in"] == "24h"
+
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["project_id"] == ["arg-project"]
+    assert query["scope"] == ["browser:sessions", "browser:actions"]
+    assert query["expires_in"] == ["24h"]
+
+
+def test_auth_login_uses_env_project_id_for_connect_from_codex_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "env-project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    connect = payload["connect_from_codex"]
+    assert connect["project_id"] == "env-project"
+    assert connect["project_id_source"] == "env"
+
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["project_id"] == ["env-project"]
 
 
 def test_session_list_passes_status_filter(

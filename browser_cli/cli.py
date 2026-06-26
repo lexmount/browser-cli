@@ -37,6 +37,13 @@ from lex_browser_runtime.browser.models import (
 
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
+LEXMOUNT_CODEX_CONNECT_URL = f"{LEXMOUNT_CONSOLE_URL}/connect/codex"
+DEFAULT_CODEX_CONNECT_SCOPES = (
+    "browser:sessions",
+    "browser:contexts",
+    "browser:actions",
+)
+DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle"}
 CONTEXT_LOCKED_STATUSES = {"locked", "busy", "in_use", "in-use", "active", "running"}
 SENSITIVE_PAYLOAD_KEYS = {
@@ -375,6 +382,46 @@ def _auth_next_steps(*, configured: bool) -> list[str]:
         "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
         "Run `browser-cli doctor` after setting credentials.",
     ]
+
+
+def _dedupe_preserving_order(values: list[str] | tuple[str, ...]) -> list[str]:
+    deduped: list[str] = []
+    for value in values:
+        if value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+def _auth_login_project_id(args: argparse.Namespace) -> tuple[str | None, str]:
+    if args.project_id:
+        return args.project_id, "argument"
+    env_project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
+    if env_project_id:
+        return env_project_id, "env"
+    return None, "unset"
+
+
+def _auth_login_scopes(args: argparse.Namespace) -> list[str]:
+    raw_scopes = args.scope or list(DEFAULT_CODEX_CONNECT_SCOPES)
+    return _dedupe_preserving_order(raw_scopes)
+
+
+def _connect_from_codex_url(
+    *,
+    project_id: str | None,
+    scopes: list[str],
+    expires_in: str,
+) -> str:
+    query: list[tuple[str, str]] = [
+        ("source", "browser-cli"),
+        ("intent", "agent-browser-control"),
+        ("response", "env"),
+        ("expires_in", expires_in),
+    ]
+    if project_id:
+        query.append(("project_id", project_id))
+    query.extend(("scope", scope) for scope in scopes)
+    return f"{LEXMOUNT_CODEX_CONNECT_URL}?{urlencode(query)}"
 
 
 def _quote_env_value(value: str, shell: str) -> str:
@@ -3612,11 +3659,55 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
 
 def cmd_auth_login(args: argparse.Namespace) -> None:
     command = "auth.login"
+    project_id, project_id_source = _auth_login_project_id(args)
+    scopes = _auth_login_scopes(args)
+    connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+    )
     _success(
         command,
         flow="manual_env",
         login_url=LEXMOUNT_CONSOLE_URL,
         device_code_available=False,
+        connect_from_codex={
+            "available": False,
+            "url": connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": scopes,
+            "requested_expires_in": args.expires_in,
+            "expected_outputs": [
+                "Project ID for the selected project",
+                "Scoped API key or short-lived local token",
+                "Copyable shell export commands",
+                "`browser-cli doctor` verification guidance",
+                "Revoke and expiration details",
+            ],
+            "browser_site_requirements": [
+                "Implement /connect/codex on browser.lexmount.cn.",
+                "Accept optional project_id, repeated scope, and expires_in query parameters.",
+                "Show the selected Project ID before issuing credentials.",
+                "Issue scoped credentials for browser sessions, contexts, and actions.",
+                "Offer copyable env/install commands without exposing secrets in chat.",
+                "Support revoke, expiration, and device-code or OAuth approval.",
+            ],
+            "fallback": "Use the manual_env steps until browser.lexmount.cn supports this flow.",
+        },
+        flows=[
+            {
+                "name": "manual_env",
+                "available": True,
+                "description": "User copies Project ID and API key from browser.lexmount.cn into the local shell.",
+            },
+            {
+                "name": "connect_from_codex",
+                "available": False,
+                "url": connect_url,
+                "description": "Planned browser.lexmount.cn flow for scoped agent credentials.",
+            },
+        ],
         message=(
             "Open browser.lexmount.cn, sign in, choose a project, create or copy "
             "an API key, then set local environment variables."
@@ -3636,7 +3727,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "browser-cli doctor",
         ],
         browser_site_recommendations=[
-            "Add a Connect from Codex page with Project ID display.",
+            "Add /connect/codex with Project ID display and query parameters for project_id, scope, and expires_in.",
             "Offer scoped API keys with expiration, revoke, and permission labels.",
             "Show copyable env/install commands and a doctor verification step.",
             "Add device-code or OAuth authorization for short-lived local tokens.",
@@ -4555,6 +4646,26 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     auth_login = auth_subparsers.add_parser(
         "login",
         help="Show browser.lexmount.cn login and environment setup guidance",
+    )
+    auth_login.add_argument(
+        "--project-id",
+        help=(
+            "Project ID to include in the planned Connect from Codex URL. "
+            "Defaults to LEXMOUNT_PROJECT_ID when set."
+        ),
+    )
+    auth_login.add_argument(
+        "--scope",
+        action="append",
+        help=(
+            "Requested Connect from Codex credential scope. May be repeated; "
+            "defaults to browser session, context, and action scopes."
+        ),
+    )
+    auth_login.add_argument(
+        "--expires-in",
+        default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
     )
     auth_login.set_defaults(func=cmd_auth_login)
 
