@@ -60,10 +60,14 @@ For credential setup, use this decision flow:
 6. Use `browser-cli auth device-code` only to inspect or integrate the future
    Connect from Codex device-code/OAuth contract. If it returns
    `available: false`, fall back to `browser-cli auth login`.
-7. Direct the user to set credentials in their local shell, not in chat.
-8. Use `browser-cli auth export-env` for masked shell snippets and
+7. Use `browser-cli auth connect-spec` when implementing or checking
+   browser.lexmount.cn. Read `backend_endpoints`, `frontend_states`,
+   `doctor_verification_contract`, `acceptance_tests`, and
+   `credential_lifecycle` from JSON.
+8. Direct the user to set credentials in their local shell, not in chat.
+9. Use `browser-cli auth export-env` for masked shell snippets and
    `browser-cli auth export-env --reveal-secrets` only in a trusted local shell.
-9. Treat `usable: false`, `masked: true`, or `contains_secrets: true` as a signal
+10. Treat `usable: false`, `masked: true`, or `contains_secrets: true` as a signal
    not to paste output into chat, logs, docs, tests, or commits.
 
 Use this to generate local shell configuration snippets when credentials are
@@ -109,6 +113,7 @@ Session lifecycle:
 browser-cli auth bootstrap
 browser-cli auth status
 browser-cli auth device-code
+browser-cli auth connect-spec
 browser-cli session create
 browser-cli session list
 browser-cli session get --session-id <session_id>

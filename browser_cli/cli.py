@@ -570,6 +570,148 @@ def cmd_auth_device_code(args: argparse.Namespace) -> None:
     )
 
 
+def _connect_backend_endpoints(args: argparse.Namespace) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "projects",
+            "method": "GET",
+            "path": "/api/codex/projects",
+            "auth": "browser_session",
+            "response_fields": ["projects", "current_project_id"],
+            "purpose": "List projects the signed-in user may connect to Codex.",
+        },
+        {
+            "id": "scoped_api_key_create",
+            "method": "POST",
+            "path": "/api/codex/api-keys",
+            "auth": "browser_session",
+            "request_fields": ["project_id", "scopes", "expires_in", "label"],
+            "response_fields": [
+                "key_id",
+                "api_key",
+                "masked_key_preview",
+                "project_id",
+                "scopes",
+                "expires_at",
+            ],
+            "secret_response_fields": ["api_key"],
+            "purpose": "Create a scoped key shown once for local shell export.",
+        },
+        {
+            "id": "scoped_api_key_revoke",
+            "method": "DELETE",
+            "path": "/api/codex/api-keys/{key_id}",
+            "auth": "browser_session",
+            "response_fields": ["key_id", "revoked", "revoked_at"],
+            "purpose": "Revoke a Codex-issued scoped key.",
+        },
+        {
+            "id": "device_authorization",
+            "method": "POST",
+            "path": urlsplit(args.device_authorization_url).path,
+            "auth": "none",
+            "request_fields": ["client_id", "scope"],
+            "response_fields": [
+                "device_code",
+                "user_code",
+                "verification_uri",
+                "verification_uri_complete",
+                "expires_in",
+                "interval",
+                "scopes",
+            ],
+            "purpose": "Start a device-code authorization for Codex.",
+        },
+        {
+            "id": "device_token",
+            "method": "POST",
+            "path": urlsplit(args.token_url).path,
+            "auth": "none",
+            "request_fields": ["grant_type", "device_code"],
+            "response_fields": [
+                "access_token",
+                "token_type",
+                "expires_in",
+                "scope",
+                "project_id",
+            ],
+            "error_codes": [
+                "authorization_pending",
+                "slow_down",
+                "expired_token",
+                "access_denied",
+            ],
+            "purpose": "Poll for approved scoped credentials.",
+        },
+    ]
+
+
+def _connect_frontend_states() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "signed_out",
+            "required_ui": ["sign_in_button", "authorization_url"],
+            "next_action": "sign_in",
+        },
+        {
+            "id": "project_selected",
+            "required_ui": ["project_id", "project_name", "copy_project_id"],
+            "next_action": "choose_scopes",
+        },
+        {
+            "id": "scoped_key_created",
+            "required_ui": ["api_key_once", "masked_key_preview", "expires_at"],
+            "next_action": "copy_env",
+            "secret_handling": "Show api_key once and never persist it in browser logs.",
+        },
+        {
+            "id": "env_ready",
+            "required_ui": ["install_command", "env_exports", "verify_commands"],
+            "next_action": "run_doctor",
+        },
+        {
+            "id": "doctor_verified",
+            "required_ui": ["doctor_command", "success_criteria", "troubleshooting"],
+            "next_action": "start_codex_browser_work",
+        },
+        {
+            "id": "device_code_pending",
+            "required_ui": ["user_code", "verification_uri", "expires_in"],
+            "next_action": "approve_or_deny",
+        },
+    ]
+
+
+def _connect_acceptance_tests() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "manual_env_flow",
+            "commands": [
+                "browser-cli auth bootstrap",
+                "browser-cli auth status",
+                "browser-cli doctor --json",
+                "browser-cli session list",
+            ],
+            "success_criteria": [
+                "auth status returns configured=true",
+                "doctor returns ok=true",
+                "session list returns ok=true",
+            ],
+        },
+        {
+            "id": "device_code_contract",
+            "commands": [
+                "browser-cli auth device-code --scope browser:sessions",
+                "browser-cli auth connect-spec",
+            ],
+            "success_criteria": [
+                "device-code endpoint returns device_code and user_code",
+                "token endpoint supports authorization_pending and access_denied",
+            ],
+        },
+    ]
+
+
 def cmd_auth_connect_spec(args: argparse.Namespace) -> None:
     scopes = args.scopes or list(DEFAULT_CODEX_AUTH_SCOPES)
 
@@ -586,6 +728,35 @@ def cmd_auth_connect_spec(args: argparse.Namespace) -> None:
             "browser-cli doctor --json",
             "browser-cli session list",
         ],
+        backend_endpoints=_connect_backend_endpoints(args),
+        frontend_states=_connect_frontend_states(),
+        doctor_verification_contract={
+            "command": "browser-cli doctor --json",
+            "success_criteria": [
+                "ok is true",
+                "decision.ready_for_browser_work is true",
+                "checks contains credentials, direct-url, and api",
+            ],
+            "failure_ui": [
+                "Show blocking_checks and warning_checks.",
+                "Show next_steps and decision.next_command.",
+                "Never display raw API keys from local command output.",
+            ],
+        },
+        acceptance_tests=_connect_acceptance_tests(),
+        credential_lifecycle={
+            "default_expiration": "short_lived",
+            "recommended_max_ttl_seconds": 604800,
+            "key_storage": "Store only a hash/server-side secret reference; show raw api_key once.",
+            "audit_events": [
+                "codex_key_created",
+                "codex_key_copied",
+                "codex_key_revoked",
+                "codex_device_authorized",
+                "codex_device_denied",
+            ],
+            "required_controls": ["revoke", "rotate", "extend_expiry", "reduce_scope"],
+        },
         required_scopes=[
             {
                 "scope": scope,

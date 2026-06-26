@@ -465,6 +465,55 @@ def test_auth_connect_spec_returns_browser_console_requirements(
         "browser-cli doctor --json",
         "browser-cli session list",
     ]
+    endpoint_ids = {endpoint["id"] for endpoint in payload["backend_endpoints"]}
+    assert {
+        "projects",
+        "scoped_api_key_create",
+        "scoped_api_key_revoke",
+        "device_authorization",
+        "device_token",
+    }.issubset(endpoint_ids)
+    create_endpoint = next(
+        endpoint
+        for endpoint in payload["backend_endpoints"]
+        if endpoint["id"] == "scoped_api_key_create"
+    )
+    assert create_endpoint["method"] == "POST"
+    assert create_endpoint["path"] == "/api/codex/api-keys"
+    assert create_endpoint["secret_response_fields"] == ["api_key"]
+    frontend_state_ids = {state["id"] for state in payload["frontend_states"]}
+    assert {
+        "signed_out",
+        "project_selected",
+        "scoped_key_created",
+        "env_ready",
+        "doctor_verified",
+        "device_code_pending",
+    }.issubset(frontend_state_ids)
+    assert payload["doctor_verification_contract"] == {
+        "command": "browser-cli doctor --json",
+        "success_criteria": [
+            "ok is true",
+            "decision.ready_for_browser_work is true",
+            "checks contains credentials, direct-url, and api",
+        ],
+        "failure_ui": [
+            "Show blocking_checks and warning_checks.",
+            "Show next_steps and decision.next_command.",
+            "Never display raw API keys from local command output.",
+        ],
+    }
+    assert [test["id"] for test in payload["acceptance_tests"]] == [
+        "manual_env_flow",
+        "device_code_contract",
+    ]
+    assert payload["credential_lifecycle"]["required_controls"] == [
+        "revoke",
+        "rotate",
+        "extend_expiry",
+        "reduce_scope",
+    ]
+    assert "codex_key_revoked" in payload["credential_lifecycle"]["audit_events"]
     assert [item["scope"] for item in payload["required_scopes"]] == [
         "browser:sessions",
         "browser:contexts",
@@ -553,6 +602,11 @@ def test_auth_connect_spec_accepts_custom_scopes_and_endpoints(
         payload["device_code_contract"]["token_endpoint"]
         == "https://browser.lexmount.cn/connect/custom/token"
     )
+    endpoint_paths = {
+        endpoint["id"]: endpoint["path"] for endpoint in payload["backend_endpoints"]
+    }
+    assert endpoint_paths["device_authorization"] == "/connect/custom/device"
+    assert endpoint_paths["device_token"] == "/connect/custom/token"
 
 
 def test_session_list_passes_status_filter(

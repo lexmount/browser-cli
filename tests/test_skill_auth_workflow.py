@@ -59,6 +59,16 @@ def test_skill_auth_flow_treats_device_code_as_future_contract() -> None:
     assert "fall back to `browser-cli auth login`" in normalized
 
 
+def test_skill_auth_flow_points_browser_site_to_connect_spec() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "browser-cli auth connect-spec" in normalized
+    assert "when implementing or checking browser.lexmount.cn" in normalized
+    assert "`backend_endpoints`, `frontend_states`" in normalized
+    assert "`doctor_verification_contract`, `acceptance_tests`" in normalized
+    assert "`credential_lifecycle`" in normalized
+
+
 def test_skill_auth_flow_protects_export_env_secrets() -> None:
     normalized = _normalized_skill_text()
 

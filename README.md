@@ -145,7 +145,10 @@ contract. Until browser.lexmount.cn implements the required endpoints, it report
 `auth connect-spec` returns the machine-readable Connect from Codex page
 requirements for browser.lexmount.cn, including Project ID display, scoped API
 key creation, copyable install/env/verify blocks, doctor verification,
-revoke/expiry controls, and the device-code endpoint contract. `auth export-env`
+revoke/expiry controls, and the device-code endpoint contract. It also includes
+`backend_endpoints`, `frontend_states`, `doctor_verification_contract`,
+`acceptance_tests`, and `credential_lifecycle` so browser.lexmount.cn can
+implement and verify the flow without guessing field names. `auth export-env`
 returns JSON containing shell lines; they are masked by default, and become
 directly usable only with `--reveal-secrets` in a trusted local shell.
 
