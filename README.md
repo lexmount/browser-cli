@@ -344,6 +344,7 @@ browser-cli action outline-snapshot --session-id <session_id> --selector "main" 
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
+browser-cli action interactive-only-snapshot --session-id <session_id>
 ```
 
 `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
@@ -356,8 +357,8 @@ browser-cli action interactive-snapshot --session-id <session_id>
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`,
-`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`, and
-`interactive-snapshot` are implemented as eval-backed DOM actions while the
+`link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
+`interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,

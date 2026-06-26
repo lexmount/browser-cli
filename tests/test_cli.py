@@ -228,6 +228,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.wait-console",
         "action.outline-snapshot",
         "action.interactive-snapshot",
+        "action.interactive-only-snapshot",
         "direct-url",
     ):
         assert name in commands
@@ -279,6 +280,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.wait-console" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
+    assert "action.interactive-only-snapshot" in payload["commands"]
     assert "auth.login" not in payload["commands"]
     assert all(command.startswith("action.") for command in payload["commands"])
 
@@ -6217,6 +6219,23 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "--include-hidden",
             ],
             "action.interactive-snapshot",
+            {"kind": "interactive", "node_count": 1, "nodes": []},
+            {
+                "kind": "interactive",
+                "node_count": 1,
+                "nodes": [],
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "interactive-only-snapshot",
+                "--session-id",
+                "s1",
+                "--include-hidden",
+            ],
+            "action.interactive-only-snapshot",
             {"kind": "interactive", "node_count": 1, "nodes": []},
             {
                 "kind": "interactive",

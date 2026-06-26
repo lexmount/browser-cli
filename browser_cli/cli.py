@@ -69,6 +69,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.open-url",
     "action.page-info",
     "action.interactive-snapshot",
+    "action.interactive-only-snapshot",
     "action.click-role",
     "action.fill-label",
     "action.wait-dialog",
@@ -8892,7 +8893,11 @@ def cmd_action_interactive_snapshot(args: argparse.Namespace) -> None:
   }};
 }}
 """.strip()
-    _run_eval_backed_action_command(args, "action.interactive-snapshot", expression)
+    _run_eval_backed_action_command(
+        args,
+        getattr(args, "action_command_name", "action.interactive-snapshot"),
+        expression,
+    )
 
 
 def cmd_doctor(args: argparse.Namespace) -> None:
@@ -11295,7 +11300,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     _add_session_target_args(action_interactive_snapshot)
     _add_snapshot_filter_args(action_interactive_snapshot)
-    action_interactive_snapshot.set_defaults(func=cmd_action_interactive_snapshot)
+    action_interactive_snapshot.set_defaults(
+        func=cmd_action_interactive_snapshot,
+        action_command_name="action.interactive-snapshot",
+    )
+
+    action_interactive_only_snapshot = action_subparsers.add_parser(
+        "interactive-only-snapshot",
+        help="Alias for interactive-snapshot; capture visible interactive elements",
+    )
+    _add_session_target_args(action_interactive_only_snapshot)
+    _add_snapshot_filter_args(action_interactive_only_snapshot)
+    action_interactive_only_snapshot.set_defaults(
+        func=cmd_action_interactive_snapshot,
+        action_command_name="action.interactive-only-snapshot",
+    )
 
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
