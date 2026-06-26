@@ -1952,6 +1952,153 @@ def test_cookie_eval_backed_action_commands_emit_structured_results(
     }
 
 
+@pytest.mark.parametrize(
+    ("argv", "command", "value", "expected_result"),
+    [
+        (
+            [
+                "action",
+                "wait-storage",
+                "--session-id",
+                "s1",
+                "--area",
+                "local",
+                "--key",
+                "authToken",
+                "--value",
+                "ready",
+                "--match",
+                "exact",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+            ],
+            "action.wait-storage",
+            {
+                "area": "local",
+                "key": "authToken",
+                "found": True,
+                "state": "present",
+                "exists": True,
+                "value": "ready",
+                "requested_value": "ready",
+                "match": "exact",
+                "waited_ms": 50,
+            },
+            {
+                "area": "local",
+                "key": "authToken",
+                "found": True,
+                "state": "present",
+                "exists": True,
+                "value": "ready",
+                "requested_value": "ready",
+                "match": "exact",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-cookie",
+                "--session-id",
+                "s1",
+                "--name",
+                "consent",
+                "--state",
+                "absent",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-cookie",
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "state": "absent",
+                "exists": False,
+                "value": None,
+                "raw_value": None,
+                "requested_value": None,
+                "match": "contains",
+                "waited_ms": 50,
+            },
+            {
+                "document_cookie_scope": "document.cookie",
+                "name": "consent",
+                "found": True,
+                "state": "absent",
+                "exists": False,
+                "value": None,
+                "raw_value": None,
+                "requested_value": None,
+                "match": "contains",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+    ],
+)
+def test_state_wait_eval_backed_action_commands_emit_structured_results(
+    argv: list[str],
+    command: str,
+    value: dict[str, Any],
+    expected_result: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "action": action,
+                "expression": request.expression,
+            }
+        )
+        return SimpleNamespace(result={"url": "https://example.test", "value": value})
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    assert observed["connect_url"] == connect_url
+    assert observed["action"] == "eval"
+    assert observed["expression"].startswith("() =>")
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": command,
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": expected_result,
+    }
+
+
 def test_direct_url_can_reveal_secret_explicitly(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

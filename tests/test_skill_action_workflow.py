@@ -47,10 +47,12 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`storage-set`",
         "`storage-remove`",
         "`storage-clear`",
+        "`wait-storage`",
         "`cookie-get`",
         "`cookie-set`",
         "`cookie-delete`",
         "`cookie-clear`",
+        "`wait-cookie`",
         "`clear`",
         "`submit`",
         "`select-option`",
@@ -74,6 +76,7 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`cleared_count`" in normalized
     assert "`network_idle`" in normalized
     assert "`quiet_ms`" in normalized
+    assert "`requested_value`" in normalized
     assert "inspect again before trying a different action" in normalized
 
 
@@ -106,10 +109,12 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Adjust browser state" in normalized
     assert "use `storage-get` for local/session storage" in normalized
     assert "`storage-clear --prefix <prefix>` for targeted cleanup" in normalized
+    assert "use `wait-storage` when the page updates keys asynchronously" in normalized
     assert (
         "Use `cookie-get`, `cookie-set`, `cookie-delete`, or `cookie-clear`"
         in normalized
     )
+    assert "`wait-cookie` when cookie changes are async" in normalized
     assert "document.cookie-visible cookies" in normalized
     assert "HttpOnly cookies" in normalized
     assert "Capture final evidence" in normalized

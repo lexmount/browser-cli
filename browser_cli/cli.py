@@ -1428,6 +1428,123 @@ def _storage_clear_expression(*, area: str, prefix: str | None) -> str:
 """.strip()
 
 
+def _wait_storage_expression(
+    *,
+    area: str,
+    key: str,
+    value: str | None,
+    state: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_storage_area_expression(area)}
+  const key = {_js_literal(key)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        area,
+        key,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const waitedMs = Date.now() - startedAt;
+    try {{
+      const storage = storageForArea();
+      const currentValue = storage.getItem(key);
+      const exists = currentValue !== null;
+      const reached = requestedState === "absent"
+        ? !exists
+        : exists && matches(currentValue);
+      if (reached) {{
+        resolve({{
+          area,
+          key,
+          found: true,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          area,
+          key,
+          found: false,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+    }} catch (error) {{
+      resolve({{
+        area,
+        key,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        error: String(error.name || "Error"),
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _cookie_helpers_expression() -> str:
     return """
   const documentCookieScope = "document.cookie";
@@ -1722,6 +1839,124 @@ def _cookie_clear_expression(
     }};
   }}
 }}
+""".strip()
+
+
+def _wait_cookie_expression(
+    *,
+    name: str,
+    value: str | None,
+    state: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    case_sensitive: bool,
+) -> str:
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_cookie_helpers_expression()}
+  const name = {_js_literal(name)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        document_cookie_scope: documentCookieScope,
+        name,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const waitedMs = Date.now() - startedAt;
+    try {{
+      const cookie = findCookie(name);
+      const exists = cookie !== null;
+      const currentValue = cookie?.value ?? null;
+      const reached = requestedState === "absent"
+        ? !exists
+        : exists && matches(currentValue);
+      if (reached) {{
+        resolve({{
+          document_cookie_scope: documentCookieScope,
+          name,
+          found: true,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          raw_value: cookie?.raw_value ?? null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          document_cookie_scope: documentCookieScope,
+          name,
+          found: false,
+          state: requestedState,
+          exists,
+          value: currentValue,
+          raw_value: cookie?.raw_value ?? null,
+          requested_value: requestedValue,
+          match: matchMode,
+          waited_ms: waitedMs
+        }});
+        return;
+      }}
+    }} catch (error) {{
+      resolve({{
+        document_cookie_scope: documentCookieScope,
+        name,
+        found: false,
+        state: requestedState,
+        exists: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        waited_ms: waitedMs,
+        error: String(error.name || "Error"),
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
 """.strip()
 
 
@@ -2142,6 +2377,23 @@ def cmd_action_storage_clear(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_wait_storage(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-storage",
+        _wait_storage_expression(
+            area=args.area,
+            key=args.key,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_cookie_get(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -2191,6 +2443,22 @@ def cmd_action_cookie_clear(args: argparse.Namespace) -> None:
             prefix=args.prefix,
             path=args.path,
             domain=args.domain,
+        ),
+    )
+
+
+def cmd_action_wait_cookie(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-cookie",
+        _wait_cookie_expression(
+            name=args.name,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
         ),
     )
 
@@ -2953,6 +3221,40 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_storage_clear.set_defaults(func=cmd_action_storage_clear)
 
+    action_wait_storage = action_subparsers.add_parser(
+        "wait-storage",
+        help="Wait until localStorage or sessionStorage reaches a key/value state",
+    )
+    _add_session_target_args(action_wait_storage)
+    action_wait_storage.add_argument(
+        "--area",
+        choices=["local", "session"],
+        default="local",
+        help="Storage area to wait on.",
+    )
+    action_wait_storage.add_argument("--key", required=True)
+    action_wait_storage.add_argument("--value")
+    action_wait_storage.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_storage.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_storage.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_storage.add_argument("--poll-ms", type=float, default=250)
+    action_wait_storage.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_storage.set_defaults(func=cmd_action_wait_storage)
+
     action_cookie_get = action_subparsers.add_parser(
         "cookie-get",
         help="Read document.cookie-visible cookies",
@@ -3019,6 +3321,34 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_cookie_clear.add_argument("--path")
     action_cookie_clear.add_argument("--domain")
     action_cookie_clear.set_defaults(func=cmd_action_cookie_clear)
+
+    action_wait_cookie = action_subparsers.add_parser(
+        "wait-cookie",
+        help="Wait until a document.cookie-visible cookie reaches a state",
+    )
+    _add_session_target_args(action_wait_cookie)
+    action_wait_cookie.add_argument("--name", required=True)
+    action_wait_cookie.add_argument("--value")
+    action_wait_cookie.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_cookie.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_cookie.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_cookie.add_argument("--poll-ms", type=float, default=250)
+    action_wait_cookie.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_cookie.set_defaults(func=cmd_action_wait_cookie)
 
     action_clear = action_subparsers.add_parser(
         "clear",
