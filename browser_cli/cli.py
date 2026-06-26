@@ -61,8 +61,30 @@ COMMON_DOM_EVENT_NAMES = (
     "mouseenter",
     "mousemove",
 )
-CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle"}
-CONTEXT_LOCKED_STATUSES = {"locked", "busy", "in_use", "in-use", "active", "running"}
+CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle", "free", "unlocked"}
+CONTEXT_LOCKED_STATUSES = {
+    "locked",
+    "busy",
+    "in_use",
+    "active",
+    "running",
+    "reserved",
+    "leased",
+    "occupied",
+}
+CONTEXT_UNAVAILABLE_STATUSES = {
+    "unavailable",
+    "failed",
+    "error",
+    "closed",
+    "deleted",
+    "deleting",
+    "expired",
+    "disabled",
+    "archived",
+    "terminated",
+    "stopped",
+}
 SENSITIVE_PAYLOAD_KEYS = {
     "api_key",
     "apikey",
@@ -312,7 +334,9 @@ def _credential_doctor_fix(*env: str) -> dict[str, Any]:
 def _normalize_status(value: Any) -> str | None:
     if value is None:
         return None
-    return str(value).strip().lower()
+    normalized = re.sub(r"[\s\-]+", "_", str(value).strip().lower())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    return normalized or None
 
 
 def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
@@ -320,6 +344,8 @@ def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
     if status in CONTEXT_REUSABLE_STATUSES:
         return {
             "status": context.get("status"),
+            "normalized_status": status,
+            "availability": "available",
             "reusable": True,
             "locked": False,
             "reason": "status_reusable",
@@ -327,19 +353,34 @@ def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
     if status in CONTEXT_LOCKED_STATUSES:
         return {
             "status": context.get("status"),
+            "normalized_status": status,
+            "availability": "locked",
             "reusable": False,
             "locked": True,
             "reason": "status_locked",
         }
+    if status in CONTEXT_UNAVAILABLE_STATUSES:
+        return {
+            "status": context.get("status"),
+            "normalized_status": status,
+            "availability": "unavailable",
+            "reusable": False,
+            "locked": False,
+            "reason": "status_unavailable",
+        }
     if status is None:
         return {
             "status": None,
+            "normalized_status": None,
+            "availability": "unknown",
             "reusable": False,
             "locked": False,
             "reason": "status_missing",
         }
     return {
         "status": context.get("status"),
+        "normalized_status": status,
+        "availability": "unknown",
         "reusable": False,
         "locked": False,
         "reason": "status_not_reusable",
@@ -366,6 +407,8 @@ def _context_pick_candidate(
     return {
         "context_id": context.get("context_id"),
         "status": context.get("status"),
+        "normalized_status": reuse["normalized_status"],
+        "availability": reuse["availability"],
         "metadata_match": metadata_match,
         "reusable": reuse["reusable"],
         "locked": reuse["locked"],

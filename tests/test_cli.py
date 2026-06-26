@@ -1037,6 +1037,38 @@ def test_session_get_close_and_keepalive_emit_json(
     ]
 
 
+@pytest.mark.parametrize(
+    ("status", "normalized_status", "availability", "reusable", "locked", "reason"),
+    [
+        ("available", "available", "available", True, False, "status_reusable"),
+        ("Ready", "ready", "available", True, False, "status_reusable"),
+        ("IN-USE", "in_use", "locked", False, True, "status_locked"),
+        ("in use", "in_use", "locked", False, True, "status_locked"),
+        ("reserved", "reserved", "locked", False, True, "status_locked"),
+        ("failed", "failed", "unavailable", False, False, "status_unavailable"),
+        ("archived", "archived", "unavailable", False, False, "status_unavailable"),
+        ("maintenance", "maintenance", "unknown", False, False, "status_not_reusable"),
+        (None, None, "unknown", False, False, "status_missing"),
+    ],
+)
+def test_context_reuse_state_normalizes_status_aliases(
+    status: str | None,
+    normalized_status: str | None,
+    availability: str,
+    reusable: bool,
+    locked: bool,
+    reason: str,
+) -> None:
+    assert cli_module._context_reuse_state({"status": status}) == {
+        "status": status,
+        "normalized_status": normalized_status,
+        "availability": availability,
+        "reusable": reusable,
+        "locked": locked,
+        "reason": reason,
+    }
+
+
 def test_context_commands_emit_json(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1128,6 +1160,8 @@ def test_context_status_reports_reusable_and_locked_state(
     assert payload["locked"] is True
     assert payload["reuse"] == {
         "status": "locked",
+        "normalized_status": "locked",
+        "availability": "locked",
         "reusable": False,
         "locked": True,
         "reason": "status_locked",
@@ -1198,6 +1232,8 @@ def test_context_pick_selects_first_available_metadata_match(
         {
             "context_id": "ctx-locked",
             "status": "locked",
+            "normalized_status": "locked",
+            "availability": "locked",
             "metadata_match": True,
             "reusable": False,
             "locked": True,
@@ -1206,6 +1242,8 @@ def test_context_pick_selects_first_available_metadata_match(
         {
             "context_id": "ctx-other",
             "status": "available",
+            "normalized_status": "available",
+            "availability": "available",
             "metadata_match": False,
             "reusable": True,
             "locked": False,
@@ -1214,6 +1252,8 @@ def test_context_pick_selects_first_available_metadata_match(
         {
             "context_id": "ctx-ready",
             "status": "available",
+            "normalized_status": "available",
+            "availability": "available",
             "metadata_match": True,
             "reusable": True,
             "locked": False,

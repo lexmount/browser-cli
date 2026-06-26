@@ -98,9 +98,11 @@ Use `read_write` for login/setup work that should update cookies or storage. Use
 confirm that the task no longer needs its login state.
 
 Parse `context_reuse` from the session result. Reuse only when
-`context_reuse.selected` is true; if candidates include `locked: true`, report
-that a busy context was skipped. Use `context status --context-id <context_id>`
-before reuse when the context id came from older notes.
+`context_reuse.selected` is true. Prefer `availability` over raw status strings:
+`available` can be reused, `locked` means busy, and `unavailable` needs a
+different context. If candidates include `locked: true`, report that a busy
+context was skipped. Use `context status --context-id <context_id>` before reuse
+when the context id came from older notes.
 
 If a command fails, parse the JSON error first. For configuration or credential
 errors, stop browser work and guide the user to configure local environment

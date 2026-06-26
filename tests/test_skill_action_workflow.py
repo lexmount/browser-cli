@@ -65,6 +65,10 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "--create-context-if-missing" in normalized
     assert "Parse `context_reuse` from the session result" in normalized
     assert "`context_reuse.selected` is true" in normalized
+    assert "Prefer `availability` over raw status strings" in normalized
+    assert "`available` can be reused" in normalized
+    assert "`locked` means busy" in normalized
+    assert "`unavailable` needs a different context" in normalized
     assert "browser-cli context pick --metadata-json" in normalized
     assert "browser-cli context status --context-id <context_id>" in normalized
     assert "candidates include `locked: true`" in normalized
