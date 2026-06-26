@@ -60,9 +60,11 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     )
     assert "`connect_from_codex_url` or `login_url`" in normalized
     assert (
-        "`copyable_commands`, `local_env`, `verification`, and `secret_policy`"
+        "`copyable_commands`, `open_command`, `local_env`, `verification`, and"
         in normalized
     )
+    assert "browser-cli auth login --open" in normalized
+    assert "inspect `open_result`" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "do not report API key values" in normalized
 

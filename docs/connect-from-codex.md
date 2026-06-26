@@ -115,14 +115,16 @@ Current short-term CLI commands:
 ```bash
 browser-cli auth status
 browser-cli auth login
+browser-cli auth login --open
 browser-cli auth export-env
 browser-cli doctor --json
 ```
 
 Expected behavior after the website page exists:
 
-- `browser-cli auth login` opens or prints
-  `https://browser.lexmount.cn/connect/codex`.
+- `browser-cli auth login` prints
+  `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
+  opens it in the local default browser and reports `open_result`.
 - `browser-cli auth status` remains local and never calls the website unless a
   token-based flow is configured.
 - `browser-cli auth export-env` remains local and masks secrets by default.

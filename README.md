@@ -34,23 +34,25 @@ CLI for you:
    browser-cli auth status
 5. 如果未配置，引导我运行：
    browser-cli auth login
-6. 引导我打开 https://browser.lexmount.cn 并登录账号。
-7. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
-8. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
+6. 如果我希望直接打开本机浏览器，可以让我运行：
+   browser-cli auth login --open
+7. 引导我打开 https://browser.lexmount.cn 并登录账号。
+8. 引导我在 browser.lexmount.cn 控制台中找到当前 Project ID，并创建或复制 API Key。
+9. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
    browser-cli auth export-env
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-9. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
+10. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
    browser-cli auth export-env --from-current --reveal-secrets
    browser-cli auth export-env --reveal-secrets
    并提醒我不要把该输出粘贴到聊天里。
-10. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-11. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-12. 运行下面命令验证：
+11. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+12. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+13. 运行下面命令验证：
    browser-cli --help
    browser-cli doctor
    browser-cli session list
-13. 如果验证失败，请按顺序排查：
+14. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - browser-cli auth status 是否显示 configured 为 true
@@ -109,6 +111,7 @@ Use these local auth helpers:
 ```bash
 browser-cli auth status
 browser-cli auth login
+browser-cli auth login --open
 browser-cli auth login --project-id <project-id> --scope browser:actions --expires-in 24h
 browser-cli auth export-env
 browser-cli auth export-env --from-current
@@ -137,6 +140,7 @@ Authentication:
 ```bash
 browser-cli auth status
 browser-cli auth login
+browser-cli auth login --open
 browser-cli auth login --project-id <project-id> --scope browser:sessions --scope browser:actions --expires-in 24h
 browser-cli auth export-env
 browser-cli auth export-env --from-current --include-base-url
@@ -150,6 +154,9 @@ includes the planned `https://browser.lexmount.cn/connect/codex` URL, optional
 `project_id`, repeated `scope` query parameters, requested `expires_in`,
 expected outputs, and the browser site requirements needed before device-code or
 scoped-token login can be marked available.
+Use `auth login --open` when you want the CLI to open the Connect URL in the
+default browser; JSON output still includes `open_result` so agents can continue
+or fall back to copying the URL when the browser cannot be opened.
 
 Diagnostics:
 

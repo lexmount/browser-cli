@@ -11,6 +11,7 @@ import re
 import shutil
 import shlex
 import sys
+import webbrowser
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, NoReturn
@@ -643,6 +644,8 @@ def _auth_login_handoff(
         "login_url": LEXMOUNT_CONSOLE_URL,
         "connect_from_codex_url": connect_url,
         "connect_from_codex_available": False,
+        "open_command": "browser-cli auth login --open",
+        "open_url": connect_url,
         "install_command": "uv tool install git+https://github.com/lexmount/browser-cli.git",
         "copyable_commands": [
             "browser-cli auth status",
@@ -5184,12 +5187,33 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         scopes=scopes,
         expires_in=args.expires_in,
     )
+    open_result: dict[str, Any] = {
+        "requested": bool(args.open),
+        "url": connect_url,
+        "opened": False,
+    }
+    warnings: list[str] = []
+    if args.open:
+        try:
+            open_result["opened"] = bool(webbrowser.open(connect_url))
+        except Exception as exc:
+            open_result["error"] = _mask_sensitive_text(str(exc))
+            warnings.append(
+                "Failed to open the Connect from Codex URL automatically; copy the URL manually."
+            )
+        else:
+            if not open_result["opened"]:
+                warnings.append(
+                    "The system browser did not confirm opening the Connect from Codex URL; copy the URL manually."
+                )
     _success(
         command,
         flow="manual_env",
         login_url=LEXMOUNT_CONSOLE_URL,
         device_code_available=False,
         handoff=handoff,
+        open_result=open_result,
+        warnings=warnings,
         connect_from_codex={
             "available": False,
             "url": connect_url,
@@ -6415,6 +6439,11 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--expires-in",
         default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
         help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
+    )
+    auth_login.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the Connect from Codex URL in the default browser.",
     )
     auth_login.set_defaults(func=cmd_auth_login)
 

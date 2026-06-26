@@ -625,6 +625,8 @@ def test_auth_login_guides_manual_browser_flow(
         "https://browser.lexmount.cn/connect/codex?"
     )
     assert handoff["connect_from_codex_available"] is False
+    assert handoff["open_command"] == "browser-cli auth login --open"
+    assert handoff["open_url"] == handoff["connect_from_codex_url"]
     assert handoff["install_command"] == (
         "uv tool install git+https://github.com/lexmount/browser-cli.git"
     )
@@ -685,6 +687,12 @@ def test_auth_login_guides_manual_browser_flow(
     assert any(
         "/connect/codex" in item for item in connect["browser_site_requirements"]
     )
+    assert payload["open_result"] == {
+        "requested": False,
+        "url": connect["url"],
+        "opened": False,
+    }
+    assert payload["warnings"] == []
 
 
 def test_auth_login_builds_connect_from_codex_contract_from_args(
@@ -749,6 +757,62 @@ def test_auth_login_uses_env_project_id_for_connect_from_codex_contract(
 
     query = parse_qs(urlsplit(connect["url"]).query)
     assert query["project_id"] == ["env-project"]
+
+
+def test_auth_login_open_attempts_browser_and_reports_result(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    opened: list[str] = []
+    monkeypatch.setattr(
+        cli_module.webbrowser,
+        "open",
+        lambda url: opened.append(url) or True,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login", "--open", "--project-id", "arg-project"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    connect_url = payload["connect_from_codex"]["url"]
+    assert opened == [connect_url]
+    assert payload["open_result"] == {
+        "requested": True,
+        "url": connect_url,
+        "opened": True,
+    }
+    assert payload["handoff"]["open_command"] == "browser-cli auth login --open"
+    assert payload["handoff"]["open_url"] == connect_url
+    assert payload["warnings"] == []
+
+
+def test_auth_login_open_failure_is_non_fatal_and_masked(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret-api-key")
+
+    def fail_open(url: str) -> bool:
+        raise RuntimeError(f"failed token=abc api_key={url} secret-api-key")
+
+    monkeypatch.setattr(cli_module.webbrowser, "open", fail_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "login", "--open"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["open_result"]["requested"] is True
+    assert payload["open_result"]["opened"] is False
+    assert payload["open_result"]["url"] == payload["connect_from_codex"]["url"]
+    assert "secret-api-key" not in payload["open_result"]["error"]
+    assert "token=***" in payload["open_result"]["error"]
+    assert "api_key=***" in payload["open_result"]["error"]
+    assert payload["warnings"] == [
+        "Failed to open the Connect from Codex URL automatically; copy the URL manually."
+    ]
 
 
 def test_session_list_passes_status_filter(

@@ -107,7 +107,9 @@ CLI behavior:
 
 - Print JSON containing `verification_uri_complete`, `user_code`, `expires_at`,
   and requested scopes.
-- With `auth login --open`, open `verification_uri_complete`.
+- In the current manual handoff, `auth login --open` opens the Connect from
+  Codex URL. In the future device-code mode, the same flag should open
+  `verification_uri_complete`.
 - Poll only after displaying the approval instructions.
 
 ### 2. Browser Approval

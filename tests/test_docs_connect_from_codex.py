@@ -11,6 +11,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
 
     assert "https://browser.lexmount.cn/connect/codex" in text
     assert "browser-cli auth login" in text
+    assert "browser-cli auth login --open" in text
+    assert "open_result" in text
     assert "browser-cli auth export-env" in text
     assert "browser-cli doctor --json" in text
     assert "ready_for_browser_actions" in text

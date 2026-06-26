@@ -40,14 +40,17 @@ Use local auth helpers instead of handling secrets in chat:
 ```bash
 browser-cli auth status
 browser-cli auth login
+browser-cli auth login --open
 browser-cli auth export-env
 ```
 
 When `auth login` returns `handoff`, use it as the setup contract: open
 `connect_from_codex_url` or `login_url`, follow `copyable_commands`, require the
 listed `local_env` variables in the user's local shell, and run the
-`verification.doctor_command`. Follow `secret_policy`: never paste
-`LEXMOUNT_API_KEY`, revealed export output, or full direct URLs into chat.
+`verification.doctor_command`. Use `browser-cli auth login --open` or
+`handoff.open_command` only when the user wants the local browser opened; then
+inspect `open_result`. Follow `secret_policy`: never paste `LEXMOUNT_API_KEY`,
+revealed export output, or full direct URLs into chat.
 
 `auth export-env` prints placeholders by default. With `--from-current`, it
 still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
@@ -135,6 +138,7 @@ Authentication:
 ```bash
 browser-cli auth status
 browser-cli auth login
+browser-cli auth login --open
 browser-cli auth export-env
 browser-cli auth export-env --from-current --include-base-url
 ```
@@ -356,7 +360,10 @@ If `error` is `argument_error`, read the JSON `usage` field and rerun a
 corrected command; do not parse stderr.
 For `auth`, report credential presence, missing variables, and next steps; do
 not report API key values. For `auth login`, prefer the `handoff` object's
-`copyable_commands`, `local_env`, `verification`, and `secret_policy` fields.
+`copyable_commands`, `open_command`, `local_env`, `verification`, and
+`secret_policy` fields. If `--open` was used, inspect `open_result`; if
+`opened` is false, show the returned URL or fallback login guidance without
+blocking on the local browser.
 For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
