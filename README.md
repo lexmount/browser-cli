@@ -124,6 +124,10 @@ browser-cli action eval --session-id <session_id> --script "() => document.title
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
 browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
+browser-cli action count --session-id <session_id> --selector ".item"
+browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
+browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
+browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
@@ -138,9 +142,10 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-`get-text`, `exists`, `scroll`, `select-option`, `check`, `uncheck`, `hover`,
-`press`, `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
-`interactive-snapshot` are implemented as eval-backed DOM actions while the
+`get-text`, `exists`, `count`, `query`, `get-attribute`, `wait-text`, `scroll`,
+`select-option`, `check`, `uncheck`, `hover`, `press`, `click-text`,
+`click-role`, `fill-label`, `accessibility-snapshot`, and `interactive-snapshot`
+are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checked`, `selected`, `clicked`, or `filled` from
@@ -205,8 +210,10 @@ browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action snapshot --session-id <session_id>
 browser-cli action exists --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
+browser-cli action wait-text --session-id <session_id> --text <text>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
 browser-cli action get-text --session-id <session_id> --selector <selector>
+browser-cli action query --session-id <session_id> --selector <selector>
 browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
 ```
@@ -214,13 +221,15 @@ browser-cli session close --session-id <session_id>
 Common agent recipes:
 
 - Form submit: `interactive-snapshot` -> `fill-label` -> `select-option` or
-  `check` -> `click-role --role button --name <text>`.
+  `check` -> `wait-text` when the form reacts -> `click-role --role button --name <text>`.
 - Visible button/link: `click-role`, then `click-text`, then selector `click`
   after `exists` confirms a stable selector.
 - Menu or keyboard flow: `hover` or `press`, then inspect again with
   `interactive-snapshot`.
 - Read results: `get-text` for known selectors, or `snapshot` when the selector
   is unknown.
+- Debug candidate selectors: use `count` for cardinality, `query` for node
+  metadata, and `get-attribute` for href/value/aria checks.
 - Final evidence: `screenshot`, then close the session unless it should stay
   open.
 

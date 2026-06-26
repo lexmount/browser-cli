@@ -616,6 +616,97 @@ def _fill_label_expression(
 """.strip()
 
 
+def _wait_text_expression(
+    *,
+    text: str,
+    selector: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedText = {_js_literal(text)};
+  const selector = {selector_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const candidates = () => {{
+    const roots = selector === null
+      ? [document.body || document.documentElement].filter(Boolean)
+      : [...document.querySelectorAll(selector)];
+    return roots.filter(visible);
+  }};
+  const check = () => {{
+    const nodes = candidates();
+    const element = nodes.find((candidate) =>
+      matchesText(textOf(candidate), requestedText, exact, caseSensitive) ||
+      matchesText(accessibleName(candidate), requestedText, exact, caseSensitive)
+    );
+    const waitedMs = Date.now() - startedAt;
+    if (element) {{
+      resolve({{
+        found: true,
+        text: requestedText,
+        selector,
+        waited_ms: waitedMs,
+        candidate_count: nodes.length,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        text: requestedText,
+        selector,
+        waited_ms: waitedMs,
+        candidate_count: nodes.length
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _query_expression(
+    *,
+    selector: str,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const selector = {_js_literal(selector)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const matched = includeHidden ? all : visibleNodes;
+  const nodes = limited(matched).map(nodeInfo);
+  return {{
+    selector,
+    kind: "query",
+    include_hidden: includeHidden,
+    count: matched.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && matched.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+
+
 def cmd_action_open_url(args: argparse.Namespace) -> None:
     _run_action_command(
         args,
@@ -718,6 +809,84 @@ def cmd_action_exists(args: argparse.Namespace) -> None:
   return {{ selector, exists: Boolean(document.querySelector(selector)) }};
 }}
 """.strip(),
+    )
+
+
+def cmd_action_count(args: argparse.Namespace) -> None:
+    expression = f"""
+() => {{
+{_dom_helpers_expression(include_hidden=args.include_hidden)}
+  const selector = {_js_literal(args.selector)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const matched = includeHidden ? all : visibleNodes;
+  return {{
+    selector,
+    include_hidden: includeHidden,
+    count: matched.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.count", expression)
+
+
+def cmd_action_query(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.query",
+        _query_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        ),
+    )
+
+
+def cmd_action_get_attribute(args: argparse.Namespace) -> None:
+    attribute = _js_literal(args.name)
+    _run_eval_backed_action_command(
+        args,
+        "action.get-attribute",
+        _selector_expression(
+            args.selector,
+            f"""
+  const name = {attribute};
+  const attributeValue = element.getAttribute(name);
+  let propertyValue = null;
+  if (name in element) {{
+    const raw = element[name];
+    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
+      ? raw
+      : String(raw);
+  }}
+  return {{
+    selector,
+    found: true,
+    name,
+    value: attributeValue,
+    attribute_value: attributeValue,
+    property_value: propertyValue
+  }};
+""".rstrip(),
+        ),
+    )
+
+
+def cmd_action_wait_text(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-text",
+        _wait_text_expression(
+            text=args.text,
+            selector=args.selector,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
     )
 
 
@@ -1215,6 +1384,57 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_exists)
     action_exists.add_argument("--selector", required=True)
     action_exists.set_defaults(func=cmd_action_exists)
+
+    action_count = action_subparsers.add_parser(
+        "count",
+        help="Count selector matches",
+    )
+    _add_session_target_args(action_count)
+    action_count.add_argument("--selector", required=True)
+    action_count.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in the count.",
+    )
+    action_count.set_defaults(func=cmd_action_count)
+
+    action_query = action_subparsers.add_parser(
+        "query",
+        help="List selector matches with DOM-backed node metadata",
+    )
+    _add_session_target_args(action_query)
+    action_query.add_argument("--selector", required=True)
+    _add_snapshot_filter_args(action_query)
+    action_query.set_defaults(func=cmd_action_query)
+
+    action_get_attribute = action_subparsers.add_parser(
+        "get-attribute",
+        help="Read an attribute and simple reflected property from a selector",
+    )
+    _add_session_target_args(action_get_attribute)
+    action_get_attribute.add_argument("--selector", required=True)
+    action_get_attribute.add_argument("--name", required=True)
+    action_get_attribute.set_defaults(func=cmd_action_get_attribute)
+
+    action_wait_text = action_subparsers.add_parser(
+        "wait-text",
+        help="Wait until text appears in the page or an optional selector",
+    )
+    _add_session_target_args(action_wait_text)
+    action_wait_text.add_argument("--text", required=True)
+    action_wait_text.add_argument(
+        "--selector",
+        help="Optional selector used to scope text candidates",
+    )
+    action_wait_text.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_text.add_argument("--poll-ms", type=float, default=250)
+    action_wait_text.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes while waiting.",
+    )
+    _add_text_match_args(action_wait_text)
+    action_wait_text.set_defaults(func=cmd_action_wait_text)
 
     action_scroll = action_subparsers.add_parser(
         "scroll",

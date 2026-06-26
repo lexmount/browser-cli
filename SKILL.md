@@ -90,6 +90,10 @@ browser-cli action eval --session-id <session_id> --script "() => document.title
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
 browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action exists --session-id <session_id> --selector "button"
+browser-cli action count --session-id <session_id> --selector ".item"
+browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
+browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
+browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
@@ -104,11 +108,12 @@ browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
 Prefer these built-in actions over writing custom JavaScript. `get-text`,
-`exists`, `scroll`, `select-option`, `check`, `uncheck`, `hover`, and `press`
-plus `click-text`, `click-role`, `fill-label`, `accessibility-snapshot`, and
-`interactive-snapshot` are DOM/eval backed, so always parse their structured
-`result` fields such as `found`, `exists`, `checked`, `selected`, `clicked`,
-`filled`, `hovered`, and `pressed` before assuming the page changed.
+`exists`, `count`, `query`, `get-attribute`, `wait-text`, `scroll`,
+`select-option`, `check`, `uncheck`, `hover`, and `press` plus `click-text`,
+`click-role`, `fill-label`, `accessibility-snapshot`, and `interactive-snapshot`
+are DOM/eval backed, so always parse their structured `result` fields such as
+`found`, `exists`, `count`, `checked`, `selected`, `clicked`, `filled`,
+`hovered`, and `pressed` before assuming the page changed.
 
 For page work, choose actions in this order:
 
@@ -116,7 +121,8 @@ For page work, choose actions in this order:
    are unclear.
 2. Prefer semantic actions: `click-role` for known roles/names, `click-text` for
    visible text, and `fill-label` for labeled form fields.
-3. Use selector actions when a stable selector is known: `exists`, `get-text`,
+3. Use selector actions when a stable selector is known: `exists`, `count`,
+   `query`, `get-attribute`, `wait-text`, `get-text`,
    `wait-selector`, `click`, `type`, `select-option`, `check`, and `uncheck`.
 4. Use `scroll`, `hover`, or `press` for viewport, menu, and keyboard flows.
 5. Use `eval` only for page-local work not covered by a first-class action, and
@@ -134,8 +140,10 @@ Common task recipes:
 3. Open menus or keyboard flows: use `hover` for menus, `press` for shortcuts or
    Enter/Escape, then inspect again with `interactive-snapshot`.
 4. Read page results: use `get-text` for a known selector; use `snapshot` when
-   the page structure or selector is unknown.
-5. Capture final evidence: use `screenshot` after the action sequence and close
+   the page structure or selector is unknown; use `wait-text` before reading
+   dynamic results.
+5. Debug selectors: use `count`, `query`, and `get-attribute` before `eval`.
+6. Capture final evidence: use `screenshot` after the action sequence and close
    the session unless the user asks to keep it open.
 
 Each action must use exactly one target:

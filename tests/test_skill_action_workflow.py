@@ -30,7 +30,11 @@ def test_skill_lists_selector_and_input_actions() -> None:
     for action in (
         "`exists`",
         "`get-text`",
+        "`count`",
+        "`query`",
+        "`get-attribute`",
         "`wait-selector`",
+        "`wait-text`",
         "`click`",
         "`type`",
         "`select-option`",
@@ -60,9 +64,12 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`click-role --role button --name <text>` or `click-text`" in normalized
     assert "Click a visible control" in normalized
     assert "`click-role`, then `click-text`, then selector `click`" in normalized
+    assert "Debug selectors" in normalized
+    assert "use `count`, `query`, and `get-attribute` before `eval`" in normalized
     assert "Open menus or keyboard flows" in normalized
     assert "`hover` for menus, `press` for shortcuts" in normalized
     assert "Read page results" in normalized
     assert "`get-text` for a known selector" in normalized
+    assert "use `wait-text` before reading dynamic results" in normalized
     assert "Capture final evidence" in normalized
     assert "use `screenshot` after the action sequence" in normalized
