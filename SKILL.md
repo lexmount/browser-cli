@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, click, type, screenshot, evaluate JavaScript, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
+description: Operate Lexmount remote browser sessions through the browser-cli command line tool. Use when Codex or another agent needs to bootstrap Lexmount browser credentials, create, list, inspect, keep alive, or close Lexmount browser sessions; manage persistent browser contexts; open pages, wait for selectors, click, type, screenshot, evaluate JavaScript, or snapshot page title, URL, HTML, and body text through the CLI; or verify Lexmount browser credentials without writing custom Playwright code.
 ---
 
 # browser-cli
@@ -15,6 +15,7 @@ Check that the CLI is available:
 
 ```bash
 browser-cli --help
+browser-cli auth bootstrap
 browser-cli auth status
 ```
 
@@ -46,20 +47,23 @@ browser-cli auth device-code
 
 For credential setup, use this decision flow:
 
-1. Run `browser-cli auth status` and parse JSON.
+1. Run `browser-cli auth bootstrap` and parse JSON.
 2. If `decision.action` is `verify_access`, run `decision.next_command` before
-   browser work.
+   browser work; this is usually `browser-cli doctor --json`.
 3. If `decision.action` is `login` or `missing` includes `LEXMOUNT_API_KEY` or
    `LEXMOUNT_PROJECT_ID`, run `browser-cli auth login`. Use
    `browser-cli auth login --open` only when it is appropriate to open the
    user's local browser; otherwise show the returned `authorization_url`.
-4. Use `browser-cli auth device-code` only to inspect or integrate the future
+4. Use the returned `workflow`, `connect_from_codex`, and `safety_rules` to
+   decide whether to login, export env lines, run doctor, or start browser work.
+5. Run `browser-cli auth status` when you only need the local env state.
+6. Use `browser-cli auth device-code` only to inspect or integrate the future
    Connect from Codex device-code/OAuth contract. If it returns
    `available: false`, fall back to `browser-cli auth login`.
-5. Direct the user to set credentials in their local shell, not in chat.
-6. Use `browser-cli auth export-env` for masked shell snippets and
+7. Direct the user to set credentials in their local shell, not in chat.
+8. Use `browser-cli auth export-env` for masked shell snippets and
    `browser-cli auth export-env --reveal-secrets` only in a trusted local shell.
-7. Treat `usable: false`, `masked: true`, or `contains_secrets: true` as a signal
+9. Treat `usable: false`, `masked: true`, or `contains_secrets: true` as a signal
    not to paste output into chat, logs, docs, tests, or commits.
 
 Use this to generate local shell configuration snippets when credentials are
@@ -102,6 +106,7 @@ keep them open.
 Session lifecycle:
 
 ```bash
+browser-cli auth bootstrap
 browser-cli auth status
 browser-cli auth device-code
 browser-cli session create

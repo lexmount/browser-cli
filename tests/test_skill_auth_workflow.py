@@ -10,7 +10,20 @@ def _normalized_skill_text() -> str:
     return " ".join(SKILL_MD.read_text().split())
 
 
-def test_skill_auth_flow_starts_with_status_json() -> None:
+def test_skill_auth_flow_starts_with_bootstrap_json() -> None:
+    text = SKILL_MD.read_text()
+    normalized = _normalized_skill_text()
+
+    assert "browser-cli auth bootstrap" in text
+    assert "Run `browser-cli auth bootstrap` and parse JSON" in normalized
+    assert (
+        "Use the returned `workflow`, `connect_from_codex`, and `safety_rules`"
+        in normalized
+    )
+    assert "browser-cli doctor --json" in normalized
+
+
+def test_skill_auth_flow_keeps_status_for_env_checks() -> None:
     text = SKILL_MD.read_text()
     normalized = _normalized_skill_text()
 
@@ -18,6 +31,10 @@ def test_skill_auth_flow_starts_with_status_json() -> None:
     assert "parse JSON" in normalized
     assert "If `decision.action` is `verify_access`" in text
     assert "run `decision.next_command` before browser work" in normalized
+    assert (
+        "Run `browser-cli auth status` when you only need the local env state"
+        in normalized
+    )
     assert "If `decision.action` is `login`" in text
     assert (
         "`missing` includes `LEXMOUNT_API_KEY` or `LEXMOUNT_PROJECT_ID`" in normalized

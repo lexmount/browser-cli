@@ -295,6 +295,92 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_auth_bootstrap(args: argparse.Namespace) -> None:
+    status = _auth_status_payload(reveal_secrets=False)
+    configured = bool(status["configured"])
+    authorization_url = args.authorization_url
+    open_result: dict[str, Any]
+    if args.open and not configured:
+        open_result = _open_authorization_url(authorization_url)
+    elif args.open:
+        open_result = {
+            "requested": False,
+            "ok": None,
+            "reason": "credentials_already_configured",
+        }
+    else:
+        open_result = {"requested": False, "ok": None}
+
+    if configured:
+        decision = {
+            "action": "verify_access",
+            "reason": "credentials_configured",
+            "can_attempt_api": True,
+            "can_start_browser_work": False,
+            "requires_user_browser": False,
+            "requires_browser_lexmount_cn": False,
+            "next_command": "browser-cli doctor --json",
+            "fallback_command": "browser-cli session list",
+        }
+        workflow = [
+            "browser-cli doctor --json",
+            "browser-cli session list",
+            "browser-cli session create",
+        ]
+    else:
+        decision = {
+            "action": "login",
+            "reason": "missing_credentials",
+            "can_attempt_api": False,
+            "can_start_browser_work": False,
+            "requires_user_browser": True,
+            "requires_browser_lexmount_cn": True,
+            "missing": status["missing"],
+            "next_command": "browser-cli auth login --open"
+            if args.open
+            else "browser-cli auth login",
+            "fallback_command": "browser-cli auth export-env",
+        }
+        workflow = [
+            "browser-cli auth login --open" if args.open else "browser-cli auth login",
+            "browser-cli auth export-env",
+            "browser-cli auth status",
+            "browser-cli doctor --json",
+        ]
+
+    _success(
+        "auth.bootstrap",
+        configured=configured,
+        status=status,
+        decision=decision,
+        workflow=workflow,
+        install_command="uv tool install git+https://github.com/lexmount/browser-cli.git",
+        authorization_url=authorization_url,
+        opened=open_result,
+        connect_from_codex={
+            "available": False,
+            "authorization_url": authorization_url,
+            "manual_fallback_command": "browser-cli auth login",
+            "future_device_code_command": "browser-cli auth device-code",
+            "spec_command": "browser-cli auth connect-spec",
+            "needs_browser_lexmount_cn": [
+                "Project ID display",
+                "Scoped API key creation",
+                "Copyable env and install commands",
+                "Doctor verification guidance",
+                "Credential revoke, expiry, and scope controls",
+                "Device-code or OAuth approval endpoint",
+            ],
+        },
+        safety_rules=[
+            "Do not ask the user to paste API keys into chat.",
+            "Do not print revealed API keys unless the user is in a trusted local shell.",
+            "Prefer browser-cli doctor --json before starting browser work.",
+            "Use browser-cli auth connect-spec when implementing browser.lexmount.cn.",
+        ],
+    )
+
+
 def cmd_auth_export_env(args: argparse.Namespace) -> None:
     command = "auth.export-env"
     env_specs = [
@@ -955,6 +1041,22 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Print secret values instead of masked values. Use only locally.",
     )
     auth_status.set_defaults(func=cmd_auth_status)
+
+    auth_bootstrap = auth_subparsers.add_parser(
+        "bootstrap",
+        help="Return the first-step Codex authentication workflow decision",
+    )
+    auth_bootstrap.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the Connect from Codex page when credentials are missing.",
+    )
+    auth_bootstrap.add_argument(
+        "--authorization-url",
+        default=DEFAULT_CODEX_AUTHORIZATION_URL,
+        help="Authorization page URL. Defaults to browser.lexmount.cn Connect from Codex.",
+    )
+    auth_bootstrap.set_defaults(func=cmd_auth_bootstrap)
 
     auth_export_env = auth_subparsers.add_parser(
         "export-env",
