@@ -98,12 +98,19 @@ DOCTOR_REQUIRED_COMMANDS = (
 )
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
+    "connect_from_codex_auth",
     "one_off_page_task",
     "persistent_login_state",
 )
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
         "auth_status",
+        "doctor",
+    ),
+    "connect_from_codex_auth": (
+        "auth_status",
+        "auth_login",
+        "export_env",
         "doctor",
     ),
     "one_off_page_task": (
@@ -426,6 +433,13 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
                 "browser-cli doctor --smoke-session",
             ],
+            "connect_from_codex_auth": [
+                "browser-cli auth status",
+                "browser-cli auth login",
+                "browser-cli auth login --open",
+                "browser-cli auth export-env",
+                AGENT_DOCTOR_COMMAND,
+            ],
             "one_off_page_task": [
                 "browser-cli session create",
                 "browser-cli action open-url --session-id <session_id> --url <url>",
@@ -471,6 +485,48 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "browser_smoke_session.created",
                             "browser_smoke_session.closed",
+                        ],
+                    },
+                ],
+            },
+            "connect_from_codex_auth": {
+                "purpose": "Guide a local user through Connect from Codex credentials and verify browser readiness.",
+                "steps": [
+                    {
+                        "id": "auth_status",
+                        "command": "browser-cli auth status",
+                        "read": [
+                            "configured",
+                            "auth_source",
+                            "runtime_auth_usable",
+                            "device_token.valid",
+                        ],
+                    },
+                    {
+                        "id": "auth_login",
+                        "command": "browser-cli auth login",
+                        "read": [
+                            "connect_from_codex.url",
+                            "connect_from_codex.requested_scope_details",
+                            "handoff.setup_blocks",
+                            "handoff.verification.doctor_command",
+                        ],
+                        "on_user_action": "Open connect_from_codex.url or run browser-cli auth login --open, then paste generated env commands into the local shell only.",
+                    },
+                    {
+                        "id": "export_env",
+                        "command": "browser-cli auth export-env",
+                        "local_shell_only": True,
+                        "secret_handling": "Do not paste revealed API keys into chat, logs, docs, or commits.",
+                    },
+                    {
+                        "id": "doctor",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
                         ],
                     },
                 ],

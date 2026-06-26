@@ -46,11 +46,12 @@ returns compact command names, and `--group <name>` filters by command group.
 `--workflow <id>` returns one workflow as `workflow_id` and `workflow`; unknown
 workflow ids fail as JSON with `error=unknown_workflow` and
 `available_workflows`.
-`agent_workflows` describes ordered setup, one-off page, and persistent login
-state steps with `command`, `read`, `success_condition`, `on_failure_read`, and
-`cleanup` hints. Command entries may expose `aliases` on canonical commands plus
-`alias_of` and `canonical_name` on alias commands, so agents can map user-facing
-phrasing back to the preferred action without parsing help text.
+`agent_workflows` describes ordered setup, Connect from Codex auth, one-off
+page, and persistent login state steps with `command`, `read`,
+`success_condition`, `on_failure_read`, and `cleanup` hints. Command entries may
+expose `aliases` on canonical commands plus `alias_of` and `canonical_name` on
+alias commands, so agents can map user-facing phrasing back to the preferred
+action without parsing help text.
 
 `context pick` and session context reuse return `selection_summary` with stable
 counts such as `checked`, `metadata_matches`, `metadata_mismatches`,

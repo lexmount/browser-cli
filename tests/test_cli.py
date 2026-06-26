@@ -208,6 +208,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in workflows["setup_and_verify"]["steps"][1]["on_failure_read"]
     )
     assert workflows["setup_and_verify"]["steps"][2]["optional"] is True
+    auth_steps = workflows["connect_from_codex_auth"]["steps"]
+    assert auth_steps[1]["command"] == "browser-cli auth login"
+    assert "connect_from_codex.url" in auth_steps[1]["read"]
+    assert auth_steps[2]["local_shell_only"] is True
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
     assert one_off_steps[-1] == {
@@ -291,10 +295,14 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 3
+    assert payload["workflow_count"] == 4
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
+    )
+    assert (
+        payload["agent_workflows"]["connect_from_codex_auth"]["steps"][1]["command"]
+        == "browser-cli auth login"
     )
     assert payload["agent_workflows"]["one_off_page_task"]["steps"][-1] == {
         "id": "close_session",
@@ -348,6 +356,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["error"] == "unknown_workflow"
     assert payload["workflow"] == "missing"
     assert payload["available_workflows"] == [
+        "connect_from_codex_auth",
         "one_off_page_task",
         "persistent_login_state",
         "setup_and_verify",
@@ -468,13 +477,22 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 3
+    assert checks["command_catalog"]["workflow_count"] == 4
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
+        "connect_from_codex_auth",
         "one_off_page_task",
         "persistent_login_state",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "connect_from_codex_auth"
+    ] == [
+        "auth_status",
+        "auth_login",
+        "export_env",
+        "doctor",
+    ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "one_off_page_task"
     ] == [
@@ -560,6 +578,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-frame" in catalog["missing_required_commands"]
     assert catalog["missing_required_workflows"] == [
         "setup_and_verify",
+        "connect_from_codex_auth",
         "one_off_page_task",
         "persistent_login_state",
     ]
@@ -593,6 +612,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "setup_and_verify": {
                     "steps": [
                         {"id": "auth_status"},
+                        {"id": "doctor"},
+                    ],
+                },
+                "connect_from_codex_auth": {
+                    "steps": [
+                        {"id": "auth_status"},
+                        {"id": "auth_login"},
+                        {"id": "export_env"},
                         {"id": "doctor"},
                     ],
                 },
