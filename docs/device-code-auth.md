@@ -110,6 +110,10 @@ CLI behavior:
 - In the current manual handoff, `auth login --open` opens the Connect from
   Codex URL. In the future device-code mode, the same flag should open
   `verification_uri_complete`.
+- Current CLI behavior: `browser-cli auth login --device-code` reserves this
+  command surface but returns `available=false`,
+  `reason=browser_site_endpoint_missing`, required device-code endpoints, and a
+  manual env fallback until browser.lexmount.cn implements the flow.
 - Poll only after displaying the approval instructions.
 
 ### 2. Browser Approval
@@ -255,6 +259,7 @@ Future command behavior:
 
 ```bash
 browser-cli auth login --open
+browser-cli auth login --device-code
 browser-cli auth status
 browser-cli auth token-info
 browser-cli auth logout

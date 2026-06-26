@@ -129,6 +129,9 @@ Expected behavior after the website page exists:
 - `browser-cli auth login` prints
   `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
   opens it in the local default browser and reports `open_result`.
+- `browser-cli auth login --device-code` now returns `available=false`,
+  `reason=browser_site_endpoint_missing`, required device-code endpoints, and a
+  `fallback_handoff` until the website/API implements the device-code flow.
 - `browser-cli auth status` remains local and never calls the website unless a
   token-based flow is configured.
 - `browser-cli auth token-info` remains local and reports safe scoped-token

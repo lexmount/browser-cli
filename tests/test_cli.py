@@ -1506,6 +1506,90 @@ def test_auth_login_builds_connect_from_codex_contract_from_args(
     assert query["expires_in"] == ["24h"]
 
 
+def test_auth_login_device_code_reports_pending_browser_site_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    opened: list[str] = []
+    monkeypatch.setattr(
+        cli_module.webbrowser,
+        "open",
+        lambda url: opened.append(url) or True,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--device-code",
+                "--open",
+                "--project-id",
+                "arg-project",
+                "--scope",
+                "browser:actions",
+                "--expires-in",
+                "24h",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.login"
+    assert payload["flow"] == "device_code"
+    assert payload["available"] is False
+    assert payload["device_code_available"] is False
+    assert payload["reason"] == "browser_site_endpoint_missing"
+    assert payload["fallback_flow"] == "manual_env"
+    assert payload["fallback_handoff"]["recommended_flow"] == "manual_env"
+    assert payload["handoff"]["recommended_flow"] == "manual_env"
+    assert payload["flows"][0] == {
+        "name": "device_code",
+        "available": False,
+        "reason": "browser_site_endpoint_missing",
+        "description": "Planned browser approval flow for scoped local credentials.",
+    }
+    assert payload["flows"][1]["name"] == "manual_env"
+    assert payload["flows"][1]["available"] is True
+    assert payload["warnings"] == [
+        "Device-code login is not available yet; use the manual_env fallback until browser.lexmount.cn exposes device-code endpoints."
+    ]
+
+    device_code = payload["device_code"]
+    assert device_code["available"] is False
+    assert device_code["reason"] == "browser_site_endpoint_missing"
+    assert (
+        device_code["verification_uri"] == "https://browser.lexmount.cn/connect/codex"
+    )
+    assert device_code["project_id"] == "arg-project"
+    assert device_code["project_id_source"] == "argument"
+    assert device_code["requested_scopes"] == ["browser:actions"]
+    assert device_code["requested_expires_in"] == "24h"
+    assert "POST /api/auth/device/code" in device_code["required_endpoints"]
+    assert "POST /api/auth/device/token" in device_code["required_endpoints"]
+    assert any(
+        "bearer-token authentication" in item
+        for item in device_code["required_browser_site_support"]
+    )
+
+    connect = payload["connect_from_codex"]
+    assert connect["response"] == "device_code"
+    assert connect["url"] == device_code["connect_from_codex_url"]
+    query = parse_qs(urlsplit(connect["url"]).query)
+    assert query["project_id"] == ["arg-project"]
+    assert query["scope"] == ["browser:actions"]
+    assert query["expires_in"] == ["24h"]
+    assert query["response"] == ["device_code"]
+    assert opened == [connect["url"]]
+    assert payload["open_result"] == {
+        "requested": True,
+        "url": connect["url"],
+        "opened": True,
+    }
+    assert any("device-code endpoints" in item for item in payload["next_steps"])
+
+
 def test_auth_login_uses_env_project_id_for_connect_from_codex_contract(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

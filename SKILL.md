@@ -46,6 +46,7 @@ browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/crede
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
+browser-cli auth login --device-code
 browser-cli auth export-env
 ```
 
@@ -56,6 +57,10 @@ listed `local_env` variables in the user's local shell, and run the
 `handoff.open_command` only when the user wants the local browser opened; then
 inspect `open_result`. Follow `secret_policy`: never paste `LEXMOUNT_API_KEY`,
 revealed export output, or full direct URLs into chat.
+If the user asks for device-code login, run `browser-cli auth login --device-code`
+and parse `available`, `reason`, `device_code.required_endpoints`, and
+`fallback_handoff`; while `available` is false, guide the user through the
+manual env fallback.
 
 `auth export-env` prints placeholders by default. With `--from-current`, it
 still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
@@ -175,6 +180,7 @@ browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/crede
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
+browser-cli auth login --device-code
 browser-cli auth export-env
 browser-cli auth export-env --from-current --include-base-url
 ```

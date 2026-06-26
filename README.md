@@ -120,6 +120,7 @@ browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/crede
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
+browser-cli auth login --device-code
 browser-cli auth login --project-id <project-id> --scope browser:actions --expires-in 24h
 browser-cli auth export-env
 browser-cli auth export-env --from-current
@@ -184,6 +185,7 @@ browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/crede
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
+browser-cli auth login --device-code
 browser-cli auth login --project-id <project-id> --scope browser:sessions --scope browser:actions --expires-in 24h
 browser-cli auth export-env
 browser-cli auth export-env --from-current --include-base-url
@@ -205,6 +207,10 @@ scoped-token login can be marked available.
 Use `auth login --open` when you want the CLI to open the Connect URL in the
 default browser; JSON output still includes `open_result` so agents can continue
 or fall back to copying the URL when the browser cannot be opened.
+`auth login --device-code` reserves the future device-code command surface and
+currently returns `flow: "device_code"`, `available: false`,
+`reason: "browser_site_endpoint_missing"`, required browser/API endpoints, and a
+`fallback_handoff` for the manual env flow.
 
 Diagnostics:
 

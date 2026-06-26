@@ -1205,11 +1205,12 @@ def _connect_from_codex_url(
     project_id: str | None,
     scopes: list[str],
     expires_in: str,
+    response: str = "env",
 ) -> str:
     query: list[tuple[str, str]] = [
         ("source", "browser-cli"),
         ("intent", "agent-browser-control"),
-        ("response", "env"),
+        ("response", response),
         ("expires_in", expires_in),
     ]
     if project_id:
@@ -6344,6 +6345,12 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         scopes=scopes,
         expires_in=args.expires_in,
     )
+    device_connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+        response="device_code",
+    )
     handoff = _auth_login_handoff(
         connect_url=connect_url,
         project_id=project_id,
@@ -6351,15 +6358,16 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         scopes=scopes,
         expires_in=args.expires_in,
     )
+    open_url = device_connect_url if args.device_code else connect_url
     open_result: dict[str, Any] = {
         "requested": bool(args.open),
-        "url": connect_url,
+        "url": open_url,
         "opened": False,
     }
     warnings: list[str] = []
     if args.open:
         try:
-            open_result["opened"] = bool(webbrowser.open(connect_url))
+            open_result["opened"] = bool(webbrowser.open(open_url))
         except Exception as exc:
             open_result["error"] = _mask_sensitive_text(str(exc))
             warnings.append(
@@ -6370,6 +6378,79 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 warnings.append(
                     "The system browser did not confirm opening the Connect from Codex URL; copy the URL manually."
                 )
+    if args.device_code:
+        warnings.append(
+            "Device-code login is not available yet; use the manual_env fallback until browser.lexmount.cn exposes device-code endpoints."
+        )
+        _success(
+            command,
+            flow="device_code",
+            available=False,
+            login_url=LEXMOUNT_CONSOLE_URL,
+            device_code_available=False,
+            reason="browser_site_endpoint_missing",
+            device_code={
+                "available": False,
+                "reason": "browser_site_endpoint_missing",
+                "verification_uri": LEXMOUNT_CODEX_CONNECT_URL,
+                "connect_from_codex_url": device_connect_url,
+                "project_id": project_id,
+                "project_id_source": project_id_source,
+                "requested_scopes": scopes,
+                "requested_expires_in": args.expires_in,
+                "required_endpoints": [
+                    "POST /api/auth/device/code",
+                    "POST /api/auth/device/token",
+                ],
+                "required_browser_site_support": [
+                    "Show user_code approval UI on /connect/codex.",
+                    "Issue scoped, project-bound, short-lived access tokens.",
+                    "Issue refresh tokens with revoke and expiration metadata.",
+                    "Expose token refresh and revoke endpoints for browser-cli.",
+                    "Enable browser runtime bearer-token authentication.",
+                ],
+            },
+            handoff=handoff,
+            open_result=open_result,
+            warnings=warnings,
+            fallback_flow="manual_env",
+            fallback_handoff=handoff,
+            connect_from_codex={
+                "available": False,
+                "url": device_connect_url,
+                "project_id": project_id,
+                "project_id_source": project_id_source,
+                "requested_scopes": scopes,
+                "requested_expires_in": args.expires_in,
+                "response": "device_code",
+                "fallback": "Use the manual_env steps until browser.lexmount.cn supports device-code login.",
+            },
+            flows=[
+                {
+                    "name": "device_code",
+                    "available": False,
+                    "reason": "browser_site_endpoint_missing",
+                    "description": "Planned browser approval flow for scoped local credentials.",
+                },
+                {
+                    "name": "manual_env",
+                    "available": True,
+                    "description": "User copies Project ID and API key from browser.lexmount.cn into the local shell.",
+                },
+            ],
+            message=(
+                "Device-code login is not available yet. Use the returned "
+                "manual_env fallback handoff until browser.lexmount.cn exposes "
+                "device-code endpoints."
+            ),
+            next_steps=[
+                "Use `browser-cli auth login` or `browser-cli auth login --open` for the manual Connect from Codex handoff today.",
+                "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+                "Run `browser-cli doctor` to verify the setup.",
+                "Implement browser.lexmount.cn device-code endpoints before treating this flow as available.",
+            ],
+        )
+        return
     _success(
         command,
         flow="manual_env",
@@ -7761,6 +7842,14 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--open",
         action="store_true",
         help="Open the Connect from Codex URL in the default browser.",
+    )
+    auth_login.add_argument(
+        "--device-code",
+        action="store_true",
+        help=(
+            "Request the planned device-code login contract. Currently returns "
+            "available=false until browser.lexmount.cn exposes device-code endpoints."
+        ),
     )
     auth_login.set_defaults(func=cmd_auth_login)
 

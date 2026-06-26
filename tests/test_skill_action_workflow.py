@@ -66,6 +66,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli auth logout" in normalized
     assert "browser-cli auth login" in normalized
     assert "browser-cli auth export-env" in normalized
+    assert "browser-cli auth login --device-code" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"
         in normalized
@@ -77,6 +78,8 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     )
     assert "browser-cli auth login --open" in normalized
     assert "inspect `open_result`" in normalized
+    assert "parse `available`, `reason`, `device_code.required_endpoints`" in normalized
+    assert "manual env fallback" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "`auth status` reports `auth_source`, `runtime_auth_usable`" in normalized
     assert "Use `auth token-info --required-scope <scope>`" in normalized
