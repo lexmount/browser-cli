@@ -364,8 +364,24 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert "action.wait-dialog" in checks["command_catalog"]["required_commands"]
-    assert "action.wait-frame" in checks["command_catalog"]["required_commands"]
+    for command_name in (
+        "action.press",
+        "action.hover",
+        "action.scroll",
+        "action.get-text",
+        "action.exists",
+        "action.select-option",
+        "action.check",
+        "action.uncheck",
+        "action.click-text",
+        "action.click-role",
+        "action.fill-label",
+        "action.accessibility-snapshot",
+        "action.interactive-only-snapshot",
+        "action.wait-dialog",
+        "action.wait-frame",
+    ):
+        assert command_name in checks["command_catalog"]["required_commands"]
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "pass"
     assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "pass"
@@ -417,6 +433,8 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["status"] == "warn"
     assert catalog["schema_version"] == 1
     assert catalog["command_count"] == 3
+    assert "action.press" in catalog["missing_required_commands"]
+    assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"

@@ -126,6 +126,27 @@ def test_json_contract_documents_context_selection_decision_fields() -> None:
     assert "`decision_reason`" in text
 
 
+def test_json_contract_documents_doctor_required_action_surface() -> None:
+    text = JSON_CONTRACT.read_text()
+
+    for phrase in (
+        "press",
+        "hover",
+        "scroll",
+        "get-text",
+        "exists",
+        "select-option",
+        "check",
+        "uncheck",
+        "click-text",
+        "click-role",
+        "fill-label",
+        "accessibility snapshot",
+        "interactive-only snapshot",
+    ):
+        assert phrase in text
+
+
 def test_error_output_contract_for_configuration_errors(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

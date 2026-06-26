@@ -502,7 +502,10 @@ command catalog, environment, direct URL, API connectivity, and optional browser
 smoke-session checks. The `command_catalog` check verifies the installed CLI has
 the commands expected by the Codex Skill and reports
 `missing_required_commands` with upgrade guidance when the action surface is too
-old. It masks `api_key` in direct URLs and diagnostic error messages by default.
+old. That required surface includes selector actions, press/hover/scroll,
+get-text/exists, select/check/uncheck, role/text/label actions, accessibility
+snapshot, and interactive-only snapshot. It masks `api_key` in direct URLs and
+diagnostic error messages by default.
 `doctor --smoke-session` creates and closes a temporary session after API
 connectivity passes, then reports the `browser_smoke_session` check with
 `created`, `closed`, `session_id`, and actionable close guidance if cleanup
