@@ -123,9 +123,12 @@ After credentials are configured, run the self-check:
 
 ```bash
 browser-cli doctor
+browser-cli doctor --json
 ```
 
-Use `browser-cli doctor --skip-api` only when the live API should not be called.
+`browser-cli` output is always JSON; `doctor --json` is accepted for agent
+compatibility. Use `browser-cli doctor --skip-api` only when the live API should
+not be called.
 
 ## Commands
 
@@ -150,6 +153,7 @@ Diagnostics:
 
 ```bash
 browser-cli doctor
+browser-cli doctor --json
 browser-cli doctor --skip-api
 ```
 
@@ -339,12 +343,14 @@ Argument parsing errors also return JSON on stdout with exit code `2`:
 Agents should use the `usage` field to repair malformed commands instead of
 parsing stderr.
 
-`browser-cli doctor` returns a `checks` array with `pass`, `fail`, or `skipped`
-statuses for install/version, environment, direct URL, and API connectivity
-checks. It masks `api_key` in direct URLs and diagnostic error messages by
-default. Failed or skipped checks may include a `fix` object with a stable
-`code`, recommended `commands`, relevant `env` names, and concise `guidance`;
-agents should prefer those fields when telling the user how to repair setup.
+`browser-cli doctor` returns top-level `ok`, `failed`, and `checked` fields plus
+a `checks` array with `pass`, `fail`, or `skipped` statuses for install/version,
+environment, direct URL, and API connectivity checks. It masks `api_key` in
+direct URLs and diagnostic error messages by default. Failed or skipped checks
+may include a `fix` object with a stable `code`, recommended `commands`,
+relevant `env` names, and concise `guidance`; agents should prefer those fields
+when telling the user how to repair setup. `doctor --json` is a no-op
+compatibility flag because JSON is already the only output format.
 
 `browser-cli auth status` reports local credential presence without revealing
 the API key. `browser-cli auth export-env` returns `commands` and `script`

@@ -23,11 +23,13 @@ def test_skill_explains_doctor_status_decisions() -> None:
     text = SKILL_MD.read_text()
     normalized = _normalized_skill_text()
 
-    assert '`status: "pass"`' in text
-    assert '`status: "warn"`' in text
-    assert '`status: "fail"` or `ok: false`' in text
-    assert "continue only when all failed checks have `severity:" in normalized
-    assert "stop before creating sessions and follow `next_steps`" in normalized
+    assert "`ok: true` and `failed: 0`" in text
+    assert "`ok: false`" in text
+    assert '`status: "fail"`' in text
+    assert '`status: "skipped"`' in text
+    assert "continue with browser work" in normalized
+    assert "stop before creating sessions, inspect `checks`" in normalized
+    assert "follow each check's `fix` object" in normalized
 
 
 def test_skill_limits_skip_api_to_non_proof_checks() -> None:

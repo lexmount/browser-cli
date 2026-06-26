@@ -234,6 +234,32 @@ def test_doctor_skip_api_does_not_call_admin(
     }
 
 
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["doctor", "--json", "--skip-api"],
+        ["--json", "doctor", "--skip-api"],
+    ],
+)
+def test_doctor_accepts_json_compatibility_flag(
+    argv: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(argv)
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "doctor"
+    assert _checks_by_name(payload)["api_connectivity"]["status"] == "skipped"
+
+
 def test_doctor_masks_api_error_messages(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

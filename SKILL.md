@@ -55,13 +55,14 @@ browser-cli doctor --json
 
 Run `browser-cli doctor --json` before the first browser action in a thread,
 after credential changes, or when a session/context/action command fails for an
-unclear reason. Parse the JSON before deciding what to do:
+unclear reason. `--json` is accepted for compatibility; browser-cli output is
+always JSON. Parse the JSON before deciding what to do:
 
-- `status: "pass"`: continue with browser work.
-- `status: "warn"`: continue only when all failed checks have `severity:
-  "warning"` and the warning does not block the requested task.
-- `status: "fail"` or `ok: false`: stop before creating sessions and follow
-  `next_steps`.
+- `ok: true` and `failed: 0`: continue with browser work.
+- `ok: false`: stop before creating sessions, inspect `checks` with
+  `status: "fail"`, and follow each check's `fix` object when present.
+- `api_connectivity` with `status: "skipped"`: do not treat live API access as
+  verified.
 
 Use `browser-cli doctor --skip-api` only for offline setup checks or when the
 user explicitly asks to avoid a live API call. Do not treat a skipped API check

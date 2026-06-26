@@ -6190,6 +6190,11 @@ def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Check browser-cli install, credentials, direct URL, and API connectivity",
     )
     doctor.add_argument(
+        "--json",
+        action="store_true",
+        help="Accepted for compatibility; browser-cli output is always JSON.",
+    )
+    doctor.add_argument(
         "--skip-api",
         action="store_true",
         help="Skip the live Lexmount API connectivity check.",
@@ -6243,6 +6248,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(
         description="Lexmount browser operation CLI",
         prog="browser-cli",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Accepted for compatibility; browser-cli output is always JSON.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
