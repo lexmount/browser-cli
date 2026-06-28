@@ -40,6 +40,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "refresh" in prompt
     assert "login" in prompt
     assert "connect-requirements" in prompt
+    assert "device-code --wait only after approval instructions are visible" in prompt
     assert "doctor --json" in prompt
     assert "commands" in prompt
     assert "commands --workflow" in prompt
@@ -60,6 +61,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "custom JavaScript" in prompt
     assert "status-check/dry-run" in prompt
     assert "persistent contexts" in prompt
+    assert "local_registry metadata diagnostics" in prompt
     assert "sessions/actions" in prompt
     assert "JSON output" in prompt
     assert "secrets" in prompt

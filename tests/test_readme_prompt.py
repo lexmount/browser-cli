@@ -43,6 +43,9 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli auth scopes --include-site-contract" in prompt
     assert "browser-cli auth connect-requirements" in prompt
     assert "browser-cli auth login" in prompt
+    assert "browser-cli auth login --device-code" in prompt
+    assert "browser-cli auth login --device-code --wait" in prompt
+    assert "available=false 时使用 manual env fallback" in prompt
     assert "browser-cli commands --workflows-only" in prompt
     assert "browser-cli reference list" in prompt
     assert "browser-cli reference get --id action_playbook --metadata-only" in prompt

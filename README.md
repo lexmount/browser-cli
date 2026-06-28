@@ -62,6 +62,10 @@ CLI for you:
    browser-cli auth login
 11. 如果我希望直接打开本机浏览器，可以让我运行：
    browser-cli auth login --open
+   如果我明确要求 device-code/OAuth 授权，先运行：
+   browser-cli auth login --device-code
+   读取 available、reason、device_code、polling、credentials 和 fallback_handoff；available=false 时使用 manual env fallback。只有在端点已配置且授权说明已经显示后，才让我运行：
+   browser-cli auth login --device-code --wait
 12. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
 13. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
 14. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
