@@ -452,6 +452,7 @@ browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action table-snapshot --session-id <session_id> --selector ".report" --max-rows 50 --max-cells 20
 browser-cli action list-snapshot --session-id <session_id> --selector ".results" --max-items 50
@@ -486,7 +487,7 @@ the boundary for custom JavaScript.
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
-`click-index`, `fill-label`,
+`click-index`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -497,7 +498,8 @@ such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
 `matched`, `state_values`, `attribute_found`, `requested_value`, `network_idle`,
 `quiet_ms`, `submitted`, `dispatched`, `dispatched_events`, `fields`,
 `value_masked`, `file_input`, `file_count`, `requested_files`, `bounding_box`,
-`in_viewport`, `index`, `attributes`, `html_truncated`, `requested_option_label`,
+`in_viewport`, `index`, `attributes`, `html_truncated`, `candidate_count`,
+`candidates`, `writable`, `requested_option_label`,
 `option_found`, `option_label`, `requested_checked`, `previous_checked`,
 `changed`, `links`, `link_count`, `href`, `href_masked`, `absolute_url`,
 `absolute_url_masked`, `same_origin`, `external`, `download`,
@@ -720,7 +722,7 @@ browser-cli session close --session-id <session_id>
 
 Common agent recipes:
 
-- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`,
+- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,
   `set-value`, `set-file-input`, or `clear` -> `wait-value` or `get-value` ->
   `blur` if validation is focus-driven -> `select-label`, `select-option`,
   `check-label`, or `check` -> `wait-state --state enabled` or `wait-role` for

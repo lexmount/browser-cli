@@ -528,6 +528,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.fields" in form_steps[1]["read"]
     assert "result.field_count" in form_steps[1]["read"]
     assert "result.filled" in form_steps[2]["read"]
+    assert "browser-cli action fill-role" in form_steps[2]["alternative_commands"][0]
     assert form_steps[3]["optional"] is True
     assert "result.option_found" in form_steps[3]["read"]
     assert form_steps[4]["optional"] is True
@@ -621,6 +622,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.press-key",
         "action.click-role",
         "action.fill-label",
+        "action.fill-role",
         "action.link-snapshot",
         "action.table-snapshot",
         "action.list-snapshot",
@@ -651,6 +653,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert action_guide["required_options"] == []
     assert action_guide["required_one_of"] == []
     assert any("--task" in option["flags"] for option in action_guide["options"])
+    fill_role = commands["action.fill-role"]
+    assert "--role" in fill_role["required_options"]
+    assert "--text" in fill_role["required_options"]
+    assert any("--name" in option["flags"] for option in fill_role["options"])
     interactive = commands["action.interactive-snapshot"]
     interactive_only = commands["action.interactive-only-snapshot"]
     assert interactive["aliases"] == ["action.interactive-only-snapshot"]
@@ -743,6 +749,11 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
 
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
+    assert "fill-role" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action fill-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
     assert (
         "browser-cli action dispatch-event --session-id <session_id> "
         '--selector "<selector>" --event input --event change'
@@ -1336,6 +1347,10 @@ def test_commands_catalog_returns_form_interaction_workflow(
     )
     assert payload["workflow"]["steps"][2]["id"] == "fill_labeled_field"
     assert "result.filled" in payload["workflow"]["steps"][2]["read"]
+    assert (
+        "browser-cli action fill-role"
+        in payload["workflow"]["steps"][2]["alternative_commands"][0]
+    )
     assert payload["workflow"]["steps"][-1]["id"] == "verify_result"
     assert payload["workflow"]["steps"][-1]["optional"] is True
     assert (
@@ -1872,6 +1887,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.click-text",
         "action.click-role",
         "action.fill-label",
+        "action.fill-role",
         "action.accessibility-snapshot",
         "action.interactive-only-snapshot",
         "action.wait-dialog",
@@ -6180,6 +6196,21 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
         (
             [
                 "action",
+                "fill-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Password",
+                "--text",
+                "fake-secret",
+            ],
+            ["text_masked", "previous_value_masked", "value_masked"],
+        ),
+        (
+            [
+                "action",
                 "inspect",
                 "--session-id",
                 "s1",
@@ -7118,6 +7149,36 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "found": True,
                 "filled": True,
                 "label": "Email",
+                "value": "user@example.test",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "fill-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Email",
+                "--text",
+                "user@example.test",
+            ],
+            "action.fill-role",
+            {
+                "found": True,
+                "filled": True,
+                "role": "textbox",
+                "name": "Email",
+                "value": "user@example.test",
+            },
+            {
+                "found": True,
+                "filled": True,
+                "role": "textbox",
+                "name": "Email",
                 "value": "user@example.test",
                 "url": "https://example.test",
             },

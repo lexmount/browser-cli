@@ -116,9 +116,9 @@ The interactive targeting workflow exposes `selection_order`,
 `preferred_commands`, and `alternative_commands` so agents can choose
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of
 writing JavaScript.
-The form interaction workflow exposes form snapshots, labeled fill/select/check
-steps, submit readiness, and verification fields so agents can complete forms
-without custom JavaScript.
+The form interaction workflow exposes form snapshots, labeled and role/name
+fill steps, labeled select/check steps, submit readiness, and verification
+fields so agents can complete forms without custom JavaScript.
 The page diagnostics workflow also exposes console/network capture steps and
 visible-state fallback commands so agents can reproduce a suspected issue before
 reading `result.entries`, `result.entry_count`, and masked diagnostic fields.
@@ -247,7 +247,7 @@ Default behavior:
   required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, hover, scroll,
   get-text, exists, select-option, check, uncheck, click-text, click-role,
-  fill-label, accessibility snapshot, and interactive-only snapshot.
+  fill-label, fill-role, accessibility snapshot, and interactive-only snapshot.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
   `connect_from_codex` with a safe `/connect/codex` URL, `open_command`,
   requested scopes, setup blocks, and verification commands. This handoff must

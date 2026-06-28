@@ -133,6 +133,7 @@ browser-cli commands --workflow form_interaction
 browser-cli action guide --task form_interaction
 browser-cli action form-snapshot --session-id <session_id> --selector form
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 ```
 
@@ -229,7 +230,7 @@ active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
 actions such as `wait-role`, `click-role`, `click-text`,
-`fill-label`, `select-label`, `check-label`, `interactive-snapshot`, and
+`fill-label`, `fill-role`, `select-label`, `check-label`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as

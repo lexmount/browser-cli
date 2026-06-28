@@ -86,6 +86,7 @@ browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 ```
 
 Inspection and diagnostics:
@@ -138,7 +139,7 @@ Prefer built-in actions over writing custom JavaScript. `page-info`, `reload`,
 `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
 `scroll-into-view`, `bounding-box`, `select-option`, `select-label`, `check`,
 `uncheck`, `check-label`, `uncheck-label`, `hover`, `press`, and `press-key`
-plus `click-text`, `click-role`, `click-index`, `fill-label`, `link-snapshot`,
+plus `click-text`, `click-role`, `click-index`, `fill-label`, `fill-role`, `link-snapshot`,
 `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
 `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`,
 `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`,
@@ -153,7 +154,8 @@ Important result fields include `found`, `exists`, `count`, `checked`,
 `requested_value`, `network_idle`, `quiet_ms`, `submitted`, `hovered`,
 `pressed`, `dispatched`, `dispatched_events`, `fields`, `value_masked`,
 `file_input`, `file_count`, `requested_files`, `bounding_box`, `in_viewport`,
-`index`, `attributes`, `html_truncated`, `total_candidate_count`,
+`index`, `attributes`, `html_truncated`, `candidate_count`, `candidates`,
+`writable`, `total_candidate_count`,
 `requested_option_label`, `option_found`, `option_label`, `requested_checked`,
 `previous_checked`, `changed`, `links`, `link_count`, `href`, `href_masked`,
 `absolute_url`, `absolute_url_masked`, `same_origin`, `external`, `download`,
@@ -209,7 +211,8 @@ console/page error entries and the reported page URL.
    known roles/names, `click-text` for visible text, `click-index` for a chosen
    repeated selector match, `link-snapshot` for choosing or reporting navigation
    URLs, `list-snapshot` for reading list/menu item state, `fill-label` for
-   labeled text fields, `select-label` for labeled native selects, and
+   labeled text fields, `fill-role` for writable role/name fields,
+   `select-label` for labeled native selects, and
    `check-label` for labeled checkbox or switch controls.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
    `wait-count`, `wait-state`, `query`, `inspect`, `get-attribute`,
@@ -242,8 +245,9 @@ console/page error entries and the reported page URL.
 1. Fill and submit a form: run `browser-cli commands --workflow
    form_interaction` and `browser-cli action guide --task form_interaction`,
    then run `form-snapshot` or `interactive-snapshot`, use `fill-label` for
-   labeled fields, `set-value` for stable selectors, and `set-file-input` for
-   upload controls; `clear` before replacement text when needed, use
+   labeled fields, `fill-role` for accessible role/name textboxes,
+   `set-value` for stable selectors, and `set-file-input` for upload controls;
+   `clear` before replacement text when needed, use
    `get-value` or `wait-value` to confirm form state, use `blur` for
    focus-driven validation, use `select-label` for labeled selects,
    `select-option` or `check` for stable selector controls, prefer

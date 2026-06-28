@@ -105,6 +105,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.click-text",
     "action.click-role",
     "action.fill-label",
+    "action.fill-role",
     "action.accessibility-snapshot",
     "action.interactive-snapshot",
     "action.interactive-only-snapshot",
@@ -752,6 +753,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action guide --task form_interaction",
                 "browser-cli action form-snapshot --session-id <session_id> --selector form",
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
+                'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
             ],
             "interactive_targeting": [
@@ -1440,6 +1442,9 @@ def _command_catalog() -> dict[str, Any]:
                             "result.filled",
                             "result.value_masked",
                         ],
+                        "alternative_commands": [
+                            'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
+                        ],
                     },
                     {
                         "id": "choose_labeled_option",
@@ -1542,7 +1547,7 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "reproduce_issue",
-                        "command": "<run the browser action that should be diagnosed, such as click-role, click-text, fill-label, or form_interaction>",
+                        "command": "<run the browser action that should be diagnosed, such as click-role, click-text, fill-label, fill-role, or form_interaction>",
                         "agent_action": True,
                     },
                     {
@@ -4257,6 +4262,103 @@ def _fill_label_expression(
       ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
       : null,
     label_element: match.label_element,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _fill_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    text: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const text = {_js_literal(text)};
+  const nameSuggestsSensitive = sensitiveText(requestedName);
+  const nameSafeText = nameSuggestsSensitive && text !== "" ? "***" : text;
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const fieldSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true'], [role]";
+  const candidates = [...document.querySelectorAll(fieldSelector)].filter(visible);
+  const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+  const element = roleMatches.find((candidate) =>
+    requestedName === null ||
+    matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+  );
+  if (!element) {{
+    return {{
+      found: false,
+      filled: false,
+      role: requestedRole,
+      name: requestedName,
+      text: nameSafeText,
+      text_masked: nameSafeText !== text,
+      text_length: nameSafeText !== text ? String(text ?? "").length : null,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  const writable = element.isContentEditable || "value" in element;
+  if (!writable) {{
+    return {{
+      found: true,
+      filled: false,
+      writable: false,
+      role: requestedRole,
+      name: requestedName,
+      text: maskValue(element, text),
+      text_masked: shouldMaskValue(element, text),
+      text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+      candidate_count: roleMatches.length,
+      element: nodeInfo(element),
+      error: "not_writable",
+      message: "Matched element does not expose a writable value or contenteditable surface."
+    }};
+  }}
+  const previousValue = element.isContentEditable ? element.textContent : element.value;
+  element.focus?.();
+  if (element.isContentEditable) {{
+    element.textContent = text;
+  }} else {{
+    element.value = text;
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  return {{
+    found: true,
+    filled: true,
+    writable: true,
+    role: requestedRole,
+    name: requestedName,
+    text: maskValue(element, text),
+    text_masked: shouldMaskValue(element, text),
+    text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_masked: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_length: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    )
+      ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
+      : null,
+    candidate_count: roleMatches.length,
     element: nodeInfo(element)
   }};
 }}
@@ -9517,6 +9619,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "selection_order": [
                 "form-snapshot",
                 "fill-label",
+                "fill-role",
                 "select-label",
                 "check-label",
                 "click-role",
@@ -9529,6 +9632,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "preferred_commands": [
                 'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
+                'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
                 'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
                 'browser-cli action check-label --session-id <session_id> --label "<label>"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
@@ -9546,6 +9650,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "read_fields": [
                 "result.fields",
                 "result.filled",
+                "result.role",
+                "result.name",
                 "result.selected",
                 "result.checked",
                 "result.clicked",
@@ -10713,6 +10819,20 @@ def cmd_action_fill_label(args: argparse.Namespace) -> None:
         "action.fill-label",
         _fill_label_expression(
             label=args.label,
+            text=args.text,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_fill_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.fill-role",
+        _fill_role_expression(
+            role=args.role,
+            name=args.name,
             text=args.text,
             exact=args.exact,
             case_sensitive=args.case_sensitive,
@@ -13785,6 +13905,17 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_fill_label.add_argument("--text", required=True)
     _add_text_match_args(action_fill_label)
     action_fill_label.set_defaults(func=cmd_action_fill_label)
+
+    action_fill_role = action_subparsers.add_parser(
+        "fill-role",
+        help="Fill a writable element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_fill_role)
+    action_fill_role.add_argument("--role", required=True)
+    action_fill_role.add_argument("--name")
+    action_fill_role.add_argument("--text", required=True)
+    _add_text_match_args(action_fill_role)
+    action_fill_role.set_defaults(func=cmd_action_fill_role)
 
     action_form_snapshot = action_subparsers.add_parser(
         "form-snapshot",

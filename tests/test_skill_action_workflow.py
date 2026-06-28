@@ -65,6 +65,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`click-text` for visible text" in normalized
     assert "`click-index` for a chosen repeated selector match" in normalized
     assert "`fill-label` for labeled text fields" in normalized
+    assert "`fill-role` for writable role/name fields" in normalized
     assert "`select-label` for labeled native selects" in normalized
     assert "`check-label` for labeled checkbox or switch controls" in normalized
     assert (
@@ -347,6 +348,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
+        "`fill-role`",
     ):
         assert action in normalized
 
@@ -382,6 +384,9 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
     assert "`index`" in normalized
     assert "`attributes`" in normalized
     assert "`html_truncated`" in normalized
+    assert "`candidate_count`" in normalized
+    assert "`candidates`" in normalized
+    assert "`writable`" in normalized
     assert "`total_candidate_count`" in normalized
     assert "`requested_option_label`" in normalized
     assert "`option_found`" in normalized
@@ -501,6 +506,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
     assert "use `outline-snapshot` for page structure" in normalized
     assert "`fill-label` for labeled fields" in normalized
+    assert "`fill-role` for accessible role/name textboxes" in normalized
     assert "`set-value` for stable selectors" in normalized
     assert "`set-file-input` for upload controls" in normalized
     assert "`clear` before replacement text" in normalized
