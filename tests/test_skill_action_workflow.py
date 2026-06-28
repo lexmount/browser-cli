@@ -4,14 +4,41 @@ from pathlib import Path
 
 
 SKILL_MD = Path(__file__).resolve().parents[1] / "SKILL.md"
+ACTION_PLAYBOOK = (
+    Path(__file__).resolve().parents[1] / "references" / "action-playbook.md"
+)
 
 
 def _normalized_skill_text() -> str:
     return " ".join(SKILL_MD.read_text().split())
 
 
-def test_skill_prefers_semantic_actions_before_eval() -> None:
+def _normalized_action_playbook_text() -> str:
+    return " ".join(ACTION_PLAYBOOK.read_text().split())
+
+
+def _normalized_skill_and_action_text() -> str:
+    return " ".join([_normalized_skill_text(), _normalized_action_playbook_text()])
+
+
+def test_skill_routes_action_details_to_reference() -> None:
+    skill_text = SKILL_MD.read_text()
     normalized = _normalized_skill_text()
+    action_text = _normalized_action_playbook_text()
+
+    assert len(skill_text.splitlines()) < 500
+    assert (
+        "[references/action-playbook.md](references/action-playbook.md)" in skill_text
+    )
+    assert "Read that reference when selecting between semantic actions" in normalized
+    assert "structured `result` fields" in normalized
+    assert "Action command examples" in action_text
+    assert "Common task recipes" in action_text
+    assert "Target Contract" in ACTION_PLAYBOOK.read_text()
+
+
+def test_skill_prefers_semantic_actions_before_eval() -> None:
+    normalized = _normalized_action_playbook_text()
 
     assert "Inspect with `snapshot`, then `interactive-snapshot`" in normalized
     assert "interactive-only-snapshot` alias" in normalized
@@ -208,7 +235,7 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
 
 
 def test_skill_documents_failure_payload_masking() -> None:
-    normalized = _normalized_skill_text()
+    normalized = _normalized_skill_and_action_text()
 
     assert "Failure messages and payloads mask `api_key`" in normalized
     assert "token-like query parameters" in normalized
@@ -220,7 +247,7 @@ def test_skill_documents_failure_payload_masking() -> None:
 
 
 def test_skill_lists_selector_and_input_actions() -> None:
-    normalized = _normalized_skill_text()
+    normalized = _normalized_action_playbook_text()
 
     for action in (
         "`exists`",
@@ -290,7 +317,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
 
 
 def test_skill_reinspects_after_failed_structured_results() -> None:
-    normalized = _normalized_skill_text()
+    normalized = _normalized_action_playbook_text()
 
     assert "`result.found`" in normalized
     assert "`result.exists`" in normalized
@@ -426,7 +453,7 @@ def test_skill_reinspects_after_failed_structured_results() -> None:
 
 
 def test_skill_includes_common_task_recipes() -> None:
-    normalized = _normalized_skill_text()
+    normalized = _normalized_action_playbook_text()
 
     assert "Common task recipes" in normalized
     assert "Fill and submit a form" in normalized
