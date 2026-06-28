@@ -367,6 +367,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["file_upload"]
     )
     assert (
+        "browser-cli action guide --task dialog_frame_handling"
+        in payload["agent_entrypoints"]["dialog_frame_handling"]
+    )
+    assert (
+        "browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 40 --max-controls 40"
+        in payload["agent_entrypoints"]["dialog_frame_handling"]
+    )
+    assert (
+        'browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 40 --max-chars 1000'
+        in payload["agent_entrypoints"]["dialog_frame_handling"]
+    )
+    assert (
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
         in payload["agent_entrypoints"]["interactive_targeting"]
     )
@@ -728,6 +740,47 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert upload_steps[4]["optional"] is True
     assert upload_steps[4]["user_requested_only"] is True
     assert "browser-cli action submit" in upload_steps[4]["fallback_commands"][0]
+    dialog_steps = workflows["dialog_frame_handling"]["steps"]
+    assert [step["id"] for step in dialog_steps] == [
+        "inspect_action_guide",
+        "inspect_page_context",
+        "inspect_or_wait_dialog",
+        "handle_dialog_control",
+        "inspect_or_wait_frame",
+        "verify_result",
+    ]
+    assert dialog_steps[0]["command"] == (
+        "browser-cli action guide --task dialog_frame_handling"
+    )
+    assert "guide.read_fields" in dialog_steps[0]["read"]
+    assert dialog_steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "visibility_state" in dialog_steps[1]["read"]
+    assert dialog_steps[2]["optional"] is True
+    assert "browser-cli action wait-dialog" in dialog_steps[2]["command"]
+    assert "result.controls" in dialog_steps[2]["read"]
+    assert "result.control_count" in dialog_steps[2]["read"]
+    assert "browser-cli action dialog-snapshot" in dialog_steps[2][
+        "alternative_commands"
+    ][0]
+    assert dialog_steps[3]["optional"] is True
+    assert dialog_steps[3]["agent_action"] is True
+    assert "result.clicked" in dialog_steps[3]["read"]
+    assert "browser-cli action click-text" in dialog_steps[3][
+        "alternative_commands"
+    ][0]
+    assert dialog_steps[4]["optional"] is True
+    assert "browser-cli action wait-frame" in dialog_steps[4]["command"]
+    assert "result.readable" in dialog_steps[4]["read"]
+    assert "result.same_origin" in dialog_steps[4]["read"]
+    assert "result.read_error" in dialog_steps[4]["read"]
+    assert "browser-cli action frame-snapshot" in dialog_steps[4][
+        "alternative_commands"
+    ][0]
+    assert "browser-cli action dialog-snapshot" in dialog_steps[5][
+        "fallback_commands"
+    ][0]
     targeting_steps = workflows["interactive_targeting"]["steps"]
     assert [step["id"] for step in targeting_steps] == [
         "inspect_action_guide",
@@ -1119,10 +1172,11 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 7,
+        "task_count": 8,
         "tasks": [
             "browser_state_management",
             "content_extraction",
+            "dialog_frame_handling",
             "file_upload",
             "form_interaction",
             "interactive_targeting",
@@ -1150,6 +1204,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["available_tasks"] == [
         "browser_state_management",
         "content_extraction",
+        "dialog_frame_handling",
         "file_upload",
         "form_interaction",
         "interactive_targeting",
@@ -1291,6 +1346,40 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "result.file_count" in payload["guide"]["read_fields"]
     assert "OS picker" in payload["guide"]["custom_js_boundary"]
     assert payload["next_commands"][0] == "browser-cli commands --workflow file_upload"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "dialog_frame_handling"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "dialog_frame_handling",
+        "interactive_targeting",
+        "page_diagnostics",
+    ]
+    assert payload["guide"]["selection_order"][:3] == [
+        "page-info",
+        "wait-dialog",
+        "dialog-snapshot",
+    ]
+    assert "wait-frame" in payload["guide"]["selection_order"]
+    assert "frame-snapshot" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action wait-dialog" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action frame-snapshot" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert "result.dialogs" in payload["guide"]["read_fields"]
+    assert "result.controls" in payload["guide"]["read_fields"]
+    assert "result.frames" in payload["guide"]["read_fields"]
+    assert "result.readable" in payload["guide"]["read_fields"]
+    assert "cross-origin frames" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"][0] == (
+        "browser-cli commands --workflow dialog_frame_handling"
+    )
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "page_diagnostics"])
@@ -1454,6 +1543,7 @@ def test_action_guide_fails_unknown_task_as_json(
     assert payload["available_tasks"] == [
         "browser_state_management",
         "content_extraction",
+        "dialog_frame_handling",
         "file_upload",
         "form_interaction",
         "interactive_targeting",
@@ -1476,7 +1566,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 16
+    assert payload["workflow_count"] == 17
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1557,6 +1647,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.requested_files"
         in payload["agent_workflows"]["file_upload"]["steps"][2]["read"]
+    )
+    assert (
+        "result.frames"
+        in payload["agent_workflows"]["dialog_frame_handling"]["steps"][4]["read"]
     )
     assert (
         "result.nodes"
@@ -2200,6 +2294,42 @@ def test_commands_catalog_returns_file_upload_workflow(
     assert steps[-1]["user_requested_only"] is True
 
 
+def test_commands_catalog_returns_dialog_frame_handling_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "dialog_frame_handling"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "dialog_frame_handling"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_page_context",
+        "inspect_or_wait_dialog",
+        "handle_dialog_control",
+        "inspect_or_wait_frame",
+        "verify_result",
+    ]
+    assert steps[0]["command"] == (
+        "browser-cli action guide --task dialog_frame_handling"
+    )
+    assert "guide.read_fields" in steps[0]["read"]
+    assert "browser-cli action wait-dialog" in steps[2]["command"]
+    assert "result.controls" in steps[2]["read"]
+    assert "browser-cli action click-role" in steps[3]["command"]
+    assert steps[3]["agent_action"] is True
+    assert "browser-cli action wait-frame" in steps[4]["command"]
+    assert "result.same_origin" in steps[4]["read"]
+    assert "result.read_error" in steps[4]["read"]
+    assert "browser-cli action guide --task dialog_frame_handling" in payload[
+        "agent_entrypoints"
+    ]["dialog_frame_handling"][0]
+
+
 def test_commands_catalog_returns_device_code_auth_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2641,6 +2771,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "connect_from_codex_site_requirements",
         "content_extraction",
         "device_code_auth",
+        "dialog_frame_handling",
         "file_upload",
         "form_interaction",
         "interactive_targeting",
@@ -2807,7 +2938,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 16
+    assert checks["command_catalog"]["workflow_count"] == 17
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -2821,6 +2952,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "browser_state_management",
         "form_interaction",
         "file_upload",
+        "dialog_frame_handling",
         "interactive_targeting",
         "content_extraction",
         "state_waits",
@@ -2927,6 +3059,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "submit_if_requested",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
+        "dialog_frame_handling"
+    ] == [
+        "inspect_action_guide",
+        "inspect_page_context",
+        "inspect_or_wait_dialog",
+        "handle_dialog_control",
+        "inspect_or_wait_frame",
+        "verify_result",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
         "interactive_targeting"
     ] == [
         "inspect_action_guide",
@@ -3012,7 +3154,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.cookie-delete",
         "action.cookie-clear",
         "action.wait-cookie",
+        "action.dialog-snapshot",
         "action.wait-dialog",
+        "action.frame-snapshot",
         "action.wait-frame",
         "reference.list",
         "reference.get",
@@ -3155,7 +3299,9 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.cookie-delete" in catalog["missing_required_commands"]
     assert "action.cookie-clear" in catalog["missing_required_commands"]
     assert "action.wait-cookie" in catalog["missing_required_commands"]
+    assert "action.dialog-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
+    assert "action.frame-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
     assert "reference.list" in catalog["missing_required_commands"]
     assert "reference.get" in catalog["missing_required_commands"]
@@ -3179,6 +3325,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "browser_state_management",
         "form_interaction",
         "file_upload",
+        "dialog_frame_handling",
         "interactive_targeting",
         "content_extraction",
         "state_waits",
@@ -3437,6 +3584,15 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "verify_upload_state"},
                     ],
                 },
+                "dialog_frame_handling": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_page_context"},
+                        {"id": "inspect_or_wait_dialog"},
+                        {"id": "handle_dialog_control"},
+                        {"id": "inspect_or_wait_frame"},
+                    ],
+                },
                 "interactive_targeting": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -3500,6 +3656,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "setup_and_verify": ["smoke_session"],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
+        "dialog_frame_handling": ["verify_result"],
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],
     }

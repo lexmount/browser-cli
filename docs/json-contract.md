@@ -235,7 +235,7 @@ Default behavior:
   command.
 - `action guide` reports compact action routes for `form_interaction`,
   `interactive_targeting`, `content_extraction`, `browser_state_management`,
-  `file_upload`, `page_diagnostics`, and `state_waits`, including
+  `file_upload`, `dialog_frame_handling`, `page_diagnostics`, and `state_waits`, including
   inspect, preferred, fallback, and verification commands plus the custom
   JavaScript boundary for each task. Page diagnostics can include
   `set-viewport` to stabilize responsive screenshots and layout checks.
@@ -251,6 +251,9 @@ Default behavior:
   File upload should expose first-class `form-snapshot`, `inspect`, and
   `set-file-input` routes so agents can attach local files without clicking OS
   file pickers or writing upload-specific JavaScript.
+  Dialog/frame handling should expose first-class `dialog-snapshot`,
+  `wait-dialog`, `frame-snapshot`, and `wait-frame` routes so agents can handle
+  modal prompts and embedded apps before custom JavaScript.
   State waits should expose first-class `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
   `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and
@@ -315,7 +318,8 @@ Default behavior:
   select-option, select-role, check, uncheck, check-role,
   uncheck-role, click-text, click-role,
   focus-role, fill-label, fill-role, get-value-role, wait-value-role,
-  link-snapshot, table-snapshot, list-snapshot, text-snapshot, outline-snapshot,
+  link-snapshot, table-snapshot, list-snapshot, text-snapshot, dialog-snapshot,
+  wait-dialog, frame-snapshot, wait-frame, outline-snapshot,
   storage-get, storage-set, storage-remove, storage-clear, wait-storage,
   cookie-get, cookie-set, cookie-delete, cookie-clear, wait-cookie, blur-role,
   clear-role, set-file-input, form-snapshot,

@@ -108,6 +108,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli commands --workflow browser_state_management" in normalized
     assert "browser-cli commands --workflow file_upload" in normalized
+    assert "browser-cli commands --workflow dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task <task>" in normalized
@@ -117,6 +118,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli action guide --task content_extraction" in normalized
     assert "browser-cli action guide --task browser_state_management" in normalized
     assert "browser-cli action guide --task file_upload" in normalized
+    assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
     assert "browser-cli commands --names-only" in normalized
@@ -311,6 +313,8 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "For file uploads" in normalized
     assert "browser-cli commands --workflow file_upload" in normalized
     assert "browser-cli action guide --task file_upload" in normalized
+    assert "browser-cli commands --workflow dialog_frame_handling" in normalized
+    assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "For deterministic state transitions" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
@@ -573,6 +577,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli commands --workflow browser_state_management" in normalized
     assert "browser-cli commands --workflow file_upload" in normalized
+    assert "browser-cli commands --workflow dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task form_interaction" in normalized
@@ -580,6 +585,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli action guide --task content_extraction" in normalized
     assert "browser-cli action guide --task browser_state_management" in normalized
     assert "browser-cli action guide --task file_upload" in normalized
+    assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
     assert "Extract page content or data" in normalized
@@ -589,6 +595,9 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`cookie-set`" in normalized
     assert "Upload files" in normalized
     assert "browser-cli commands --workflow file_upload" in normalized
+    assert "Dialogs and frames" in normalized
+    assert "browser-cli commands --workflow dialog_frame_handling" in normalized
+    assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "Wait for deterministic state" in normalized
     assert "`wait-storage`" in normalized
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
@@ -668,6 +677,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`press-key` for active/global shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized
     assert "`blur-role` or `blur`" in normalized
+    assert "first read `dialog_frame_handling`" in normalized
     assert "run `wait-dialog` when the dialog appears asynchronously" in normalized
     assert "otherwise run `dialog-snapshot`, choose from `controls`" in normalized
     assert "run `wait-frame` when the frame appears asynchronously" in normalized

@@ -21,6 +21,7 @@ browser-cli commands --group action
 browser-cli commands --group action --names-only
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
+browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -29,6 +30,7 @@ browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
+browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -292,6 +294,10 @@ Upload files: run `browser-cli commands --workflow file_upload` and
 `browser-cli action guide --task file_upload`, inspect upload controls with
 `form-snapshot`, `query`, or `inspect`, then use `set-file-input`; read
 `requested_files`, `file_count`, `files`, and `value_masked` before submitting.
+Dialogs and frames: run `browser-cli commands --workflow dialog_frame_handling`
+and `browser-cli action guide --task dialog_frame_handling`, then use
+`wait-dialog`, `dialog-snapshot`, `wait-frame`, or `frame-snapshot` before
+custom JavaScript.
 2. Click a visible control: run `browser-cli commands --workflow
    interactive_targeting` and
    `browser-cli action guide --task interactive_targeting`, use
@@ -340,9 +346,10 @@ Upload files: run `browser-cli commands --workflow file_upload` and
    Enter/Escape, `wait-attribute-role` for `aria-expanded` or `aria-selected`,
    `dispatch-event` for explicit DOM events, and `blur-role` or `blur` for
    focus-driven validation, then inspect again with `interactive-snapshot`. For
-   modal dialogs, alert dialogs, cookie banners, or confirmation prompts, run
-   `wait-dialog` when the dialog appears asynchronously, otherwise run
-   `dialog-snapshot`, choose from `controls`, then use `click-role`,
+   modal dialogs, alert dialogs, cookie banners, confirmation prompts, or
+   embedded frames, first read `dialog_frame_handling`; run `wait-dialog` when
+   the dialog appears asynchronously, otherwise run `dialog-snapshot`, choose
+   from `controls`, then use `click-role`,
    `click-text`, or `click-index`. For iframe or embedded app issues, run
    `wait-frame` when the frame appears asynchronously, otherwise run
    `frame-snapshot` and parse `readable`, `same_origin`, `frame_url`, and

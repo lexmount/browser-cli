@@ -20,6 +20,7 @@ browser-cli commands --workflow session_recovery
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
+browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -28,6 +29,7 @@ browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
+browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -212,6 +214,18 @@ browser-cli action inspect --session-id <session_id> --selector "input[type=file
 browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./upload.txt
 browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./front.png --file ./back.png
 browser-cli action wait-text --session-id <session_id> --text "uploaded"
+```
+
+For dialogs, cookie banners, confirmation prompts, or embedded frames, read the
+dialog/frame workflow before writing page-specific JavaScript:
+
+```bash
+browser-cli commands --workflow dialog_frame_handling
+browser-cli action guide --task dialog_frame_handling
+browser-cli action wait-dialog --session-id <session_id> --text "Confirm" --modal-only
+browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 40 --max-controls 40
+browser-cli action wait-frame --session-id <session_id> --url /checkout --url-match contains --readable-only
+browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 40 --max-chars 1000
 ```
 
 For deterministic page or target state, read the state-wait workflow before

@@ -56,6 +56,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "content_extraction" in prompt
     assert "browser_state_management" in prompt
     assert "file_upload" in prompt
+    assert "dialog_frame_handling" in prompt
     assert "state_waits" in prompt
     assert "page_diagnostics" in prompt
     assert "workflow read arrays" in prompt
