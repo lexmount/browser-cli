@@ -135,6 +135,12 @@ counts such as `checked`, `metadata_matches`, `metadata_mismatches`,
 prefer `recommended_next_action` over raw status strings when deciding whether
 to reuse, create, wait, or adjust filters. `context pick --dry-run` must not
 create a context.
+Each `context pick` candidate also includes `metadata_diagnostics` with
+`metadata_source`, `metadata_keys`, `filter_keys`, `matched_keys`,
+`missing_keys`, `different_keys`, and `value_redacted=true`; agents can explain
+metadata mismatches from keys only without exposing metadata values. When the
+API returns empty context metadata, browser-cli may use its local
+context-registry entry and report `metadata_source=local_registry`.
 `context status`, selected `context pick` results, and session `context_reuse`
 also expose top-level `availability`, `reusable`, `locked`, `normalized_status`,
 and `reuse_reason` fields so agents can classify a selected persistent context

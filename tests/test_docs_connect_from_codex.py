@@ -74,6 +74,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "would_create" in text
     assert "browser-cli context pick --metadata-json" in text
     assert "browser-cli session create --context-metadata-json" in text
+    assert "persist metadata supplied during context creation" in text
+    assert "server-side metadata" in text
     assert 'availability: "available"' in text
     assert 'availability: "locked"' in text
     assert 'availability: "unavailable"' in text

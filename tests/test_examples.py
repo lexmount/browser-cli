@@ -98,6 +98,11 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "selection_summary.recommended_next_action" in text
     assert "selection_summary.decision_reason" in text
     assert "selection_summary.locked_matches" in text
+    assert "metadata_diagnostics.missing_keys" in text
+    assert "values are intentionally redacted" in text
+    assert "metadata_diagnostics.metadata_source" in text
+    assert "local_registry" in text
+    assert "not API keys, passwords, or session secrets" in text
     assert "would_create" in text
     assert "browser-cli action form-snapshot" in text
     assert "browser-cli action fill-label" in text

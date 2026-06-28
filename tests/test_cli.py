@@ -22,6 +22,10 @@ def isolate_device_token_credentials(
         "LEXMOUNT_BROWSER_CREDENTIALS_FILE",
         str(tmp_path / "missing-credentials.json"),
     )
+    monkeypatch.setenv(
+        "LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE",
+        str(tmp_path / "context-registry.json"),
+    )
 
 
 class DummyModel:
@@ -4767,6 +4771,99 @@ def test_session_create_can_reuse_context_by_metadata(
     ]
 
 
+def test_session_create_reuses_context_metadata_from_local_registry(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+    cli_module._record_context_metadata(
+        {
+            "context_id": "ctx-ready",
+            "status": "available",
+            "metadata": {"purpose": "codex-login", "marker": "registry-value"},
+        }
+    )
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list_contexts", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-ready",
+                            "status": "available",
+                            "metadata": {},
+                        }
+                    ],
+                }
+            )
+
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(
+                (
+                    "create_session",
+                    {
+                        "context_id": context_id,
+                        "create_context": create_context,
+                        "context_mode": context_mode,
+                        "browser_mode": browser_mode,
+                        "metadata": metadata,
+                    },
+                )
+            )
+            return DummyModel({"session": {"session_id": "s1"}})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["context_reuse"]["selected"] is True
+    assert payload["context_reuse"]["context_id"] == "ctx-ready"
+    diagnostics = payload["context_reuse"]["candidates"][0]["metadata_diagnostics"]
+    assert diagnostics["metadata_source"] == "local_registry"
+    assert diagnostics["matched_keys"] == ["purpose"]
+    assert "registry-value" not in output
+    assert calls == [
+        ("list_contexts", {"status": None, "limit": 20}),
+        (
+            "create_session",
+            {
+                "context_id": "ctx-ready",
+                "create_context": False,
+                "context_mode": "read_write",
+                "browser_mode": "normal",
+                "metadata": None,
+            },
+        ),
+    ]
+
+
 def test_session_create_can_create_context_when_no_reusable_metadata_match(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -5245,6 +5342,16 @@ def test_context_pick_selects_first_available_metadata_match(
             "normalized_status": "locked",
             "availability": "locked",
             "metadata_match": True,
+            "metadata_diagnostics": {
+                "metadata_present": True,
+                "metadata_source": "api",
+                "metadata_keys": ["purpose"],
+                "filter_keys": ["purpose"],
+                "matched_keys": ["purpose"],
+                "missing_keys": [],
+                "different_keys": [],
+                "value_redacted": True,
+            },
             "reusable": False,
             "locked": True,
             "reason": "status_locked",
@@ -5255,6 +5362,16 @@ def test_context_pick_selects_first_available_metadata_match(
             "normalized_status": "available",
             "availability": "available",
             "metadata_match": False,
+            "metadata_diagnostics": {
+                "metadata_present": True,
+                "metadata_source": "api",
+                "metadata_keys": ["purpose"],
+                "filter_keys": ["purpose"],
+                "matched_keys": [],
+                "missing_keys": [],
+                "different_keys": ["purpose"],
+                "value_redacted": True,
+            },
             "reusable": True,
             "locked": False,
             "reason": "metadata_mismatch",
@@ -5265,10 +5382,110 @@ def test_context_pick_selects_first_available_metadata_match(
             "normalized_status": "available",
             "availability": "available",
             "metadata_match": True,
+            "metadata_diagnostics": {
+                "metadata_present": True,
+                "metadata_source": "api",
+                "metadata_keys": ["purpose"],
+                "filter_keys": ["purpose"],
+                "matched_keys": ["purpose"],
+                "missing_keys": [],
+                "different_keys": [],
+                "value_redacted": True,
+            },
             "reusable": True,
             "locked": False,
             "reason": "status_reusable",
         },
+    ]
+
+
+def test_context_pick_uses_local_registry_when_api_metadata_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def create_context(self, *, metadata: dict[str, Any] | None) -> DummyModel:
+            calls.append(("create", {"metadata": metadata}))
+            return DummyModel(
+                {
+                    "context_id": "ctx-local",
+                    "status": "available",
+                    "metadata": metadata,
+                }
+            )
+
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 1,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-local",
+                            "status": "available",
+                            "metadata": {},
+                        }
+                    ],
+                }
+            )
+
+        def delete_context(self, context_id: str) -> None:
+            calls.append(("delete", {"context_id": context_id}))
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "create",
+                "--metadata-json",
+                '{"purpose":"codex","marker":"registry-value"}',
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    capsys.readouterr()
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+                "--dry-run",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["selected"] is True
+    assert payload["context_id"] == "ctx-local"
+    diagnostics = payload["candidates"][0]["metadata_diagnostics"]
+    assert diagnostics["metadata_source"] == "local_registry"
+    assert diagnostics["metadata_keys"] == ["marker", "purpose"]
+    assert diagnostics["matched_keys"] == ["purpose"]
+    assert diagnostics["value_redacted"] is True
+    assert "registry-value" not in output
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "delete", "--context-id", "ctx-local"])
+
+    assert exc_info.value.code == 0
+    assert "ctx-local" not in cli_module._read_context_registry()["contexts"]
+    assert calls == [
+        ("create", {"metadata": {"purpose": "codex", "marker": "registry-value"}}),
+        ("list", {"status": None, "limit": 20}),
+        ("delete", {"context_id": "ctx-local"}),
     ]
 
 

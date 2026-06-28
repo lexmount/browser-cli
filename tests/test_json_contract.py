@@ -287,6 +287,9 @@ def test_json_contract_documents_context_selection_decision_fields() -> None:
     assert "`reusable`" in text
     assert "`locked`" in text
     assert "`reuse_reason`" in text
+    assert "`metadata_diagnostics`" in text
+    assert "`metadata_source`" in text
+    assert "`value_redacted=true`" in text
 
 
 def test_json_contract_documents_doctor_required_action_surface() -> None:
@@ -422,6 +425,18 @@ def test_context_pick_dry_run_selection_summary_contract(
     assert summary["recommended_next_action"] == "rerun_without_dry_run_to_create"
     assert summary["decision_reason"] == "dry_run_create_if_missing"
     assert summary["would_create"] is True
+    diagnostics = payload["candidates"][0]["metadata_diagnostics"]
+    assert diagnostics == {
+        "metadata_present": True,
+        "metadata_source": "api",
+        "metadata_keys": ["purpose"],
+        "filter_keys": ["purpose"],
+        "matched_keys": ["purpose"],
+        "missing_keys": [],
+        "different_keys": [],
+        "value_redacted": True,
+    }
+    assert "codex" not in json.dumps(diagnostics)
 
 
 def test_direct_url_secret_masking_contract(

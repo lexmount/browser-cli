@@ -265,6 +265,12 @@ browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
 ```
 
+The context API should persist metadata supplied during context creation and
+return it from context get/list responses. The CLI can use a local registry for
+contexts it created on the same machine, but browser.lexmount.cn should expose
+server-side metadata so agents can reuse login state across machines and setup
+flows.
+
 If the website can show contexts, it should distinguish:
 
 - `availability: "available"`: can be reused now

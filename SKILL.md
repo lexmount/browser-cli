@@ -309,7 +309,11 @@ report that a busy context was skipped. Inspect `selection_summary` for
 `locked_matches`, `metadata_mismatches`, `reusable_matches`,
 `recommended_next_action`, `decision_reason`, and `would_create`. Prefer
 `recommended_next_action` when deciding whether to reuse, create, wait, or
-adjust filters. Use
+adjust filters. Inspect candidate `metadata_diagnostics` keys to explain
+metadata mismatches; values are redacted. If `metadata_source` is
+`local_registry`, browser-cli matched metadata recorded locally when it created
+the context. Never put API keys, passwords, or session secrets in context
+metadata. Use
 `context pick --metadata-json <json> --dry-run` before creating a session when
 you need to explain context reuse or avoid mutating persistent login state. Use
 the workflow's optional `context status --context-id <context_id>` step before

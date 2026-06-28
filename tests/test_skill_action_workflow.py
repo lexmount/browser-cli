@@ -228,6 +228,10 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "`recommended_next_action`" in normalized
     assert "`decision_reason`" in normalized
     assert "`would_create`" in normalized
+    assert "`metadata_diagnostics`" in normalized
+    assert "values are redacted" in normalized
+    assert "`local_registry`" in normalized
+    assert "Never put API keys, passwords, or session secrets" in normalized
     assert (
         "`context pick --metadata-json <json> --dry-run` before creating a session"
         in normalized

@@ -182,6 +182,11 @@ access or refresh token values. Until bearer-token runtime support lands,
 When env credentials are incomplete, `auth status` also reports `missing_env`
 and a `fix` object with safe `browser-cli auth login` / Connect from Codex setup
 commands.
+Persistent context metadata created by this CLI is also cached locally at
+`~/.config/lexmount/browser-cli/context-registry.json`; set
+`LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE` to override that path for tests or
+isolated workspaces. Use metadata for labels such as `purpose`; do not put API
+keys, passwords, or session secrets in context metadata.
 Use `auth token-info --required-scope <scope>` to check scoped-token coverage.
 Use `auth refresh --credentials-file <path>` to inspect whether local
 device-token metadata needs refresh. It currently reports `refresh_available:
@@ -864,7 +869,11 @@ locked/reusable details. Treat
 need to inspect or report candidates before creating a session; read
 `selection_summary.recommended_next_action`, `decision_reason`,
 `locked_matches`, `metadata_mismatches`, `reusable_matches`, and `would_create`
-before deciding whether to reuse, create, wait, or adjust filters.
+before deciding whether to reuse, create, wait, or adjust filters. Candidate
+`metadata_diagnostics` reports matched, missing, and different metadata keys
+with values redacted. `metadata_diagnostics.metadata_source` can be
+`local_registry` when browser-cli is using metadata it recorded locally after
+creating a context.
 
 ## Codex Skill
 

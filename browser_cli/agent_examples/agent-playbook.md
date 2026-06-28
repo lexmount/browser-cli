@@ -201,7 +201,12 @@ Use the dry-run output to read
 `selection_summary.recommended_next_action` first, then explain
 `selection_summary.decision_reason`, `selection_summary.locked_matches`,
 `selection_summary.reusable_matches`, and `would_create` before mutating
-persistent login state.
+persistent login state. When metadata filters do not match, inspect each
+candidate's `metadata_diagnostics.missing_keys` and
+`metadata_diagnostics.different_keys`; values are intentionally redacted.
+`metadata_diagnostics.metadata_source` may be `local_registry` when the API
+omits metadata that browser-cli recorded locally at context creation time. Use
+metadata for labels, not API keys, passwords, or session secrets.
 
 ## Case Files
 

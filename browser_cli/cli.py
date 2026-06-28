@@ -62,6 +62,7 @@ DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
+CONTEXT_REGISTRY_FILE_ENV = "LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
 COMMON_DOM_STATE_CHOICES = (
     "attached",
@@ -2430,18 +2431,174 @@ def _metadata_matches(
     return all(metadata.get(key) == value for key, value in expected.items())
 
 
+def _context_registry_path(raw_path: str | None = None) -> tuple[Path, str]:
+    if raw_path:
+        return Path(raw_path).expanduser(), "argument"
+    env_path = os.environ.get(CONTEXT_REGISTRY_FILE_ENV)
+    if env_path:
+        return Path(env_path).expanduser(), "env"
+    return (
+        Path.home() / ".config" / "lexmount" / "browser-cli" / "context-registry.json",
+        "default",
+    )
+
+
+def _context_registry_scope() -> dict[str, str | None]:
+    return {
+        "project_id": os.environ.get("LEXMOUNT_PROJECT_ID"),
+        "base_url": os.environ.get("LEXMOUNT_BASE_URL") or DEFAULT_LEXMOUNT_BASE_URL,
+    }
+
+
+def _read_context_registry() -> dict[str, Any]:
+    path, _path_source = _context_registry_path()
+    if not path.exists():
+        return {"version": 1, "contexts": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": 1, "contexts": {}}
+    if not isinstance(data, dict):
+        return {"version": 1, "contexts": {}}
+    contexts = data.get("contexts")
+    if not isinstance(contexts, dict):
+        contexts = {}
+    return {"version": 1, "contexts": contexts}
+
+
+def _write_context_registry(registry: dict[str, Any]) -> None:
+    path, _path_source = _context_registry_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(registry, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    if os.name == "posix":
+        path.chmod(0o600)
+
+
+def _record_context_metadata(context: dict[str, Any]) -> None:
+    context_id = context.get("context_id") or context.get("id")
+    metadata = context.get("metadata")
+    if not context_id or not isinstance(metadata, dict) or not metadata:
+        return
+    registry = _read_context_registry()
+    contexts = registry.setdefault("contexts", {})
+    contexts[str(context_id)] = {
+        "context_id": str(context_id),
+        "metadata": metadata,
+        **_context_registry_scope(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _write_context_registry(registry)
+
+
+def _forget_context_metadata(context_id: str) -> None:
+    registry = _read_context_registry()
+    contexts = registry.get("contexts")
+    if not isinstance(contexts, dict) or context_id not in contexts:
+        return
+    del contexts[context_id]
+    _write_context_registry(registry)
+
+
+def _registry_metadata_for_context(
+    context: dict[str, Any],
+    registry: dict[str, Any],
+) -> dict[str, Any] | None:
+    context_id = context.get("context_id") or context.get("id")
+    if not context_id:
+        return None
+    contexts = registry.get("contexts")
+    if not isinstance(contexts, dict):
+        return None
+    entry = contexts.get(str(context_id))
+    if not isinstance(entry, dict):
+        return None
+    scope = _context_registry_scope()
+    if entry.get("project_id") != scope["project_id"]:
+        return None
+    if entry.get("base_url") != scope["base_url"]:
+        return None
+    metadata = entry.get("metadata")
+    if not isinstance(metadata, dict) or not metadata:
+        return None
+    return metadata
+
+
+def _effective_context_metadata(
+    context: dict[str, Any],
+    registry: dict[str, Any],
+) -> tuple[Any, str]:
+    metadata = context.get("metadata")
+    if isinstance(metadata, dict) and metadata:
+        return metadata, "api"
+    registry_metadata = _registry_metadata_for_context(context, registry)
+    if registry_metadata is not None:
+        return registry_metadata, "local_registry"
+    if isinstance(metadata, dict):
+        return metadata, "api_empty"
+    return metadata, "missing"
+
+
+def _metadata_match_diagnostics(
+    metadata: Any,
+    expected: dict[str, Any],
+    *,
+    metadata_source: str,
+) -> dict[str, Any]:
+    if isinstance(metadata, dict):
+        metadata_keys = sorted(str(key) for key in metadata)
+    else:
+        metadata_keys = []
+
+    expected_keys = sorted(expected, key=str)
+    filter_keys = [str(key) for key in expected_keys]
+    matched_keys: list[str] = []
+    missing_keys: list[str] = []
+    different_keys: list[str] = []
+
+    for key in expected_keys:
+        key_name = str(key)
+        if not isinstance(metadata, dict) or key not in metadata:
+            missing_keys.append(key_name)
+        elif metadata.get(key) == expected.get(key):
+            matched_keys.append(key_name)
+        else:
+            different_keys.append(key_name)
+
+    return {
+        "metadata_present": isinstance(metadata, dict),
+        "metadata_source": metadata_source,
+        "metadata_keys": metadata_keys,
+        "filter_keys": filter_keys,
+        "matched_keys": matched_keys,
+        "missing_keys": missing_keys,
+        "different_keys": different_keys,
+        "value_redacted": True,
+    }
+
+
 def _context_pick_candidate(
     context: dict[str, Any],
     metadata_filter: dict[str, Any],
+    registry: dict[str, Any],
 ) -> dict[str, Any]:
     reuse = _context_reuse_state(context)
-    metadata_match = _metadata_matches(context.get("metadata"), metadata_filter)
+    metadata, metadata_source = _effective_context_metadata(context, registry)
+    metadata_match = _metadata_matches(metadata, metadata_filter)
+    metadata_diagnostics = _metadata_match_diagnostics(
+        metadata,
+        metadata_filter,
+        metadata_source=metadata_source,
+    )
     return {
         "context_id": context.get("context_id"),
         "status": context.get("status"),
         "normalized_status": reuse["normalized_status"],
         "availability": reuse["availability"],
         "metadata_match": metadata_match,
+        "metadata_diagnostics": metadata_diagnostics,
         "reusable": reuse["reusable"],
         "locked": reuse["locked"],
         "reason": reuse["reason"] if metadata_match else "metadata_mismatch",
@@ -2557,8 +2714,10 @@ def _select_or_create_context_for_session(
     contexts = payload.get("contexts", [])
     if not isinstance(contexts, list):
         contexts = []
+    registry = _read_context_registry()
     candidates = [
-        _context_pick_candidate(context, metadata_filter) for context in contexts
+        _context_pick_candidate(context, metadata_filter, registry)
+        for context in contexts
     ]
 
     for context, candidate in zip(contexts, candidates, strict=True):
@@ -2594,6 +2753,7 @@ def _select_or_create_context_for_session(
         except Exception as exc:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
+        _record_context_metadata(created_context)
         reuse = _context_reuse_state(created_context)
         return {
             "selected": True,
@@ -3611,7 +3771,9 @@ def cmd_context_create(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().create_context(metadata=args.metadata)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_model_payload(context))
+    payload = _model_payload(context)
+    _record_context_metadata(payload)
+    _success(command, context=payload)
 
 
 def cmd_context_list(args: argparse.Namespace) -> None:
@@ -3670,8 +3832,10 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
 
     payload = _model_payload(result)
     contexts = payload.get("contexts", [])
+    registry = _read_context_registry()
     candidates = [
-        _context_pick_candidate(context, metadata_filter) for context in contexts
+        _context_pick_candidate(context, metadata_filter, registry)
+        for context in contexts
     ]
     selected_context: dict[str, Any] | None = None
     for context, candidate in zip(contexts, candidates, strict=True):
@@ -3738,6 +3902,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
         created_context_id = created_context.get("context_id")
+        _record_context_metadata(created_context)
         reuse = _context_reuse_state(created_context)
         _success(
             command,
@@ -3783,6 +3948,7 @@ def cmd_context_delete(args: argparse.Namespace) -> None:
         LexmountBrowserAdmin().delete_context(args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
+    _forget_context_metadata(args.context_id)
     _success(command, context_id=args.context_id, deleted=True)
 
 
