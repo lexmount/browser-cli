@@ -104,6 +104,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.console-snapshot",
     "action.wait-console",
 )
+DOCTOR_REQUIRED_REFERENCES = ("action_playbook",)
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
     "connect_from_codex_site_requirements",
@@ -1678,6 +1679,116 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         missing_required_workflows=[],
         required_workflow_steps=required_workflow_steps,
         missing_required_workflow_steps={},
+    )
+
+
+def _doctor_agent_references_check() -> dict[str, Any]:
+    try:
+        references = _agent_references()
+    except Exception as exc:
+        return _doctor_check(
+            "agent_references",
+            "warn",
+            "Agent reference metadata could not be built.",
+            error=exc.__class__.__name__,
+            required_references=list(DOCTOR_REQUIRED_REFERENCES),
+            fix=_doctor_fix(
+                "verify_agent_reference_metadata",
+                commands=[
+                    "browser-cli reference list",
+                    "browser-cli commands --workflows-only",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on packaged references before choosing custom JavaScript.",
+                    "Upgrade or reinstall browser-cli if agent reference metadata is unavailable.",
+                ],
+            ),
+        )
+
+    missing_references = [
+        reference_id
+        for reference_id in DOCTOR_REQUIRED_REFERENCES
+        if reference_id not in references
+    ]
+    checked_references: list[dict[str, Any]] = []
+    invalid_references: list[dict[str, Any]] = []
+
+    for reference_id in DOCTOR_REQUIRED_REFERENCES:
+        reference = references.get(reference_id)
+        if not isinstance(reference, dict):
+            continue
+        item: dict[str, Any] = {
+            "id": reference_id,
+            "path": reference.get("path"),
+            "package_resource": reference.get("package_resource"),
+            "content_command": reference.get("content_command"),
+        }
+        try:
+            content = _read_agent_reference_content(reference_id)
+        except Exception as exc:
+            item.update(
+                {
+                    "status": "unavailable",
+                    "error": exc.__class__.__name__,
+                }
+            )
+            invalid_references.append(item)
+            checked_references.append(item)
+            continue
+
+        missing_patterns = [
+            str(pattern)
+            for pattern in reference.get("grep_patterns", [])
+            if str(pattern) not in content
+        ]
+        item.update(
+            {
+                "status": "pass"
+                if content.strip() and not missing_patterns
+                else "invalid",
+                "content_length": len(content),
+                "missing_patterns": missing_patterns,
+            }
+        )
+        if item["status"] != "pass":
+            invalid_references.append(item)
+        checked_references.append(item)
+
+    if missing_references or invalid_references:
+        return _doctor_check(
+            "agent_references",
+            "warn",
+            "Packaged agent references are missing or invalid.",
+            required_references=list(DOCTOR_REQUIRED_REFERENCES),
+            reference_count=len(references),
+            missing_required_references=missing_references,
+            invalid_references=invalid_references,
+            checked_references=checked_references,
+            fix=_doctor_fix(
+                "repair_packaged_agent_references",
+                commands=[
+                    "browser-cli reference list",
+                    "browser-cli reference get --id action_playbook --metadata-only",
+                    "browser-cli reference get --id action_playbook",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Packaged references should be readable from an installed CLI.",
+                    "Reinstall browser-cli if reference get cannot load action_playbook.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "agent_references",
+        "pass",
+        "Packaged agent references are readable.",
+        required_references=list(DOCTOR_REQUIRED_REFERENCES),
+        reference_count=len(references),
+        missing_required_references=[],
+        invalid_references=[],
+        checked_references=checked_references,
     )
 
 
@@ -10244,6 +10355,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     )
 
     checks.append(_doctor_command_catalog_check())
+    checks.append(_doctor_agent_references_check())
 
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")

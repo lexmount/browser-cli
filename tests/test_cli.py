@@ -1373,6 +1373,22 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ):
         assert command_name in checks["command_catalog"]["required_commands"]
     assert checks["command_catalog"]["missing_required_commands"] == []
+    assert checks["agent_references"]["status"] == "pass"
+    assert checks["agent_references"]["reference_count"] == 1
+    assert checks["agent_references"]["required_references"] == ["action_playbook"]
+    assert checks["agent_references"]["missing_required_references"] == []
+    assert checks["agent_references"]["invalid_references"] == []
+    checked_reference = checks["agent_references"]["checked_references"][0]
+    assert checked_reference["id"] == "action_playbook"
+    assert checked_reference["status"] == "pass"
+    assert checked_reference["content_command"] == (
+        "browser-cli reference get --id action_playbook"
+    )
+    assert checked_reference["package_resource"] == (
+        "browser_cli.agent_references:action-playbook.md"
+    )
+    assert checked_reference["content_length"] > 1000
+    assert checked_reference["missing_patterns"] == []
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "pass"
     assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "pass"
     assert checks["direct_url"]["status"] == "pass"
@@ -1450,6 +1466,59 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_agent_reference_resource_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    def fail_read(reference_id: str) -> str:
+        assert reference_id == "action_playbook"
+        raise FileNotFoundError("missing packaged reference")
+
+    monkeypatch.setattr("browser_cli.cli._read_agent_reference_content", fail_read)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "agent_references" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    references = checks["agent_references"]
+    assert references["status"] == "warn"
+    assert references["required_references"] == ["action_playbook"]
+    assert references["missing_required_references"] == []
+    assert references["invalid_references"] == [
+        {
+            "id": "action_playbook",
+            "path": "references/action-playbook.md",
+            "package_resource": "browser_cli.agent_references:action-playbook.md",
+            "content_command": "browser-cli reference get --id action_playbook",
+            "status": "unavailable",
+            "error": "FileNotFoundError",
+        }
+    ]
+    assert references["fix"]["code"] == "repair_packaged_agent_references"
+    assert (
+        "browser-cli reference get --id action_playbook"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+        in payload["repair_plan"]["commands"]
+    )
     assert "api_connectivity" in payload["skipped_checks"]
 
 

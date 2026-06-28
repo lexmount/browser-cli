@@ -140,6 +140,9 @@ what to do:
 - `command_catalog` with `status: "warn"`: inspect
   `missing_required_commands` and follow its `fix` guidance before relying on
   the full Skill workflow.
+- `agent_references` with `status: "warn"`: run
+  `browser-cli reference get --id action_playbook` or follow its `fix` commands
+  before relying on detailed action guidance.
 - `repair_plan`: prefer its aggregated `commands`, `env`, `guidance`, and
   `fixes` when explaining setup repair steps.
 - `warnings > 0` or a check with `status: "warn"`: continue only after

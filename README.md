@@ -602,8 +602,12 @@ aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
 command catalog, environment, direct URL, API connectivity, and optional browser
 smoke-session checks. The `browser_cli` check reports `version_source` so agents
 can distinguish installed package metadata from the package fallback version.
-The `command_catalog` check verifies the installed CLI has
-the commands and `agent_workflows` expected by the Codex Skill and reports
+The `agent_references` check verifies packaged Skill reference docs such as
+`action_playbook` are readable from the installed CLI and reports
+`missing_required_references`, `invalid_references`, and `checked_references`
+with `content_command`/`package_resource` metadata. The `command_catalog` check
+verifies the installed CLI has the commands and `agent_workflows` expected by
+the Codex Skill and reports
 `missing_required_commands`, `missing_required_workflows`, or
 `missing_required_workflow_steps` with upgrade guidance when the action or
 workflow surface is too old or missing critical steps such as cleanup. That

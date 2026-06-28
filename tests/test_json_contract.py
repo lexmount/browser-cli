@@ -215,6 +215,11 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
     text = JSON_CONTRACT.read_text()
 
     assert "`browser_cli.version_source`" in text
+    assert "`agent_references`" in text
+    assert "`required_references`" in text
+    assert "`missing_required_references`" in text
+    assert "`invalid_references`" in text
+    assert "`checked_references`" in text
     assert "`required_workflows`" in text
     assert "`missing_required_workflows`" in text
     assert "`required_workflow_steps`" in text

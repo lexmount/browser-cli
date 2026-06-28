@@ -188,6 +188,11 @@ Default behavior:
   status, but must not print direct connect URLs or token values.
 - `doctor` reports `browser_cli.version_source` to show whether the browser-cli
   version came from installed package metadata or the package fallback.
+- `doctor` reports an `agent_references` check with `required_references`,
+  `missing_required_references`, `invalid_references`, and
+  `checked_references`. Treat `status=warn` as a signal to run
+  `browser-cli reference get --id action_playbook` or reinstall browser-cli
+  before relying on the full Codex Skill action guidance.
 - `doctor` reports a `command_catalog` check with `required_commands`,
   `missing_required_commands`, `required_workflows`,
   `missing_required_workflows`, `required_workflow_steps`,
