@@ -422,7 +422,8 @@ Core action rules:
 - Inspect first with `snapshot`, `interactive-snapshot`, `accessibility-snapshot`,
   `form-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
   `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
-- Prefer semantic actions such as `wait-role`, `wait-state-role`, `exists-role`, `get-text-role`,
+- Prefer semantic actions such as `wait-role`, `wait-state-role`, `get-attribute-role`,
+  `wait-attribute-role`, `exists-role`, `get-text-role`,
   `bounding-box-role`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
   `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`,
   `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,

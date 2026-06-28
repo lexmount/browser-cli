@@ -114,6 +114,8 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.exists-role",
     "action.wait-state",
     "action.wait-state-role",
+    "action.get-attribute-role",
+    "action.wait-attribute-role",
     "action.scroll",
     "action.bounding-box-role",
     "action.select-option",
@@ -7881,6 +7883,215 @@ def _wait_attribute_expression(
 """.strip()
 
 
+def _get_attribute_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    attribute: str,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const attribute = {_js_literal(attribute)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      attribute,
+      found: false,
+      role_found: false,
+      value: null,
+      attribute_value: null,
+      property_value: null,
+      include_hidden: includeHidden,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const attributeValue = element.getAttribute(attribute);
+  let propertyValue = null;
+  if (attribute in element) {{
+    const raw = element[attribute];
+    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
+      ? raw
+      : String(raw);
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    attribute,
+    found: true,
+    role_found: true,
+    value: attributeValue,
+    attribute_value: attributeValue,
+    property_value: propertyValue,
+    include_hidden: includeHidden,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _wait_attribute_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    attribute: str,
+    value: str | None,
+    state: str,
+    match: str,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const attribute = {_js_literal(attribute)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+{_role_target_helpers_expression(_js_literal("body *"))}
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const roleMatch = findRoleTargetElement();
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        attribute,
+        found: false,
+        state: requestedState,
+        role_found: Boolean(roleMatch.element),
+        attribute_found: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        include_hidden: includeHidden,
+        waited_ms: 0,
+        candidate_count: roleMatch.candidate_count,
+        candidates: roleMatch.candidates,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const roleMatch = findRoleTargetElement();
+    const element = roleMatch.element;
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          role: requestedRole,
+          name: requestedName,
+          attribute,
+          found: false,
+          state: requestedState,
+          role_found: false,
+          attribute_found: null,
+          value: null,
+          requested_value: requestedValue,
+          match: matchMode,
+          include_hidden: includeHidden,
+          waited_ms: waitedMs,
+          candidate_count: roleMatch.candidate_count,
+          candidates: roleMatch.candidates
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const currentValue = element.getAttribute(attribute);
+    const attributeFound = currentValue !== null;
+    const reached = requestedState === "absent"
+      ? !attributeFound
+      : attributeFound && matches(currentValue);
+    if (reached) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        attribute,
+        found: true,
+        state: requestedState,
+        role_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        attribute,
+        found: false,
+        state: requestedState,
+        role_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _query_expression(
     *,
     selector: str,
@@ -10834,6 +11045,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "wait-load-state",
                 "wait-url",
                 "wait-state-role",
+                "wait-attribute-role",
                 "wait-selector",
                 "wait-role",
                 "wait-text",
@@ -10845,12 +11057,14 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "inspect_commands": [
                 "browser-cli action page-info --session-id <session_id>",
                 'browser-cli action exists-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action get-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded',
                 "browser-cli action exists --session-id <session_id> --selector <selector>",
             ],
             "preferred_commands": [
                 "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
                 'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
                 'browser-cli action wait-state-role --session-id <session_id> --role button --name "<name>" --state enabled',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded --value true --match exact',
                 'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
                 'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
                 'browser-cli action wait-text --session-id <session_id> --text "<text>"',
@@ -10874,6 +11088,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.role_found",
                 "result.matched",
                 "result.state_values",
+                "result.attribute_found",
+                "result.value",
+                "result.requested_value",
                 "result.count",
                 "result.entry",
             ],
@@ -11284,6 +11501,21 @@ def cmd_action_get_attribute(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_get_attribute_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-attribute-role",
+        _get_attribute_role_expression(
+            role=args.role,
+            name=args.name,
+            attribute=args.attribute,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
 def cmd_action_wait_attribute(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -11297,6 +11529,26 @@ def cmd_action_wait_attribute(args: argparse.Namespace) -> None:
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
             case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_wait_attribute_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-attribute-role",
+        _wait_attribute_role_expression(
+            role=args.role,
+            name=args.name,
+            attribute=args.attribute,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
         ),
     )
 
@@ -14704,6 +14956,22 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_get_attribute.add_argument("--name", required=True)
     action_get_attribute.set_defaults(func=cmd_action_get_attribute)
 
+    action_get_attribute_role = action_subparsers.add_parser(
+        "get-attribute-role",
+        help="Read an attribute from an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_get_attribute_role)
+    action_get_attribute_role.add_argument("--role", required=True)
+    action_get_attribute_role.add_argument("--name")
+    action_get_attribute_role.add_argument("--attribute", required=True)
+    action_get_attribute_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_get_attribute_role)
+    action_get_attribute_role.set_defaults(func=cmd_action_get_attribute_role)
+
     action_wait_attribute = action_subparsers.add_parser(
         "wait-attribute",
         help="Wait until an attribute reaches a state or value",
@@ -14732,6 +15000,37 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Match values case-sensitively.",
     )
     action_wait_attribute.set_defaults(func=cmd_action_wait_attribute)
+
+    action_wait_attribute_role = action_subparsers.add_parser(
+        "wait-attribute-role",
+        help="Wait until an attribute on an element matched by role/name reaches a state or value",
+    )
+    _add_session_target_args(action_wait_attribute_role)
+    action_wait_attribute_role.add_argument("--role", required=True)
+    action_wait_attribute_role.add_argument("--name")
+    action_wait_attribute_role.add_argument("--attribute", required=True)
+    action_wait_attribute_role.add_argument("--value")
+    action_wait_attribute_role.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Attribute presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_attribute_role.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_attribute_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_attribute_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_attribute_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_wait_attribute_role)
+    action_wait_attribute_role.set_defaults(func=cmd_action_wait_attribute_role)
 
     action_wait_text = action_subparsers.add_parser(
         "wait-text",

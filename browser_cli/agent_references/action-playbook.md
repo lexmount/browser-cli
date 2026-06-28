@@ -60,7 +60,9 @@ browser-cli action wait-state-role --session-id <session_id> --role button --nam
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action inspect --session-id <session_id> --selector "button"
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
+browser-cli action get-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded
 browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
+browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
@@ -147,7 +149,7 @@ browser-cli action wait-cookie --session-id <session_id> --name consent --value 
 Prefer built-in actions over writing custom JavaScript. `page-info`, `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-title`, `wait-load-state`,
 `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`, `inspect`,
-`get-attribute`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-text`,
+`get-attribute`, `get-attribute-role`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-attribute-role`, `wait-text`,
 `wait-role`, `focus`, `focus-role`, `get-value`, `get-value-role`, `wait-value`,
 `wait-value-role`, `blur`, `blur-role`, `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
@@ -308,7 +310,8 @@ console/page error entries and the reported page URL.
 6. Open menus or keyboard flows: use `focus-role`, `hover-role`, `press-role`,
    or `scroll-into-view-role` when role/name is known; use `focus`, `hover`, or `press` for
    stable selector-scoped keys, `press-key` for active/global shortcuts such as
-   Enter/Escape, `dispatch-event` for explicit DOM events, and `blur-role` or `blur` for
+   Enter/Escape, `wait-attribute-role` for `aria-expanded` or `aria-selected`,
+   `dispatch-event` for explicit DOM events, and `blur-role` or `blur` for
    focus-driven validation, then inspect again with `interactive-snapshot`. For
    modal dialogs, alert dialogs, cookie banners, or confirmation prompts, run
    `wait-dialog` when the dialog appears asynchronously, otherwise run
@@ -322,8 +325,9 @@ console/page error entries and the reported page URL.
    `list-snapshot` for menu/listbox/search-result/task-list content,
    `text-snapshot` for visible paragraphs, alerts, status messages, and bounded
    readable text, `table-snapshot` for HTML or ARIA table/report data,
-   `outline-snapshot` for headings and landmarks, `wait-attribute` for DOM
-   attributes, `wait-state-role` for semantic enabled/visible/checked/focused
+   `outline-snapshot` for headings and landmarks, `get-attribute-role` and
+   `wait-attribute-role` for semantic DOM attributes, `wait-attribute` for
+   selector DOM attributes, `wait-state-role` for semantic enabled/visible/checked/focused
    states, `wait-state` for selector states, `get-text-role` for semantic text
    checks, and `get-text` for a known selector. Use `snapshot` when the page structure or
    selector is unknown; use `wait-text` or `wait-role` before reading dynamic

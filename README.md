@@ -414,7 +414,9 @@ browser-cli action wait-state --session-id <session_id> --selector "button[type=
 browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
+browser-cli action get-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded
 browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
+browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
@@ -495,7 +497,7 @@ the boundary for custom JavaScript.
 
 `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`,
-`get-attribute`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `focus-role`,
+`get-attribute`, `get-attribute-role`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-attribute-role`, `wait-text`, `wait-role`, `focus`, `focus-role`,
 `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `blur-role`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
@@ -806,7 +808,8 @@ Common agent recipes:
   to correlate visible state with JS errors.
 - Menu or keyboard flow: `focus-role`, `hover-role`, `press-role`,
   `scroll-into-view-role`, selector-scoped `focus`, `hover`, or `press`,
-  active/global `press-key`, or `dispatch-event`, then inspect again with
+  active/global `press-key`, `wait-attribute-role` for `aria-expanded` or
+  `aria-selected`, or `dispatch-event`, then inspect again with
   `interactive-snapshot`.
 - Dialog flow: use `wait-dialog` when the dialog appears asynchronously,
   otherwise `dialog-snapshot` for modal dialogs, alert dialogs, cookie banners,
@@ -822,7 +825,8 @@ Common agent recipes:
   `list-snapshot` for menu/listbox/search-result/task-list content,
   `text-snapshot` for visible paragraphs, alerts, status messages, and bounded
   readable page text,
-  `wait-attribute` for DOM attributes, `wait-state-role` for semantic
+  `get-attribute-role` and `wait-attribute-role` for semantic DOM attributes,
+  `wait-attribute` for selector DOM attributes, `wait-state-role` for semantic
   enabled/visible/checked/focused states, `wait-state` for selector states, `get-text-role` for semantic text
   checks, `get-text` for known selectors, or
   `snapshot` when the selector is unknown. Use `wait-text --state absent` when

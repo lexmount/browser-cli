@@ -62,6 +62,8 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
     assert "`wait-state-role`" in normalized
+    assert "`get-attribute-role`" in normalized
+    assert "`wait-attribute-role`" in normalized
     assert "`exists-role`, `get-text-role`, and `bounding-box-role`" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
@@ -306,7 +308,9 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`query`",
         "`inspect`",
         "`get-attribute`",
+        "`get-attribute-role`",
         "`wait-attribute`",
+        "`wait-attribute-role`",
         "`wait-selector`",
         "`wait-title`",
         "`wait-load-state`",
@@ -598,6 +602,7 @@ def test_skill_includes_common_task_recipes() -> None:
         "use `focus-role`, `hover-role`, `press-role`, or `scroll-into-view-role`"
         in normalized
     )
+    assert "`wait-attribute-role` for `aria-expanded` or `aria-selected`" in normalized
     assert (
         "use `focus`, `hover`, or `press` for stable selector-scoped keys" in normalized
     )
@@ -616,6 +621,10 @@ def test_skill_includes_common_task_recipes() -> None:
         "`wait-state-role` for semantic enabled/visible/checked/focused" in normalized
     )
     assert "`wait-state` for selector states" in normalized
+    assert (
+        "`get-attribute-role` and `wait-attribute-role` for semantic DOM attributes"
+        in normalized
+    )
     assert "`get-text-role` for semantic text checks" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` or `wait-role` before reading dynamic results" in normalized

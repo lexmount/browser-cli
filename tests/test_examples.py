@@ -104,6 +104,8 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action fill-role" in text
     assert "browser-cli action clear-role" in text
     assert "browser-cli action wait-state-role" in text
+    assert "browser-cli action get-attribute-role" in text
+    assert "browser-cli action wait-attribute-role" in text
     assert "browser-cli action select-role" in text
     assert "browser-cli action check-role" in text
     assert "browser-cli action wait-value-role" in text

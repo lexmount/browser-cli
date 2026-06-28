@@ -654,6 +654,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.wait-title",
         "action.wait-state-role",
         "action.press-key",
+        "action.get-attribute-role",
+        "action.wait-attribute-role",
         "action.get-text-role",
         "action.exists-role",
         "action.bounding-box-role",
@@ -707,6 +709,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any("--name" in option["flags"] for option in wait_state_role["options"])
     assert any(
         "--include-hidden" in option["flags"] for option in wait_state_role["options"]
+    )
+    get_attribute_role = commands["action.get-attribute-role"]
+    assert "--role" in get_attribute_role["required_options"]
+    assert "--attribute" in get_attribute_role["required_options"]
+    assert any("--name" in option["flags"] for option in get_attribute_role["options"])
+    wait_attribute_role = commands["action.wait-attribute-role"]
+    assert "--role" in wait_attribute_role["required_options"]
+    assert "--attribute" in wait_attribute_role["required_options"]
+    assert any(
+        "--value" in option["flags"] for option in wait_attribute_role["options"]
     )
     get_text_role = commands["action.get-text-role"]
     assert get_text_role["required_options"] == ["--role"]
@@ -956,12 +968,22 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "wait-url",
         "wait-state-role",
     ]
+    assert "wait-attribute-role" in payload["guide"]["selection_order"]
     assert any(
         "browser-cli action wait-state-role" in command
         for command in payload["guide"]["preferred_commands"]
     )
+    assert any(
+        "browser-cli action wait-attribute-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action get-attribute-role" in command
+        for command in payload["guide"]["inspect_commands"]
+    )
     assert "result.matched" in payload["guide"]["read_fields"]
     assert "result.state_values" in payload["guide"]["read_fields"]
+    assert "result.attribute_found" in payload["guide"]["read_fields"]
 
 
 def test_action_guide_fails_unknown_task_as_json(
@@ -2111,6 +2133,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.exists",
         "action.exists-role",
         "action.wait-state-role",
+        "action.get-attribute-role",
+        "action.wait-attribute-role",
         "action.bounding-box-role",
         "action.select-option",
         "action.select-role",
@@ -2240,6 +2264,8 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
     assert "action.wait-state-role" in catalog["missing_required_commands"]
+    assert "action.get-attribute-role" in catalog["missing_required_commands"]
+    assert "action.wait-attribute-role" in catalog["missing_required_commands"]
     assert "action.bounding-box-role" in catalog["missing_required_commands"]
     assert "action.select-role" in catalog["missing_required_commands"]
     assert "action.check-role" in catalog["missing_required_commands"]
@@ -9504,6 +9530,100 @@ def test_second_batch_eval_backed_action_commands_emit_structured_results(
                 "requested_value": None,
                 "match": "contains",
                 "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "get-attribute-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Menu",
+                "--attribute",
+                "aria-expanded",
+            ],
+            "action.get-attribute-role",
+            {
+                "role": "button",
+                "name": "Menu",
+                "attribute": "aria-expanded",
+                "found": True,
+                "role_found": True,
+                "value": "false",
+                "attribute_value": "false",
+                "property_value": None,
+                "include_hidden": False,
+                "candidate_count": 1,
+            },
+            {
+                "role": "button",
+                "name": "Menu",
+                "attribute": "aria-expanded",
+                "found": True,
+                "role_found": True,
+                "value": "false",
+                "attribute_value": "false",
+                "property_value": None,
+                "include_hidden": False,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-attribute-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Menu",
+                "--attribute",
+                "aria-expanded",
+                "--value",
+                "true",
+                "--match",
+                "exact",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-attribute-role",
+            {
+                "role": "button",
+                "name": "Menu",
+                "attribute": "aria-expanded",
+                "found": True,
+                "state": "present",
+                "role_found": True,
+                "attribute_found": True,
+                "value": "true",
+                "requested_value": "true",
+                "match": "exact",
+                "include_hidden": False,
+                "waited_ms": 50,
+                "candidate_count": 1,
+            },
+            {
+                "role": "button",
+                "name": "Menu",
+                "attribute": "aria-expanded",
+                "found": True,
+                "state": "present",
+                "role_found": True,
+                "attribute_found": True,
+                "value": "true",
+                "requested_value": "true",
+                "match": "exact",
+                "include_hidden": False,
+                "waited_ms": 50,
+                "candidate_count": 1,
                 "url": "https://example.test",
             },
         ),
