@@ -613,13 +613,17 @@ parsing stderr.
 `ready_for_browser_actions`, check-name arrays, and a `repair_plan` that
 aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
 `fail`, or `skipped` statuses for Python/runtime, install path, version,
-command catalog, environment, direct URL, API connectivity, and optional browser
-smoke-session checks. The `browser_cli` check reports `version_source` so agents
-can distinguish installed package metadata from the package fallback version.
+command catalog, packaged references/examples, environment, direct URL, API
+connectivity, and optional browser smoke-session checks. The `browser_cli` check
+reports `version_source` so agents can distinguish installed package metadata
+from the package fallback version.
 The `agent_references` check verifies packaged Skill reference docs such as
 `action_playbook` are readable from the installed CLI and reports
 `missing_required_references`, `invalid_references`, and `checked_references`
-with `content_command`/`package_resource` metadata. The `command_catalog` check
+with `content_command`/`package_resource` metadata. The `agent_examples` check
+verifies packaged playbooks and case examples are readable, validates YAML case
+examples, and reports `missing_required_examples`, `invalid_examples`,
+`checked_examples`, `case_valid`, and `case_errors`. The `command_catalog` check
 verifies the installed CLI has the commands and `agent_workflows` expected by
 the Codex Skill and reports
 `missing_required_commands`, `missing_required_workflows`, or

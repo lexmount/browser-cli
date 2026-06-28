@@ -1638,6 +1638,28 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert checked_reference["content_length"] > 1000
     assert checked_reference["missing_patterns"] == []
+    assert checks["agent_examples"]["status"] == "pass"
+    assert checks["agent_examples"]["example_count"] == 3
+    assert checks["agent_examples"]["required_examples"] == [
+        "agent_playbook",
+        "page_inspection_case",
+        "form_fill_case",
+    ]
+    assert checks["agent_examples"]["missing_required_examples"] == []
+    assert checks["agent_examples"]["invalid_examples"] == []
+    checked_examples = {
+        item["id"]: item for item in checks["agent_examples"]["checked_examples"]
+    }
+    assert checked_examples["agent_playbook"]["status"] == "pass"
+    assert checked_examples["agent_playbook"]["content_command"] == (
+        "browser-cli example get --id agent_playbook"
+    )
+    assert checked_examples["agent_playbook"]["content_length"] > 1000
+    assert checked_examples["agent_playbook"]["missing_patterns"] == []
+    assert checked_examples["page_inspection_case"]["case_valid"] is True
+    assert checked_examples["page_inspection_case"]["case_errors"] == []
+    assert checked_examples["form_fill_case"]["case_valid"] is True
+    assert checked_examples["form_fill_case"]["case_errors"] == []
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "pass"
     assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "pass"
     assert checks["direct_url"]["status"] == "pass"
@@ -1765,6 +1787,70 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     assert references["fix"]["code"] == "repair_packaged_agent_references"
     assert (
         "browser-cli reference get --id action_playbook"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_packaged_case_example_is_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    original_read = cli_module._read_agent_example_content
+
+    def read_example(example_id: str) -> str:
+        if example_id != "form_fill_case":
+            return original_read(example_id)
+        return """
+name: form-fill
+steps:
+  - action: eval
+  - action: type
+  - action: screenshot
+""".strip()
+
+    monkeypatch.setattr("browser_cli.cli._read_agent_example_content", read_example)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "agent_examples" in payload["warning_checks"]
+    examples = _checks_by_name(payload)["agent_examples"]
+    assert examples["status"] == "warn"
+    assert examples["required_examples"] == [
+        "agent_playbook",
+        "page_inspection_case",
+        "form_fill_case",
+    ]
+    assert examples["missing_required_examples"] == []
+    assert len(examples["invalid_examples"]) == 1
+    invalid = examples["invalid_examples"][0]
+    assert invalid["id"] == "form_fill_case"
+    assert invalid["status"] == "invalid"
+    assert invalid["case_valid"] is False
+    assert "steps[0] missing required field 'expression'" in invalid["case_errors"]
+    assert "steps[1] missing required field 'selector'" in invalid["case_errors"]
+    assert "steps[1] missing required field 'text'" in invalid["case_errors"]
+    assert invalid["missing_patterns"] == []
+    assert examples["fix"]["code"] == "repair_packaged_agent_examples"
+    assert "browser-cli example list" in payload["repair_plan"]["commands"]
+    assert (
+        "browser-cli example get --id form_fill_case"
         in payload["repair_plan"]["commands"]
     )
     assert (

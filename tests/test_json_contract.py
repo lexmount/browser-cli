@@ -229,6 +229,13 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
     assert "`missing_required_references`" in text
     assert "`invalid_references`" in text
     assert "`checked_references`" in text
+    assert "`agent_examples`" in text
+    assert "`required_examples`" in text
+    assert "`missing_required_examples`" in text
+    assert "`invalid_examples`" in text
+    assert "`checked_examples`" in text
+    assert "`case_valid`" in text
+    assert "`case_errors`" in text
     assert "`required_workflows`" in text
     assert "`missing_required_workflows`" in text
     assert "`required_workflow_steps`" in text

@@ -204,6 +204,12 @@ Default behavior:
   `checked_references`. Treat `status=warn` as a signal to run
   `browser-cli reference get --id action_playbook` or reinstall browser-cli
   before relying on the full Codex Skill action guidance.
+- `doctor` reports an `agent_examples` check with `required_examples`,
+  `missing_required_examples`, `invalid_examples`, and `checked_examples`.
+  YAML case examples include `case_valid` and `case_errors`; treat
+  `status=warn` as a signal to run `browser-cli example list`, inspect the
+  invalid example, or reinstall browser-cli before relying on packaged
+  playbooks or case examples.
 - `doctor` reports a `command_catalog` check with `required_commands`,
   `missing_required_commands`, `required_workflows`,
   `missing_required_workflows`, `required_workflow_steps`,

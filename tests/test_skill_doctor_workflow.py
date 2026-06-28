@@ -34,7 +34,10 @@ def test_skill_explains_doctor_status_decisions() -> None:
     assert '`browser_smoke_session` with `status: "fail"`' in text
     assert '`command_catalog` with `status: "warn"`' in text
     assert '`agent_references` with `status: "warn"`' in text
+    assert '`agent_examples` with `status: "warn"`' in text
     assert "browser-cli reference get --id action_playbook" in text
+    assert "browser-cli example list" in text
+    assert "`invalid_examples` and `checked_examples`" in text
     assert "`missing_required_commands`" in text
     assert "`repair_plan`" in text
     assert "`warnings > 0`" in text

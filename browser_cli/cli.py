@@ -112,6 +112,11 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.wait-console",
 )
 DOCTOR_REQUIRED_REFERENCES = ("action_playbook",)
+DOCTOR_REQUIRED_EXAMPLES = (
+    "agent_playbook",
+    "page_inspection_case",
+    "form_fill_case",
+)
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
     "connect_from_codex_site_requirements",
@@ -565,6 +570,13 @@ def _agent_examples() -> dict[str, Any]:
                 "Choosing a workflow for a common browser task.",
                 "Writing or reviewing Skill instructions for browser-cli.",
             ],
+            "grep_patterns": [
+                "First Checks",
+                "Case Files",
+                "Action Selection",
+                "browser-cli doctor --json",
+                "browser-cli case scaffold",
+            ],
         },
         "page_inspection_case": {
             "path": "examples/cases/page-inspection.yaml",
@@ -583,6 +595,13 @@ def _agent_examples() -> dict[str, Any]:
                 "Creating a repeatable page inspection smoke test.",
                 "Needing a small browser case file template with artifacts.",
             ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: page-inspection",
+                "action: open-url",
+                "action: snapshot",
+                "action: screenshot",
+            ],
         },
         "form_fill_case": {
             "path": "examples/cases/form-fill.yaml",
@@ -598,6 +617,13 @@ def _agent_examples() -> dict[str, Any]:
             "load_when": [
                 "Creating a repeatable form interaction smoke test.",
                 "Needing a small case file template for fill/click/verify steps.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: form-fill",
+                "action: eval",
+                "action: type",
+                "action: screenshot",
             ],
         },
     }
@@ -1890,6 +1916,144 @@ def _doctor_agent_references_check() -> dict[str, Any]:
         missing_required_references=[],
         invalid_references=[],
         checked_references=checked_references,
+    )
+
+
+def _validate_case_example_content(content: str) -> list[str]:
+    try:
+        import yaml
+    except Exception as exc:
+        return [f"PyYAML unavailable: {exc.__class__.__name__}"]
+
+    try:
+        spec = yaml.safe_load(content)
+    except Exception as exc:
+        return [f"Invalid YAML: {exc}"]
+    if not isinstance(spec, dict):
+        return ["Case example root must be an object."]
+    return validate_case_spec(spec)
+
+
+def _doctor_agent_examples_check() -> dict[str, Any]:
+    try:
+        examples = _agent_examples()
+    except Exception as exc:
+        return _doctor_check(
+            "agent_examples",
+            "warn",
+            "Agent example metadata could not be built.",
+            error=exc.__class__.__name__,
+            required_examples=list(DOCTOR_REQUIRED_EXAMPLES),
+            fix=_doctor_fix(
+                "verify_agent_example_metadata",
+                commands=[
+                    "browser-cli example list",
+                    "browser-cli commands --workflows-only",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on packaged examples for repeatable browser tasks.",
+                    "Upgrade or reinstall browser-cli if agent example metadata is unavailable.",
+                ],
+            ),
+        )
+
+    missing_examples = [
+        example_id
+        for example_id in DOCTOR_REQUIRED_EXAMPLES
+        if example_id not in examples
+    ]
+    checked_examples: list[dict[str, Any]] = []
+    invalid_examples: list[dict[str, Any]] = []
+
+    for example_id in DOCTOR_REQUIRED_EXAMPLES:
+        example = examples.get(example_id)
+        if not isinstance(example, dict):
+            continue
+        item: dict[str, Any] = {
+            "id": example_id,
+            "path": example.get("path"),
+            "package_resource": example.get("package_resource"),
+            "content_command": example.get("content_command"),
+            "format": example.get("format"),
+        }
+        try:
+            content = _read_agent_example_content(example_id)
+        except Exception as exc:
+            item.update(
+                {
+                    "status": "unavailable",
+                    "error": exc.__class__.__name__,
+                }
+            )
+            invalid_examples.append(item)
+            checked_examples.append(item)
+            continue
+
+        missing_patterns = [
+            str(pattern)
+            for pattern in example.get("grep_patterns", [])
+            if str(pattern) not in content
+        ]
+        case_errors: list[str] = []
+        if example.get("case_file"):
+            case_errors = _validate_case_example_content(content)
+        item.update(
+            {
+                "status": "pass"
+                if content.strip() and not missing_patterns and not case_errors
+                else "invalid",
+                "content_length": len(content),
+                "missing_patterns": missing_patterns,
+            }
+        )
+        if example.get("case_file"):
+            item.update(
+                {
+                    "case_valid": not case_errors,
+                    "case_errors": case_errors,
+                }
+            )
+        if item["status"] != "pass":
+            invalid_examples.append(item)
+        checked_examples.append(item)
+
+    if missing_examples or invalid_examples:
+        return _doctor_check(
+            "agent_examples",
+            "warn",
+            "Packaged agent examples are missing, unreadable, or invalid.",
+            required_examples=list(DOCTOR_REQUIRED_EXAMPLES),
+            example_count=len(examples),
+            missing_required_examples=missing_examples,
+            invalid_examples=invalid_examples,
+            checked_examples=checked_examples,
+            fix=_doctor_fix(
+                "repair_packaged_agent_examples",
+                commands=[
+                    "browser-cli example list",
+                    "browser-cli example get --id agent_playbook --metadata-only",
+                    "browser-cli example get --id page_inspection_case",
+                    "browser-cli example get --id form_fill_case",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Packaged examples should be readable from an installed CLI.",
+                    "Reinstall browser-cli if example get cannot load playbooks or case files.",
+                    "Run `browser-cli case validate --file <case.yaml>` on copied case examples before running them.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "agent_examples",
+        "pass",
+        "Packaged agent examples are readable and case examples validate.",
+        required_examples=list(DOCTOR_REQUIRED_EXAMPLES),
+        example_count=len(examples),
+        missing_required_examples=[],
+        invalid_examples=[],
+        checked_examples=checked_examples,
     )
 
 
@@ -10457,6 +10621,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
 
     checks.append(_doctor_command_catalog_check())
     checks.append(_doctor_agent_references_check())
+    checks.append(_doctor_agent_examples_check())
 
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
