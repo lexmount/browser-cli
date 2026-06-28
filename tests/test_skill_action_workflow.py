@@ -46,6 +46,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflows-only" in normalized
     assert "browser-cli commands --workflow setup_and_verify" in normalized
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
+    assert "browser-cli commands --workflow device_code_auth" in normalized
     assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
     assert "browser-cli commands --workflow session_recovery" in normalized
     assert "browser-cli commands --workflow case_file_task" in normalized
@@ -89,6 +90,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli auth export-env" in normalized
     assert "browser-cli auth login --device-code" in normalized
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
+    assert "browser-cli commands --workflow device_code_auth" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"
         in normalized
@@ -102,6 +104,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli auth login --open" in normalized
     assert "inspect `open_result`" in normalized
     assert "parse `available`, `reason`, `device_code.required_endpoints`" in normalized
+    assert "inspect or explain the device-code authorization path" in normalized
     assert "manual env fallback" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "Check top-level `usable` and `unusable_exports`" in normalized

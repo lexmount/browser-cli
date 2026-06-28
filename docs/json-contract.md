@@ -55,10 +55,11 @@ groups.
 `--workflow <id>` returns one workflow as `workflow_id` and `workflow`; unknown
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
-`agent_workflows` describes ordered setup, Connect from Codex auth, scoped token
-lifecycle, session recovery, one-off page, case file task, persistent login state,
-form interaction, interactive targeting, and page diagnostics steps with `command`, `read`,
-`success_condition`, `on_failure_read`, and `cleanup` hints.
+`agent_workflows` describes ordered setup, Connect from Codex auth, device-code
+auth, scoped token lifecycle, session recovery, one-off page, case file task,
+persistent login state, form interaction, interactive targeting, and page
+diagnostics steps with `command`, `read`, `success_condition`,
+`on_failure_read`, and `cleanup` hints.
 Command entries may expose `aliases` on canonical commands plus `alias_of` and
 `canonical_name` on alias commands, so agents can map user-facing phrasing back
 to the preferred action without parsing help text.
@@ -68,6 +69,11 @@ the next agent decision.
 The scoped token lifecycle workflow includes token validity, scope coverage,
 refresh availability, browser readiness, and local logout/revoke-pending fields
 without exposing token values.
+The device-code auth workflow includes `auth login --device-code`,
+`device_code.required_endpoints`, `device_code.required_browser_site_support`,
+`connect_from_codex.site_capability_status.missing`, and `fallback_handoff`
+fields so agents can explain current browser.lexmount.cn gaps and fall back to
+manual env setup.
 The session recovery workflow includes active session listing, single-session
 inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.

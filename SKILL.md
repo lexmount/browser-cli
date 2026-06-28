@@ -57,6 +57,7 @@ When setup or auth is unclear, inspect the installed workflow contract first:
 ```bash
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 ```
 
@@ -72,7 +73,9 @@ revealed export output, or full direct URLs into chat.
 If the user asks for device-code login, run `browser-cli auth login --device-code`
 and parse `available`, `reason`, `device_code.required_endpoints`, and
 `fallback_handoff`; while `available` is false, guide the user through the
-manual env fallback.
+manual env fallback. Prefer
+`browser-cli commands --workflow device_code_auth` when the task is to inspect
+or explain the device-code authorization path.
 
 `auth export-env` prints placeholders by default. With `--from-current`, it
 still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
@@ -303,6 +306,7 @@ browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task

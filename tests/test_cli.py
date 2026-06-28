@@ -254,6 +254,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli auth login --device-code"
+        in payload["agent_entrypoints"]["device_code_auth"]
+    )
+    assert (
         "browser-cli auth token-info --required-scope browser.actions:run"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
     )
@@ -300,6 +304,25 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "usable" in auth_steps[2]["read"]
     assert "unusable_exports" in auth_steps[2]["read"]
     assert auth_steps[2]["local_shell_only"] is True
+    device_steps = workflows["device_code_auth"]["steps"]
+    assert [step["id"] for step in device_steps] == [
+        "request_device_code",
+        "fallback_manual_env",
+        "verify_auth_status",
+        "doctor",
+    ]
+    assert device_steps[0]["command"] == "browser-cli auth login --device-code"
+    assert "device_code.required_endpoints" in device_steps[0]["read"]
+    assert "device_code.required_browser_site_support" in device_steps[0]["read"]
+    assert (
+        "connect_from_codex.site_capability_status.missing" in device_steps[0]["read"]
+    )
+    assert "fallback_handoff.setup_blocks" in device_steps[0]["read"]
+    assert device_steps[1]["optional"] is True
+    assert device_steps[1]["command"] == "browser-cli auth login"
+    assert "manual_env_available" in device_steps[1]["read"]
+    assert "device_token.valid" in device_steps[2]["read"]
+    assert device_steps[3]["command"] == "browser-cli doctor --json"
     token_steps = workflows["scoped_token_lifecycle"]["steps"]
     assert [step["id"] for step in token_steps] == [
         "status_scoped_token",
@@ -546,7 +569,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 10
+    assert payload["workflow_count"] == 11
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -554,6 +577,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         payload["agent_workflows"]["connect_from_codex_auth"]["steps"][1]["command"]
         == "browser-cli auth login"
+    )
+    assert (
+        "device_code.required_endpoints"
+        in payload["agent_workflows"]["device_code_auth"]["steps"][0]["read"]
     )
     assert payload["agent_workflows"]["one_off_page_task"]["steps"][-1] == {
         "id": "close_session",
@@ -657,6 +684,38 @@ def test_commands_catalog_returns_form_interaction_workflow(
     assert (
         "browser-cli action form-snapshot"
         in payload["agent_entrypoints"]["form_interaction"][0]
+    )
+
+
+def test_commands_catalog_returns_device_code_auth_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "device_code_auth"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "device_code_auth"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "request_device_code",
+        "fallback_manual_env",
+        "verify_auth_status",
+        "doctor",
+    ]
+    assert steps[0]["command"] == "browser-cli auth login --device-code"
+    assert "available=false" in steps[0]["success_condition"]
+    assert "device_code.required_endpoints" in steps[0]["read"]
+    assert "fallback_handoff.setup_blocks" in steps[0]["read"]
+    assert steps[1]["optional"] is True
+    assert "manual_env_available" in steps[1]["read"]
+    assert "device_token.valid" in steps[2]["read"]
+    assert steps[3]["command"] == "browser-cli doctor --json"
+    assert (
+        "browser-cli auth login --device-code"
+        in payload["agent_entrypoints"]["device_code_auth"]
     )
 
 
@@ -838,6 +897,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["available_workflows"] == [
         "case_file_task",
         "connect_from_codex_auth",
+        "device_code_auth",
         "form_interaction",
         "interactive_targeting",
         "one_off_page_task",
@@ -999,10 +1059,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 10
+    assert checks["command_catalog"]["workflow_count"] == 11
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
+        "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
         "one_off_page_task",
@@ -1019,6 +1080,12 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "auth_status",
         "auth_login",
         "export_env",
+        "doctor",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["device_code_auth"] == [
+        "request_device_code",
+        "fallback_manual_env",
+        "verify_auth_status",
         "doctor",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
@@ -1168,6 +1235,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["missing_required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
+        "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
         "one_off_page_task",
@@ -1215,6 +1283,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "auth_status"},
                         {"id": "auth_login"},
                         {"id": "export_env"},
+                        {"id": "doctor"},
+                    ],
+                },
+                "device_code_auth": {
+                    "steps": [
+                        {"id": "request_device_code"},
+                        {"id": "fallback_manual_env"},
+                        {"id": "verify_auth_status"},
                         {"id": "doctor"},
                     ],
                 },

@@ -103,6 +103,7 @@ DOCTOR_REQUIRED_COMMANDS = (
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
     "connect_from_codex_auth",
+    "device_code_auth",
     "scoped_token_lifecycle",
     "session_recovery",
     "one_off_page_task",
@@ -121,6 +122,12 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "auth_status",
         "auth_login",
         "export_env",
+        "doctor",
+    ),
+    "device_code_auth": (
+        "request_device_code",
+        "fallback_manual_env",
+        "verify_auth_status",
         "doctor",
     ),
     "scoped_token_lifecycle": (
@@ -496,6 +503,13 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli auth export-env",
                 AGENT_DOCTOR_COMMAND,
             ],
+            "device_code_auth": [
+                "browser-cli auth login --device-code",
+                "browser-cli auth login",
+                "browser-cli auth export-env",
+                "browser-cli auth status",
+                AGENT_DOCTOR_COMMAND,
+            ],
             "scoped_token_lifecycle": [
                 "browser-cli auth status",
                 "browser-cli auth token-info --required-scope browser.actions:run",
@@ -621,6 +635,67 @@ def _command_catalog() -> dict[str, Any]:
                             "unusable_exports",
                         ],
                         "secret_handling": "Do not paste revealed API keys into chat, logs, docs, or commits.",
+                    },
+                    {
+                        "id": "doctor",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                ],
+            },
+            "device_code_auth": {
+                "purpose": "Attempt the planned device-code approval flow, read browser.lexmount.cn readiness gaps, and fall back to manual env setup until the site implements device-code endpoints.",
+                "steps": [
+                    {
+                        "id": "request_device_code",
+                        "command": "browser-cli auth login --device-code",
+                        "success_condition": "available=true, or available=false with fallback_flow=manual_env",
+                        "read": [
+                            "selected_flow",
+                            "available",
+                            "device_code_available",
+                            "reason",
+                            "device_code.available",
+                            "device_code.reason",
+                            "device_code.required_endpoints",
+                            "device_code.required_browser_site_support",
+                            "device_code.verification_uri",
+                            "connect_from_codex.site_capability_status.missing",
+                            "fallback_flow",
+                            "fallback_handoff.setup_blocks",
+                            "fallback_handoff.verification.doctor_command",
+                        ],
+                    },
+                    {
+                        "id": "fallback_manual_env",
+                        "command": "browser-cli auth login",
+                        "optional": True,
+                        "read": [
+                            "selected_flow",
+                            "manual_env_available",
+                            "device_code_available",
+                            "connect_from_codex.url",
+                            "handoff.setup_blocks",
+                            "handoff.verification.doctor_command",
+                        ],
+                        "on_user_action": "Use this fallback when request_device_code reports available=false; paste generated env commands into the local shell only.",
+                    },
+                    {
+                        "id": "verify_auth_status",
+                        "command": "browser-cli auth status",
+                        "read": [
+                            "configured",
+                            "auth_source",
+                            "runtime_auth_usable",
+                            "device_token.present",
+                            "device_token.valid",
+                            "missing_env",
+                        ],
                     },
                     {
                         "id": "doctor",

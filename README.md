@@ -37,6 +37,7 @@ CLI for you:
    browser-cli commands --workflows-only
    browser-cli commands --workflow setup_and_verify
    browser-cli commands --workflow connect_from_codex_auth
+   browser-cli commands --workflow device_code_auth
    browser-cli commands --workflow scoped_token_lifecycle
 6. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
@@ -194,6 +195,7 @@ browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
@@ -263,6 +265,8 @@ or fall back to copying the URL when the browser cannot be opened.
 currently returns `flow: "device_code"`, `available: false`,
 `reason: "browser_site_endpoint_missing"`, required browser/API endpoints, and a
 `fallback_handoff` for the manual env flow.
+Use `browser-cli commands --workflow device_code_auth` when an agent needs the
+machine-readable device-code contract and fallback sequence.
 
 Diagnostics:
 
@@ -275,6 +279,7 @@ browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
@@ -534,9 +539,9 @@ local reveal flag.
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`. Use `--names-only`
 for compact command discovery and `--group action` when choosing a browser
 action. Use `--workflows-only` when you only need the structured setup,
-Connect from Codex auth, scoped token lifecycle, one-off page task, persistent
-login state, session recovery, case file task, form interaction, interactive
-targeting, and page diagnostics workflows, or
+Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page
+task, persistent login state, session recovery, case file task, form interaction,
+interactive targeting, and page diagnostics workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,
