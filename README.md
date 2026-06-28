@@ -59,13 +59,14 @@ CLI for you:
 9. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先读取权限目录和站点契约：
    browser-cli auth scopes --include-site-contract
    browser-cli auth connect-requirements
+   读取 browser_site_contract.required_runtime_auth、required_runtime_auth、required_token_lifecycle 和 setup_blocks；如果 scoped token/device-code 相关 runtime auth 仍缺 SDK/API/gateway 支持，不要把它当作可用登录方式。
 10. 如果未配置，引导我运行：
    browser-cli auth login
 11. 如果我希望直接打开本机浏览器，可以让我运行：
    browser-cli auth login --open
    如果我明确要求 device-code/OAuth 授权，先运行：
    browser-cli auth login --device-code
-   读取 available、reason、device_code、polling、credentials 和 fallback_handoff；available=false 时使用 manual env fallback。只有在端点已配置且授权说明已经显示后，才让我运行：
+   读取 available、reason、device_code、polling、credentials、connect_from_codex.required_runtime_auth 和 fallback_handoff；available=false 时使用 manual env fallback。只有在端点已配置、runtime auth 阻塞项已处理、且授权说明已经显示后，才让我运行：
    browser-cli auth login --device-code --wait
 12. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
 13. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
