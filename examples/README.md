@@ -6,6 +6,7 @@ These examples are meant for Codex and other agents that should prefer
 Generate a starter case file:
 
 ```bash
+browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 ```
 

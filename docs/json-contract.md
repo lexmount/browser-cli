@@ -97,10 +97,11 @@ manual env setup.
 The session recovery workflow includes active session listing, single-session
 inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.
-The case file task workflow includes case command discovery, optional
-`case scaffold` generation, case validation, and `--close-created-session` case
-runs with `next_commands`, `events_path`, `artifacts_dir`, `session`, and
-`steps` fields for repeatable smoke tests or regressions.
+The case file task workflow includes case command discovery, `case schema`
+inspection, optional `case scaffold` generation, case validation, and
+`--close-created-session` case runs with `supported_actions`,
+`required_fields`, `next_commands`, `events_path`, `artifacts_dir`, `session`,
+and `steps` fields for repeatable smoke tests or regressions.
 The interactive targeting workflow exposes `selection_order`,
 `preferred_commands`, and `alternative_commands` so agents can choose
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of
@@ -192,6 +193,9 @@ Default behavior:
 - `example list` and `example get` expose packaged agent playbooks and case
   files as JSON. `example get --metadata-only` omits content, and unknown ids
   fail as JSON with `error=unknown_example` plus `available_examples`.
+- `case schema` returns `supported_actions`, `required_fields`, per-action
+  `actions`, top-level target/session schema, optional `--names-only`, and
+  action-specific output with `--action`.
 - `case scaffold` returns a valid starter case spec and serialized YAML/JSON
   content, can write it to `--output`, refuses to overwrite without
   `--overwrite`, and reports `next_commands` for validate/run.

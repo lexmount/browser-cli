@@ -291,6 +291,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli case run --file <case.yaml> --close-created-session"
         in payload["agent_entrypoints"]["case_file_task"]
     )
+    assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
@@ -438,26 +439,31 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     case_steps = workflows["case_file_task"]["steps"]
     assert [step["id"] for step in case_steps] == [
         "inspect_case_commands",
+        "inspect_case_schema",
         "scaffold_case_file",
         "validate_case_file",
         "run_case_file",
     ]
     assert case_steps[0]["command"] == "browser-cli commands --group case"
     assert "commands" in case_steps[0]["read"]
-    assert case_steps[1]["command"] == (
+    assert case_steps[1]["command"] == "browser-cli case schema"
+    assert "supported_actions" in case_steps[1]["read"]
+    assert "required_fields" in case_steps[1]["read"]
+    assert "top_level" in case_steps[1]["read"]
+    assert case_steps[2]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert case_steps[1]["optional"] is True
-    assert case_steps[1]["success_condition"] == "valid=true and wrote_file=true"
-    assert "next_commands" in case_steps[1]["read"]
-    assert case_steps[2]["command"] == "browser-cli case validate --file <case.yaml>"
-    assert case_steps[2]["success_condition"] == "valid=true"
-    assert "errors" in case_steps[2]["read"]
-    assert case_steps[3]["command"] == (
+    assert case_steps[2]["optional"] is True
+    assert case_steps[2]["success_condition"] == "valid=true and wrote_file=true"
+    assert "next_commands" in case_steps[2]["read"]
+    assert case_steps[3]["command"] == "browser-cli case validate --file <case.yaml>"
+    assert case_steps[3]["success_condition"] == "valid=true"
+    assert "errors" in case_steps[3]["read"]
+    assert case_steps[4]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "events_path" in case_steps[3]["read"]
-    assert "message" in case_steps[3]["on_failure_read"]
+    assert "events_path" in case_steps[4]["read"]
+    assert "message" in case_steps[4]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
     assert "availability" in context_steps[0]["read"]
     assert "reusable" in context_steps[0]["read"]
@@ -570,6 +576,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "auth.login",
         "auth.refresh",
         "doctor",
+        "case.schema",
         "case.scaffold",
         "case.validate",
         "case.run",
@@ -685,7 +692,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "events_path"
-        in payload["agent_workflows"]["case_file_task"]["steps"][3]["read"]
+        in payload["agent_workflows"]["case_file_task"]["steps"][4]["read"]
     )
     assert (
         "selection_summary.recommended_next_action"
@@ -953,6 +960,93 @@ def test_example_get_fails_unknown_example_as_json(
     assert payload["fix"]["code"] == "inspect_available_agent_examples"
 
 
+def test_case_schema_returns_supported_actions_and_fields(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["case", "schema"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.schema"
+    assert payload["schema_version"] == 1
+    assert payload["supported_actions"] == [
+        "click",
+        "eval",
+        "open-url",
+        "screenshot",
+        "snapshot",
+        "type",
+        "wait-selector",
+    ]
+    assert payload["required_fields"]["type"] == ["selector", "text"]
+    assert payload["required_fields"]["screenshot"] == []
+    assert payload["actions"]["open-url"]["required_fields"] == ["url"]
+    assert "wait_until" in payload["actions"]["open-url"]["optional_fields"]
+    assert payload["actions"]["type"]["example_step"] == {
+        "action": "type",
+        "selector": "input[name=q]",
+        "text": "hello",
+    }
+    assert "steps" in payload["top_level"]["required_fields"]
+    assert "session.create" in payload["top_level"]["target_options"]
+    assert payload["workflow"]["validate"] == (
+        "browser-cli case validate --file case.yaml"
+    )
+
+
+def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["case", "schema", "--names-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": "case.schema",
+        "schema_version": 1,
+        "action_count": 7,
+        "supported_actions": [
+            "click",
+            "eval",
+            "open-url",
+            "screenshot",
+            "snapshot",
+            "type",
+            "wait-selector",
+        ],
+    }
+
+
+def test_case_schema_single_action_and_unknown_action_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["case", "schema", "--action", "wait-selector"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.schema"
+    assert payload["action"] == "wait-selector"
+    assert payload["action_schema"]["required_fields"] == ["selector"]
+    assert "state" in payload["action_schema"]["optional_fields"]
+    assert payload["action_schema"]["example_step"]["selector"] == "main"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["case", "schema", "--action", "hover"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "case.schema"
+    assert payload["error"] == "unknown_case_action"
+    assert payload["action"] == "hover"
+    assert "wait-selector" in payload["available_actions"]
+    assert payload["fix"]["code"] == "inspect_available_case_actions"
+
+
 def test_case_scaffold_returns_valid_json_case_content(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -1191,24 +1285,29 @@ def test_commands_catalog_returns_case_file_task_workflow(
     steps = payload["workflow"]["steps"]
     assert [step["id"] for step in steps] == [
         "inspect_case_commands",
+        "inspect_case_schema",
         "scaffold_case_file",
         "validate_case_file",
         "run_case_file",
     ]
     assert steps[0]["command"] == "browser-cli commands --group case"
     assert "command_count" in steps[0]["read"]
-    assert steps[1]["command"] == (
+    assert steps[1]["command"] == "browser-cli case schema"
+    assert "supported_actions" in steps[1]["read"]
+    assert "actions" in steps[1]["read"]
+    assert steps[2]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert steps[1]["optional"] is True
-    assert "next_commands" in steps[1]["read"]
-    assert steps[2]["success_condition"] == "valid=true"
-    assert "step_count" in steps[2]["read"]
-    assert steps[3]["command"] == (
+    assert steps[2]["optional"] is True
+    assert "next_commands" in steps[2]["read"]
+    assert steps[3]["success_condition"] == "valid=true"
+    assert "step_count" in steps[3]["read"]
+    assert steps[4]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "artifacts_dir" in steps[3]["read"]
-    assert "steps" in steps[3]["on_failure_read"]
+    assert "artifacts_dir" in steps[4]["read"]
+    assert "steps" in steps[4]["on_failure_read"]
+    assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
@@ -1554,6 +1653,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["case_file_task"] == [
         "inspect_case_commands",
+        "inspect_case_schema",
         "scaffold_case_file",
         "validate_case_file",
         "run_case_file",
@@ -1616,6 +1716,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "example.list",
         "example.get",
         "version",
+        "case.schema",
         "case.scaffold",
         "case.validate",
         "case.run",
@@ -1720,6 +1821,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "example.list" in catalog["missing_required_commands"]
     assert "example.get" in catalog["missing_required_commands"]
     assert "version" in catalog["missing_required_commands"]
+    assert "case.schema" in catalog["missing_required_commands"]
     assert "case.scaffold" in catalog["missing_required_commands"]
     assert "auth.connect-requirements" in catalog["missing_required_commands"]
     assert catalog["missing_required_workflows"] == [
@@ -1938,6 +2040,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "case_file_task": {
                     "steps": [
                         {"id": "inspect_case_commands"},
+                        {"id": "inspect_case_schema"},
                         {"id": "scaffold_case_file"},
                         {"id": "validate_case_file"},
                         {"id": "run_case_file"},

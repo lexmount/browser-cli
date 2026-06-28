@@ -49,6 +49,7 @@ CLI for you:
    browser-cli example get --id agent_playbook --metadata-only
    browser-cli example get --id page_inspection_case
    browser-cli example get --id form_fill_case
+   browser-cli case schema
    browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 8. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
@@ -224,6 +225,7 @@ browser-cli reference list
 browser-cli reference get --id action_playbook --metadata-only
 browser-cli example list
 browser-cli example get --id page_inspection_case --metadata-only
+browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 ```
 
@@ -524,6 +526,7 @@ browser-cli auth status
 browser-cli auth export-env
 browser-cli commands
 browser-cli commands --workflow case_file_task
+browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
@@ -654,6 +657,7 @@ For a new browser task, agents should prefer this sequence:
 ```bash
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow case_file_task
+browser-cli case schema
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>

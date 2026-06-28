@@ -35,6 +35,7 @@ from lex_browser_runtime.browser.actions import (
 )
 from lex_browser_runtime.browser.cases import run_case_file, validate_case_file
 from lex_browser_runtime.browser.cases import (
+    REQUIRED_CASE_FIELDS,
     SUPPORTED_CASE_ACTIONS,
     validate_case_spec,
 )
@@ -70,6 +71,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "example.get",
     "version",
     "doctor",
+    "case.schema",
     "case.scaffold",
     "case.validate",
     "case.run",
@@ -176,6 +178,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     ),
     "case_file_task": (
         "inspect_case_commands",
+        "inspect_case_schema",
         "scaffold_case_file",
         "validate_case_file",
         "run_case_file",
@@ -723,6 +726,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "case_file_task": [
                 "browser-cli commands --group case",
+                "browser-cli case schema",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case validate --file <case.yaml>",
                 "browser-cli case run --file <case.yaml> --close-created-session",
@@ -1145,6 +1149,16 @@ def _command_catalog() -> dict[str, Any]:
                             "command_count",
                             "commands",
                             "json_output",
+                        ],
+                    },
+                    {
+                        "id": "inspect_case_schema",
+                        "command": "browser-cli case schema",
+                        "read": [
+                            "supported_actions",
+                            "required_fields",
+                            "actions",
+                            "top_level",
                         ],
                     },
                     {
@@ -11980,6 +11994,149 @@ def _case_scaffold_next_commands(output: str | None) -> list[str]:
     ]
 
 
+def _case_action_schema() -> dict[str, Any]:
+    optional_fields: dict[str, list[str]] = {
+        "open-url": ["wait_until", "timeout_ms"],
+        "wait-selector": ["state", "timeout_ms"],
+        "click": ["timeout_ms", "wait_after_ms"],
+        "type": ["timeout_ms", "press_enter"],
+        "screenshot": ["output", "full_page", "timeout_ms"],
+        "eval": [],
+        "snapshot": ["max_chars", "output", "timeout_ms"],
+    }
+    result_fields: dict[str, list[str]] = {
+        "open-url": ["url", "title", "status"],
+        "wait-selector": ["selector", "state", "text", "url"],
+        "click": ["selector", "clicked", "url"],
+        "type": ["selector", "typed", "press_enter", "url"],
+        "screenshot": ["path", "full_page", "url"],
+        "eval": ["expression", "value", "url"],
+        "snapshot": ["url", "title", "html", "text"],
+    }
+    examples: dict[str, dict[str, Any]] = {
+        "open-url": {
+            "action": "open-url",
+            "url": "https://example.com",
+            "wait_until": "load",
+        },
+        "wait-selector": {
+            "action": "wait-selector",
+            "selector": "main",
+            "state": "visible",
+        },
+        "click": {"action": "click", "selector": "button[type=submit]"},
+        "type": {"action": "type", "selector": "input[name=q]", "text": "hello"},
+        "screenshot": {
+            "action": "screenshot",
+            "output": "page.png",
+            "full_page": True,
+        },
+        "eval": {"action": "eval", "expression": "() => document.title"},
+        "snapshot": {
+            "action": "snapshot",
+            "max_chars": 2000,
+            "output": "snapshot.json",
+        },
+    }
+    return {
+        action: {
+            "required_fields": list(REQUIRED_CASE_FIELDS.get(action, ())),
+            "optional_fields": optional_fields.get(action, []),
+            "result_fields": result_fields.get(action, []),
+            "example_step": examples.get(action, {"action": action}),
+        }
+        for action in sorted(SUPPORTED_CASE_ACTIONS)
+    }
+
+
+def cmd_case_schema(args: argparse.Namespace) -> None:
+    command = "case.schema"
+    actions = _case_action_schema()
+    top_level = {
+        "required_fields": ["steps"],
+        "optional_fields": [
+            "name",
+            "description",
+            "run_id",
+            "close_created_session",
+            "target",
+            "session",
+        ],
+        "target_options": {
+            "target.session_id": "Use an existing Lexmount browser session.",
+            "target.connect_url": "Use an explicit CDP websocket URL.",
+            "target.direct_url": "Use a direct URL derived from local env credentials.",
+            "session.create": "Create a temporary Lexmount browser session for the case.",
+        },
+        "session_fields": [
+            "create",
+            "context_id",
+            "create_context",
+            "context_mode",
+            "browser_mode",
+            "metadata",
+        ],
+    }
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "supported_actions": sorted(SUPPORTED_CASE_ACTIONS),
+        "action_count": len(SUPPORTED_CASE_ACTIONS),
+        "required_fields": {
+            action: list(fields)
+            for action, fields in sorted(REQUIRED_CASE_FIELDS.items())
+        },
+        "actions": actions,
+        "top_level": top_level,
+        "workflow": {
+            "inspect": "browser-cli case schema",
+            "scaffold": "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+            "validate": "browser-cli case validate --file case.yaml",
+            "run": "browser-cli case run --file case.yaml --close-created-session",
+        },
+        "notes": [
+            "Use case scaffold for common starter files before hand-writing YAML.",
+            "Use action commands directly when a browser task needs actions outside this case runner schema.",
+            "Run case validate before case run.",
+        ],
+    }
+    if args.action:
+        action = str(args.action)
+        if action not in actions:
+            _failure(
+                command,
+                "unknown_case_action",
+                f"Unknown case action: {action}",
+                action=action,
+                available_actions=sorted(actions),
+                fix=_doctor_fix(
+                    "inspect_available_case_actions",
+                    commands=[
+                        "browser-cli case schema",
+                        "browser-cli case schema --names-only",
+                    ],
+                    guidance=[
+                        "Choose one of available_actions, then rerun case schema with that --action value."
+                    ],
+                ),
+            )
+        _success(
+            command,
+            schema_version=payload["schema_version"],
+            action=action,
+            supported_actions=payload["supported_actions"],
+            action_schema=actions[action],
+            top_level=top_level,
+        )
+    if args.names_only:
+        _success(
+            command,
+            schema_version=payload["schema_version"],
+            action_count=payload["action_count"],
+            supported_actions=payload["supported_actions"],
+        )
+    _success(command, **payload)
+
+
 def cmd_case_scaffold(args: argparse.Namespace) -> None:
     command = "case.scaffold"
     spec = _case_scaffold_spec(args)
@@ -13581,6 +13738,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case = subparsers.add_parser("case", help="Validate or run a browser case file")
     case_subparsers = case.add_subparsers(dest="case_command", required=True)
+
+    case_schema = case_subparsers.add_parser(
+        "schema",
+        help="Describe the supported browser case file schema",
+    )
+    case_schema.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Only return supported case action names.",
+    )
+    case_schema.add_argument(
+        "--action",
+        help="Return schema details for one supported case action.",
+    )
+    case_schema.set_defaults(func=cmd_case_schema)
 
     case_scaffold = case_subparsers.add_parser(
         "scaffold",

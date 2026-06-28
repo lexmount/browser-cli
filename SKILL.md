@@ -223,9 +223,12 @@ workflow before writing browser automation code:
 browser-cli commands --workflow case_file_task
 ```
 
-Generate a starter case with `browser-cli case scaffold --template page-inspection --url <url> --output case.yaml` when no case file exists. Validate first, then run with
-`--close-created-session`. Read `valid`, `errors`, `step_count`,
-`next_commands`, `events_path`, `artifacts_dir`, `session`, and `steps`.
+Run `browser-cli case schema` before hand-writing a case file. Generate a
+starter case with `browser-cli case scaffold --template page-inspection --url <url> --output case.yaml`
+when no case file exists. Validate first, then run with
+`--close-created-session`. Read `supported_actions`, `required_fields`,
+`valid`, `errors`, `step_count`, `next_commands`, `events_path`,
+`artifacts_dir`, `session`, and `steps`.
 
 For form tasks, prefer the more specific form workflow:
 
@@ -345,6 +348,7 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
+browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli doctor
 browser-cli doctor --json
