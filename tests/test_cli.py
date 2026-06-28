@@ -342,6 +342,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720"
         in payload["agent_entrypoints"]["page_diagnostics"]
     )
+    assert (
+        "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png"
+        in payload["agent_entrypoints"]["page_diagnostics"]
+    )
     workflows = payload["agent_workflows"]
     assert workflows["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -642,7 +646,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.entries" in diagnostics_steps[6]["read"]
     assert "result.entry_count" in diagnostics_steps[7]["read"]
     assert (
-        "browser-cli action screenshot" in diagnostics_steps[8]["fallback_commands"][0]
+        "browser-cli action screenshot-selector"
+        in diagnostics_steps[8]["fallback_commands"][0]
+    )
+    assert (
+        "browser-cli action screenshot" in diagnostics_steps[8]["fallback_commands"][1]
     )
 
     for name in (
@@ -661,6 +669,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.open-url",
         "action.page-info",
         "action.set-viewport",
+        "action.screenshot-selector",
         "action.wait-title",
         "action.wait-state-role",
         "action.press-key",
@@ -712,6 +721,12 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     set_viewport = commands["action.set-viewport"]
     assert set_viewport["required_options"] == ["--width", "--height"]
     assert set_viewport["browser_target"] == open_url["browser_target"]
+    screenshot_selector = commands["action.screenshot-selector"]
+    assert screenshot_selector["required_options"] == ["--selector"]
+    assert screenshot_selector["browser_target"] == open_url["browser_target"]
+    assert any(
+        "--output" in option["flags"] for option in screenshot_selector["options"]
+    )
     action_guide = commands["action.guide"]
     assert action_guide["required_options"] == []
     assert action_guide["required_one_of"] == []
@@ -990,6 +1005,13 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert "result.viewport" in payload["guide"]["read_fields"]
     assert "result.window_viewport" in payload["guide"]["read_fields"]
+    assert "screenshot-selector" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action screenshot-selector" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert "result.screenshot" in payload["guide"]["read_fields"]
+    assert "result.path" in payload["guide"]["read_fields"]
     assert (
         "set-viewport when viewport state matters"
         in payload["guide"]["custom_js_boundary"]
@@ -1868,8 +1890,12 @@ def test_commands_catalog_returns_page_diagnostics_workflow(
     assert "result.entries" in payload["workflow"]["steps"][6]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "capture_visible_state"
     assert (
-        "browser-cli action screenshot"
+        "browser-cli action screenshot-selector"
         in payload["workflow"]["steps"][-1]["fallback_commands"][0]
+    )
+    assert (
+        "browser-cli action screenshot"
+        in payload["workflow"]["steps"][-1]["fallback_commands"][1]
     )
 
 
@@ -1954,6 +1980,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.open-url" in payload["commands"]
     assert "action.page-info" in payload["commands"]
     assert "action.set-viewport" in payload["commands"]
+    assert "action.screenshot-selector" in payload["commands"]
     assert "action.wait-title" in payload["commands"]
     assert "action.press-key" in payload["commands"]
     assert "action.link-snapshot" in payload["commands"]
@@ -2173,6 +2200,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.scroll",
         "action.scroll-into-view-role",
         "action.set-viewport",
+        "action.screenshot-selector",
         "action.get-text",
         "action.get-text-role",
         "action.exists",
@@ -2306,6 +2334,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.hover-role" in catalog["missing_required_commands"]
     assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
     assert "action.set-viewport" in catalog["missing_required_commands"]
+    assert "action.screenshot-selector" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
@@ -6673,6 +6702,127 @@ def test_action_set_viewport_rejects_invalid_size_as_json(
     assert payload["error"] == "argument_error"
     assert payload["width"] == 0
     assert payload["height"] == 720
+
+
+def test_action_screenshot_selector_emits_structured_result(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_screenshot_selector(
+        *,
+        connect_url: str,
+        selector: str,
+        output: str | None,
+        index: int,
+        timeout_ms: float,
+    ) -> dict[str, Any]:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "selector": selector,
+                "output": output,
+                "index": index,
+                "timeout_ms": timeout_ms,
+            }
+        )
+        return {
+            "url": "https://example.test",
+            "selector": selector,
+            "index": index,
+            "found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": output,
+            "match_count": 2,
+            "bounding_box": {"x": 10, "y": 20, "width": 300, "height": 120},
+        }
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._screenshot_selector", fake_screenshot_selector
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "screenshot-selector",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--output",
+                "/tmp/main.png",
+                "--index",
+                "1",
+                "--timeout-ms",
+                "1234",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed == {
+        "connect_url": connect_url,
+        "selector": "main",
+        "output": "/tmp/main.png",
+        "index": 1,
+        "timeout_ms": 1234.0,
+    }
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": "action.screenshot-selector",
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": {
+            "url": "https://example.test",
+            "selector": "main",
+            "index": 1,
+            "found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": "/tmp/main.png",
+            "match_count": 2,
+            "bounding_box": {"x": 10, "y": 20, "width": 300, "height": 120},
+        },
+    }
+
+
+def test_action_screenshot_selector_rejects_invalid_index_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "screenshot-selector",
+                "--session-id",
+                "s1",
+                "--selector",
+                "main",
+                "--index",
+                "-1",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "action.screenshot-selector"
+    assert payload["error"] == "argument_error"
+    assert payload["index"] == -1
 
 
 def test_action_dom_snapshots_mask_sensitive_accessible_names(

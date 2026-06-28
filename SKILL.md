@@ -435,7 +435,8 @@ Core action rules:
   selector is known.
 - For page failures, run `browser-cli commands --workflow page_diagnostics`;
   install console/network capture before reproducing the issue; use
-  `set-viewport` when viewport size affects the failure or screenshot evidence.
+  `set-viewport` and `screenshot-selector` when viewport size or a specific
+  page region affects the failure evidence.
 - Parse structured result fields and `*_masked` flags before concluding that an
   action changed the page or before reporting values.
 - Use `eval` only for page-local work not covered by a first-class action, and

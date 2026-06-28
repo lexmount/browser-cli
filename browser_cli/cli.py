@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from importlib import resources as importlib_resources
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Callable, NoReturn
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from browser_cli import __version__
@@ -109,6 +109,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.snapshot",
     "action.page-info",
     "action.set-viewport",
+    "action.screenshot-selector",
     "action.get-text",
     "action.get-text-role",
     "action.exists",
@@ -818,6 +819,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action network-snapshot --session-id <session_id> --install-only",
                 "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
                 "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
             ],
         },
         "agent_workflows": {
@@ -1671,6 +1673,7 @@ def _command_catalog() -> dict[str, Any]:
                             "result.text_truncated",
                         ],
                         "fallback_commands": [
+                            "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
                             "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
                             "browser-cli action page-info --session-id <session_id>",
                         ],
@@ -3827,11 +3830,10 @@ def _run_action_command(
     )
 
 
-def _set_page_viewport(
+def _run_with_playwright_page(
     *,
     connect_url: str,
-    width: int,
-    height: int,
+    operation: Callable[[Any], dict[str, Any]],
 ) -> dict[str, Any]:
     try:
         from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
@@ -3846,29 +3848,131 @@ def _set_page_viewport(
         try:
             context = browser.contexts[0] if browser.contexts else browser.new_context()
             page = context.pages[0] if context.pages else context.new_page()
-            previous_viewport = page.viewport_size
-            page.set_viewport_size({"width": width, "height": height})
-            viewport = page.viewport_size
-            window_viewport = page.evaluate(
-                """
+            return operation(page)
+        finally:
+            browser.close()
+
+
+def _set_page_viewport(
+    *,
+    connect_url: str,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    def apply(page: Any) -> dict[str, Any]:
+        previous_viewport = page.viewport_size
+        page.set_viewport_size({"width": width, "height": height})
+        viewport = page.viewport_size
+        window_viewport = page.evaluate(
+            """
 () => ({
   width: window.innerWidth,
   height: window.innerHeight,
   device_pixel_ratio: window.devicePixelRatio
 })
 """.strip()
-            )
+        )
+        return {
+            "url": page.url,
+            "title": page.title(),
+            "requested_viewport": {"width": width, "height": height},
+            "previous_viewport": previous_viewport,
+            "viewport": viewport,
+            "window_viewport": window_viewport,
+            "changed": previous_viewport != viewport,
+        }
+
+    return _run_with_playwright_page(connect_url=connect_url, operation=apply)
+
+
+def _screenshot_selector(
+    *,
+    connect_url: str,
+    selector: str,
+    output: str | None,
+    index: int,
+    timeout_ms: float,
+) -> dict[str, Any]:
+    output_path = output or str(
+        Path("/tmp")
+        / f"browser-cli-selector-screenshot-{int(datetime.now(timezone.utc).timestamp())}.png"
+    )
+
+    def apply(page: Any) -> dict[str, Any]:
+        try:
+            page.wait_for_selector(selector, state="attached", timeout=timeout_ms)
+        except Exception:
             return {
                 "url": page.url,
-                "title": page.title(),
-                "requested_viewport": {"width": width, "height": height},
-                "previous_viewport": previous_viewport,
-                "viewport": viewport,
-                "window_viewport": window_viewport,
-                "changed": previous_viewport != viewport,
+                "selector": selector,
+                "index": index,
+                "found": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": 0,
+                "error": "selector_not_found",
             }
-        finally:
-            browser.close()
+
+        matches = page.locator(selector)
+        match_count = matches.count()
+        if index >= match_count:
+            return {
+                "url": page.url,
+                "selector": selector,
+                "index": index,
+                "found": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "error": "index_out_of_range",
+            }
+
+        target = matches.nth(index)
+        try:
+            target.wait_for(state="visible", timeout=timeout_ms)
+        except Exception:
+            return {
+                "url": page.url,
+                "selector": selector,
+                "index": index,
+                "found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": target.bounding_box(),
+                "error": "element_not_visible",
+            }
+
+        bounding_box = target.bounding_box()
+        if bounding_box is None:
+            return {
+                "url": page.url,
+                "selector": selector,
+                "index": index,
+                "found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": None,
+                "error": "missing_bounding_box",
+            }
+
+        target.screenshot(path=output_path, timeout=timeout_ms)
+        return {
+            "url": page.url,
+            "selector": selector,
+            "index": index,
+            "found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": output_path,
+            "match_count": match_count,
+            "bounding_box": bounding_box,
+        }
+
+    return _run_with_playwright_page(connect_url=connect_url, operation=apply)
 
 
 def _run_set_viewport_action_command(args: argparse.Namespace) -> None:
@@ -3890,6 +3994,48 @@ def _run_set_viewport_action_command(args: argparse.Namespace) -> None:
             connect_url=connect_url,
             width=args.width,
             height=args.height,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def _run_screenshot_selector_action_command(args: argparse.Namespace) -> None:
+    command = "action.screenshot-selector"
+    if args.index < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--index must be zero or greater.",
+            exit_code=2,
+            index=args.index,
+        )
+    if args.timeout_ms < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--timeout-ms must be zero or greater.",
+            exit_code=2,
+            timeout_ms=args.timeout_ms,
+        )
+
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = _screenshot_selector(
+            connect_url=connect_url,
+            selector=args.selector,
+            output=args.output,
+            index=args.index,
+            timeout_ms=args.timeout_ms,
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
@@ -11086,6 +11232,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "console-snapshot",
                 "network-snapshot",
                 "text-snapshot",
+                "screenshot-selector",
                 "screenshot",
             ],
             "inspect_commands": [
@@ -11104,6 +11251,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "fallback_commands": [
                 "browser-cli action wait-console --session-id <session_id> --source pageerror",
                 "browser-cli action wait-network --session-id <session_id> --failed-only",
+                "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
                 "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
             ],
             "verify_commands": [
@@ -11120,11 +11268,13 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.entry_count",
                 "result.texts",
                 "result.text_count",
+                "result.screenshot",
+                "result.path",
             ],
             "custom_js_boundary": (
                 "Use action eval only after page-info, set-viewport when viewport "
-                "state matters, console/network capture, text snapshots, and "
-                "screenshots do not explain the issue."
+                "state matters, console/network capture, text snapshots, selector "
+                "screenshots, and full-page screenshots do not explain the issue."
             ),
         },
         "state_waits": {
@@ -11329,6 +11479,10 @@ def cmd_action_screenshot(args: argparse.Namespace) -> None:
             timeout_ms=args.timeout_ms,
         ),
     )
+
+
+def cmd_action_screenshot_selector(args: argparse.Namespace) -> None:
+    _run_screenshot_selector_action_command(args)
 
 
 def cmd_action_eval(args: argparse.Namespace) -> None:
@@ -14786,6 +14940,17 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_screenshot.add_argument("--full-page", action="store_true")
     action_screenshot.add_argument("--timeout-ms", type=float, default=30000)
     action_screenshot.set_defaults(func=cmd_action_screenshot)
+
+    action_screenshot_selector = action_subparsers.add_parser(
+        "screenshot-selector",
+        help="Capture a screenshot of one selector match",
+    )
+    _add_session_target_args(action_screenshot_selector)
+    action_screenshot_selector.add_argument("--selector", required=True)
+    action_screenshot_selector.add_argument("--output")
+    action_screenshot_selector.add_argument("--index", type=int, default=0)
+    action_screenshot_selector.add_argument("--timeout-ms", type=float, default=30000)
+    action_screenshot_selector.set_defaults(func=cmd_action_screenshot_selector)
 
     action_eval = action_subparsers.add_parser(
         "eval",
