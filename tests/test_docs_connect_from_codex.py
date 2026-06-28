@@ -10,6 +10,7 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     text = DOC.read_text()
 
     assert "https://browser.lexmount.cn/connect/codex" in text
+    assert "browser-cli auth connect-requirements" in text
     assert "browser-cli auth login" in text
     assert "browser-cli auth login --open" in text
     assert "browser-cli auth login --device-code" in text
@@ -25,6 +26,10 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "site_capabilities" in text
     assert "site_capability_status" in text
     assert "setup_blocks" in text
+    assert "required_device_code_endpoints" in text
+    assert "required_api_contract" in text
+    assert "required_token_lifecycle" in text
+    assert "verification.doctor_command" in text
     assert "contains_secret_values" in text
     assert "contains_secret_placeholders" in text
     assert "safe_to_paste_in_chat" in text

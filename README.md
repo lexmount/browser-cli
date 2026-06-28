@@ -36,34 +36,37 @@ CLI for you:
 5. 先读取当前安装版本提供给 agent 的 workflow 契约，后续按 JSON 中的 workflow.steps 执行，不要解析 --help 文本：
    browser-cli commands --workflows-only
    browser-cli commands --workflow setup_and_verify
+   browser-cli commands --workflow connect_from_codex_site_requirements
    browser-cli commands --workflow connect_from_codex_auth
    browser-cli commands --workflow device_code_auth
    browser-cli commands --workflow scoped_token_lifecycle
 6. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
-7. 如果未配置，引导我运行：
+7. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先运行：
+   browser-cli auth connect-requirements
+8. 如果未配置，引导我运行：
    browser-cli auth login
-8. 如果我希望直接打开本机浏览器，可以让我运行：
+9. 如果我希望直接打开本机浏览器，可以让我运行：
    browser-cli auth login --open
-9. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
-10. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
-11. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
+10. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
+11. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
+12. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
    browser-cli auth export-env
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-12. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
+13. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
    browser-cli auth export-env --from-current --reveal-secrets
    browser-cli auth export-env --reveal-secrets
    并提醒我不要把该输出粘贴到聊天里。
-13. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-14. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-15. 运行下面命令验证：
+14. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+15. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+16. 运行下面命令验证：
    browser-cli --help
    browser-cli doctor --json
    browser-cli doctor --smoke-session
    browser-cli session list
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
-16. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约：
+17. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约：
    browser-cli commands --workflow session_recovery
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow case_file_task
@@ -194,6 +197,7 @@ browser-cli commands --names-only
 browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow connect_from_codex_site_requirements
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
@@ -226,6 +230,7 @@ browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/creden
 browser-cli auth token-info --required-scope browser:sessions --required-scope browser:actions
 browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth connect-requirements
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth login --device-code
@@ -238,6 +243,15 @@ browser-cli auth export-env --from-current --include-base-url
 `has_refresh_token`, `refresh_available`, `refreshed`, and `reason`. Remote
 refresh is not implemented yet, so agents should use its `next_steps` and keep
 using env API-key credentials for browser actions today.
+
+`auth connect-requirements` returns the browser.lexmount.cn `/connect/codex`
+implementation contract without requiring credentials or opening a browser. It
+includes `connect_from_codex.url`, `connect_from_codex.device_code_url`,
+`site_capabilities`/`site_capability_status`, `setup_blocks`,
+`required_device_code_endpoints`, `required_api_contract`,
+`required_token_lifecycle`, and verification commands for
+`browser-cli auth status`, `browser-cli auth login`, device-code fallback, and
+`browser-cli doctor --json`.
 
 `auth login` returns top-level `flow`, `selected_flow`, `available`,
 `manual_env_available`, and `device_code_available`, plus the currently
@@ -265,8 +279,10 @@ or fall back to copying the URL when the browser cannot be opened.
 currently returns `flow: "device_code"`, `available: false`,
 `reason: "browser_site_endpoint_missing"`, required browser/API endpoints, and a
 `fallback_handoff` for the manual env flow.
-Use `browser-cli commands --workflow device_code_auth` when an agent needs the
-machine-readable device-code contract and fallback sequence.
+Use `browser-cli commands --workflow connect_from_codex_site_requirements` when
+an agent or browser.lexmount.cn implementer needs the machine-readable site
+requirements, and `browser-cli commands --workflow device_code_auth` when an
+agent needs the machine-readable device-code contract and fallback sequence.
 
 Diagnostics:
 
@@ -278,6 +294,7 @@ browser-cli commands --names-only
 browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow connect_from_codex_site_requirements
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle

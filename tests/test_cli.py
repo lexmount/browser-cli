@@ -242,6 +242,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "version" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
+    assert (
+        "browser-cli auth connect-requirements" in payload["agent_entrypoints"]["setup"]
+    )
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
@@ -256,6 +259,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         "browser-cli auth login --device-code"
         in payload["agent_entrypoints"]["device_code_auth"]
+    )
+    assert (
+        "browser-cli auth connect-requirements"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
     )
     assert (
         "browser-cli auth token-info --required-scope browser.actions:run"
@@ -295,6 +302,20 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in workflows["setup_and_verify"]["steps"][1]["on_failure_read"]
     )
     assert workflows["setup_and_verify"]["steps"][2]["optional"] is True
+    site_steps = workflows["connect_from_codex_site_requirements"]["steps"]
+    assert [step["id"] for step in site_steps] == [
+        "inspect_site_requirements",
+        "verify_manual_handoff",
+        "verify_device_code_handoff",
+        "doctor_after_credentials",
+    ]
+    assert site_steps[0]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.device_code_url" in site_steps[0]["read"]
+    assert "required_device_code_endpoints" in site_steps[0]["read"]
+    assert "required_token_lifecycle" in site_steps[0]["read"]
+    assert site_steps[1]["optional"] is True
+    assert site_steps[2]["command"] == "browser-cli auth login --device-code"
+    assert site_steps[3]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[1]["command"] == "browser-cli auth login"
     assert "selected_flow" in auth_steps[1]["read"]
@@ -569,10 +590,16 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 11
+    assert payload["workflow_count"] == 12
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
+    )
+    assert (
+        "required_token_lifecycle"
+        in payload["agent_workflows"]["connect_from_codex_site_requirements"]["steps"][
+            0
+        ]["read"]
     )
     assert (
         payload["agent_workflows"]["connect_from_codex_auth"]["steps"][1]["command"]
@@ -659,6 +686,38 @@ def test_commands_catalog_returns_single_workflow(
     assert (
         "browser-cli session create"
         in payload["agent_entrypoints"]["one_off_page_task"]
+    )
+
+
+def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "connect_from_codex_site_requirements"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "connect_from_codex_site_requirements"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_site_requirements",
+        "verify_manual_handoff",
+        "verify_device_code_handoff",
+        "doctor_after_credentials",
+    ]
+    assert steps[0]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.site_capabilities" in steps[0]["read"]
+    assert "required_device_code_endpoints" in steps[0]["read"]
+    assert steps[1]["optional"] is True
+    assert "handoff.setup_blocks" in steps[1]["read"]
+    assert steps[2]["command"] == "browser-cli auth login --device-code"
+    assert "device_code.required_endpoints" in steps[2]["read"]
+    assert steps[3]["command"] == "browser-cli doctor --json"
+    assert (
+        "browser-cli auth connect-requirements"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
     )
 
 
@@ -897,6 +956,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["available_workflows"] == [
         "case_file_task",
         "connect_from_codex_auth",
+        "connect_from_codex_site_requirements",
         "device_code_auth",
         "form_interaction",
         "interactive_targeting",
@@ -1059,9 +1119,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 11
+    assert checks["command_catalog"]["workflow_count"] == 12
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
+        "connect_from_codex_site_requirements",
         "connect_from_codex_auth",
         "device_code_auth",
         "scoped_token_lifecycle",
@@ -1081,6 +1142,14 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "auth_login",
         "export_env",
         "doctor",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "connect_from_codex_site_requirements"
+    ] == [
+        "inspect_site_requirements",
+        "verify_manual_handoff",
+        "verify_device_code_handoff",
+        "doctor_after_credentials",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["device_code_auth"] == [
         "request_device_code",
@@ -1232,8 +1301,10 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
     assert "version" in catalog["missing_required_commands"]
+    assert "auth.connect-requirements" in catalog["missing_required_commands"]
     assert catalog["missing_required_workflows"] == [
         "setup_and_verify",
+        "connect_from_codex_site_requirements",
         "connect_from_codex_auth",
         "device_code_auth",
         "scoped_token_lifecycle",
@@ -1276,6 +1347,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                     "steps": [
                         {"id": "auth_status"},
                         {"id": "doctor"},
+                    ],
+                },
+                "connect_from_codex_site_requirements": {
+                    "steps": [
+                        {"id": "inspect_site_requirements"},
+                        {"id": "verify_manual_handoff"},
+                        {"id": "verify_device_code_handoff"},
+                        {"id": "doctor_after_credentials"},
                     ],
                 },
                 "connect_from_codex_auth": {
@@ -2548,6 +2627,119 @@ def test_auth_export_env_can_reveal_current_secret_explicitly(
     assert payload["warnings"] == []
     assert "local-secret" in payload["script"]
     assert payload["exports"][0]["usable"] is True
+
+
+def test_auth_connect_requirements_reports_browser_site_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "env-project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "connect-requirements",
+                "--project-id",
+                "arg-project",
+                "--scope",
+                "browser:actions",
+                "--scope",
+                "browser:actions",
+                "--expires-in",
+                "24h",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "auth.connect-requirements"
+    assert payload["available"] is False
+    assert payload["reason"] == "browser_site_contract_pending"
+    assert payload["project_id"] == "arg-project"
+    assert payload["project_id_source"] == "argument"
+    assert payload["requested_scopes"] == ["browser:actions"]
+    assert payload["requested_expires_in"] == "24h"
+    assert payload["requested_scope_details"][0]["label"] == "Browser actions"
+    assert payload["requested_scope_details"][0]["risk"] == "high"
+    assert [block["id"] for block in payload["setup_blocks"]] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert payload["setup_blocks"][2]["commands"][-1] == (
+        "export LEXMOUNT_PROJECT_ID=arg-project"
+    )
+    assert payload["required_device_code_endpoints"] == [
+        "POST /api/auth/device/code",
+        "POST /api/auth/device/token",
+    ]
+    assert any(
+        "bearer-token authentication" in item
+        for item in payload["required_device_code_support"]
+    )
+    assert [item["id"] for item in payload["required_token_lifecycle"]] == [
+        "issue_scoped_key",
+        "refresh_token",
+        "revoke_token",
+        "expire_token",
+    ]
+    assert (
+        payload["required_api_contract"]["device_code"][0]["path"]
+        == "/api/auth/device/code"
+    )
+    assert payload["required_api_contract"]["device_code"][1]["secret_fields"] == [
+        "access_token",
+        "refresh_token",
+    ]
+    assert payload["verification"]["workflow_command"] == (
+        "browser-cli commands --workflow connect_from_codex_site_requirements"
+    )
+    assert "browser-cli auth connect-requirements" in payload["agent_commands"]
+    assert payload["secret_policy"]["contains_secret_values"] is False
+    assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["do_not_paste_in_chat"]
+
+    connect = payload["connect_from_codex"]
+    assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
+    assert connect["device_code_url"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert connect["project_id"] == "arg-project"
+    assert connect["requested_scopes"] == ["browser:actions"]
+    assert connect["setup_blocks"] == payload["setup_blocks"]
+    assert connect["supported_response_modes"] == ["env", "device_code"]
+    assert "response=env|device_code" in connect["required_query_parameters"]
+    capability_ids = [
+        "project_id_display",
+        "scoped_api_key",
+        "copy_install_and_env",
+        "doctor_verification",
+        "scoped_key_lifecycle",
+        "device_code_oauth",
+    ]
+    assert connect["site_capability_status"] == {
+        "available": False,
+        "available_count": 0,
+        "missing_count": len(capability_ids),
+        "missing": capability_ids,
+    }
+    assert [item["id"] for item in connect["site_capabilities"]] == capability_ids
+    assert any(
+        "scope" in item and "expires_in" in item
+        for item in connect["browser_site_requirements"]
+    )
+
+    env_query = parse_qs(urlsplit(connect["url"]).query)
+    assert env_query["project_id"] == ["arg-project"]
+    assert env_query["scope"] == ["browser:actions"]
+    assert env_query["expires_in"] == ["24h"]
+    assert env_query["response"] == ["env"]
+    device_query = parse_qs(urlsplit(connect["device_code_url"]).query)
+    assert device_query["response"] == ["device_code"]
+    assert "arg-project" in json.dumps(payload)
+    assert "real-api-key-value" not in json.dumps(payload)
 
 
 def test_auth_login_guides_manual_browser_flow(

@@ -65,7 +65,7 @@ Destructive scope `browser.contexts:delete` should be opt-in.
 CLI request:
 
 ```http
-POST /v1/auth/device/code
+POST /api/auth/device/code
 Content-Type: application/json
 ```
 
@@ -135,7 +135,7 @@ approval flow. The resulting token must be bound to exactly one project.
 CLI request:
 
 ```http
-POST /v1/auth/device/token
+POST /api/auth/device/token
 Content-Type: application/json
 ```
 
@@ -260,6 +260,7 @@ Future command behavior:
 ```bash
 browser-cli auth login --open
 browser-cli auth login --device-code
+browser-cli auth connect-requirements
 browser-cli auth status
 browser-cli auth token-info
 browser-cli auth logout

@@ -12,6 +12,7 @@ browser-cli --help
 browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow connect_from_codex_site_requirements
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
@@ -21,6 +22,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
 browser-cli auth status
+browser-cli auth connect-requirements
 browser-cli auth login
 browser-cli auth export-env
 browser-cli doctor --json
@@ -32,6 +34,14 @@ through `handoff.connect_from_codex_url`, `handoff.copyable_commands`, and
 `browser-cli commands --workflow connect_from_codex_auth` as the machine-readable
 auth setup path. Keep `LEXMOUNT_API_KEY`, revealed export output, and full
 direct browser URLs out of chat.
+
+If the task is to improve browser.lexmount.cn, read
+`browser-cli commands --workflow connect_from_codex_site_requirements` and run
+`browser-cli auth connect-requirements`. Report
+`connect_from_codex.site_capability_status.missing`,
+`required_device_code_endpoints`, `required_api_contract`,
+`required_token_lifecycle`, and `setup_blocks` instead of inventing a site
+checklist.
 
 If the user asks for device-code authorization, read
 `browser-cli commands --workflow device_code_auth` and run

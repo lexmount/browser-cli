@@ -65,6 +65,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "case.run",
     "auth.status",
     "auth.login",
+    "auth.connect-requirements",
     "auth.export-env",
     "context.pick",
     "context.status",
@@ -102,6 +103,7 @@ DOCTOR_REQUIRED_COMMANDS = (
 )
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
+    "connect_from_codex_site_requirements",
     "connect_from_codex_auth",
     "device_code_auth",
     "scoped_token_lifecycle",
@@ -123,6 +125,12 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "auth_login",
         "export_env",
         "doctor",
+    ),
+    "connect_from_codex_site_requirements": (
+        "inspect_site_requirements",
+        "verify_manual_handoff",
+        "verify_device_code_handoff",
+        "doctor_after_credentials",
     ),
     "device_code_auth": (
         "request_device_code",
@@ -491,19 +499,29 @@ def _command_catalog() -> dict[str, Any]:
             "setup": [
                 "browser-cli auth status",
                 "browser-cli auth refresh",
+                "browser-cli auth connect-requirements",
                 "browser-cli auth login",
                 "browser-cli auth export-env",
                 AGENT_DOCTOR_COMMAND,
                 "browser-cli doctor --smoke-session",
             ],
+            "connect_from_codex_site_requirements": [
+                "browser-cli auth connect-requirements",
+                "browser-cli auth connect-requirements --project-id <project_id>",
+                "browser-cli auth login",
+                "browser-cli auth login --device-code",
+                AGENT_DOCTOR_COMMAND,
+            ],
             "connect_from_codex_auth": [
                 "browser-cli auth status",
+                "browser-cli auth connect-requirements",
                 "browser-cli auth login",
                 "browser-cli auth login --open",
                 "browser-cli auth export-env",
                 AGENT_DOCTOR_COMMAND,
             ],
             "device_code_auth": [
+                "browser-cli auth connect-requirements",
                 "browser-cli auth login --device-code",
                 "browser-cli auth login",
                 "browser-cli auth export-env",
@@ -643,6 +661,63 @@ def _command_catalog() -> dict[str, Any]:
                         "on_failure_read": [
                             "failed_checks",
                             "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                ],
+            },
+            "connect_from_codex_site_requirements": {
+                "purpose": "Inspect the browser.lexmount.cn /connect/codex frontend, API, token lifecycle, and verification requirements before implementing or diagnosing Connect from Codex.",
+                "steps": [
+                    {
+                        "id": "inspect_site_requirements",
+                        "command": "browser-cli auth connect-requirements",
+                        "read": [
+                            "connect_from_codex.url",
+                            "connect_from_codex.device_code_url",
+                            "connect_from_codex.site_capability_status.missing",
+                            "connect_from_codex.site_capabilities",
+                            "required_device_code_endpoints",
+                            "required_browser_site_support",
+                            "required_token_lifecycle",
+                            "setup_blocks",
+                            "verification.doctor_command",
+                        ],
+                    },
+                    {
+                        "id": "verify_manual_handoff",
+                        "command": "browser-cli auth login",
+                        "optional": True,
+                        "read": [
+                            "selected_flow",
+                            "manual_env_available",
+                            "connect_from_codex.url",
+                            "connect_from_codex.site_capability_status.missing",
+                            "handoff.setup_blocks",
+                        ],
+                    },
+                    {
+                        "id": "verify_device_code_handoff",
+                        "command": "browser-cli auth login --device-code",
+                        "optional": True,
+                        "read": [
+                            "selected_flow",
+                            "available",
+                            "device_code_available",
+                            "reason",
+                            "device_code.required_endpoints",
+                            "device_code.required_browser_site_support",
+                            "fallback_handoff.setup_blocks",
+                        ],
+                    },
+                    {
+                        "id": "doctor_after_credentials",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "optional": True,
+                        "success_condition": "ok=true and ready_for_browser_actions=true after the user configures credentials",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "warning_checks",
                             "repair_plan.connect_from_codex.url",
                         ],
                     },
@@ -2439,6 +2514,141 @@ def _connect_from_codex_site_capability_status(
         "available_count": len(capabilities) - len(missing),
         "missing_count": len(missing),
         "missing": missing,
+    }
+
+
+def _device_code_required_endpoints() -> list[str]:
+    return [
+        "POST /api/auth/device/code",
+        "POST /api/auth/device/token",
+    ]
+
+
+def _device_code_required_browser_site_support() -> list[str]:
+    return [
+        "Show user_code approval UI on /connect/codex.",
+        "Issue scoped, project-bound, short-lived access tokens.",
+        "Issue refresh tokens with revoke and expiration metadata.",
+        "Expose token refresh and revoke endpoints for browser-cli.",
+        "Enable browser runtime bearer-token authentication.",
+    ]
+
+
+def _connect_from_codex_browser_site_requirements() -> list[str]:
+    return [
+        "Implement /connect/codex on browser.lexmount.cn.",
+        "Accept optional project_id, repeated scope, expires_in, source, intent, and response query parameters.",
+        "Show the selected Project ID, project name, API host, and region before issuing credentials.",
+        "Issue scoped credentials for browser sessions, contexts, and actions.",
+        "Offer copyable install, local env, auth export-env, and doctor verification commands without exposing secrets in chat.",
+        "Display requested scopes with labels, permission names, risk levels, destructive markers, expiration, masked preview, revoke, and rotation controls.",
+        "Support device-code or OAuth approval for project-bound, scoped, time-limited local tokens.",
+    ]
+
+
+def _connect_from_codex_required_token_lifecycle() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "issue_scoped_key",
+            "required": True,
+            "purpose": "Create a scoped API key or local token bound to the selected project and requested scopes.",
+            "must_show": [
+                "project_id",
+                "scope labels",
+                "expires_at",
+                "masked credential preview",
+            ],
+        },
+        {
+            "id": "refresh_token",
+            "required": True,
+            "purpose": "Refresh short-lived local access tokens without exposing token values in chat.",
+            "cli_command": "browser-cli auth refresh",
+        },
+        {
+            "id": "revoke_token",
+            "required": True,
+            "purpose": "Revoke scoped API keys or device tokens when the user or agent requests cleanup.",
+            "cli_command": "browser-cli auth logout --revoke",
+        },
+        {
+            "id": "expire_token",
+            "required": True,
+            "purpose": "Attach expiration metadata so agents can detect stale credentials before browser actions.",
+            "status_fields": [
+                "device_token.expires_at",
+                "device_token.expired",
+                "device_token.refresh_needed",
+            ],
+        },
+    ]
+
+
+def _connect_from_codex_required_api_contract() -> dict[str, Any]:
+    return {
+        "device_code": [
+            {
+                "method": "POST",
+                "path": "/api/auth/device/code",
+                "purpose": "Start a device-code approval request for Codex or another local agent.",
+                "request_fields": [
+                    "project_id",
+                    "scope[]",
+                    "expires_in",
+                    "source",
+                    "intent",
+                ],
+                "response_fields": [
+                    "device_code",
+                    "user_code",
+                    "verification_uri",
+                    "verification_uri_complete",
+                    "expires_in",
+                    "interval",
+                ],
+            },
+            {
+                "method": "POST",
+                "path": "/api/auth/device/token",
+                "purpose": "Poll for the approved project-bound scoped local token.",
+                "request_fields": [
+                    "device_code",
+                ],
+                "response_fields": [
+                    "access_token",
+                    "refresh_token",
+                    "token_type",
+                    "expires_in",
+                    "project_id",
+                    "scopes",
+                ],
+                "secret_fields": [
+                    "access_token",
+                    "refresh_token",
+                ],
+            },
+        ],
+        "token_lifecycle": [
+            {
+                "method": "POST",
+                "path": "/api/auth/token/refresh",
+                "purpose": "Refresh local short-lived agent credentials.",
+                "secret_fields": [
+                    "refresh_token",
+                    "access_token",
+                ],
+            },
+            {
+                "method": "POST",
+                "path": "/api/auth/token/revoke",
+                "purpose": "Revoke local agent credentials or scoped API keys.",
+                "secret_fields": [
+                    "refresh_token",
+                    "access_token",
+                    "api_key",
+                ],
+            },
+        ],
     }
 
 
@@ -10549,6 +10759,119 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
+    command = "auth.connect-requirements"
+    project_id, project_id_source = _auth_login_project_id(args)
+    scopes = _auth_login_scopes(args)
+    scope_details = _scope_details(scopes)
+    connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+    )
+    device_connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+        response="device_code",
+    )
+    setup_blocks = _auth_login_setup_blocks(project_id)
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
+    _success(
+        command,
+        available=False,
+        reason="browser_site_contract_pending",
+        login_url=LEXMOUNT_CONSOLE_URL,
+        project_id=project_id,
+        project_id_source=project_id_source,
+        requested_scopes=scopes,
+        requested_scope_details=scope_details,
+        requested_expires_in=args.expires_in,
+        connect_from_codex={
+            "available": False,
+            "url": connect_url,
+            "device_code_url": device_connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": scopes,
+            "requested_scope_details": scope_details,
+            "requested_expires_in": args.expires_in,
+            "supported_response_modes": [
+                "env",
+                "device_code",
+            ],
+            "required_query_parameters": [
+                "source=browser-cli",
+                "intent=agent-browser-control",
+                "response=env|device_code",
+                "expires_in=<duration>",
+                "project_id=<project-id>",
+                "scope=<scope> (repeatable)",
+            ],
+            "expected_outputs": [
+                "Project ID for the selected project",
+                "Scoped API key or short-lived local token",
+                "Copyable shell export commands",
+                f"`{AGENT_DOCTOR_COMMAND}` verification guidance",
+                "Revoke and expiration details",
+            ],
+            "setup_blocks": setup_blocks,
+            "site_capability_status": site_capability_status,
+            "site_capabilities": site_capabilities,
+            "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
+        },
+        setup_blocks=setup_blocks,
+        required_browser_site_support=_connect_from_codex_browser_site_requirements(),
+        required_device_code_endpoints=_device_code_required_endpoints(),
+        required_device_code_support=_device_code_required_browser_site_support(),
+        required_api_contract=_connect_from_codex_required_api_contract(),
+        required_token_lifecycle=_connect_from_codex_required_token_lifecycle(),
+        verification={
+            "status_command": "browser-cli auth status",
+            "login_command": "browser-cli auth login",
+            "device_code_command": "browser-cli auth login --device-code",
+            "doctor_command": AGENT_DOCTOR_COMMAND,
+            "workflow_command": (
+                "browser-cli commands --workflow connect_from_codex_site_requirements"
+            ),
+            "success_condition": (
+                "auth.status configured is true and doctor ok is true after the "
+                "user configures credentials"
+            ),
+        },
+        agent_commands=[
+            "browser-cli auth connect-requirements",
+            "browser-cli auth login",
+            "browser-cli auth login --device-code",
+            "browser-cli auth status",
+            AGENT_DOCTOR_COMMAND,
+        ],
+        secret_policy={
+            "contains_secret_values": False,
+            "do_not_paste_in_chat": [
+                "LEXMOUNT_API_KEY",
+                "access_token",
+                "refresh_token",
+                "full direct connect URLs containing api_key",
+            ],
+            "safe_to_share": [
+                "browser-cli auth connect-requirements output",
+                "browser-cli auth status output",
+                "browser-cli doctor output with default masking",
+            ],
+        },
+        next_steps=[
+            "Use connect_from_codex.url for manual scoped API-key setup.",
+            "Use connect_from_codex.device_code_url when implementing device-code approval.",
+            "Render setup_blocks as copyable install, local env, and verification sections.",
+            "Implement required_api_contract and required_token_lifecycle before marking device-code or scoped-token login available.",
+        ],
+    )
+
+
 def cmd_auth_login(args: argparse.Namespace) -> None:
     command = "auth.login"
     project_id, project_id_source = _auth_login_project_id(args)
@@ -10620,17 +10943,8 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "requested_scopes": scopes,
                 "requested_scope_details": scope_details,
                 "requested_expires_in": args.expires_in,
-                "required_endpoints": [
-                    "POST /api/auth/device/code",
-                    "POST /api/auth/device/token",
-                ],
-                "required_browser_site_support": [
-                    "Show user_code approval UI on /connect/codex.",
-                    "Issue scoped, project-bound, short-lived access tokens.",
-                    "Issue refresh tokens with revoke and expiration metadata.",
-                    "Expose token refresh and revoke endpoints for browser-cli.",
-                    "Enable browser runtime bearer-token authentication.",
-                ],
+                "required_endpoints": _device_code_required_endpoints(),
+                "required_browser_site_support": _device_code_required_browser_site_support(),
             },
             handoff=handoff,
             open_result=open_result,
@@ -10706,14 +11020,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 f"`{AGENT_DOCTOR_COMMAND}` verification guidance",
                 "Revoke and expiration details",
             ],
-            "browser_site_requirements": [
-                "Implement /connect/codex on browser.lexmount.cn.",
-                "Accept optional project_id, repeated scope, and expires_in query parameters.",
-                "Show the selected Project ID before issuing credentials.",
-                "Issue scoped credentials for browser sessions, contexts, and actions.",
-                "Offer copyable env/install commands without exposing secrets in chat.",
-                "Support revoke, expiration, and device-code or OAuth approval.",
-            ],
+            "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
             "fallback": "Use the manual_env steps until browser.lexmount.cn supports this flow.",
         },
         flows=[
@@ -12546,6 +12853,32 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Include LEXMOUNT_REGION in the generated commands.",
     )
     auth_export_env.set_defaults(func=cmd_auth_export_env)
+
+    auth_connect_requirements = auth_subparsers.add_parser(
+        "connect-requirements",
+        help="Print browser.lexmount.cn Connect from Codex implementation requirements",
+    )
+    auth_connect_requirements.add_argument(
+        "--project-id",
+        help=(
+            "Project ID to include in the Connect from Codex URLs. "
+            "Defaults to LEXMOUNT_PROJECT_ID when set."
+        ),
+    )
+    auth_connect_requirements.add_argument(
+        "--scope",
+        action="append",
+        help=(
+            "Requested Connect from Codex credential scope. May be repeated; "
+            "defaults to browser session, context, and action scopes."
+        ),
+    )
+    auth_connect_requirements.add_argument(
+        "--expires-in",
+        default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
+    )
+    auth_connect_requirements.set_defaults(func=cmd_auth_connect_requirements)
 
     auth_login = auth_subparsers.add_parser(
         "login",

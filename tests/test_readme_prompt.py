@@ -32,9 +32,13 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli --version" in prompt
     assert "browser-cli version" in prompt
     assert "browser-cli auth status" in prompt
+    assert "browser-cli auth connect-requirements" in prompt
     assert "browser-cli auth login" in prompt
     assert "browser-cli commands --workflows-only" in prompt
     assert "browser-cli commands --workflow setup_and_verify" in prompt
+    assert (
+        "browser-cli commands --workflow connect_from_codex_site_requirements" in prompt
+    )
     assert "browser-cli commands --workflow connect_from_codex_auth" in prompt
     assert "browser-cli commands --workflow device_code_auth" in prompt
     assert "browser-cli commands --workflow scoped_token_lifecycle" in prompt

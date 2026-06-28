@@ -118,6 +118,7 @@ browser-cli auth status
 browser-cli auth token-info
 browser-cli auth refresh
 browser-cli auth logout
+browser-cli auth connect-requirements
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -127,6 +128,13 @@ browser-cli doctor --smoke-session
 
 Expected behavior after the website page exists:
 
+- `browser-cli auth connect-requirements` prints the browser.lexmount.cn
+  implementation contract without needing credentials: `connect_from_codex.url`,
+  `connect_from_codex.device_code_url`,
+  `connect_from_codex.site_capability_status.missing`,
+  `required_device_code_endpoints`, `required_api_contract`,
+  `required_token_lifecycle`, `setup_blocks`, and
+  `verification.doctor_command`.
 - `browser-cli auth login` prints
   `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
   opens it in the local default browser and reports `open_result`.
@@ -182,7 +190,7 @@ access in the browser while the CLI receives a scoped local token.
 
 Suggested high-level protocol:
 
-1. CLI calls `POST /v1/auth/device/code` with:
+1. CLI calls `POST /api/auth/device/code` with:
    - client name, such as `browser-cli`
    - requested scopes
    - optional device name
@@ -195,7 +203,7 @@ Suggested high-level protocol:
    - `interval`
 3. CLI prints the URL and code, and optionally opens the browser.
 4. User approves on browser.lexmount.cn.
-5. CLI polls `POST /v1/auth/device/token`.
+5. CLI polls `POST /api/auth/device/token`.
 6. API returns a short-lived access token and optional refresh token.
 7. CLI stores the token in the user's local keychain or an explicit config path,
    not in the Codex skill directory.

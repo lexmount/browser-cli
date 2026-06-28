@@ -73,6 +73,10 @@ def test_skill_documents_agent_workflow_discovery() -> None:
 
     assert "browser-cli commands --workflows-only" in normalized
     assert "browser-cli commands --workflow setup_and_verify" in normalized
+    assert (
+        "browser-cli commands --workflow connect_from_codex_site_requirements"
+        in normalized
+    )
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
     assert "browser-cli commands --workflow device_code_auth" in normalized
     assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized

@@ -45,6 +45,10 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli doctor" in normalized
     assert "browser-cli commands --workflows-only" in normalized
     assert "browser-cli commands --workflow setup_and_verify" in normalized
+    assert (
+        "browser-cli commands --workflow connect_from_codex_site_requirements"
+        in normalized
+    )
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
     assert "browser-cli commands --workflow device_code_auth" in normalized
     assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
@@ -79,18 +83,25 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     normalized = _normalized_skill_text()
 
     assert (
-        "guide authentication with auth status/token-info/refresh/logout/export-env/login"
+        "guide authentication with auth status/token-info/refresh/logout/connect-requirements/export-env/login"
         in normalized
     )
     assert "browser-cli auth status" in normalized
     assert "browser-cli auth token-info" in normalized
     assert "browser-cli auth refresh" in normalized
     assert "browser-cli auth logout" in normalized
+    assert "browser-cli auth connect-requirements" in normalized
     assert "browser-cli auth login" in normalized
     assert "browser-cli auth export-env" in normalized
     assert "browser-cli auth login --device-code" in normalized
+    assert (
+        "browser-cli commands --workflow connect_from_codex_site_requirements"
+        in normalized
+    )
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
     assert "browser-cli commands --workflow device_code_auth" in normalized
+    assert "`required_api_contract`" in normalized
+    assert "`required_token_lifecycle`" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"
         in normalized

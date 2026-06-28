@@ -55,10 +55,11 @@ groups.
 `--workflow <id>` returns one workflow as `workflow_id` and `workflow`; unknown
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
-`agent_workflows` describes ordered setup, Connect from Codex auth, device-code
-auth, scoped token lifecycle, session recovery, one-off page, case file task,
-persistent login state, form interaction, interactive targeting, and page
-diagnostics steps with `command`, `read`, `success_condition`,
+`agent_workflows` describes ordered setup, Connect from Codex site requirements,
+Connect from Codex auth, device-code auth, scoped token lifecycle, session
+recovery, one-off page, case file task, persistent login state, form
+interaction, interactive targeting, and page diagnostics steps with `command`,
+`read`, `success_condition`,
 `on_failure_read`, and `cleanup` hints.
 Command entries may expose `aliases` on canonical commands plus `alias_of` and
 `canonical_name` on alias commands, so agents can map user-facing phrasing back
@@ -69,6 +70,12 @@ the next agent decision.
 The scoped token lifecycle workflow includes token validity, scope coverage,
 refresh availability, browser readiness, and local logout/revoke-pending fields
 without exposing token values.
+The Connect from Codex site requirements workflow includes
+`auth connect-requirements`, `connect_from_codex.site_capability_status.missing`,
+`required_device_code_endpoints`, `required_api_contract`,
+`required_token_lifecycle`, `setup_blocks`, and verification commands so agents
+can coordinate browser.lexmount.cn changes without pretending a user is logging
+in.
 The device-code auth workflow includes `auth login --device-code`,
 `device_code.required_endpoints`, `device_code.required_browser_site_support`,
 `connect_from_codex.site_capability_status.missing`, and `fallback_handoff`
@@ -84,6 +91,9 @@ The interactive targeting workflow exposes `selection_order`,
 `preferred_commands`, and `alternative_commands` so agents can choose
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of
 writing JavaScript.
+The form interaction workflow exposes form snapshots, labeled fill/select/check
+steps, submit readiness, and verification fields so agents can complete forms
+without custom JavaScript.
 The page diagnostics workflow also exposes console/network capture steps and
 visible-state fallback commands so agents can reproduce a suspected issue before
 reading `result.entries`, `result.entry_count`, and masked diagnostic fields.
@@ -149,6 +159,12 @@ Default behavior:
 - `auth login` reports top-level `flow`, `selected_flow`, `available`,
   `manual_env_available`, and `device_code_available` so agents can choose the
   currently usable setup path without inferring it from nested flow metadata.
+- `auth connect-requirements` reports the browser.lexmount.cn `/connect/codex`
+  implementation contract without credentials: `connect_from_codex.url`,
+  `connect_from_codex.device_code_url`, `site_capabilities`,
+  `site_capability_status`, `required_device_code_endpoints`,
+  `required_api_contract`, `required_token_lifecycle`, `setup_blocks`, and
+  verification commands.
 - `auth export-env` reports top-level `usable` and `unusable_exports` so agents
   can distinguish directly runnable export commands from placeholder or masked
   commands.

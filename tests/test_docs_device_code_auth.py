@@ -15,7 +15,10 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "browser-cli auth token-info" in text
     assert "browser-cli auth refresh" in text
     assert "browser-cli auth logout" in text
+    assert "browser-cli auth connect-requirements" in text
     assert "browser-cli auth login --device-code" in text
+    assert "POST /api/auth/device/code" in text
+    assert "POST /api/auth/device/token" in text
     assert "reason=browser_site_endpoint_missing" in text
     assert "browser-cli doctor" in text
     assert "browser-cli doctor --smoke-session" in text

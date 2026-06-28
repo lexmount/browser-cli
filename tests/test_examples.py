@@ -24,6 +24,9 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --names-only" in text
     assert "browser-cli commands --workflows-only" in text
     assert "browser-cli commands --workflow setup_and_verify" in text
+    assert (
+        "browser-cli commands --workflow connect_from_codex_site_requirements" in text
+    )
     assert "browser-cli commands --workflow connect_from_codex_auth" in text
     assert "browser-cli commands --workflow device_code_auth" in text
     assert "browser-cli commands --workflow scoped_token_lifecycle" in text
@@ -43,6 +46,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "export usability" in text
     assert "context reuse fields" in text
     assert "browser-cli auth login" in text
+    assert "browser-cli auth connect-requirements" in text
     assert "browser-cli auth export-env" in text
     assert "scope_check.missing_scopes" in text
     assert "refresh_available" in text
@@ -51,6 +55,8 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "verification.doctor_command" in text
     assert "browser-cli auth login --device-code" in text
     assert "fallback_handoff" in text
+    assert "required_api_contract" in text
+    assert "required_token_lifecycle" in text
     assert "list active sessions" in text
     assert "close stale sessions" in text
     assert "events_path" in text

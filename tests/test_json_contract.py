@@ -155,6 +155,10 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "commands for inspecting valid groups" in normalized
     assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
+    assert "Connect from Codex site requirements" in text
+    assert "`auth connect-requirements`" in text
+    assert "`required_api_contract`" in text
+    assert "`required_token_lifecycle`" in text
     assert "Connect from Codex auth" in text
     assert "device-code auth" in text
     assert "`device_code.required_endpoints`" in text
@@ -207,6 +211,8 @@ def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     assert "`selected_flow`" in text
     assert "`manual_env_available`" in text
     assert "`device_code_available`" in text
+    assert "`auth connect-requirements`" in text
+    assert "`connect_from_codex.device_code_url`" in text
     assert "`unusable_exports`" in text
     assert "`repair_plan`" in text
     assert "`fix` object" in text
