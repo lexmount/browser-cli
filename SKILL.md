@@ -171,7 +171,8 @@ parsing `--help` text. Follow `agent_references` when detailed action guidance i
 `browser-cli reference get --id action_playbook` to read packaged reference
 content from an installed CLI. Use `browser-cli example list` and
 `browser-cli example get --id page_inspection_case` when a common task or case
-file template would help, then follow each workflow step's `read` array first;
+file template would help. Use `browser-cli case scaffold --template page-inspection`
+to generate a valid starter case before hand-writing YAML, then follow each workflow step's `read` array first;
 it names the auth availability, export usability, and context reuse fields that
 drive the next decision.
 
@@ -219,8 +220,9 @@ workflow before writing browser automation code:
 browser-cli commands --workflow case_file_task
 ```
 
-Validate first, then run with `--close-created-session`. Read `valid`,
-`errors`, `step_count`, `events_path`, `artifacts_dir`, `session`, and `steps`.
+Generate a starter case with `browser-cli case scaffold --template page-inspection --url <url> --output case.yaml` when no case file exists. Validate first, then run with
+`--close-created-session`. Read `valid`, `errors`, `step_count`,
+`next_commands`, `events_path`, `artifacts_dir`, `session`, and `steps`.
 
 For form tasks, prefer the more specific form workflow:
 
@@ -340,6 +342,7 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
+browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli doctor
 browser-cli doctor --json
 browser-cli doctor --smoke-session

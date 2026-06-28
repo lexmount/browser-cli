@@ -194,6 +194,8 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "session recovery" in text
     assert "replacement session" in text
     assert "case file task" in text
+    assert "`case scaffold`" in text
+    assert "`next_commands`" in text
     assert "`events_path`" in text
     assert "`artifacts_dir`" in text
     assert "form interaction" in text

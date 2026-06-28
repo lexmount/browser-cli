@@ -47,7 +47,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "scoped_token_lifecycle" in prompt
     assert "session_recovery" in prompt
     assert "case_file_task" in prompt
-    assert "validate/run case files" in prompt
+    assert "scaffold/validate/run case files" in prompt
     assert "form_interaction" in prompt
     assert "interactive_targeting" in prompt
     assert "page_diagnostics" in prompt

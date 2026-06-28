@@ -233,7 +233,11 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "Then follow the returned steps" in normalized
     assert "For repeatable smoke tests, demos, or regression checks" in normalized
     assert "browser-cli commands --workflow case_file_task" in normalized
-    assert "`events_path`, `artifacts_dir`, `session`, and `steps`" in normalized
+    assert "browser-cli case scaffold --template page-inspection" in normalized
+    assert (
+        "`next_commands`, `events_path`, `artifacts_dir`, `session`, and `steps`"
+        in normalized
+    )
     assert "For form tasks, prefer the more specific form workflow" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "Follow its `read` fields for `form-snapshot`, `fill-label`" in normalized

@@ -34,6 +34,10 @@ from lex_browser_runtime.browser.actions import (
     run_browser_action,
 )
 from lex_browser_runtime.browser.cases import run_case_file, validate_case_file
+from lex_browser_runtime.browser.cases import (
+    SUPPORTED_CASE_ACTIONS,
+    validate_case_spec,
+)
 from lex_browser_runtime.browser.lexmount import (
     LexmountBrowserAdmin,
     LexmountErrorInfo,
@@ -66,6 +70,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "example.get",
     "version",
     "doctor",
+    "case.scaffold",
     "case.validate",
     "case.run",
     "auth.status",
@@ -166,6 +171,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     ),
     "case_file_task": (
         "inspect_case_commands",
+        "scaffold_case_file",
         "validate_case_file",
         "run_case_file",
     ),
@@ -691,6 +697,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "case_file_task": [
                 "browser-cli commands --group case",
+                "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case validate --file <case.yaml>",
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
@@ -1112,6 +1119,20 @@ def _command_catalog() -> dict[str, Any]:
                             "command_count",
                             "commands",
                             "json_output",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_case_file",
+                        "command": "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "output",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
                         ],
                     },
                     {
@@ -11623,6 +11644,228 @@ def cmd_version(args: argparse.Namespace) -> None:
     )
 
 
+CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill")
+
+
+def _case_artifact_stem(name: str) -> str:
+    stem = re.sub(r"[^a-zA-Z0-9_.-]+", "-", name.strip().lower())
+    stem = re.sub(r"-+", "-", stem).strip("-._")
+    return stem or "browser-case"
+
+
+def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
+    template = str(args.template)
+    name = args.name or template
+    browser_mode = args.browser_mode
+
+    if template == "page-inspection":
+        url = args.url or "https://example.com"
+        selector = args.selector or "body"
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                f"Create a temporary browser session, inspect {url}, "
+                "and save snapshot/screenshot artifacts."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-selector",
+                    "selector": selector,
+                    "state": "visible",
+                },
+                {
+                    "action": "snapshot",
+                    "max_chars": args.max_chars,
+                    "output": f"{stem}-snapshot.json",
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}-page.png",
+                    "full_page": True,
+                },
+            ],
+        }
+
+    if template == "form-fill":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny form in the page, fill it, click submit, "
+                "and verify state."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <label for="q">Query</label>
+    <input id="q" name="q" />
+    <button id="submit" onclick="window.submitted = document.querySelector('#q').value">
+      Submit
+    </button>
+  `;
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "type",
+                    "selector": "#q",
+                    "text": args.text,
+                },
+                {
+                    "action": "click",
+                    "selector": "#submit",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => ({
+  value: document.querySelector("#q").value,
+  submitted: window.submitted
+})
+""".strip(),
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}-filled.png",
+                },
+            ],
+        }
+
+    raise AssertionError(f"unhandled case scaffold template: {template}")
+
+
+def _serialize_case_spec(
+    *,
+    command: str,
+    spec: dict[str, Any],
+    output_format: str,
+) -> str:
+    if output_format == "json":
+        return json.dumps(spec, ensure_ascii=False, indent=2) + "\n"
+    if output_format == "yaml":
+        try:
+            import yaml
+        except Exception as exc:
+            _failure(
+                command,
+                "yaml_unavailable",
+                "PyYAML is required for YAML scaffold output.",
+                exit_code=2,
+                error_class=exc.__class__.__name__,
+                fix=_doctor_fix(
+                    "install_yaml_support",
+                    commands=[
+                        "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    ],
+                ),
+            )
+
+        class CaseYamlDumper(yaml.SafeDumper):
+            pass
+
+        def represent_string(dumper: Any, data: str) -> Any:
+            style = "|" if "\n" in data else None
+            return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+        CaseYamlDumper.add_representer(str, represent_string)
+        return yaml.dump(
+            spec,
+            Dumper=CaseYamlDumper,
+            sort_keys=False,
+            allow_unicode=True,
+        )
+    _failure(
+        command,
+        "argument_error",
+        f"Unsupported scaffold output format: {output_format}",
+        exit_code=2,
+    )
+
+
+def _case_scaffold_next_commands(output: str | None) -> list[str]:
+    case_file = output or "case.yaml"
+    return [
+        f"browser-cli case validate --file {shlex.quote(case_file)}",
+        f"browser-cli case run --file {shlex.quote(case_file)} --close-created-session",
+    ]
+
+
+def cmd_case_scaffold(args: argparse.Namespace) -> None:
+    command = "case.scaffold"
+    spec = _case_scaffold_spec(args)
+    errors = validate_case_spec(spec)
+    content = _serialize_case_spec(
+        command=command,
+        spec=spec,
+        output_format=args.output_format,
+    )
+    output_path: Path | None = None
+    if args.output:
+        output_path = Path(args.output).expanduser()
+        if output_path.exists() and not args.overwrite:
+            _failure(
+                command,
+                "file_exists",
+                "Output file already exists. Pass --overwrite to replace it.",
+                exit_code=2,
+                output=str(output_path),
+            )
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            _failure(
+                command,
+                "file_write_error",
+                str(exc),
+                exit_code=2,
+                output=str(output_path),
+            )
+
+    _success(
+        command,
+        template=args.template,
+        output_format=args.output_format,
+        output=str(output_path) if output_path is not None else None,
+        wrote_file=output_path is not None,
+        valid=not errors,
+        errors=errors,
+        step_count=len(spec.get("steps", [])),
+        supported_actions=sorted(SUPPORTED_CASE_ACTIONS),
+        safe_to_paste_in_chat=True,
+        next_commands=_case_scaffold_next_commands(
+            str(output_path) if output_path is not None else None
+        ),
+        case=spec,
+        content=content,
+    )
+
+
 def cmd_case_validate(args: argparse.Namespace) -> None:
     command = "case.validate"
     try:
@@ -13173,6 +13416,63 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case = subparsers.add_parser("case", help="Validate or run a browser case file")
     case_subparsers = case.add_subparsers(dest="case_command", required=True)
+
+    case_scaffold = case_subparsers.add_parser(
+        "scaffold",
+        help="Generate a valid starter browser case file",
+    )
+    case_scaffold.add_argument(
+        "--template",
+        choices=CASE_SCAFFOLD_TEMPLATES,
+        default="page-inspection",
+        help="Case template to generate.",
+    )
+    case_scaffold.add_argument(
+        "--name",
+        help="Optional case name. Defaults to the selected template id.",
+    )
+    case_scaffold.add_argument(
+        "--url",
+        help=("URL for the page-inspection template. Defaults to https://example.com."),
+    )
+    case_scaffold.add_argument(
+        "--selector",
+        help="Selector to wait for in the page-inspection template. Defaults to body.",
+    )
+    case_scaffold.add_argument(
+        "--text",
+        default="lexmount browser",
+        help="Text used by the form-fill template.",
+    )
+    case_scaffold.add_argument(
+        "--browser-mode",
+        type=_normalize_browser_mode,
+        default="light",
+        help="Browser mode to place under session.browser_mode.",
+    )
+    case_scaffold.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=2000,
+        help="Snapshot max_chars for the page-inspection template.",
+    )
+    case_scaffold.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("yaml", "json"),
+        default="yaml",
+        help="Serialized case format included in JSON output and written to --output.",
+    )
+    case_scaffold.add_argument(
+        "--output",
+        help="Optional .yaml/.yml/.json file path to write.",
+    )
+    case_scaffold.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow replacing an existing --output file.",
+    )
+    case_scaffold.set_defaults(func=cmd_case_scaffold)
 
     case_validate = case_subparsers.add_parser("validate", help="Validate a case file")
     case_validate.add_argument(

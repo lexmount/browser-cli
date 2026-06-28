@@ -24,6 +24,7 @@ browser-cli commands --workflow page_diagnostics
 browser-cli reference list
 browser-cli example list
 browser-cli example get --id page_inspection_case --metadata-only
+browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli auth status
 browser-cli auth connect-requirements
 browser-cli auth login
@@ -185,13 +186,15 @@ Use case files when the task is repeatable or should leave artifacts:
 
 ```bash
 browser-cli commands --workflow case_file_task
+browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case validate --file examples/cases/page-inspection.yaml
 browser-cli case run --file examples/cases/page-inspection.yaml --close-created-session
 ```
 
 Case files are good for smoke tests, regression checks, and demos because they
 produce structured JSON summaries and event logs. Read `valid`, `errors`,
-`step_count`, `events_path`, `artifacts_dir`, `session`, and `steps`.
+`step_count`, `next_commands`, `events_path`, `artifacts_dir`, `session`, and
+`steps`.
 
 ## Action Selection
 

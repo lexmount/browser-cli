@@ -3,6 +3,12 @@
 These examples are meant for Codex and other agents that should prefer
 `browser-cli` workflows over ad hoc Playwright scripts.
 
+Generate a starter case file:
+
+```bash
+browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+```
+
 Validate all case files:
 
 ```bash
