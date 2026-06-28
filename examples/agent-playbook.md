@@ -21,12 +21,14 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
+browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
+browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli reference list
@@ -90,6 +92,7 @@ browser-cli commands --group action
 browser-cli commands --group action --names-only
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
+browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 ```
 
@@ -180,6 +183,20 @@ browser-cli action outline-snapshot --session-id <session_id> --selector main --
 browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000
 browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80
 browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200
+```
+
+For browser state setup or cleanup, read the browser state workflow before
+writing page-specific storage or cookie JavaScript:
+
+```bash
+browser-cli commands --workflow browser_state_management
+browser-cli action guide --task browser_state_management
+browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
+browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
+browser-cli action cookie-get --session-id <session_id> --name consent
+browser-cli action cookie-set --session-id <session_id> --name consent --value yes --path /
+browser-cli action wait-storage --session-id <session_id> --area local --key seenIntro --value true --match exact
+browser-cli action wait-cookie --session-id <session_id> --name consent --value yes --match exact
 ```
 
 For deterministic page or target state, read the state-wait workflow before

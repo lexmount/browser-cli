@@ -268,18 +268,18 @@ Read `selection_order`, then `interactive-snapshot` and optional `accessibility-
 
 For page content extraction, prefer `browser-cli commands --workflow content_extraction` and `browser-cli action guide --task content_extraction`; choose outline/text/link/table/list/accessibility snapshots before bounded `snapshot` or custom JS.
 
+For browser state setup or cleanup, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands for local/session storage and document.cookie-visible cookies before custom JS.
+
 For deterministic state transitions, prefer `browser-cli commands --workflow state_waits` and `browser-cli action guide --task state_waits`; choose `wait-load-state`, `wait-url`, `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or `wait-cookie` before sleeps or custom JS.
 
-For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic
-workflow before writing custom probes:
+For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic workflow before writing custom probes:
 
 ```bash
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --task page_diagnostics
 ```
 
-Install console/network capture before reproducing the issue, then read the
-workflow's console, network, and visible-state steps.
+Install console/network capture before reproducing the issue, then read the workflow's console, network, and visible-state steps.
 
 Use persistent contexts only when cookies, login state, or storage should
 survive across sessions:
@@ -298,8 +298,7 @@ browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' -
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing --dry-run
 ```
 
-Use `read_write` for login/setup work that should update cookies or storage. Use
-`read_only` when inspecting an existing logged-in state. Before deleting a context,
+Use `read_write` for login/setup work that should update cookies or storage. Use `read_only` when inspecting an existing logged-in state. Before deleting a context,
 confirm that the task no longer needs its login state.
 
 Parse `context_reuse` from the session result. Reuse only when
@@ -330,8 +329,7 @@ choosing another selector.
 Write custom Playwright only when the CLI cannot express the task and explain
 why the CLI was insufficient.
 
-Always close sessions created for temporary automation unless the user asks to
-keep them open. Always close temporary sessions.
+Always close temporary sessions created for automation unless the user asks to keep them open.
 
 ## Commands
 
@@ -374,12 +372,14 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
+browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
+browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli case schema

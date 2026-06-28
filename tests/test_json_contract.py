@@ -174,6 +174,9 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`text-snapshot`" in text
     assert "`table-snapshot`" in text
     assert "`link-snapshot`" in text
+    assert "`browser_state_management`" in text
+    assert "`storage-set`" in text
+    assert "`cookie-set`" in text
     assert "`state_waits`" in text
     assert "`wait-network`" in text
     assert "`wait-storage`" in text

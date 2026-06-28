@@ -106,6 +106,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
+    assert "browser-cli commands --workflow browser_state_management" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task <task>" in normalized
@@ -113,6 +114,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli action guide --task form_interaction" in normalized
     assert "browser-cli action guide --task interactive_targeting" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
+    assert "browser-cli action guide --task browser_state_management" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
     assert "browser-cli commands --names-only" in normalized
@@ -301,6 +303,9 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
+    assert "For browser state setup or cleanup" in normalized
+    assert "browser-cli commands --workflow browser_state_management" in normalized
+    assert "browser-cli action guide --task browser_state_management" in normalized
     assert "For deterministic state transitions" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
@@ -561,15 +566,20 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
+    assert "browser-cli commands --workflow browser_state_management" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task form_interaction" in normalized
     assert "browser-cli action guide --task interactive_targeting" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
+    assert "browser-cli action guide --task browser_state_management" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
     assert "Extract page content or data" in normalized
     assert "`table-snapshot`" in normalized
+    assert "Manage browser state" in normalized
+    assert "`storage-set`" in normalized
+    assert "`cookie-set`" in normalized
     assert "Wait for deterministic state" in normalized
     assert "`wait-storage`" in normalized
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
@@ -673,7 +683,7 @@ def test_skill_includes_common_task_recipes() -> None:
         "`wait-text --state absent` when loading, toast, or error text should disappear"
         in normalized
     )
-    assert "Adjust browser state" in normalized
+    assert "Manage browser state" in normalized
     assert "use `storage-get` for local/session storage" in normalized
     assert "`storage-clear --prefix <prefix>` for targeted cleanup" in normalized
     assert "use `wait-storage` when the page updates keys asynchronously" in normalized

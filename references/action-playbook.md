@@ -22,12 +22,14 @@ browser-cli commands --group action --names-only
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
+browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
+browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 ```
@@ -353,7 +355,9 @@ console/page error entries and the reported page URL.
    selector is unknown; use `wait-text` or `wait-role` before reading dynamic
    results, and use `wait-text --state absent` when loading, toast, or error
    text should disappear.
-10. Adjust browser state: use `storage-get` for local/session storage,
+10. Manage browser state: run `browser-cli commands --workflow
+   browser_state_management` and `browser-cli action guide --task
+   browser_state_management`, then use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
    `storage-clear --prefix <prefix>` for targeted cleanup; use `wait-storage`
    when the page updates keys asynchronously. Use `cookie-get`, `cookie-set`,

@@ -44,6 +44,7 @@ CLI for you:
    browser-cli action guide --names-only
    browser-cli action guide --task interactive_targeting
    browser-cli action guide --task content_extraction
+   browser-cli action guide --task browser_state_management
    browser-cli action guide --task state_waits
    browser-cli reference list
    browser-cli reference get --id action_playbook --metadata-only
@@ -96,11 +97,13 @@ CLI for you:
    browser-cli commands --workflow form_interaction
    browser-cli commands --workflow interactive_targeting
    browser-cli commands --workflow content_extraction
+   browser-cli commands --workflow browser_state_management
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
    browser-cli action guide --task form_interaction
    browser-cli action guide --task interactive_targeting
    browser-cli action guide --task content_extraction
+   browser-cli action guide --task browser_state_management
    browser-cli action guide --task state_waits
    browser-cli action guide --task page_diagnostics
 20. 如果验证失败，请按顺序排查：
@@ -245,6 +248,7 @@ browser-cli commands --group action
 browser-cli action guide --names-only
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
+browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
@@ -259,6 +263,7 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
+browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli reference list
@@ -391,6 +396,7 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
+browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli doctor
@@ -434,6 +440,7 @@ browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
+browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli action open-url --session-id <session_id> --url https://example.com
@@ -541,7 +548,8 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 ```
 
 `action guide` returns machine-readable task routes for `form_interaction`,
-`interactive_targeting`, `content_extraction`, `page_diagnostics`, and `state_waits`, including
+`interactive_targeting`, `content_extraction`, `browser_state_management`,
+`page_diagnostics`, and `state_waits`, including
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
@@ -829,6 +837,10 @@ Common agent recipes:
   then choose `outline-snapshot`, `text-snapshot`, `link-snapshot`,
   `table-snapshot`, `list-snapshot`, or `accessibility-snapshot` before
   falling back to `snapshot` or custom JavaScript.
+- Manage browser state: run `browser-cli commands --workflow browser_state_management`,
+  then choose `storage-get`, `storage-set`, `cookie-get`, `cookie-set`,
+  `wait-storage`, or `wait-cookie` before using custom JavaScript. Use these
+  for local/session storage and document.cookie-visible cookies only.
 - Deterministic wait: run `browser-cli commands --workflow state_waits`, then
   choose the narrowest `wait-*` command such as `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or

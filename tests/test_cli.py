@@ -339,6 +339,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["persistent_login_state"]
     )
     assert (
+        "browser-cli action guide --task browser_state_management"
+        in payload["agent_entrypoints"]["browser_state_management"]
+    )
+    assert (
+        "browser-cli action storage-set --session-id <session_id> --area local --key <key> --value <value>"
+        in payload["agent_entrypoints"]["browser_state_management"]
+    )
+    assert (
+        "browser-cli action cookie-set --session-id <session_id> --name <name> --value <value> --path /"
+        in payload["agent_entrypoints"]["browser_state_management"]
+    )
+    assert (
         "browser-cli action form-snapshot --session-id <session_id> --selector form"
         in payload["agent_entrypoints"]["form_interaction"]
     )
@@ -605,6 +617,43 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "context_reuse.selection_summary.recommended_next_action"
         in (context_steps[2]["read"])
     )
+    state_management_steps = workflows["browser_state_management"]["steps"]
+    assert [step["id"] for step in state_management_steps] == [
+        "inspect_action_guide",
+        "inspect_page_info",
+        "read_existing_state",
+        "modify_state",
+        "wait_for_state",
+        "cleanup_state",
+    ]
+    assert state_management_steps[0]["command"] == (
+        "browser-cli action guide --task browser_state_management"
+    )
+    assert "guide.custom_js_boundary" in state_management_steps[0]["read"]
+    assert state_management_steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "visibility_state" in state_management_steps[1]["read"]
+    assert "result.items" in state_management_steps[2]["read"]
+    assert (
+        "browser-cli action cookie-get"
+        in state_management_steps[2]["alternative_commands"][0]
+    )
+    assert state_management_steps[3]["agent_action"] is True
+    assert "result.previous_value" in state_management_steps[3]["read"]
+    assert "result.document_cookie_scope" in state_management_steps[3]["read"]
+    assert (
+        "browser-cli action cookie-set"
+        in state_management_steps[3]["alternative_commands"][0]
+    )
+    assert "result.requested_value" in state_management_steps[4]["read"]
+    assert (
+        "browser-cli action wait-cookie"
+        in state_management_steps[4]["alternative_commands"][0]
+    )
+    assert state_management_steps[5]["optional"] is True
+    assert state_management_steps[5]["user_requested_only"] is True
+    assert "result.cleared_count" in state_management_steps[5]["read"]
     form_steps = workflows["form_interaction"]["steps"]
     assert [step["id"] for step in form_steps] == [
         "inspect_action_guide",
@@ -1030,8 +1079,9 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 5,
+        "task_count": 6,
         "tasks": [
+            "browser_state_management",
             "content_extraction",
             "form_interaction",
             "interactive_targeting",
@@ -1057,6 +1107,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["command"] == "action.guide"
     assert payload["task"] == "interactive_targeting"
     assert payload["available_tasks"] == [
+        "browser_state_management",
         "content_extraction",
         "form_interaction",
         "interactive_targeting",
@@ -1238,6 +1289,49 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     ]
 
     with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "browser_state_management"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "browser_state_management",
+        "persistent_login_state",
+        "state_waits",
+    ]
+    assert payload["guide"]["selection_order"][:3] == [
+        "page-info",
+        "storage-get",
+        "cookie-get",
+    ]
+    assert "storage-set" in payload["guide"]["selection_order"]
+    assert "cookie-set" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action storage-set" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action cookie-set" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-storage" in command
+        for command in payload["guide"]["verify_commands"]
+    )
+    assert any(
+        "browser-cli action wait-cookie" in command
+        for command in payload["guide"]["verify_commands"]
+    )
+    assert "result.document_cookie_scope" in payload["guide"]["read_fields"]
+    assert "cannot read HttpOnly cookies" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"][0] == (
+        "browser-cli commands --workflow browser_state_management"
+    )
+    assert "browser-cli commands --workflow persistent_login_state" in payload[
+        "next_commands"
+    ]
+    assert "browser-cli commands --workflow state_waits" in payload["next_commands"]
+
+    with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "state_waits"])
 
     assert exc_info.value.code == 0
@@ -1287,6 +1381,7 @@ def test_action_guide_fails_unknown_task_as_json(
     assert payload["error"] == "unknown_action_guide_task"
     assert payload["task"] == "missing"
     assert payload["available_tasks"] == [
+        "browser_state_management",
         "content_extraction",
         "form_interaction",
         "interactive_targeting",
@@ -1309,7 +1404,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 14
+    assert payload["workflow_count"] == 15
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1362,6 +1457,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "context_reuse.availability"
         in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
+    )
+    assert (
+        "result.document_cookie_scope"
+        in payload["agent_workflows"]["browser_state_management"]["steps"][3]["read"]
     )
     assert (
         "normalized_status"
@@ -2321,6 +2420,48 @@ def test_commands_catalog_returns_content_extraction_workflow(
     assert "browser-cli action table-snapshot" in steps[-1]["fallback_commands"][1]
 
 
+def test_commands_catalog_returns_browser_state_management_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "browser_state_management"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "browser_state_management"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_page_info",
+        "read_existing_state",
+        "modify_state",
+        "wait_for_state",
+        "cleanup_state",
+    ]
+    assert steps[0]["command"] == (
+        "browser-cli action guide --task browser_state_management"
+    )
+    assert "guide.read_fields" in steps[0]["read"]
+    assert steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "ready_state" in steps[1]["read"]
+    assert "result.items" in steps[2]["read"]
+    assert "browser-cli action cookie-get" in steps[2]["alternative_commands"][0]
+    assert steps[3]["agent_action"] is True
+    assert "result.previous_value" in steps[3]["read"]
+    assert "result.document_cookie_scope" in steps[3]["read"]
+    assert "browser-cli action cookie-set" in steps[3]["alternative_commands"][0]
+    assert "result.requested_value" in steps[4]["read"]
+    assert "browser-cli action wait-cookie" in steps[4]["alternative_commands"][0]
+    assert steps[-1]["id"] == "cleanup_state"
+    assert steps[-1]["optional"] is True
+    assert steps[-1]["user_requested_only"] is True
+    assert "result.cleared_count" in steps[-1]["read"]
+
+
 def test_commands_catalog_returns_page_diagnostics_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2377,6 +2518,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["error"] == "unknown_workflow"
     assert payload["workflow"] == "missing"
     assert payload["available_workflows"] == [
+        "browser_state_management",
         "case_file_task",
         "connect_from_codex_auth",
         "connect_from_codex_site_requirements",
@@ -2547,7 +2689,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 14
+    assert checks["command_catalog"]["workflow_count"] == 15
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -2558,6 +2700,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "one_off_page_task",
         "case_file_task",
         "persistent_login_state",
+        "browser_state_management",
         "form_interaction",
         "interactive_targeting",
         "content_extraction",
@@ -2636,6 +2779,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "inspect_context_status",
         "create_session_with_context",
         "close_session",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "browser_state_management"
+    ] == [
+        "inspect_action_guide",
+        "inspect_page_info",
+        "read_existing_state",
+        "modify_state",
+        "wait_for_state",
+        "cleanup_state",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["form_interaction"] == [
         "inspect_action_guide",
@@ -2721,6 +2874,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.clear-role",
         "action.accessibility-snapshot",
         "action.interactive-only-snapshot",
+        "action.storage-get",
+        "action.storage-set",
+        "action.storage-remove",
+        "action.storage-clear",
+        "action.wait-storage",
+        "action.cookie-get",
+        "action.cookie-set",
+        "action.cookie-delete",
+        "action.cookie-clear",
+        "action.wait-cookie",
         "action.wait-dialog",
         "action.wait-frame",
         "reference.list",
@@ -2852,6 +3015,16 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.list-snapshot" in catalog["missing_required_commands"]
     assert "action.text-snapshot" in catalog["missing_required_commands"]
     assert "action.outline-snapshot" in catalog["missing_required_commands"]
+    assert "action.storage-get" in catalog["missing_required_commands"]
+    assert "action.storage-set" in catalog["missing_required_commands"]
+    assert "action.storage-remove" in catalog["missing_required_commands"]
+    assert "action.storage-clear" in catalog["missing_required_commands"]
+    assert "action.wait-storage" in catalog["missing_required_commands"]
+    assert "action.cookie-get" in catalog["missing_required_commands"]
+    assert "action.cookie-set" in catalog["missing_required_commands"]
+    assert "action.cookie-delete" in catalog["missing_required_commands"]
+    assert "action.cookie-clear" in catalog["missing_required_commands"]
+    assert "action.wait-cookie" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
     assert "reference.list" in catalog["missing_required_commands"]
@@ -2873,6 +3046,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "one_off_page_task",
         "case_file_task",
         "persistent_login_state",
+        "browser_state_management",
         "form_interaction",
         "interactive_targeting",
         "content_extraction",
@@ -3103,6 +3277,15 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "close_session"},
                     ],
                 },
+                "browser_state_management": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_page_info"},
+                        {"id": "read_existing_state"},
+                        {"id": "modify_state"},
+                        {"id": "wait_for_state"},
+                    ],
+                },
                 "form_interaction": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -3176,6 +3359,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         ],
         "one_off_page_task": ["close_session"],
         "setup_and_verify": ["smoke_session"],
+        "browser_state_management": ["cleanup_state"],
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],
     }
