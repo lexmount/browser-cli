@@ -1265,8 +1265,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.wait-state-role",
         "action.query",
         "action.inspect",
+        "action.get-attribute",
         "action.press-key",
         "action.get-attribute-role",
+        "action.wait-attribute",
         "action.wait-attribute-role",
         "action.get-text-role",
         "action.exists-role",
@@ -1356,6 +1358,12 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any(
         "--include-hidden" in option["flags"] for option in wait_state_role["options"]
     )
+    get_attribute = commands["action.get-attribute"]
+    assert get_attribute["required_options"] == ["--selector", "--name"]
+    wait_attribute = commands["action.wait-attribute"]
+    assert "--selector" in wait_attribute["required_options"]
+    assert "--name" in wait_attribute["required_options"]
+    assert any("--value" in option["flags"] for option in wait_attribute["options"])
     get_attribute_role = commands["action.get-attribute-role"]
     assert "--role" in get_attribute_role["required_options"]
     assert "--attribute" in get_attribute_role["required_options"]
@@ -4034,7 +4042,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.wait-state-role",
         "action.query",
         "action.inspect",
+        "action.get-attribute",
         "action.get-attribute-role",
+        "action.wait-attribute",
         "action.wait-attribute-role",
         "action.bounding-box",
         "action.bounding-box-role",
@@ -4236,7 +4246,9 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
     assert "action.wait-state-role" in catalog["missing_required_commands"]
+    assert "action.get-attribute" in catalog["missing_required_commands"]
     assert "action.get-attribute-role" in catalog["missing_required_commands"]
+    assert "action.wait-attribute" in catalog["missing_required_commands"]
     assert "action.wait-attribute-role" in catalog["missing_required_commands"]
     assert "action.bounding-box-role" in catalog["missing_required_commands"]
     assert "action.select-role" in catalog["missing_required_commands"]

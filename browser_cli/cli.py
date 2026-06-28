@@ -140,7 +140,9 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.wait-state-role",
     "action.query",
     "action.inspect",
+    "action.get-attribute",
     "action.get-attribute-role",
+    "action.wait-attribute",
     "action.wait-attribute-role",
     "action.scroll",
     "action.bounding-box",
@@ -19197,7 +19199,7 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_guide.add_argument(
         "--task",
-        help="Action task guide to inspect, such as form_interaction, file_upload, dialog_frame_handling, interactive_targeting, navigation_flow, visual_capture, semantic_waits, menu_keyboard_flow, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
+        help="Action task guide to inspect, such as form_interaction, file_upload, dialog_frame_handling, interactive_targeting, navigation_flow, link_navigation, visual_capture, semantic_waits, menu_keyboard_flow, mouse_interaction, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
     )
     action_guide.add_argument(
         "--names-only",
