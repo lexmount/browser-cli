@@ -10,6 +10,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     text = DOC.read_text()
 
     assert "https://browser.lexmount.cn/connect/codex" in text
+    assert "browser-cli auth scopes" in text
+    assert "browser-cli auth scopes --include-site-contract" in text
     assert "browser-cli auth connect-requirements" in text
     assert "browser-cli auth login" in text
     assert "browser-cli auth login --open" in text
@@ -35,6 +37,9 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "safe_to_paste_in_chat" in text
     assert "local_shell_only" in text
     assert "requested_scope_details" in text
+    assert "scope_ui_fields" in text
+    assert "permission_count" in text
+    assert "default_requested" in text
     assert "permission names" in text
     assert "risk level" in text
     assert "known: false" in text
@@ -82,6 +87,7 @@ def test_connect_from_codex_doc_keeps_required_site_capabilities() -> None:
     required_phrases = [
         "Project ID with copy button",
         "Create scoped API key button",
+        "Permission picker rendered from",
         "Revoke button for each agent key",
         "Expiration display",
         "Copyable env block",

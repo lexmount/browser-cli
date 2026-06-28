@@ -40,6 +40,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli --version" in prompt
     assert "browser-cli version" in prompt
     assert "browser-cli auth status" in prompt
+    assert "browser-cli auth scopes --include-site-contract" in prompt
     assert "browser-cli auth connect-requirements" in prompt
     assert "browser-cli auth login" in prompt
     assert "browser-cli commands --workflows-only" in prompt

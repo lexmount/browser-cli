@@ -36,6 +36,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "$browser-cli" in prompt
     assert "version JSON" in prompt
     assert "auth status" in prompt
+    assert "scopes" in prompt
     assert "refresh" in prompt
     assert "login" in prompt
     assert "connect-requirements" in prompt

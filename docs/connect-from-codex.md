@@ -11,6 +11,8 @@ to paste secrets into chat.
 - Show the active project, API key status, install commands, env commands, and
   verification commands in one copyable flow.
 - Encourage scoped, revocable agent keys instead of long-lived general keys.
+- Render permission labels from `browser-cli auth scopes` instead of hard-coded
+  frontend copies.
 - Let `browser-cli auth login` evolve from manual guidance into a real
   device-code/OAuth authorization flow.
 - Let `browser-cli doctor` prove that local setup, credentials, API reachability,
@@ -51,6 +53,7 @@ Recommended sections:
 3. Authorize
    - Current agent key status
    - Create scoped API key button
+   - Permission picker rendered from `browser-cli auth scopes --include-site-contract`
    - Show created API key once with copy controls
    - Revoke button for each agent key
    - Expiration display and optional rotation action
@@ -78,17 +81,9 @@ The key wizard should create keys intended for local agents. Suggested fields:
 - Name, defaulting to `Codex on <device name>`.
 - Expiration, with presets such as 1 day, 7 days, 30 days, and no expiration if
   the account policy allows it.
-- Permissions:
-  - `browser.sessions:create`
-  - `browser.sessions:list`
-  - `browser.sessions:read`
-  - `browser.sessions:close`
-  - `browser.contexts:create`
-  - `browser.contexts:list`
-  - `browser.contexts:read`
-  - `browser.contexts:delete`
-- Optional action scope:
-  - `browser.actions:run`
+- Permissions rendered from `browser-cli auth scopes --include-site-contract`:
+  use each scope's `label`, `description`, `permissions`, `risk`,
+  `destructive`, `default_requested`, and `permission_count`.
 - Optional read-only mode for inspection agents:
   - sessions list/read
   - contexts list/read
@@ -115,6 +110,8 @@ Current short-term CLI commands:
 
 ```bash
 browser-cli auth status
+browser-cli auth scopes
+browser-cli auth scopes --include-site-contract
 browser-cli auth token-info
 browser-cli auth refresh
 browser-cli auth logout
@@ -128,6 +125,12 @@ browser-cli doctor --smoke-session
 
 Expected behavior after the website page exists:
 
+- `browser-cli auth scopes` prints the stable permission catalog:
+  `known_scopes`, `default_scopes`, `scopes`, `unknown_scopes`,
+  `permission_count`, `risk`, and `destructive`. With
+  `--include-site-contract`, it also prints `browser_site_contract.url`,
+  `device_code_url`, `scope_ui_fields`, `required_query_parameters`, and token
+  lifecycle requirements for the Connect page.
 - `browser-cli auth connect-requirements` prints the browser.lexmount.cn
   implementation contract without needing credentials: `connect_from_codex.url`,
   `connect_from_codex.device_code_url`,
@@ -150,9 +153,11 @@ Expected behavior after the website page exists:
   `contains_secret_values`, `contains_secret_placeholders`,
   `safe_to_paste_in_chat`, and `local_shell_only` so the website can make secret
   copy controls visually distinct.
-- `browser-cli auth login` includes `requested_scope_details` for each requested
-  scope. Known scopes include a label, description, permission names, risk level,
-  and destructive marker; custom or future scopes are returned with
+- `browser-cli auth scopes` and `browser-cli auth login` include scope details
+  for each requested scope; `auth login` exposes the same data as
+  `requested_scope_details`. Known scopes include a label, description,
+  permission names, risk level, and destructive marker; custom or future scopes
+  are returned with
   `known: false` so browser.lexmount.cn can still render them explicitly.
 - `browser-cli auth login --device-code` now returns `available=false`,
   `reason=browser_site_endpoint_missing`, required device-code endpoints, and a

@@ -77,18 +77,20 @@ interaction, interactive targeting, and page diagnostics steps with `command`,
 Command entries may expose `aliases` on canonical commands plus `alias_of` and
 `canonical_name` on alias commands, so agents can map user-facing phrasing back
 to the preferred action without parsing help text.
-Workflow `read` arrays include current auth availability fields, export
-usability fields, and context reuse availability fields when those values drive
-the next agent decision.
+Workflow `read` arrays include current auth availability fields, scope catalog
+fields, export usability fields, and context reuse availability fields when
+those values drive the next agent decision.
 The scoped token lifecycle workflow includes token validity, scope coverage,
-refresh availability, browser readiness, and local logout/revoke-pending fields
+scope catalog lookup, refresh availability, browser readiness, and local logout/revoke-pending fields
 without exposing token values.
 The Connect from Codex site requirements workflow includes
-`auth connect-requirements`, `connect_from_codex.site_capability_status.missing`,
+`auth scopes --include-site-contract`, `auth connect-requirements`,
+`browser_site_contract.scope_ui_fields`,
+`connect_from_codex.site_capability_status.missing`,
 `required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, `setup_blocks`, and verification commands so agents
-can coordinate browser.lexmount.cn changes without pretending a user is logging
-in.
+`required_token_lifecycle`, `setup_blocks`, and verification commands so
+agents can coordinate browser.lexmount.cn changes without pretending a user is
+logging in.
 The device-code auth workflow includes `auth login --device-code`,
 `device_code.required_endpoints`, `device_code.required_browser_site_support`,
 `connect_from_codex.site_capability_status.missing`, and `fallback_handoff`
@@ -171,6 +173,13 @@ Default behavior:
 - When env API-key credentials are incomplete, `auth status` reports
   `missing_env` plus a `fix` object with safe Connect from Codex setup commands
   and no API key values.
+- `auth scopes` reports the stable Connect from Codex scope catalog without
+  credentials or secrets: `known_scopes`, `default_scopes`, `scopes`,
+  `permission_count`, `risk`, `destructive`, `unknown_scopes`, and the
+  repeatable `scope` query parameter. With `--include-site-contract`, it also
+  reports `browser_site_contract.url`, `device_code_url`, `scope_ui_fields`,
+  `required_query_parameters`, `site_capability_status`, and token lifecycle
+  requirements for browser.lexmount.cn.
 - `auth login` reports top-level `flow`, `selected_flow`, `available`,
   `manual_env_available`, and `device_code_available` so agents can choose the
   currently usable setup path without inferring it from nested flow metadata.

@@ -181,6 +181,8 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`related_workflows`" in text
     assert "`grep_patterns`" in text
     assert "Connect from Codex site requirements" in text
+    assert "`auth scopes --include-site-contract`" in text
+    assert "`browser_site_contract.scope_ui_fields`" in text
     assert "`auth connect-requirements`" in text
     assert "`required_api_contract`" in text
     assert "`required_token_lifecycle`" in text
@@ -189,6 +191,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`device_code.required_endpoints`" in text
     assert "`fallback_handoff`" in text
     assert "scoped token lifecycle" in text
+    assert "scope catalog lookup" in text
     assert "refresh availability" in text
     assert "local logout/revoke-pending fields" in text
     assert "session recovery" in text
@@ -216,6 +219,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`error=unknown_workflow`" in text
     assert "commands for inspecting valid workflows" in normalized
     assert "auth availability fields" in normalized
+    assert "scope catalog fields" in normalized
     assert "export usability fields" in normalized
     assert "context reuse availability fields" in normalized
     assert "`success_condition`" in text
@@ -253,6 +257,9 @@ def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     assert "`selected_flow`" in text
     assert "`manual_env_available`" in text
     assert "`device_code_available`" in text
+    assert "`auth scopes`" in text
+    assert "`known_scopes`" in text
+    assert "`scope_ui_fields`" in text
     assert "`auth connect-requirements`" in text
     assert "`connect_from_codex.device_code_url`" in text
     assert "`unusable_exports`" in text

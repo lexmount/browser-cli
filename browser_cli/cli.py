@@ -76,6 +76,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "case.validate",
     "case.run",
     "auth.status",
+    "auth.scopes",
     "auth.login",
     "auth.connect-requirements",
     "auth.export-env",
@@ -140,11 +141,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     ),
     "connect_from_codex_auth": (
         "auth_status",
+        "inspect_scope_catalog",
         "auth_login",
         "export_env",
         "doctor",
     ),
     "connect_from_codex_site_requirements": (
+        "inspect_scope_catalog",
         "inspect_site_requirements",
         "verify_manual_handoff",
         "verify_device_code_handoff",
@@ -158,6 +161,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     ),
     "scoped_token_lifecycle": (
         "status_scoped_token",
+        "inspect_scope_catalog",
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
@@ -673,6 +677,7 @@ def _command_catalog() -> dict[str, Any]:
         "agent_entrypoints": {
             "setup": [
                 "browser-cli auth status",
+                "browser-cli auth scopes",
                 "browser-cli auth refresh",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth login",
@@ -681,6 +686,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli doctor --smoke-session",
             ],
             "connect_from_codex_site_requirements": [
+                "browser-cli auth scopes --include-site-contract",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth connect-requirements --project-id <project_id>",
                 "browser-cli auth login",
@@ -689,6 +695,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "connect_from_codex_auth": [
                 "browser-cli auth status",
+                "browser-cli auth scopes",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth login",
                 "browser-cli auth login --open",
@@ -705,6 +712,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "scoped_token_lifecycle": [
                 "browser-cli auth status",
+                "browser-cli auth scopes --scope browser:actions",
                 "browser-cli auth token-info --required-scope browser.actions:run",
                 "browser-cli auth refresh",
                 AGENT_DOCTOR_COMMAND,
@@ -807,6 +815,15 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_scope_catalog",
+                        "command": "browser-cli auth scopes",
+                        "read": [
+                            "default_scopes",
+                            "scopes",
+                            "unknown_scopes",
+                        ],
+                    },
+                    {
                         "id": "auth_login",
                         "command": "browser-cli auth login",
                         "read": [
@@ -846,6 +863,18 @@ def _command_catalog() -> dict[str, Any]:
             "connect_from_codex_site_requirements": {
                 "purpose": "Inspect the browser.lexmount.cn /connect/codex frontend, API, token lifecycle, and verification requirements before implementing or diagnosing Connect from Codex.",
                 "steps": [
+                    {
+                        "id": "inspect_scope_catalog",
+                        "command": "browser-cli auth scopes --include-site-contract",
+                        "read": [
+                            "default_scopes",
+                            "scopes",
+                            "browser_site_contract.url",
+                            "browser_site_contract.required_query_parameters",
+                            "browser_site_contract.scope_ui_fields",
+                            "browser_site_contract.site_capability_status.missing",
+                        ],
+                    },
                     {
                         "id": "inspect_site_requirements",
                         "command": "browser-cli auth connect-requirements",
@@ -977,6 +1006,17 @@ def _command_catalog() -> dict[str, Any]:
                             "device_token.refresh_needed",
                             "device_token.scopes",
                             "missing_env",
+                        ],
+                    },
+                    {
+                        "id": "inspect_scope_catalog",
+                        "command": "browser-cli auth scopes --scope browser:actions",
+                        "read": [
+                            "scopes",
+                            "scopes[0].permissions",
+                            "scopes[0].risk",
+                            "scopes[0].destructive",
+                            "unknown_scopes",
                         ],
                     },
                     {
@@ -2814,8 +2854,8 @@ def _auth_login_scopes(args: argparse.Namespace) -> list[str]:
     return _dedupe_preserving_order(raw_scopes)
 
 
-def _scope_detail(scope: str) -> dict[str, Any]:
-    known_scopes: dict[str, dict[str, Any]] = {
+def _known_scope_details() -> dict[str, dict[str, Any]]:
+    return {
         "browser:sessions": {
             "label": "Browser sessions",
             "description": "Create, list, inspect, keep alive, and close browser sessions.",
@@ -2850,7 +2890,10 @@ def _scope_detail(scope: str) -> dict[str, Any]:
             "destructive": False,
         },
     }
-    detail = known_scopes.get(scope)
+
+
+def _scope_detail(scope: str) -> dict[str, Any]:
+    detail = _known_scope_details().get(scope)
     if detail is None:
         return {
             "scope": scope,
@@ -2870,6 +2913,32 @@ def _scope_detail(scope: str) -> dict[str, Any]:
 
 def _scope_details(scopes: list[str]) -> list[dict[str, Any]]:
     return [_scope_detail(scope) for scope in scopes]
+
+
+def _scope_catalog_entry(scope: str) -> dict[str, Any]:
+    detail = _scope_detail(scope)
+    permissions = list(detail["permissions"])
+    entry = {
+        **detail,
+        "default_requested": scope in DEFAULT_CODEX_CONNECT_SCOPES,
+        "permission_count": len(permissions),
+        "query_parameter": f"scope={scope}",
+        "browser_site_ui": {
+            "label_field": "label",
+            "description_field": "description",
+            "permissions_field": "permissions",
+            "risk_field": "risk",
+            "destructive_field": "destructive",
+            "default_checked_field": "default_requested",
+        },
+    }
+    if not detail["known"]:
+        entry["browser_site_ui"]["custom_scope"] = True
+    return entry
+
+
+def _scope_catalog_entries(scopes: list[str]) -> list[dict[str, Any]]:
+    return [_scope_catalog_entry(scope) for scope in scopes]
 
 
 def _connect_from_codex_url(
@@ -10949,6 +11018,109 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     _json_dump(data, exit_code=1 if failed else 0)
 
 
+def cmd_auth_scopes(args: argparse.Namespace) -> None:
+    command = "auth.scopes"
+    known_scopes = list(_known_scope_details())
+    selected_scopes = (
+        _dedupe_preserving_order(args.scope) if args.scope else known_scopes
+    )
+    requested_scopes = (
+        _dedupe_preserving_order(args.scope)
+        if args.scope
+        else list(DEFAULT_CODEX_CONNECT_SCOPES)
+    )
+    scope_entries = _scope_catalog_entries(selected_scopes)
+    unknown_scopes = [
+        str(entry["scope"]) for entry in scope_entries if not bool(entry["known"])
+    ]
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
+
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "known_scopes": known_scopes,
+        "default_scopes": list(DEFAULT_CODEX_CONNECT_SCOPES),
+        "requested_scopes": requested_scopes,
+        "scopes": scope_entries,
+        "scope_count": len(scope_entries),
+        "known_scope_count": len(scope_entries) - len(unknown_scopes),
+        "unknown_scopes": unknown_scopes,
+        "all_selected_scopes_known": not unknown_scopes,
+        "default_expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        "scope_query_parameter": {
+            "name": "scope",
+            "repeatable": True,
+            "default": list(DEFAULT_CODEX_CONNECT_SCOPES),
+        },
+        "secret_policy": {
+            "contains_secret_values": False,
+            "safe_to_share": True,
+            "do_not_paste_in_chat": [
+                "LEXMOUNT_API_KEY",
+                "access_token",
+                "refresh_token",
+            ],
+        },
+        "next_commands": [
+            "browser-cli auth connect-requirements",
+            "browser-cli auth login",
+            "browser-cli commands --workflow connect_from_codex_site_requirements",
+        ],
+    }
+
+    if args.include_site_contract:
+        project_id, project_id_source = _auth_login_project_id(args)
+        connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=requested_scopes,
+            expires_in=args.expires_in,
+        )
+        device_connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=requested_scopes,
+            expires_in=args.expires_in,
+            response="device_code",
+        )
+        payload["browser_site_contract"] = {
+            "available": False,
+            "reason": "browser_site_contract_pending",
+            "url": connect_url,
+            "device_code_url": device_connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": requested_scopes,
+            "requested_scope_details": _scope_details(requested_scopes),
+            "requested_expires_in": args.expires_in,
+            "scope_catalog_command": "browser-cli auth scopes",
+            "scope_ui_fields": [
+                "scope",
+                "label",
+                "description",
+                "permissions",
+                "risk",
+                "destructive",
+                "default_requested",
+                "permission_count",
+            ],
+            "required_query_parameters": [
+                "source=browser-cli",
+                "intent=agent-browser-control",
+                "response=env|device_code",
+                "expires_in=<duration>",
+                "project_id=<project-id>",
+                "scope=<scope> (repeatable)",
+            ],
+            "site_capability_status": site_capability_status,
+            "site_capabilities": site_capabilities,
+            "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
+            "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
+        }
+
+    _success(command, **payload)
+
+
 def cmd_auth_status(args: argparse.Namespace) -> None:
     command = "auth.status"
     api_key = os.environ.get("LEXMOUNT_API_KEY")
@@ -13849,6 +14021,37 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         ),
     )
     auth_status.set_defaults(func=cmd_auth_status)
+
+    auth_scopes = auth_subparsers.add_parser(
+        "scopes",
+        help="List known Connect from Codex credential scopes and permissions",
+    )
+    auth_scopes.add_argument(
+        "--scope",
+        action="append",
+        help=(
+            "Scope to inspect. May be repeated; defaults to all known browser "
+            "credential scopes."
+        ),
+    )
+    auth_scopes.add_argument(
+        "--project-id",
+        help=(
+            "Project ID to include when --include-site-contract is used. "
+            "Defaults to LEXMOUNT_PROJECT_ID when set."
+        ),
+    )
+    auth_scopes.add_argument(
+        "--expires-in",
+        default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
+    )
+    auth_scopes.add_argument(
+        "--include-site-contract",
+        action="store_true",
+        help="Include browser.lexmount.cn /connect/codex UI and query contract fields.",
+    )
+    auth_scopes.set_defaults(func=cmd_auth_scopes)
 
     auth_token_info = auth_subparsers.add_parser(
         "token-info",

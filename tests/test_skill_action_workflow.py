@@ -121,10 +121,15 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     normalized = _normalized_skill_text()
 
     assert (
-        "guide authentication with auth status/token-info/refresh/logout/connect-requirements/export-env/login"
+        "guide authentication with auth status/scopes/token-info/refresh/logout/connect-requirements/export-env/login"
         in normalized
     )
     assert "browser-cli auth status" in normalized
+    assert "browser-cli auth scopes" in normalized
+    assert (
+        "browser-cli auth scopes --scope browser:actions --include-site-contract"
+        in normalized
+    )
     assert "browser-cli auth token-info" in normalized
     assert "browser-cli auth refresh" in normalized
     assert "browser-cli auth logout" in normalized
@@ -140,6 +145,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli commands --workflow device_code_auth" in normalized
     assert "`required_api_contract`" in normalized
     assert "`required_token_lifecycle`" in normalized
+    assert "`browser_site_contract.scope_ui_fields`" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"
         in normalized
@@ -160,6 +166,8 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`auth status` reports `auth_source`, `runtime_auth_usable`" in normalized
     assert "When env credentials are incomplete, read `missing_env`" in normalized
     assert "and the `fix` object instead of inventing setup steps" in normalized
+    assert "`auth scopes` to inspect known Connect from Codex scopes" in normalized
+    assert "`permission_count`, `risk`, `destructive`, `unknown_scopes`" in normalized
     assert "Use `auth token-info --required-scope <scope>`" in normalized
     assert "Use `auth refresh --credentials-file <path>`" in normalized
     assert "`refresh_available`, `refreshed`, and `reason`" in normalized

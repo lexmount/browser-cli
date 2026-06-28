@@ -280,6 +280,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         "browser-cli auth connect-requirements" in payload["agent_entrypoints"]["setup"]
     )
+    assert "browser-cli auth scopes" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
@@ -299,6 +300,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         "browser-cli auth login --device-code"
         in payload["agent_entrypoints"]["device_code_auth"]
+    )
+    assert (
+        "browser-cli auth scopes --include-site-contract"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
     )
     assert (
         "browser-cli auth connect-requirements"
@@ -344,27 +349,34 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert workflows["setup_and_verify"]["steps"][2]["optional"] is True
     site_steps = workflows["connect_from_codex_site_requirements"]["steps"]
     assert [step["id"] for step in site_steps] == [
+        "inspect_scope_catalog",
         "inspect_site_requirements",
         "verify_manual_handoff",
         "verify_device_code_handoff",
         "doctor_after_credentials",
     ]
-    assert site_steps[0]["command"] == "browser-cli auth connect-requirements"
-    assert "connect_from_codex.device_code_url" in site_steps[0]["read"]
-    assert "required_device_code_endpoints" in site_steps[0]["read"]
-    assert "required_token_lifecycle" in site_steps[0]["read"]
-    assert site_steps[1]["optional"] is True
-    assert site_steps[2]["command"] == "browser-cli auth login --device-code"
-    assert site_steps[3]["command"] == "browser-cli doctor --json"
+    assert site_steps[0]["command"] == (
+        "browser-cli auth scopes --include-site-contract"
+    )
+    assert "browser_site_contract.scope_ui_fields" in site_steps[0]["read"]
+    assert site_steps[1]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.device_code_url" in site_steps[1]["read"]
+    assert "required_device_code_endpoints" in site_steps[1]["read"]
+    assert "required_token_lifecycle" in site_steps[1]["read"]
+    assert site_steps[2]["optional"] is True
+    assert site_steps[3]["command"] == "browser-cli auth login --device-code"
+    assert site_steps[4]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
-    assert auth_steps[1]["command"] == "browser-cli auth login"
-    assert "selected_flow" in auth_steps[1]["read"]
-    assert "manual_env_available" in auth_steps[1]["read"]
-    assert "device_code_available" in auth_steps[1]["read"]
-    assert "connect_from_codex.url" in auth_steps[1]["read"]
-    assert "usable" in auth_steps[2]["read"]
-    assert "unusable_exports" in auth_steps[2]["read"]
-    assert auth_steps[2]["local_shell_only"] is True
+    assert auth_steps[1]["command"] == "browser-cli auth scopes"
+    assert "default_scopes" in auth_steps[1]["read"]
+    assert auth_steps[2]["command"] == "browser-cli auth login"
+    assert "selected_flow" in auth_steps[2]["read"]
+    assert "manual_env_available" in auth_steps[2]["read"]
+    assert "device_code_available" in auth_steps[2]["read"]
+    assert "connect_from_codex.url" in auth_steps[2]["read"]
+    assert "usable" in auth_steps[3]["read"]
+    assert "unusable_exports" in auth_steps[3]["read"]
+    assert auth_steps[3]["local_shell_only"] is True
     device_steps = workflows["device_code_auth"]["steps"]
     assert [step["id"] for step in device_steps] == [
         "request_device_code",
@@ -387,6 +399,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     token_steps = workflows["scoped_token_lifecycle"]["steps"]
     assert [step["id"] for step in token_steps] == [
         "status_scoped_token",
+        "inspect_scope_catalog",
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
@@ -395,18 +408,22 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert token_steps[0]["command"] == "browser-cli auth status"
     assert "device_token.refresh_needed" in token_steps[0]["read"]
     assert token_steps[1]["command"] == (
+        "browser-cli auth scopes --scope browser:actions"
+    )
+    assert "scopes[0].permissions" in token_steps[1]["read"]
+    assert token_steps[2]["command"] == (
         "browser-cli auth token-info --required-scope browser.actions:run"
     )
-    assert "scope_check.satisfied" in token_steps[1]["read"]
-    assert "scope_check.missing_scopes" in token_steps[1]["read"]
-    assert token_steps[2]["optional"] is True
-    assert "refresh_available" in token_steps[2]["read"]
-    assert "browser-cli auth login" in token_steps[2]["fallback_commands"]
-    assert token_steps[3]["command"] == "browser-cli doctor --json"
-    assert "repair_plan.connect_from_codex.url" in token_steps[3]["on_failure_read"]
-    assert token_steps[4]["optional"] is True
-    assert token_steps[4]["user_requested_only"] is True
-    assert "revoke_available" in token_steps[4]["read"]
+    assert "scope_check.satisfied" in token_steps[2]["read"]
+    assert "scope_check.missing_scopes" in token_steps[2]["read"]
+    assert token_steps[3]["optional"] is True
+    assert "refresh_available" in token_steps[3]["read"]
+    assert "browser-cli auth login" in token_steps[3]["fallback_commands"]
+    assert token_steps[4]["command"] == "browser-cli doctor --json"
+    assert "repair_plan.connect_from_codex.url" in token_steps[4]["on_failure_read"]
+    assert token_steps[5]["optional"] is True
+    assert token_steps[5]["user_requested_only"] is True
+    assert "revoke_available" in token_steps[5]["read"]
     session_steps = workflows["session_recovery"]["steps"]
     assert [step["id"] for step in session_steps] == [
         "list_active_sessions",
@@ -670,11 +687,11 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "required_token_lifecycle"
         in payload["agent_workflows"]["connect_from_codex_site_requirements"]["steps"][
-            0
+            1
         ]["read"]
     )
     assert (
-        payload["agent_workflows"]["connect_from_codex_auth"]["steps"][1]["command"]
+        payload["agent_workflows"]["connect_from_codex_auth"]["steps"][2]["command"]
         == "browser-cli auth login"
     )
     assert (
@@ -708,11 +725,11 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "unusable_exports"
-        in payload["agent_workflows"]["connect_from_codex_auth"]["steps"][2]["read"]
+        in payload["agent_workflows"]["connect_from_codex_auth"]["steps"][3]["read"]
     )
     assert (
         "scope_check.missing_scopes"
-        in payload["agent_workflows"]["scoped_token_lifecycle"]["steps"][1]["read"]
+        in payload["agent_workflows"]["scoped_token_lifecycle"]["steps"][2]["read"]
     )
     assert (
         "final_status"
@@ -1157,19 +1174,26 @@ def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
     assert "agent_workflows" not in payload
     steps = payload["workflow"]["steps"]
     assert [step["id"] for step in steps] == [
+        "inspect_scope_catalog",
         "inspect_site_requirements",
         "verify_manual_handoff",
         "verify_device_code_handoff",
         "doctor_after_credentials",
     ]
-    assert steps[0]["command"] == "browser-cli auth connect-requirements"
-    assert "connect_from_codex.site_capabilities" in steps[0]["read"]
-    assert "required_device_code_endpoints" in steps[0]["read"]
-    assert steps[1]["optional"] is True
-    assert "handoff.setup_blocks" in steps[1]["read"]
-    assert steps[2]["command"] == "browser-cli auth login --device-code"
-    assert "device_code.required_endpoints" in steps[2]["read"]
-    assert steps[3]["command"] == "browser-cli doctor --json"
+    assert steps[0]["command"] == "browser-cli auth scopes --include-site-contract"
+    assert "browser_site_contract.scope_ui_fields" in steps[0]["read"]
+    assert steps[1]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.site_capabilities" in steps[1]["read"]
+    assert "required_device_code_endpoints" in steps[1]["read"]
+    assert steps[2]["optional"] is True
+    assert "handoff.setup_blocks" in steps[2]["read"]
+    assert steps[3]["command"] == "browser-cli auth login --device-code"
+    assert "device_code.required_endpoints" in steps[3]["read"]
+    assert steps[4]["command"] == "browser-cli doctor --json"
+    assert (
+        "browser-cli auth scopes --include-site-contract"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
+    )
     assert (
         "browser-cli auth connect-requirements"
         in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
@@ -1247,6 +1271,7 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     steps = payload["workflow"]["steps"]
     assert [step["id"] for step in steps] == [
         "status_scoped_token",
+        "inspect_scope_catalog",
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
@@ -1254,17 +1279,23 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     ]
     assert steps[0]["command"] == "browser-cli auth status"
     assert "device_token.valid" in steps[0]["read"]
-    assert steps[1]["command"] == (
+    assert steps[1]["command"] == ("browser-cli auth scopes --scope browser:actions")
+    assert "scopes[0].permissions" in steps[1]["read"]
+    assert steps[2]["command"] == (
         "browser-cli auth token-info --required-scope browser.actions:run"
     )
-    assert "scope_check.satisfied" in steps[1]["read"]
-    assert steps[2]["optional"] is True
-    assert "refresh_available" in steps[2]["read"]
-    assert steps[3]["success_condition"] == (
+    assert "scope_check.satisfied" in steps[2]["read"]
+    assert steps[3]["optional"] is True
+    assert "refresh_available" in steps[3]["read"]
+    assert steps[4]["success_condition"] == (
         "ok=true and ready_for_browser_actions=true"
     )
-    assert steps[4]["user_requested_only"] is True
-    assert "revoke_available" in steps[4]["read"]
+    assert steps[5]["user_requested_only"] is True
+    assert "revoke_available" in steps[5]["read"]
+    assert (
+        "browser-cli auth scopes --scope browser:actions"
+        in payload["agent_entrypoints"]["scoped_token_lifecycle"]
+    )
     assert (
         "browser-cli auth token-info --required-scope browser.actions:run"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
@@ -1609,6 +1640,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "connect_from_codex_auth"
     ] == [
         "auth_status",
+        "inspect_scope_catalog",
         "auth_login",
         "export_env",
         "doctor",
@@ -1616,6 +1648,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["required_workflow_steps"][
         "connect_from_codex_site_requirements"
     ] == [
+        "inspect_scope_catalog",
         "inspect_site_requirements",
         "verify_manual_handoff",
         "verify_device_code_handoff",
@@ -1631,6 +1664,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "scoped_token_lifecycle"
     ] == [
         "status_scoped_token",
+        "inspect_scope_catalog",
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
@@ -1823,6 +1857,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "version" in catalog["missing_required_commands"]
     assert "case.schema" in catalog["missing_required_commands"]
     assert "case.scaffold" in catalog["missing_required_commands"]
+    assert "auth.scopes" in catalog["missing_required_commands"]
     assert "auth.connect-requirements" in catalog["missing_required_commands"]
     assert catalog["missing_required_workflows"] == [
         "setup_and_verify",
@@ -1990,6 +2025,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 },
                 "connect_from_codex_site_requirements": {
                     "steps": [
+                        {"id": "inspect_scope_catalog"},
                         {"id": "inspect_site_requirements"},
                         {"id": "verify_manual_handoff"},
                         {"id": "verify_device_code_handoff"},
@@ -1999,6 +2035,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "connect_from_codex_auth": {
                     "steps": [
                         {"id": "auth_status"},
+                        {"id": "inspect_scope_catalog"},
                         {"id": "auth_login"},
                         {"id": "export_env"},
                         {"id": "doctor"},
@@ -2015,6 +2052,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "scoped_token_lifecycle": {
                     "steps": [
                         {"id": "status_scoped_token"},
+                        {"id": "inspect_scope_catalog"},
                         {"id": "inspect_required_scopes"},
                         {"id": "refresh_if_needed"},
                         {"id": "verify_browser_readiness"},
@@ -3268,6 +3306,148 @@ def test_auth_export_env_can_reveal_current_secret_explicitly(
     assert payload["warnings"] == []
     assert "local-secret" in payload["script"]
     assert payload["exports"][0]["usable"] is True
+
+
+def test_auth_scopes_lists_machine_readable_scope_catalog(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "scopes"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "auth.scopes"
+    assert payload["schema_version"] == 1
+    assert payload["known_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert payload["default_scopes"] == payload["known_scopes"]
+    assert payload["requested_scopes"] == payload["default_scopes"]
+    assert payload["scope_count"] == 3
+    assert payload["known_scope_count"] == 3
+    assert payload["unknown_scopes"] == []
+    assert payload["all_selected_scopes_known"] is True
+    assert payload["scope_query_parameter"] == {
+        "name": "scope",
+        "repeatable": True,
+        "default": [
+            "browser:sessions",
+            "browser:contexts",
+            "browser:actions",
+        ],
+    }
+    assert payload["secret_policy"]["contains_secret_values"] is False
+    assert payload["secret_policy"]["safe_to_share"] is True
+    assert "browser-cli auth connect-requirements" in payload["next_commands"]
+
+    action_scope = payload["scopes"][2]
+    assert action_scope["scope"] == "browser:actions"
+    assert action_scope["known"] is True
+    assert action_scope["label"] == "Browser actions"
+    assert action_scope["permissions"] == ["browser.actions:run"]
+    assert action_scope["permission_count"] == 1
+    assert action_scope["default_requested"] is True
+    assert action_scope["risk"] == "high"
+    assert action_scope["query_parameter"] == "scope=browser:actions"
+    assert action_scope["browser_site_ui"]["risk_field"] == "risk"
+    assert "browser_site_contract" not in payload
+
+
+def test_auth_scopes_filters_unknown_scopes_and_reports_site_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "env-project")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "scopes",
+                "--scope",
+                "browser:actions",
+                "--scope",
+                "browser:future",
+                "--include-site-contract",
+                "--project-id",
+                "arg-project",
+                "--expires-in",
+                "24h",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "auth.scopes"
+    assert payload["requested_scopes"] == ["browser:actions", "browser:future"]
+    assert payload["scope_count"] == 2
+    assert payload["known_scope_count"] == 1
+    assert payload["unknown_scopes"] == ["browser:future"]
+    assert payload["all_selected_scopes_known"] is False
+    assert payload["scopes"][0]["permission_count"] == 1
+    assert payload["scopes"][1] == {
+        "scope": "browser:future",
+        "known": False,
+        "label": "browser:future",
+        "description": "Custom or future scope requested by the caller.",
+        "permissions": ["browser:future"],
+        "risk": "unknown",
+        "destructive": None,
+        "default_requested": False,
+        "permission_count": 1,
+        "query_parameter": "scope=browser:future",
+        "browser_site_ui": {
+            "label_field": "label",
+            "description_field": "description",
+            "permissions_field": "permissions",
+            "risk_field": "risk",
+            "destructive_field": "destructive",
+            "default_checked_field": "default_requested",
+            "custom_scope": True,
+        },
+    }
+
+    contract = payload["browser_site_contract"]
+    assert contract["available"] is False
+    assert contract["reason"] == "browser_site_contract_pending"
+    assert contract["project_id"] == "arg-project"
+    assert contract["project_id_source"] == "argument"
+    assert contract["requested_scopes"] == ["browser:actions", "browser:future"]
+    assert contract["requested_scope_details"][1]["known"] is False
+    assert contract["requested_expires_in"] == "24h"
+    assert contract["scope_catalog_command"] == "browser-cli auth scopes"
+    assert contract["scope_ui_fields"] == [
+        "scope",
+        "label",
+        "description",
+        "permissions",
+        "risk",
+        "destructive",
+        "default_requested",
+        "permission_count",
+    ]
+    assert "scope=<scope> (repeatable)" in contract["required_query_parameters"]
+    assert [item["id"] for item in contract["required_token_lifecycle"]] == [
+        "issue_scoped_key",
+        "refresh_token",
+        "revoke_token",
+        "expire_token",
+    ]
+    assert contract["site_capability_status"]["missing_count"] == 6
+    assert any(
+        "permission names" in item for item in contract["browser_site_requirements"]
+    )
+    env_query = parse_qs(urlsplit(contract["url"]).query)
+    assert env_query["project_id"] == ["arg-project"]
+    assert env_query["scope"] == ["browser:actions", "browser:future"]
+    assert env_query["expires_in"] == ["24h"]
+    assert env_query["response"] == ["env"]
+    device_query = parse_qs(urlsplit(contract["device_code_url"]).query)
+    assert device_query["response"] == ["device_code"]
+    assert "real-api-key-value" not in json.dumps(payload)
 
 
 def test_auth_connect_requirements_reports_browser_site_contract(

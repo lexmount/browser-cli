@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
+description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
 ---
 
 # browser-cli
@@ -45,6 +45,8 @@ Use local auth helpers instead of handling secrets in chat:
 ```bash
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth scopes
+browser-cli auth scopes --scope browser:actions --include-site-contract
 browser-cli auth token-info --required-scope browser:actions
 browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
@@ -66,9 +68,11 @@ browser-cli commands --workflow scoped_token_lifecycle
 ```
 
 When the task is to inspect or explain what browser.lexmount.cn must implement,
-run `browser-cli auth connect-requirements` or
+run `browser-cli auth scopes --include-site-contract`,
+`browser-cli auth connect-requirements`, or
 `browser-cli commands --workflow connect_from_codex_site_requirements` first.
-Read `connect_from_codex.site_capability_status.missing`,
+Read `browser_site_contract.scope_ui_fields`, `known_scopes`,
+`default_scopes`, `connect_from_codex.site_capability_status.missing`,
 `required_device_code_endpoints`, `required_api_contract`,
 `required_token_lifecycle`, `setup_blocks`, and `verification.doctor_command`.
 
@@ -97,6 +101,9 @@ treating returned `commands` as directly runnable.
 `device_token` metadata when a local scoped-token credentials file exists or
 `--credentials-file` is passed. When env credentials are incomplete, read
 `missing_env` and the `fix` object instead of inventing setup steps. Use
+`auth scopes` to inspect known Connect from Codex scopes, `default_scopes`,
+`permission_count`, `risk`, `destructive`, `unknown_scopes`, and the optional
+`browser_site_contract` before explaining requested permissions. Use
 `auth token-info --required-scope <scope>` to check scoped-token coverage. Use
 `auth refresh --credentials-file <path>` to
 inspect `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`,
@@ -316,6 +323,8 @@ Authentication:
 ```bash
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth scopes
+browser-cli auth scopes --scope browser:actions --include-site-contract
 browser-cli auth token-info --required-scope browser:actions
 browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
