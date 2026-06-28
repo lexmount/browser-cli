@@ -231,13 +231,14 @@ browser-cli action wait-selector --session-id <session_id> --selector <selector>
 browser-cli action click --session-id <session_id> --selector <selector>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
 browser-cli action page-info --session-id <session_id>
+browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720
 browser-cli action get-attribute-role --session-id <session_id> --role button --name Menu --attribute aria-expanded
 browser-cli action wait-attribute-role --session-id <session_id> --role button --name Menu --attribute aria-expanded --value true --match exact
 browser-cli action snapshot --session-id <session_id>
 ```
 
 When expanded action commands are available, use them for common browser
-operations such as reading page info, checking existence, reading text,
+operations such as reading page info, setting a stable viewport, checking existence, reading text,
 waiting on title changes, waiting for text to disappear, scrolling, selecting
 options, checking boxes, hovering, pressing selector keys, and sending
 active/global shortcut keys.

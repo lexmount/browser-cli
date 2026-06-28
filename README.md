@@ -397,6 +397,7 @@ browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
 browser-cli action page-info --session-id <session_id>
+browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720
 browser-cli action reload --session-id <session_id>
 browser-cli action go-back --session-id <session_id>
 browser-cli action go-forward --session-id <session_id>
@@ -495,7 +496,7 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
-`page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
+`page-info`, `set-viewport`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`,
 `get-attribute`, `get-attribute-role`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-attribute-role`, `wait-text`, `wait-role`, `focus`, `focus-role`,
 `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `blur-role`, `storage-get`, `storage-set`, `storage-remove`,
@@ -821,6 +822,7 @@ Common agent recipes:
   decide whether the agent can inspect the embedded page or needs a different
   browser workflow.
 - Read results: `page-info` for URL/title/readyState/viewport checks,
+  `set-viewport` before responsive screenshots or layout-sensitive checks,
   `wait-title` for async title changes, `wait-count` for dynamic lists,
   `list-snapshot` for menu/listbox/search-result/task-list content,
   `text-snapshot` for visible paragraphs, alerts, status messages, and bounded
@@ -841,8 +843,8 @@ Common agent recipes:
 - Debug candidate selectors: use `count` for cardinality, `query` for node
   metadata, `inspect` for state, `get-attribute` for href/value/aria checks,
   then `wait-count`, `wait-state`, or `wait-attribute` for async DOM changes.
-- Final evidence: `screenshot`, then close the session unless it should stay
-  open.
+- Final evidence: `set-viewport` when evidence needs a stable browser size,
+  `screenshot`, then close the session unless it should stay open.
 
 Use `session create --context-metadata-json '{"purpose":"codex-login"}'
 --create-context-if-missing --context-mode read_write` when login state or

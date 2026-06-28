@@ -169,6 +169,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`guide.preferred_commands`" in text
     assert "`guide.verify_commands`" in text
     assert "`guide.custom_js_boundary`" in text
+    assert "`set-viewport`" in text
     assert "`error=unknown_action_guide_task`" in text
     assert "`available_tasks`" in text
     assert "`error=unknown_group`" in text
@@ -298,6 +299,7 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "hover-role",
         "scroll",
         "scroll-into-view-role",
+        "set-viewport",
         "get-text",
         "get-text-role",
         "exists",

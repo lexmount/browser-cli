@@ -338,6 +338,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli action console-snapshot --session-id <session_id> --install-only"
         in payload["agent_entrypoints"]["page_diagnostics"]
     )
+    assert (
+        "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720"
+        in payload["agent_entrypoints"]["page_diagnostics"]
+    )
     workflows = payload["agent_workflows"]
     assert workflows["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -613,6 +617,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert [step["id"] for step in diagnostics_steps] == [
         "inspect_action_guide",
         "page_info_before",
+        "set_viewport",
         "install_console_capture",
         "install_network_capture",
         "reproduce_issue",
@@ -625,15 +630,19 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "guide.read_fields" in diagnostics_steps[0]["read"]
     assert diagnostics_steps[2]["command"] == (
+        "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720"
+    )
+    assert "result.viewport" in diagnostics_steps[2]["read"]
+    assert diagnostics_steps[3]["command"] == (
         "browser-cli action console-snapshot --session-id <session_id> --install-only"
     )
-    assert "result.newly_installed" in diagnostics_steps[2]["read"]
-    assert "result.buffered_count_after" in diagnostics_steps[3]["read"]
-    assert diagnostics_steps[4]["agent_action"] is True
-    assert "result.entries" in diagnostics_steps[5]["read"]
-    assert "result.entry_count" in diagnostics_steps[6]["read"]
+    assert "result.newly_installed" in diagnostics_steps[3]["read"]
+    assert "result.buffered_count_after" in diagnostics_steps[4]["read"]
+    assert diagnostics_steps[5]["agent_action"] is True
+    assert "result.entries" in diagnostics_steps[6]["read"]
+    assert "result.entry_count" in diagnostics_steps[7]["read"]
     assert (
-        "browser-cli action screenshot" in diagnostics_steps[7]["fallback_commands"][0]
+        "browser-cli action screenshot" in diagnostics_steps[8]["fallback_commands"][0]
     )
 
     for name in (
@@ -651,6 +660,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.guide",
         "action.open-url",
         "action.page-info",
+        "action.set-viewport",
         "action.wait-title",
         "action.wait-state-role",
         "action.press-key",
@@ -699,6 +709,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "exactly_one_of": ["--connect-url", "--direct-url", "--session-id"],
     }
     assert "--url" in open_url["required_options"]
+    set_viewport = commands["action.set-viewport"]
+    assert set_viewport["required_options"] == ["--width", "--height"]
+    assert set_viewport["browser_target"] == open_url["browser_target"]
     action_guide = commands["action.guide"]
     assert action_guide["required_options"] == []
     assert action_guide["required_one_of"] == []
@@ -959,6 +972,30 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     ) in payload["guide"]["fallback_commands"]
 
     with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "page_diagnostics"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["selection_order"][:2] == [
+        "page-info",
+        "set-viewport",
+    ]
+    assert any(
+        "browser-cli action set-viewport" in command
+        for command in payload["guide"]["inspect_commands"]
+    )
+    assert any(
+        "browser-cli action set-viewport" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert "result.viewport" in payload["guide"]["read_fields"]
+    assert "result.window_viewport" in payload["guide"]["read_fields"]
+    assert (
+        "set-viewport when viewport state matters"
+        in payload["guide"]["custom_js_boundary"]
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "state_waits"])
 
     assert exc_info.value.code == 0
@@ -1096,7 +1133,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "result.entries"
-        in payload["agent_workflows"]["page_diagnostics"]["steps"][5]["read"]
+        in payload["agent_workflows"]["page_diagnostics"]["steps"][6]["read"]
     )
     assert "browser-cli auth login" in payload["agent_entrypoints"]["setup"]
     assert payload["json_output"]["always_json"] is True
@@ -1818,12 +1855,17 @@ def test_commands_catalog_returns_page_diagnostics_workflow(
     )
     assert payload["workflow"]["steps"][1]["id"] == "page_info_before"
     assert payload["workflow"]["steps"][2]["command"] == (
+        "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720"
+    )
+    assert payload["workflow"]["steps"][2]["optional"] is True
+    assert "result.window_viewport" in payload["workflow"]["steps"][2]["read"]
+    assert payload["workflow"]["steps"][3]["command"] == (
         "browser-cli action console-snapshot --session-id <session_id> --install-only"
     )
-    assert payload["workflow"]["steps"][4]["id"] == "reproduce_issue"
-    assert payload["workflow"]["steps"][4]["agent_action"] is True
-    assert payload["workflow"]["steps"][5]["id"] == "read_console_entries"
-    assert "result.entries" in payload["workflow"]["steps"][5]["read"]
+    assert payload["workflow"]["steps"][5]["id"] == "reproduce_issue"
+    assert payload["workflow"]["steps"][5]["agent_action"] is True
+    assert payload["workflow"]["steps"][6]["id"] == "read_console_entries"
+    assert "result.entries" in payload["workflow"]["steps"][6]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "capture_visible_state"
     assert (
         "browser-cli action screenshot"
@@ -1911,6 +1953,7 @@ def test_commands_catalog_filters_group_and_names_only(
     }
     assert "action.open-url" in payload["commands"]
     assert "action.page-info" in payload["commands"]
+    assert "action.set-viewport" in payload["commands"]
     assert "action.wait-title" in payload["commands"]
     assert "action.press-key" in payload["commands"]
     assert "action.link-snapshot" in payload["commands"]
@@ -2113,6 +2156,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["required_workflow_steps"]["page_diagnostics"] == [
         "inspect_action_guide",
         "page_info_before",
+        "set_viewport",
         "install_console_capture",
         "install_network_capture",
         "reproduce_issue",
@@ -2128,6 +2172,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.hover-role",
         "action.scroll",
         "action.scroll-into-view-role",
+        "action.set-viewport",
         "action.get-text",
         "action.get-text-role",
         "action.exists",
@@ -2260,6 +2305,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.press-role" in catalog["missing_required_commands"]
     assert "action.hover-role" in catalog["missing_required_commands"]
     assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
+    assert "action.set-viewport" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
@@ -2547,6 +2593,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                     "steps": [
                         {"id": "inspect_action_guide"},
                         {"id": "page_info_before"},
+                        {"id": "set_viewport"},
                         {"id": "install_console_capture"},
                         {"id": "install_network_capture"},
                         {"id": "reproduce_issue"},
@@ -6512,6 +6559,120 @@ def test_eval_backed_action_reports_missing_selector(
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "action.get-text"
     assert payload["result"] == {"found": False, "url": "https://example.test"}
+
+
+def test_action_set_viewport_emits_structured_result(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_set_page_viewport(
+        *,
+        connect_url: str,
+        width: int,
+        height: int,
+    ) -> dict[str, Any]:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "width": width,
+                "height": height,
+            }
+        )
+        return {
+            "url": "https://example.test",
+            "title": "Example",
+            "requested_viewport": {"width": width, "height": height},
+            "previous_viewport": {"width": 800, "height": 600},
+            "viewport": {"width": width, "height": height},
+            "window_viewport": {
+                "width": width,
+                "height": height,
+                "device_pixel_ratio": 1,
+            },
+            "changed": True,
+        }
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli._set_page_viewport", fake_set_page_viewport)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "set-viewport",
+                "--session-id",
+                "s1",
+                "--width",
+                "1280",
+                "--height",
+                "720",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed == {
+        "connect_url": connect_url,
+        "width": 1280,
+        "height": 720,
+    }
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": "action.set-viewport",
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": {
+            "url": "https://example.test",
+            "title": "Example",
+            "requested_viewport": {"width": 1280, "height": 720},
+            "previous_viewport": {"width": 800, "height": 600},
+            "viewport": {"width": 1280, "height": 720},
+            "window_viewport": {
+                "width": 1280,
+                "height": 720,
+                "device_pixel_ratio": 1,
+            },
+            "changed": True,
+        },
+    }
+
+
+def test_action_set_viewport_rejects_invalid_size_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "set-viewport",
+                "--session-id",
+                "s1",
+                "--width",
+                "0",
+                "--height",
+                "720",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "action.set-viewport"
+    assert payload["error"] == "argument_error"
+    assert payload["width"] == 0
+    assert payload["height"] == 720
 
 
 def test_action_dom_snapshots_mask_sensitive_accessible_names(

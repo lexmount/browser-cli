@@ -299,6 +299,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`exists`",
         "`exists-role`",
         "`page-info`",
+        "`set-viewport`",
         "`get-text`",
         "`get-text-role`",
         "`count`",
@@ -615,6 +616,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "otherwise run `frame-snapshot` and parse `readable`" in normalized
     assert "Read page results" in normalized
     assert "use `page-info` for URL/title/readyState/viewport checks" in normalized
+    assert "`set-viewport` before responsive screenshots" in normalized
     assert "`wait-title` for async title changes" in normalized
     assert "`wait-count` for dynamic lists" in normalized
     assert (
@@ -644,4 +646,5 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "document.cookie-visible cookies" in normalized
     assert "HttpOnly cookies" in normalized
     assert "Capture final evidence" in normalized
-    assert "use `screenshot` after the action sequence" in normalized
+    assert "use `set-viewport` when evidence needs a stable browser size" in normalized
+    assert "then use `screenshot` after the action sequence" in normalized

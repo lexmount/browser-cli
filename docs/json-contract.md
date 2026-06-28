@@ -205,7 +205,8 @@ Default behavior:
 - `action guide` reports compact action routes for `form_interaction`,
   `interactive_targeting`, `page_diagnostics`, and `state_waits`, including
   inspect, preferred, fallback, and verification commands plus the custom
-  JavaScript boundary for each task.
+  JavaScript boundary for each task. Page diagnostics can include
+  `set-viewport` to stabilize responsive screenshots and layout checks.
 - `auth export-env` reports top-level `usable` and `unusable_exports` so agents
   can distinguish directly runnable export commands from placeholder or masked
   commands.
@@ -248,7 +249,7 @@ Default behavior:
   the Skill workflow or missing critical workflow steps such as cleanup. The
   required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, press-role,
-  hover, hover-role, scroll, scroll-into-view-role,
+  hover, hover-role, scroll, scroll-into-view-role, set-viewport,
   get-text, get-text-role, exists, exists-role, wait-state-role,
   get-attribute-role, wait-attribute-role, bounding-box-role,
   select-option, select-role, check, uncheck, check-role,

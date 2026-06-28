@@ -108,6 +108,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.eval",
     "action.snapshot",
     "action.page-info",
+    "action.set-viewport",
     "action.get-text",
     "action.get-text-role",
     "action.exists",
@@ -249,6 +250,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "page_diagnostics": (
         "inspect_action_guide",
         "page_info_before",
+        "set_viewport",
         "install_console_capture",
         "install_network_capture",
         "reproduce_issue",
@@ -810,6 +812,8 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "page_diagnostics": [
                 "browser-cli action guide --task page_diagnostics",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
                 "browser-cli action console-snapshot --session-id <session_id> --install-only",
                 "browser-cli action network-snapshot --session-id <session_id> --install-only",
                 "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
@@ -1603,6 +1607,17 @@ def _command_catalog() -> dict[str, Any]:
                             "visibility_state",
                             "viewport",
                             "scroll",
+                        ],
+                    },
+                    {
+                        "id": "set_viewport",
+                        "command": "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                        "optional": True,
+                        "read": [
+                            "result.requested_viewport",
+                            "result.previous_viewport",
+                            "result.viewport",
+                            "result.window_viewport",
                         ],
                     },
                     {
@@ -3809,6 +3824,83 @@ def _run_action_command(
             reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
         ),
         result=result.result,
+    )
+
+
+def _set_page_viewport(
+    *,
+    connect_url: str,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    try:
+        from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise BrowserConfigError(
+            "Failed to import Playwright. Install lex-browser-runtime[browser] "
+            "or provide an environment that already includes playwright."
+        ) from exc
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.connect_over_cdp(connect_url)
+        try:
+            context = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = context.pages[0] if context.pages else context.new_page()
+            previous_viewport = page.viewport_size
+            page.set_viewport_size({"width": width, "height": height})
+            viewport = page.viewport_size
+            window_viewport = page.evaluate(
+                """
+() => ({
+  width: window.innerWidth,
+  height: window.innerHeight,
+  device_pixel_ratio: window.devicePixelRatio
+})
+""".strip()
+            )
+            return {
+                "url": page.url,
+                "title": page.title(),
+                "requested_viewport": {"width": width, "height": height},
+                "previous_viewport": previous_viewport,
+                "viewport": viewport,
+                "window_viewport": window_viewport,
+                "changed": previous_viewport != viewport,
+            }
+        finally:
+            browser.close()
+
+
+def _run_set_viewport_action_command(args: argparse.Namespace) -> None:
+    command = "action.set-viewport"
+    if args.width <= 0 or args.height <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--width and --height must be positive integers.",
+            exit_code=2,
+            width=args.width,
+            height=args.height,
+        )
+
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = _set_page_viewport(
+            connect_url=connect_url,
+            width=args.width,
+            height=args.height,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
     )
 
 
@@ -10987,6 +11079,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "selection_order": [
                 "page-info",
+                "set-viewport",
                 "console-snapshot --install-only",
                 "network-snapshot --install-only",
                 "reproduce issue",
@@ -10997,10 +11090,12 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "inspect_commands": [
                 "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
                 "browser-cli action console-snapshot --session-id <session_id> --install-only",
                 "browser-cli action network-snapshot --session-id <session_id> --install-only",
             ],
             "preferred_commands": [
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
                 "<run the browser action that should be diagnosed>",
                 "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
                 "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
@@ -11019,14 +11114,17 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "read_fields": [
                 "ready_state",
                 "visibility_state",
+                "result.viewport",
+                "result.window_viewport",
                 "result.entries",
                 "result.entry_count",
                 "result.texts",
                 "result.text_count",
             ],
             "custom_js_boundary": (
-                "Use action eval only after page-info, console/network capture, "
-                "text snapshots, and screenshots do not explain the issue."
+                "Use action eval only after page-info, set-viewport when viewport "
+                "state matters, console/network capture, text snapshots, and "
+                "screenshots do not explain the issue."
             ),
         },
         "state_waits": {
@@ -11255,6 +11353,10 @@ def cmd_action_page_info(args: argparse.Namespace) -> None:
         "action.page-info",
         _page_info_expression(),
     )
+
+
+def cmd_action_set_viewport(args: argparse.Namespace) -> None:
+    _run_set_viewport_action_command(args)
 
 
 def cmd_action_reload(args: argparse.Namespace) -> None:
@@ -14708,6 +14810,15 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     _add_session_target_args(action_page_info)
     action_page_info.set_defaults(func=cmd_action_page_info)
+
+    action_set_viewport = action_subparsers.add_parser(
+        "set-viewport",
+        help="Set the current page viewport width and height",
+    )
+    _add_session_target_args(action_set_viewport)
+    action_set_viewport.add_argument("--width", type=int, required=True)
+    action_set_viewport.add_argument("--height", type=int, required=True)
+    action_set_viewport.set_defaults(func=cmd_action_set_viewport)
 
     action_reload = action_subparsers.add_parser(
         "reload",
