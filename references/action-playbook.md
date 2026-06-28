@@ -24,6 +24,7 @@ browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
+browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
@@ -37,6 +38,7 @@ browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task navigation_flow
+browser-cli action guide --task link_navigation
 browser-cli action guide --task visual_capture
 browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
@@ -324,6 +326,11 @@ then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
    `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
    selector. For repeated matches, run `query` and then `click-index --index
    <n>`.
+Link navigation: run `browser-cli commands --workflow link_navigation` and
+`browser-cli action guide --task link_navigation`, use `link-snapshot` to read
+visible text, href, `same_origin`, `external`, `download`, `href_masked`, and
+`absolute_url_masked`, activate with `click-role`, `click-text`, or `open-url`,
+then verify with `wait-url`, `wait-title`, `wait-load-state`, and `page-info`.
 3. Extract page content or data: run `browser-cli commands --workflow
    content_extraction` and `browser-cli action guide --task content_extraction`,
    then choose `outline-snapshot`, `text-snapshot`, `link-snapshot`,

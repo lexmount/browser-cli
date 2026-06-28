@@ -23,6 +23,7 @@ browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
+browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
@@ -36,6 +37,7 @@ browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task navigation_flow
+browser-cli action guide --task link_navigation
 browser-cli action guide --task visual_capture
 browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
@@ -195,6 +197,17 @@ browser-cli action outline-snapshot --session-id <session_id> --selector main --
 browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000
 browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80
 browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200
+```
+
+For link navigation, read the link workflow before scraping hrefs or writing
+click JavaScript:
+
+```bash
+browser-cli commands --workflow link_navigation
+browser-cli action guide --task link_navigation
+browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80
+browser-cli action click-role --session-id <session_id> --role link --name "Docs"
+browser-cli action wait-url --session-id <session_id> --url /docs
 ```
 
 For browser state setup or cleanup, read the browser state workflow before

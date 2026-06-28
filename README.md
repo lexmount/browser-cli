@@ -48,6 +48,7 @@ CLI for you:
    browser-cli action guide --task file_upload
    browser-cli action guide --task dialog_frame_handling
    browser-cli action guide --task navigation_flow
+   browser-cli action guide --task link_navigation
    browser-cli action guide --task visual_capture
    browser-cli action guide --task semantic_waits
    browser-cli action guide --task menu_keyboard_flow
@@ -107,6 +108,7 @@ CLI for you:
    browser-cli commands --workflow file_upload
    browser-cli commands --workflow dialog_frame_handling
    browser-cli commands --workflow navigation_flow
+   browser-cli commands --workflow link_navigation
    browser-cli commands --workflow visual_capture
    browser-cli commands --workflow semantic_waits
    browser-cli commands --workflow menu_keyboard_flow
@@ -119,6 +121,7 @@ CLI for you:
    browser-cli action guide --task file_upload
    browser-cli action guide --task dialog_frame_handling
    browser-cli action guide --task navigation_flow
+   browser-cli action guide --task link_navigation
    browser-cli action guide --task visual_capture
    browser-cli action guide --task semantic_waits
    browser-cli action guide --task menu_keyboard_flow
@@ -270,6 +273,7 @@ browser-cli action guide --task browser_state_management
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task navigation_flow
+browser-cli action guide --task link_navigation
 browser-cli action guide --task visual_capture
 browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
@@ -287,6 +291,7 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
+browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
@@ -295,6 +300,7 @@ browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow navigation_flow
+browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
@@ -433,6 +439,11 @@ browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
+browser-cli commands --workflow navigation_flow
+browser-cli commands --workflow link_navigation
+browser-cli commands --workflow visual_capture
+browser-cli commands --workflow semantic_waits
+browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli doctor
@@ -588,7 +599,8 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 
 `action guide` returns machine-readable task routes for `form_interaction`,
 `interactive_targeting`, `content_extraction`, `browser_state_management`,
-`file_upload`, `dialog_frame_handling`, `navigation_flow`, `visual_capture`, `semantic_waits`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
+`file_upload`, `dialog_frame_handling`, `navigation_flow`, `link_navigation`,
+`visual_capture`, `semantic_waits`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
@@ -867,6 +879,11 @@ Common agent recipes:
   choose, inspect, or report navigation URLs, then use `scroll-into-view` and
   selector `click` after `exists`, `inspect`, or `bounding-box` confirms a
   stable selector.
+- Link navigation: run `browser-cli commands --workflow link_navigation` and
+  `browser-cli action guide --task link_navigation`; use `link-snapshot` to
+  inspect visible text, href, same-origin, external, download, and masked URL
+  fields, activate with `click-role`, `click-text`, or `open-url`, then verify
+  with `wait-url`, `wait-title`, `wait-load-state`, and `page-info`.
 - Repeated list item: `list-snapshot` for menus, search results, listboxes, and
   task lists -> read `items`, `links`, `checked`, `selected`, and `expanded`;
   use `--selector` and `--max-items` to keep output bounded. Fall back to

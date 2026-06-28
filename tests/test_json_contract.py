@@ -183,6 +183,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`dialog-snapshot`" in text
     assert "`frame-snapshot`" in text
     assert "`navigation_flow`" in text
+    assert "`link_navigation`" in text
     assert "`visual_capture`" in text
     assert "`semantic_waits`" in text
     assert "`screenshot-role`" in text

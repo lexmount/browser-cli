@@ -110,6 +110,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow file_upload" in normalized
     assert "browser-cli commands --workflow dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow navigation_flow" in normalized
+    assert "browser-cli commands --workflow link_navigation" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
     assert "browser-cli commands --workflow semantic_waits" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
@@ -124,6 +125,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli action guide --task file_upload" in normalized
     assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "browser-cli action guide --task navigation_flow" in normalized
+    assert "browser-cli action guide --task link_navigation" in normalized
     assert "browser-cli action guide --task visual_capture" in normalized
     assert "browser-cli action guide --task semantic_waits" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
@@ -325,6 +327,8 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow navigation_flow" in normalized
     assert "browser-cli action guide --task navigation_flow" in normalized
+    assert "browser-cli commands --workflow link_navigation" in normalized
+    assert "browser-cli action guide --task link_navigation" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
     assert "browser-cli action guide --task visual_capture" in normalized
     assert "For visual evidence" in normalized
@@ -600,6 +604,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli commands --workflow file_upload" in normalized
     assert "browser-cli commands --workflow dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow navigation_flow" in normalized
+    assert "browser-cli commands --workflow link_navigation" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
     assert "browser-cli commands --workflow semantic_waits" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
@@ -612,6 +617,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli action guide --task file_upload" in normalized
     assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "browser-cli action guide --task navigation_flow" in normalized
+    assert "browser-cli action guide --task link_navigation" in normalized
     assert "browser-cli action guide --task visual_capture" in normalized
     assert "browser-cli action guide --task semantic_waits" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
@@ -630,6 +636,9 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Navigate page history or async refresh" in normalized
     assert "browser-cli commands --workflow navigation_flow" in normalized
     assert "browser-cli action guide --task navigation_flow" in normalized
+    assert "Link navigation" in normalized
+    assert "browser-cli commands --workflow link_navigation" in normalized
+    assert "browser-cli action guide --task link_navigation" in normalized
     assert "Capture visual evidence" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
     assert "browser-cli action guide --task visual_capture" in normalized

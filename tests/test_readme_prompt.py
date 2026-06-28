@@ -79,6 +79,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli commands --workflow file_upload" in prompt
     assert "browser-cli commands --workflow dialog_frame_handling" in prompt
     assert "browser-cli commands --workflow navigation_flow" in prompt
+    assert "browser-cli commands --workflow link_navigation" in prompt
     assert "browser-cli commands --workflow visual_capture" in prompt
     assert "browser-cli commands --workflow semantic_waits" in prompt
     assert "browser-cli commands --workflow menu_keyboard_flow" in prompt
@@ -92,6 +93,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli action guide --task file_upload" in prompt
     assert "browser-cli action guide --task dialog_frame_handling" in prompt
     assert "browser-cli action guide --task navigation_flow" in prompt
+    assert "browser-cli action guide --task link_navigation" in prompt
     assert "browser-cli action guide --task visual_capture" in prompt
     assert "browser-cli action guide --task semantic_waits" in prompt
     assert "browser-cli action guide --task menu_keyboard_flow" in prompt

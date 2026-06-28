@@ -263,6 +263,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "navigation_flow" in references["action_playbook"]["related_workflows"]
+    assert "link_navigation" in references["action_playbook"]["related_workflows"]
     assert "visual_capture" in references["action_playbook"]["related_workflows"]
     assert "semantic_waits" in references["action_playbook"]["related_workflows"]
     assert "page_diagnostics" in references["action_playbook"]["related_workflows"]
@@ -400,6 +401,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         'browser-cli action wait-title --session-id <session_id> --title "<title text>"'
         in payload["agent_entrypoints"]["navigation_flow"]
+    )
+    assert (
+        "browser-cli action guide --task link_navigation"
+        in payload["agent_entrypoints"]["link_navigation"]
+    )
+    assert (
+        "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80"
+        in payload["agent_entrypoints"]["link_navigation"]
+    )
+    assert (
+        'browser-cli action click-role --session-id <session_id> --role link --name "Docs"'
+        in payload["agent_entrypoints"]["link_navigation"]
     )
     assert (
         "browser-cli action guide --task visual_capture"
@@ -672,6 +685,22 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser-cli action wait-title" in navigation_steps[4][
         "fallback_commands"
     ][2]
+    link_steps = workflows["link_navigation"]["steps"]
+    assert [step["id"] for step in link_steps] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "inspect_links",
+        "choose_link_target",
+        "activate_link",
+        "verify_navigation_result",
+    ]
+    assert link_steps[0]["command"] == "browser-cli action guide --task link_navigation"
+    assert "browser-cli action link-snapshot" in link_steps[2]["command"]
+    assert "result.links[].href_masked" in link_steps[2]["read"]
+    assert link_steps[3]["agent_action"] is True
+    assert link_steps[3]["secret_handling"].startswith("Do not copy href")
+    assert "click-role" in link_steps[3]["selection_order"]
+    assert "result.navigation_requested" in link_steps[4]["read"]
     visual_steps = workflows["visual_capture"]["steps"]
     assert [step["id"] for step in visual_steps] == [
         "inspect_action_guide",
@@ -1407,7 +1436,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 12,
+        "task_count": 13,
         "tasks": [
             "browser_state_management",
             "content_extraction",
@@ -1415,6 +1444,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
             "file_upload",
             "form_interaction",
             "interactive_targeting",
+            "link_navigation",
             "menu_keyboard_flow",
             "navigation_flow",
             "page_diagnostics",
@@ -1447,6 +1477,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
+        "link_navigation",
         "menu_keyboard_flow",
         "navigation_flow",
         "page_diagnostics",
@@ -1578,6 +1609,46 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli commands --workflow navigation_flow",
         "browser-cli commands --workflow state_waits",
         "browser-cli commands --workflow one_off_page_task",
+    ]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "link_navigation"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "link_navigation",
+        "navigation_flow",
+        "interactive_targeting",
+        "content_extraction",
+    ]
+    assert payload["guide"]["selection_order"][:5] == [
+        "page-info",
+        "link-snapshot",
+        "interactive-snapshot",
+        "accessibility-snapshot",
+        "wait-role",
+    ]
+    assert any(
+        "browser-cli action link-snapshot" in command
+        for command in payload["guide"]["inspect_commands"]
+    )
+    assert any(
+        "browser-cli action click-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action click-index" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert "result.links" in payload["guide"]["read_fields"]
+    assert "result.links[].absolute_url_masked" in payload["guide"]["read_fields"]
+    assert "link-snapshot" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"] == [
+        "browser-cli commands --workflow link_navigation",
+        "browser-cli commands --workflow navigation_flow",
+        "browser-cli commands --workflow interactive_targeting",
+        "browser-cli commands --workflow content_extraction",
     ]
 
     with pytest.raises(SystemExit) as exc_info:
@@ -1939,6 +2010,7 @@ def test_action_guide_fails_unknown_task_as_json(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
+        "link_navigation",
         "menu_keyboard_flow",
         "navigation_flow",
         "page_diagnostics",
@@ -1962,7 +2034,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 21
+    assert payload["workflow_count"] == 22
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -2007,6 +2079,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.navigation_requested"
         in payload["agent_workflows"]["navigation_flow"]["steps"][3]["read"]
+    )
+    assert (
+        "result.links[].absolute_url_masked"
+        in payload["agent_workflows"]["link_navigation"]["steps"][2]["read"]
     )
     assert (
         "events_path"
@@ -2160,6 +2236,46 @@ def test_commands_catalog_returns_navigation_flow_workflow(
     assert "browser-cli action guide --task navigation_flow" in payload[
         "agent_entrypoints"
     ]["navigation_flow"][0]
+
+
+def test_commands_catalog_returns_link_navigation_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "link_navigation"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "link_navigation"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "inspect_links",
+        "choose_link_target",
+        "activate_link",
+        "verify_navigation_result",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task link_navigation"
+    assert "guide.custom_js_boundary" in steps[0]["read"]
+    assert "browser-cli action link-snapshot" in steps[2]["command"]
+    assert "result.links[].absolute_url_masked" in steps[2]["read"]
+    assert steps[3]["agent_action"] is True
+    assert steps[3]["selection_order"][:3] == [
+        "click-role",
+        "click-text",
+        "open-url",
+    ]
+    assert "browser-cli action click-role" in steps[3]["preferred_commands"][1]
+    assert "browser-cli action click-index" in steps[3]["fallback_commands"][2]
+    assert steps[3]["secret_handling"].startswith("Do not copy href")
+    assert "result.navigation_requested" in steps[4]["read"]
+    assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
+    assert "browser-cli action guide --task link_navigation" in payload[
+        "agent_entrypoints"
+    ]["link_navigation"][0]
 
 
 def test_commands_catalog_returns_visual_capture_workflow(
@@ -3354,6 +3470,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
+        "link_navigation",
         "menu_keyboard_flow",
         "navigation_flow",
         "one_off_page_task",
@@ -3521,7 +3638,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 21
+    assert checks["command_catalog"]["workflow_count"] == 22
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -3531,6 +3648,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "session_recovery",
         "one_off_page_task",
         "navigation_flow",
+        "link_navigation",
         "case_file_task",
         "persistent_login_state",
         "browser_state_management",
@@ -3607,6 +3725,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "inspect_current_page",
         "choose_navigation_action",
         "run_navigation_action",
+        "verify_navigation_result",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "link_navigation"
+    ] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "inspect_links",
+        "choose_link_target",
+        "activate_link",
         "verify_navigation_result",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["case_file_task"] == [
@@ -4004,6 +4132,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "session_recovery",
         "one_off_page_task",
         "navigation_flow",
+        "link_navigation",
         "case_file_task",
         "persistent_login_state",
         "browser_state_management",
@@ -4233,6 +4362,15 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "run_navigation_action"},
                     ],
                 },
+                "link_navigation": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_current_page"},
+                        {"id": "inspect_links"},
+                        {"id": "choose_link_target"},
+                        {"id": "activate_link"},
+                    ],
+                },
                 "case_file_task": {
                     "steps": [
                         {"id": "inspect_case_commands"},
@@ -4376,6 +4514,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         ],
         "one_off_page_task": ["close_session"],
         "navigation_flow": ["verify_navigation_result"],
+        "link_navigation": ["verify_navigation_result"],
         "setup_and_verify": ["smoke_session"],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],

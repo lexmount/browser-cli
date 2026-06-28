@@ -235,10 +235,11 @@ Default behavior:
   command.
 - `action guide` reports compact action routes for `form_interaction`,
   `interactive_targeting`, `content_extraction`, `browser_state_management`,
-  `file_upload`, `dialog_frame_handling`, `navigation_flow`, `visual_capture`,
-  `semantic_waits`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
-  inspect, preferred, fallback, and verification commands plus the custom
-  JavaScript boundary for each task. Page diagnostics can include
+  `file_upload`, `dialog_frame_handling`, `navigation_flow`,
+  `link_navigation`, `visual_capture`, `semantic_waits`, `menu_keyboard_flow`,
+  `page_diagnostics`, and `state_waits`, including inspect, preferred,
+  fallback, and verification commands plus the custom JavaScript boundary for
+  each task. Page diagnostics can include
   `set-viewport` to stabilize responsive screenshots and layout checks.
   Visual capture exposes `set-viewport`, `screenshot-role`,
   `screenshot-selector`, full-page `screenshot`, and bounded `text-snapshot`
@@ -268,6 +269,10 @@ Default behavior:
   Navigation flow should expose first-class `open-url`, `reload`, `go-back`,
   `go-forward`, `wait-url`, `wait-title`, and `wait-load-state` routes so
   agents can navigate and verify page transitions before custom JavaScript.
+  Link navigation should expose first-class `link-snapshot`, `click-role`,
+  `click-text`, `open-url`, `wait-url`, and `page-info` routes so agents can
+  choose, inspect, activate, and verify links while honoring `href_masked` and
+  `absolute_url_masked` before custom JavaScript.
   State waits should expose first-class `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
   `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and
