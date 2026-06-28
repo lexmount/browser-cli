@@ -323,10 +323,14 @@ unknown future scopes are marked with `known: false`. Capability ids currently i
 Use `auth login --open` when you want the CLI to open the Connect URL in the
 default browser; JSON output still includes `open_result` so agents can continue
 or fall back to copying the URL when the browser cannot be opened.
-`auth login --device-code` reserves the future device-code command surface and
-currently returns `flow: "device_code"`, `available: false`,
+`auth login --device-code` returns the structured device-code contract. By
+default, when no endpoint is configured, it reports `available: false`,
 `reason: "browser_site_endpoint_missing"`, required browser/API endpoints, and a
-`fallback_handoff` for the manual env flow.
+`fallback_handoff` for the manual env flow. With
+`--device-code-base-url <url>` or `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it
+POSTs `/api/auth/device/code`; add `--wait` to poll `/api/auth/device/token` and
+write approved scoped-token metadata to the local credentials file without
+printing access, refresh, or raw device-code values.
 Use `browser-cli commands --workflow connect_from_codex_site_requirements` when
 an agent or browser.lexmount.cn implementer needs the machine-readable site
 requirements, and `browser-cli commands --workflow device_code_auth` when an

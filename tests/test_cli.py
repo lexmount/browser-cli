@@ -403,6 +403,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert device_steps[0]["command"] == "browser-cli auth login --device-code"
     assert "device_code.required_endpoints" in device_steps[0]["read"]
     assert "device_code.required_browser_site_support" in device_steps[0]["read"]
+    assert "device_code.verification_uri_complete" in device_steps[0]["read"]
+    assert "polling.status" in device_steps[0]["read"]
+    assert "credentials.device_token.valid" in device_steps[0]["read"]
     assert (
         "connect_from_codex.site_capability_status.missing" in device_steps[0]["read"]
     )
@@ -1695,7 +1698,11 @@ def test_commands_catalog_returns_device_code_auth_workflow(
     ]
     assert steps[0]["command"] == "browser-cli auth login --device-code"
     assert "available=false" in steps[0]["success_condition"]
+    assert "saved credentials" in steps[0]["success_condition"]
     assert "device_code.required_endpoints" in steps[0]["read"]
+    assert "device_code.verification_uri_complete" in steps[0]["read"]
+    assert "polling.status" in steps[0]["read"]
+    assert "credentials.device_token.valid" in steps[0]["read"]
     assert "fallback_handoff.setup_blocks" in steps[0]["read"]
     assert steps[1]["optional"] is True
     assert "manual_env_available" in steps[1]["read"]
@@ -4478,6 +4485,253 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
     }
     assert any("browser-cli doctor --json" in item for item in payload["next_steps"])
     assert any("device-code endpoints" in item for item in payload["next_steps"])
+
+
+class FakeHTTPResponse:
+    def __init__(self, payload: dict[str, Any], *, status: int = 200) -> None:
+        self.payload = payload
+        self.status = status
+
+    def __enter__(self) -> "FakeHTTPResponse":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
+
+
+def test_auth_login_device_code_starts_approval_with_configured_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    requests: list[dict[str, Any]] = []
+
+    def fake_urlopen(request: Any, *, timeout: float) -> FakeHTTPResponse:
+        requests.append(
+            {
+                "url": request.full_url,
+                "timeout": timeout,
+                "body": json.loads(request.data.decode("utf-8")),
+            }
+        )
+        return FakeHTTPResponse(
+            {
+                "device_code": "dc-secret-code",
+                "user_code": "ABCD-EFGH",
+                "verification_uri": "https://browser.lexmount.cn/connect/codex",
+                "verification_uri_complete": (
+                    "https://browser.lexmount.cn/connect/codex?user_code=ABCD-EFGH"
+                ),
+                "expires_in": 600,
+                "interval": 5,
+            }
+        )
+
+    monkeypatch.setattr(cli_module, "urlopen", fake_urlopen)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--device-code",
+                "--device-code-base-url",
+                "https://auth.lexmount.test",
+                "--project-id",
+                "project-1",
+                "--scope",
+                "browser:actions",
+                "--device-name",
+                "Codex test device",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["flow"] == "device_code"
+    assert payload["available"] is True
+    assert payload["device_code_available"] is True
+    assert payload["authenticated"] is False
+    assert payload["credentials_saved"] is False
+    assert payload["reason"] == "approval_required"
+    assert payload["polling"] == {
+        "requested": False,
+        "authenticated": False,
+        "status": "not_requested",
+        "attempts": 0,
+    }
+    device_code = payload["device_code"]
+    assert device_code["base_url"] == "https://auth.lexmount.test"
+    assert device_code["base_url_source"] == "argument"
+    assert device_code["code_endpoint"] == (
+        "https://auth.lexmount.test/api/auth/device/code"
+    )
+    assert device_code["token_endpoint"] == (
+        "https://auth.lexmount.test/api/auth/device/token"
+    )
+    assert device_code["user_code"] == "ABCD-EFGH"
+    assert device_code["device_code_present"] is True
+    assert device_code["device_code_length"] == len("dc-secret-code")
+    assert device_code["requested_scopes"] == ["browser:actions"]
+    assert payload["open_result"] == {
+        "requested": False,
+        "url": "https://browser.lexmount.cn/connect/codex?user_code=ABCD-EFGH",
+        "opened": False,
+    }
+    assert requests == [
+        {
+            "url": "https://auth.lexmount.test/api/auth/device/code",
+            "timeout": 10,
+            "body": {
+                "client_name": "browser-cli",
+                "client_version": cli_module.__version__,
+                "device_name": "Codex test device",
+                "project_id": "project-1",
+                "requested_scopes": ["browser:actions"],
+                "audience": "lexmount-browser",
+                "expires_in": "7d",
+            },
+        }
+    ]
+    assert "dc-secret-code" not in output
+
+
+def test_auth_login_device_code_endpoint_error_is_actionable(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fake_urlopen(request: Any, *, timeout: float) -> FakeHTTPResponse:
+        return FakeHTTPResponse(
+            {
+                "error": "not_found",
+                "message": "Device-code endpoint is missing.",
+            },
+            status=404,
+        )
+
+    monkeypatch.setattr(cli_module, "urlopen", fake_urlopen)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--device-code",
+                "--device-code-base-url",
+                "https://auth.lexmount.test",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["available"] is False
+    assert payload["device_code_available"] is False
+    assert payload["reason"] == "device_code_endpoint_error"
+    assert payload["fallback_flow"] == "manual_env"
+    assert payload["device_code"] == {}
+    assert payload["polling"] is None
+    assert payload["credentials"] is None
+    assert "Device-code endpoints are not available" in payload["next_steps"][0]
+    assert "manual_env fallback" in payload["next_steps"][1]
+
+
+def test_auth_login_device_code_wait_saves_token_without_revealing_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    credentials_file = tmp_path / "credentials.json"
+    responses = [
+        {
+            "device_code": "dc-secret-code",
+            "user_code": "WXYZ-1234",
+            "verification_uri": "https://browser.lexmount.cn/connect/codex",
+            "verification_uri_complete": (
+                "https://browser.lexmount.cn/connect/codex?user_code=WXYZ-1234"
+            ),
+            "expires_in": 600,
+            "interval": 1,
+        },
+        {
+            "access_token": "secret-access-token",
+            "refresh_token": "secret-refresh-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "project_id": "project-1",
+            "api_base_url": "https://api.lexmount.cn",
+            "scopes": ["browser.actions:run"],
+            "token_id": "tok_123",
+        },
+    ]
+    requests: list[dict[str, Any]] = []
+
+    def fake_urlopen(request: Any, *, timeout: float) -> FakeHTTPResponse:
+        requests.append(
+            {
+                "url": request.full_url,
+                "timeout": timeout,
+                "body": json.loads(request.data.decode("utf-8")),
+            }
+        )
+        return FakeHTTPResponse(responses.pop(0))
+
+    monkeypatch.setattr(cli_module, "urlopen", fake_urlopen)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--device-code",
+                "--device-code-base-url",
+                "https://auth.lexmount.test",
+                "--wait",
+                "--device-code-timeout-seconds",
+                "5",
+                "--credentials-file",
+                str(credentials_file),
+                "--project-id",
+                "project-1",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert payload["available"] is True
+    assert payload["authenticated"] is True
+    assert payload["credentials_saved"] is True
+    assert payload["reason"] == "authenticated"
+    assert payload["fallback_flow"] is None
+    assert payload["polling"]["status"] == "approved"
+    assert payload["polling"]["attempts"] == 1
+    assert payload["credentials"]["saved"] is True
+    assert payload["credentials"]["credentials_file"] == str(credentials_file)
+    assert payload["credentials"]["device_token"]["present"] is True
+    assert payload["credentials"]["device_token"]["valid"] is True
+    assert payload["credentials"]["device_token"]["has_access_token"] is True
+    assert payload["credentials"]["device_token"]["has_refresh_token"] is True
+    assert payload["credentials"]["device_token"]["token_id"] == "tok_123"
+    assert payload["credentials"]["device_token"]["scopes"] == ["browser.actions:run"]
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert "dc-secret-code" not in serialized
+
+    stored = json.loads(credentials_file.read_text())
+    assert stored["access_token"] == "secret-access-token"
+    assert stored["refresh_token"] == "secret-refresh-token"
+    assert stored["kind"] == "device_token"
+    assert stored["project_id"] == "project-1"
+    assert requests[0]["url"] == "https://auth.lexmount.test/api/auth/device/code"
+    assert requests[1]["url"] == "https://auth.lexmount.test/api/auth/device/token"
+    assert requests[1]["body"] == {
+        "device_code": "dc-secret-code",
+        "client_name": "browser-cli",
+    }
 
 
 def test_auth_login_uses_env_project_id_for_connect_from_codex_contract(

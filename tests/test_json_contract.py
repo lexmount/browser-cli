@@ -266,6 +266,11 @@ def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     assert "`selected_flow`" in text
     assert "`manual_env_available`" in text
     assert "`device_code_available`" in text
+    assert "`authenticated`" in text
+    assert "`credentials_saved`" in text
+    assert "`device_code.verification_uri_complete`" in text
+    assert "`polling`" in text
+    assert "`credentials`" in text
     assert "`auth scopes`" in text
     assert "`known_scopes`" in text
     assert "`scope_ui_fields`" in text

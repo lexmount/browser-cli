@@ -107,14 +107,17 @@ CLI behavior:
 
 - Print JSON containing `verification_uri_complete`, `user_code`, `expires_at`,
   and requested scopes.
-- In the current manual handoff, `auth login --open` opens the Connect from
-  Codex URL. In the future device-code mode, the same flag should open
+- In manual handoff mode, `auth login --open` opens the Connect from Codex URL.
+  In device-code mode with an endpoint configured, the same flag opens
   `verification_uri_complete`.
-- Current CLI behavior: `browser-cli auth login --device-code` reserves this
-  command surface but returns `available=false`,
-  `reason=browser_site_endpoint_missing`, required device-code endpoints, and a
-  manual env fallback until browser.lexmount.cn implements the flow.
-- Poll only after displaying the approval instructions.
+- Current CLI behavior: `browser-cli auth login --device-code` returns
+  `available=false`, `reason=browser_site_endpoint_missing`, required
+  device-code endpoints, and a manual env fallback when no endpoint is
+  configured. With `--device-code-base-url <url>` or
+  `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
+  `POST /api/auth/device/code`.
+- Poll only after displaying approval instructions; pass `--wait` to poll
+  `POST /api/auth/device/token` and save approved local scoped-token metadata.
 
 ### 2. Browser Approval
 

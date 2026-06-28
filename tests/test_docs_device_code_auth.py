@@ -20,6 +20,9 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "POST /api/auth/device/code" in text
     assert "POST /api/auth/device/token" in text
     assert "reason=browser_site_endpoint_missing" in text
+    assert "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL" in text
+    assert "--device-code-base-url <url>" in text
+    assert "--wait" in text
     assert "browser-cli doctor" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "LEXMOUNT_BROWSER_CREDENTIALS_FILE" in text

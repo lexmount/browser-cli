@@ -75,6 +75,8 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "verification.doctor_command" in text
     assert "browser-cli auth login --device-code" in text
     assert "fallback_handoff" in text
+    assert "device_code.verification_uri_complete" in text
+    assert "credentials" in text
     assert "required_api_contract" in text
     assert "required_token_lifecycle" in text
     assert "list active sessions" in text

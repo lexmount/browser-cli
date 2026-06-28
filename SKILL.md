@@ -86,9 +86,11 @@ path. Use `browser-cli auth login --open` or
 inspect `open_result`. Follow `secret_policy`: never paste `LEXMOUNT_API_KEY`,
 revealed export output, or full direct URLs into chat.
 If the user asks for device-code login, run `browser-cli auth login --device-code`
-and parse `available`, `reason`, `device_code.required_endpoints`, and
+and parse `available`, `reason`, `device_code`, `polling`, `credentials`, and
 `fallback_handoff`; while `available` is false, guide the user through the
-manual env fallback. Prefer
+manual env fallback. When an endpoint is explicitly configured, use `--wait`
+only after approval instructions are visible; never report access, refresh, or
+raw device-code values. Prefer
 `browser-cli commands --workflow device_code_auth` when the task is to inspect
 or explain the device-code authorization path.
 

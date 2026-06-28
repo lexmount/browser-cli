@@ -159,9 +159,12 @@ Expected behavior after the website page exists:
   permission names, risk level, and destructive marker; custom or future scopes
   are returned with
   `known: false` so browser.lexmount.cn can still render them explicitly.
-- `browser-cli auth login --device-code` now returns `available=false`,
+- `browser-cli auth login --device-code` returns `available=false`,
   `reason=browser_site_endpoint_missing`, required device-code endpoints, and a
-  `fallback_handoff` until the website/API implements the device-code flow.
+  `fallback_handoff` until an endpoint is configured. With
+  `--device-code-base-url <url>` or `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it
+  can start the device-code flow; with `--wait`, it polls and saves approved
+  local scoped-token metadata without printing token values.
 - `browser-cli auth status` remains local and never calls the website unless a
   token-based flow is configured.
 - `browser-cli auth token-info` remains local and reports safe scoped-token

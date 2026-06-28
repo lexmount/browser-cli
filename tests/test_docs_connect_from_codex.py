@@ -20,6 +20,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "manual_env_available" in text
     assert "device_code_available" in text
     assert "reason=browser_site_endpoint_missing" in text
+    assert "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL" in text
+    assert "--wait" in text
     assert "fallback_handoff" in text
     assert "browser-cli auth token-info" in text
     assert "browser-cli auth refresh" in text

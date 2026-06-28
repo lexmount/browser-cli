@@ -56,7 +56,9 @@ If the user asks for device-code authorization, read
 `browser-cli commands --workflow device_code_auth` and run
 `browser-cli auth login --device-code`. While it reports `available=false`, use
 the `fallback_handoff` manual env path and report the missing
-browser.lexmount.cn device-code endpoints.
+browser.lexmount.cn device-code endpoints. When a device-code endpoint is
+explicitly configured, read `device_code.verification_uri_complete`, `polling`,
+and `credentials`; use `--wait` only after approval instructions are visible.
 
 When a local scoped token exists, use
 `browser-cli commands --workflow scoped_token_lifecycle` before manual token

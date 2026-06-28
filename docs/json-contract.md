@@ -202,6 +202,11 @@ Default behavior:
 - `auth login` reports top-level `flow`, `selected_flow`, `available`,
   `manual_env_available`, and `device_code_available` so agents can choose the
   currently usable setup path without inferring it from nested flow metadata.
+  For device-code mode, default output remains a manual fallback when no
+  endpoint is configured; with an explicit endpoint it may also report
+  `authenticated`, `credentials_saved`, `device_code.verification_uri_complete`,
+  `polling`, and `credentials` without printing access, refresh, or raw
+  device-code values.
 - `auth connect-requirements` reports the browser.lexmount.cn `/connect/codex`
   implementation contract without credentials: `connect_from_codex.url`,
   `connect_from_codex.device_code_url`, `site_capabilities`,

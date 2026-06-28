@@ -174,7 +174,11 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     )
     assert "browser-cli auth login --open" in normalized
     assert "inspect `open_result`" in normalized
-    assert "parse `available`, `reason`, `device_code.required_endpoints`" in normalized
+    assert (
+        "parse `available`, `reason`, `device_code`, `polling`, `credentials`"
+        in normalized
+    )
+    assert "raw device-code values" in normalized
     assert "inspect or explain the device-code authorization path" in normalized
     assert "manual env fallback" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized

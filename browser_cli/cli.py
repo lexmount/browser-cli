@@ -11,6 +11,7 @@ import re
 import shutil
 import shlex
 import sys
+import time
 import webbrowser
 from collections import Counter
 from datetime import datetime, timezone
@@ -18,7 +19,9 @@ from importlib import resources as importlib_resources
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
 from typing import Any, Callable, NoReturn
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 from browser_cli import __version__
 from lex_browser_runtime.browser.actions import (
@@ -62,6 +65,7 @@ DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
+DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
 CONTEXT_REGISTRY_FILE_ENV = "LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
 COMMON_DOM_STATE_CHOICES = (
@@ -991,22 +995,32 @@ def _command_catalog() -> dict[str, Any]:
                 ],
             },
             "device_code_auth": {
-                "purpose": "Attempt the planned device-code approval flow, read browser.lexmount.cn readiness gaps, and fall back to manual env setup until the site implements device-code endpoints.",
+                "purpose": "Attempt device-code approval, read browser.lexmount.cn readiness gaps, and fall back to manual env setup until device-code endpoints are configured.",
                 "steps": [
                     {
                         "id": "request_device_code",
                         "command": "browser-cli auth login --device-code",
-                        "success_condition": "available=true, or available=false with fallback_flow=manual_env",
+                        "success_condition": "available=true with approval instructions or saved credentials, or available=false with fallback_flow=manual_env",
                         "read": [
                             "selected_flow",
                             "available",
                             "device_code_available",
+                            "authenticated",
+                            "credentials_saved",
                             "reason",
                             "device_code.available",
                             "device_code.reason",
                             "device_code.required_endpoints",
                             "device_code.required_browser_site_support",
                             "device_code.verification_uri",
+                            "device_code.verification_uri_complete",
+                            "device_code.user_code",
+                            "polling.requested",
+                            "polling.authenticated",
+                            "polling.status",
+                            "credentials.saved",
+                            "credentials.credentials_file",
+                            "credentials.device_token.valid",
                             "connect_from_codex.site_capability_status.missing",
                             "fallback_flow",
                             "fallback_handoff.setup_blocks",
@@ -2851,6 +2865,148 @@ def _parse_datetime_utc(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _device_code_base_url(raw_url: str | None = None) -> tuple[str | None, str]:
+    if raw_url:
+        return raw_url.rstrip("/"), "argument"
+    env_url = os.environ.get(DEVICE_CODE_BASE_URL_ENV)
+    if env_url:
+        return env_url.rstrip("/"), "env"
+    return None, "unset"
+
+
+def _device_code_endpoint(base_url: str, path: str) -> str:
+    return urljoin(f"{base_url.rstrip('/')}/", path.lstrip("/"))
+
+
+def _json_http_post(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    request = Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            raw_body = response.read()
+            status_code = int(getattr(response, "status", 200))
+    except HTTPError as exc:
+        raw_body = exc.read()
+        status_code = int(exc.code)
+    except URLError as exc:
+        return {
+            "ok": False,
+            "status_code": None,
+            "error": "network_error",
+            "message": _mask_sensitive_text(str(exc.reason)),
+            "json": {},
+        }
+    except OSError as exc:
+        return {
+            "ok": False,
+            "status_code": None,
+            "error": "network_error",
+            "message": _mask_sensitive_text(str(exc)),
+            "json": {},
+        }
+
+    text = raw_body.decode("utf-8", errors="replace") if raw_body else ""
+    try:
+        parsed = json.loads(text) if text else {}
+    except json.JSONDecodeError as exc:
+        return {
+            "ok": False,
+            "status_code": status_code,
+            "error": "invalid_json_response",
+            "message": f"Response JSON could not be parsed: {exc}",
+            "json": {},
+        }
+    if not isinstance(parsed, dict):
+        return {
+            "ok": False,
+            "status_code": status_code,
+            "error": "invalid_json_response",
+            "message": "Response JSON must contain an object.",
+            "json": {},
+        }
+    error = parsed.get("error")
+    return {
+        "ok": 200 <= status_code < 300 and not error,
+        "status_code": status_code,
+        "error": str(error) if error else None,
+        "message": _mask_sensitive_text(str(parsed.get("message") or "")) or None,
+        "json": parsed,
+    }
+
+
+def _device_token_expires_at(token_payload: dict[str, Any]) -> str | None:
+    expires_at = token_payload.get("expires_at")
+    if isinstance(expires_at, str) and expires_at:
+        return expires_at
+    expires_in = token_payload.get("expires_in")
+    if isinstance(expires_in, str) and expires_in.isdigit():
+        expires_in = int(expires_in)
+    if isinstance(expires_in, int | float):
+        return datetime.fromtimestamp(
+            _now_utc().timestamp() + float(expires_in),
+            tz=timezone.utc,
+        ).isoformat()
+    return None
+
+
+def _write_device_token_credentials(
+    token_payload: dict[str, Any],
+    *,
+    credentials_file: str | None,
+    requested_scopes: list[str],
+) -> dict[str, Any]:
+    path, path_source = _device_token_credentials_path(credentials_file)
+    access_token = token_payload.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        return {
+            "saved": False,
+            "credentials_file": str(path),
+            "path_source": path_source,
+            "error": "missing_access_token",
+        }
+    scopes = token_payload.get("scopes")
+    if not isinstance(scopes, list):
+        scopes = requested_scopes
+    data = {
+        "kind": "device_token",
+        "project_id": token_payload.get("project_id"),
+        "api_base_url": token_payload.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+        "access_token": access_token,
+        "refresh_token": token_payload.get("refresh_token"),
+        "expires_at": _device_token_expires_at(token_payload),
+        "scopes": scopes,
+        "token_id": token_payload.get("token_id"),
+        "token_type": token_payload.get("token_type") or "Bearer",
+        "created_at": _now_utc().isoformat(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    if os.name == "posix":
+        path.chmod(0o600)
+    return {
+        "saved": True,
+        "credentials_file": str(path),
+        "path_source": path_source,
+        "device_token": _local_device_token_status(str(path)),
+    }
+
+
 def _posix_file_mode(path: Path) -> tuple[str | None, bool | None]:
     if os.name != "posix":
         return None, None
@@ -3590,6 +3746,263 @@ def _auth_login_handoff(
                 "browser-cli auth export-env output without --reveal-secrets",
             ],
         },
+    }
+
+
+def _device_code_public_start(
+    response: dict[str, Any],
+    *,
+    connect_from_codex_url: str,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    scope_details: list[dict[str, Any]],
+    expires_in: str,
+    base_url: str,
+    base_url_source: str,
+    code_endpoint: str,
+    token_endpoint: str,
+) -> dict[str, Any]:
+    response_expires_in = response.get("expires_in")
+    if isinstance(response_expires_in, str) and response_expires_in.isdigit():
+        response_expires_in = int(response_expires_in)
+    expires_at = None
+    if isinstance(response_expires_in, int | float):
+        expires_at = datetime.fromtimestamp(
+            _now_utc().timestamp() + float(response_expires_in),
+            tz=timezone.utc,
+        ).isoformat()
+    return {
+        "available": True,
+        "reason": "approval_required",
+        "base_url": base_url,
+        "base_url_source": base_url_source,
+        "code_endpoint": code_endpoint,
+        "token_endpoint": token_endpoint,
+        "connect_from_codex_url": connect_from_codex_url,
+        "verification_uri": response.get("verification_uri"),
+        "verification_uri_complete": response.get("verification_uri_complete")
+        or response.get("verification_uri"),
+        "user_code": response.get("user_code"),
+        "device_code_present": bool(response.get("device_code")),
+        "device_code_length": len(str(response.get("device_code") or "")),
+        "expires_in": response_expires_in,
+        "expires_at": expires_at,
+        "interval": response.get("interval") or 5,
+        "project_id": project_id,
+        "project_id_source": project_id_source,
+        "requested_scopes": scopes,
+        "requested_scope_details": scope_details,
+        "requested_expires_in": expires_in,
+        "required_endpoints": _device_code_required_endpoints(),
+        "required_browser_site_support": _device_code_required_browser_site_support(),
+        "secret_policy": {
+            "contains_secret_values": False,
+            "device_code_redacted": True,
+            "do_not_paste_in_chat": [
+                "access_token",
+                "refresh_token",
+                "raw device_code",
+            ],
+        },
+    }
+
+
+def _poll_device_code_token(
+    *,
+    token_endpoint: str,
+    device_code: str,
+    timeout_seconds: float,
+    http_timeout_seconds: float,
+    interval_seconds: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    attempts = 0
+    interval = max(float(interval_seconds), 0.1)
+    last_error: str | None = None
+    while time.monotonic() <= deadline:
+        attempts += 1
+        response = _json_http_post(
+            token_endpoint,
+            {
+                "device_code": device_code,
+                "client_name": "browser-cli",
+            },
+            timeout_seconds=http_timeout_seconds,
+        )
+        payload = response.get("json", {})
+        if response.get("ok") and isinstance(payload, dict):
+            return {
+                "authenticated": True,
+                "status": "approved",
+                "attempts": attempts,
+                "token_payload": payload,
+            }
+        error = str(response.get("error") or "")
+        last_error = error or str(response.get("status_code"))
+        if error == "authorization_pending":
+            time.sleep(interval)
+            continue
+        if error == "slow_down":
+            interval += 5
+            time.sleep(interval)
+            continue
+        return {
+            "authenticated": False,
+            "status": error or "token_endpoint_error",
+            "attempts": attempts,
+            "status_code": response.get("status_code"),
+            "message": response.get("message"),
+        }
+    return {
+        "authenticated": False,
+        "status": "timeout",
+        "attempts": attempts,
+        "last_error": last_error,
+    }
+
+
+def _run_device_code_login(
+    *,
+    args: argparse.Namespace,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    scope_details: list[dict[str, Any]],
+    expires_in: str,
+    connect_url: str,
+) -> dict[str, Any]:
+    base_url, base_url_source = _device_code_base_url(args.device_code_base_url)
+    if not base_url:
+        return {
+            "attempted": False,
+            "available": False,
+            "reason": "browser_site_endpoint_missing",
+            "base_url": None,
+            "base_url_source": base_url_source,
+        }
+
+    code_endpoint = _device_code_endpoint(base_url, "/api/auth/device/code")
+    token_endpoint = _device_code_endpoint(base_url, "/api/auth/device/token")
+    start_request = {
+        "client_name": "browser-cli",
+        "client_version": __version__,
+        "device_name": args.device_name,
+        "project_id": project_id,
+        "requested_scopes": scopes,
+        "audience": "lexmount-browser",
+        "expires_in": expires_in,
+    }
+    start_response = _json_http_post(
+        code_endpoint,
+        start_request,
+        timeout_seconds=args.device_code_http_timeout_seconds,
+    )
+    start_payload = start_response.get("json", {})
+    if not start_response.get("ok") or not isinstance(start_payload, dict):
+        return {
+            "attempted": True,
+            "available": False,
+            "reason": "device_code_endpoint_error",
+            "base_url": base_url,
+            "base_url_source": base_url_source,
+            "code_endpoint": code_endpoint,
+            "token_endpoint": token_endpoint,
+            "status_code": start_response.get("status_code"),
+            "error": start_response.get("error"),
+            "message": start_response.get("message"),
+        }
+
+    device_code = start_payload.get("device_code")
+    if not isinstance(device_code, str) or not device_code:
+        return {
+            "attempted": True,
+            "available": False,
+            "reason": "missing_device_code",
+            "base_url": base_url,
+            "base_url_source": base_url_source,
+            "code_endpoint": code_endpoint,
+            "token_endpoint": token_endpoint,
+            "status_code": start_response.get("status_code"),
+        }
+
+    device_code_public = _device_code_public_start(
+        start_payload,
+        connect_from_codex_url=connect_url,
+        project_id=project_id,
+        project_id_source=project_id_source,
+        scopes=scopes,
+        scope_details=scope_details,
+        expires_in=expires_in,
+        base_url=base_url,
+        base_url_source=base_url_source,
+        code_endpoint=code_endpoint,
+        token_endpoint=token_endpoint,
+    )
+    verification_url = (
+        device_code_public.get("verification_uri_complete") or connect_url
+    )
+    open_result: dict[str, Any] = {
+        "requested": bool(args.open),
+        "url": verification_url,
+        "opened": False,
+    }
+    warnings: list[str] = []
+    if args.open:
+        try:
+            open_result["opened"] = bool(webbrowser.open(str(verification_url)))
+        except Exception as exc:
+            open_result["error"] = _mask_sensitive_text(str(exc))
+            warnings.append(
+                "Failed to open the device-code verification URL automatically; copy the URL manually."
+            )
+        else:
+            if not open_result["opened"]:
+                warnings.append(
+                    "The system browser did not confirm opening the device-code verification URL; copy the URL manually."
+                )
+
+    polling = {
+        "requested": bool(args.device_code_wait),
+        "authenticated": False,
+        "status": "not_requested",
+        "attempts": 0,
+    }
+    credentials: dict[str, Any] = {
+        "saved": False,
+        "credentials_file": str(
+            _device_token_credentials_path(args.credentials_file)[0]
+        ),
+    }
+    if args.device_code_wait:
+        interval = device_code_public.get("interval") or 5
+        polling = _poll_device_code_token(
+            token_endpoint=token_endpoint,
+            device_code=device_code,
+            timeout_seconds=args.device_code_timeout_seconds,
+            http_timeout_seconds=args.device_code_http_timeout_seconds,
+            interval_seconds=float(interval),
+        )
+        token_payload = polling.pop("token_payload", None)
+        if polling.get("authenticated") and isinstance(token_payload, dict):
+            credentials = _write_device_token_credentials(
+                token_payload,
+                credentials_file=args.credentials_file,
+                requested_scopes=scopes,
+            )
+
+    authenticated = bool(polling.get("authenticated"))
+    return {
+        "attempted": True,
+        "available": True,
+        "reason": "authenticated" if authenticated else "approval_required",
+        "authenticated": authenticated,
+        "credentials_saved": bool(credentials.get("saved")),
+        "device_code": device_code_public,
+        "polling": polling,
+        "credentials": credentials,
+        "open_result": open_result,
+        "warnings": warnings,
     }
 
 
@@ -14133,6 +14546,22 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
 
 def cmd_auth_login(args: argparse.Namespace) -> None:
     command = "auth.login"
+    if getattr(args, "device_code_timeout_seconds", 0) < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--device-code-timeout-seconds must be zero or greater.",
+            exit_code=2,
+            device_code_timeout_seconds=args.device_code_timeout_seconds,
+        )
+    if getattr(args, "device_code_http_timeout_seconds", 0) <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--device-code-http-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            device_code_http_timeout_seconds=args.device_code_http_timeout_seconds,
+        )
     project_id, project_id_source = _auth_login_project_id(args)
     scopes = _auth_login_scopes(args)
     connect_url = _connect_from_codex_url(
@@ -14159,6 +14588,9 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
     )
     scope_details = _scope_details(scopes)
     setup_blocks = handoff["setup_blocks"]
+    device_code_base_url, _device_code_base_url_source = _device_code_base_url(
+        args.device_code_base_url
+    )
     open_url = device_connect_url if args.device_code else connect_url
     open_result: dict[str, Any] = {
         "requested": bool(args.open),
@@ -14166,7 +14598,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         "opened": False,
     }
     warnings: list[str] = []
-    if args.open:
+    if args.open and not (args.device_code and device_code_base_url):
         try:
             open_result["opened"] = bool(webbrowser.open(open_url))
         except Exception as exc:
@@ -14180,6 +14612,94 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                     "The system browser did not confirm opening the Connect from Codex URL; copy the URL manually."
                 )
     if args.device_code:
+        if device_code_base_url:
+            device_attempt = _run_device_code_login(
+                args=args,
+                project_id=project_id,
+                project_id_source=project_id_source,
+                scopes=scopes,
+                scope_details=scope_details,
+                expires_in=args.expires_in,
+                connect_url=device_connect_url,
+            )
+            warnings.extend(device_attempt.get("warnings", []))
+            device_code = device_attempt.get("device_code", {})
+            authenticated = bool(device_attempt.get("authenticated"))
+            credentials_saved = bool(device_attempt.get("credentials_saved"))
+            device_code_flow_available = bool(device_attempt.get("available"))
+            if not device_code_flow_available:
+                next_steps = [
+                    "Device-code endpoints are not available or did not return the expected JSON contract.",
+                    "Use the manual_env fallback handoff, or configure browser.lexmount.cn device-code endpoints.",
+                    f"Run `{AGENT_DOCTOR_COMMAND}` after credentials are usable.",
+                ]
+            elif authenticated:
+                next_steps = [
+                    "Run `browser-cli auth status` to inspect saved local device-token metadata.",
+                    "Use env API-key credentials for browser actions until bearer-token runtime auth lands.",
+                    f"Run `{AGENT_DOCTOR_COMMAND}` after credentials are usable.",
+                ]
+            else:
+                next_steps = [
+                    "Open verification_uri_complete and approve the device if polling was not requested.",
+                    "Rerun with `browser-cli auth login --device-code --wait` after approving, or use the manual_env fallback.",
+                    f"Run `{AGENT_DOCTOR_COMMAND}` after credentials are usable.",
+                ]
+            _success(
+                command,
+                flow="device_code",
+                selected_flow="device_code",
+                available=device_code_flow_available,
+                manual_env_available=True,
+                device_code_available=device_code_flow_available,
+                authenticated=authenticated,
+                credentials_saved=credentials_saved,
+                reason=device_attempt.get("reason"),
+                fallback_flow=None if authenticated else "manual_env",
+                fallback_handoff=None if authenticated else handoff,
+                handoff=handoff,
+                flows=[
+                    {
+                        "name": "device_code",
+                        "available": device_code_flow_available,
+                        "reason": device_attempt.get("reason"),
+                        "description": "Browser approval flow for scoped local credentials.",
+                    },
+                    {
+                        "name": "manual_env",
+                        "available": True,
+                        "description": "User copies Project ID and API key from browser.lexmount.cn into the local shell.",
+                    },
+                ],
+                device_code=device_code,
+                polling=device_attempt.get("polling"),
+                credentials=device_attempt.get("credentials"),
+                connect_from_codex={
+                    "response": "device_code",
+                    "url": device_connect_url,
+                    "setup_blocks": setup_blocks,
+                    "requested_scope_details": scope_details,
+                    "site_capability_status": site_capability_status,
+                    "site_capabilities": site_capabilities,
+                    "verification_uri": device_code.get("verification_uri"),
+                    "verification_uri_complete": device_code.get(
+                        "verification_uri_complete"
+                    ),
+                },
+                open_result=device_attempt.get("open_result", open_result),
+                warnings=warnings,
+                secret_policy={
+                    "contains_secret_values": False,
+                    "credentials_file_contains_secrets": credentials_saved,
+                    "do_not_paste_in_chat": [
+                        "access_token",
+                        "refresh_token",
+                        "raw device_code",
+                    ],
+                },
+                next_steps=next_steps,
+            )
+
         warnings.append(
             "Device-code login is not available yet; use the manual_env fallback until browser.lexmount.cn exposes device-code endpoints."
         )
@@ -17156,8 +17676,45 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--device-code",
         action="store_true",
         help=(
-            "Request the planned device-code login contract. Currently returns "
-            "available=false until browser.lexmount.cn exposes device-code endpoints."
+            "Request device-code login. Defaults to structured fallback unless "
+            "a device-code base URL is configured."
+        ),
+    )
+    auth_login.add_argument(
+        "--device-code-base-url",
+        help=(
+            "Base URL for device-code endpoints. Defaults to "
+            f"{DEVICE_CODE_BASE_URL_ENV} when set."
+        ),
+    )
+    auth_login.add_argument(
+        "--wait",
+        dest="device_code_wait",
+        action="store_true",
+        help="Poll the token endpoint until approval, denial, expiration, or timeout.",
+    )
+    auth_login.add_argument(
+        "--device-code-timeout-seconds",
+        type=float,
+        default=600,
+        help="Maximum polling time when --wait is used.",
+    )
+    auth_login.add_argument(
+        "--device-code-http-timeout-seconds",
+        type=float,
+        default=10,
+        help="HTTP timeout for device-code endpoint requests.",
+    )
+    auth_login.add_argument(
+        "--device-name",
+        default="Codex workstation",
+        help="Device name shown in the browser approval UI.",
+    )
+    auth_login.add_argument(
+        "--credentials-file",
+        help=(
+            "Write approved local device-token metadata to this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
         ),
     )
     auth_login.set_defaults(func=cmd_auth_login)
