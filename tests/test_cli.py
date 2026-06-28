@@ -239,6 +239,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "action" in payload["groups"]
     assert "auth" in payload["groups"]
     assert "doctor" in payload["groups"]
+    assert "example" in payload["groups"]
     assert "reference" in payload["groups"]
     assert "version" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
@@ -264,6 +265,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any(
         "semantic actions" in item
         for item in references["action_playbook"]["load_when"]
+    )
+    examples = payload["agent_examples"]
+    assert examples["agent_playbook"]["path"] == "examples/agent-playbook.md"
+    assert examples["agent_playbook"]["content_command"] == (
+        "browser-cli example get --id agent_playbook"
+    )
+    assert examples["page_inspection_case"]["format"] == "yaml"
+    assert "case_file_task" in examples["page_inspection_case"]["related_workflows"]
+    assert examples["form_fill_case"]["package_resource"] == (
+        "browser_cli.agent_examples.cases:form-fill.yaml"
     )
     assert (
         "browser-cli auth connect-requirements" in payload["agent_entrypoints"]["setup"]
@@ -602,6 +613,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "--metadata-only" in option["flags"]
         for option in commands["reference.get"]["options"]
     )
+    assert any(
+        "--metadata-only" in option["flags"]
+        for option in commands["example.get"]["options"]
+    )
     assert "super-secret-key" not in json.dumps(payload)
 
 
@@ -621,6 +636,9 @@ def test_commands_catalog_returns_workflows_only(
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
+    )
+    assert payload["agent_examples"]["page_inspection_case"]["content_command"] == (
+        "browser-cli example get --id page_inspection_case"
     )
     assert (
         "page_diagnostics"
@@ -712,6 +730,9 @@ def test_commands_catalog_returns_single_workflow(
     assert "agent_workflows" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
+    )
+    assert payload["agent_examples"]["agent_playbook"]["content_command"] == (
+        "browser-cli example get --id agent_playbook"
     )
     assert payload["workflow"]["steps"][0]["id"] == "create_session"
     assert "result.nodes" in payload["workflow"]["steps"][3]["read"]
@@ -813,6 +834,110 @@ def test_reference_get_fails_unknown_reference_as_json(
     assert payload["reference_id"] == "missing"
     assert payload["available_references"] == ["action_playbook"]
     assert payload["fix"]["code"] == "inspect_available_agent_references"
+
+
+def test_example_list_returns_packaged_agent_examples(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "list"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.list"
+    assert payload["example_count"] == 3
+    assert sorted(payload["examples"]) == [
+        "agent_playbook",
+        "form_fill_case",
+        "page_inspection_case",
+    ]
+    playbook = payload["examples"]["agent_playbook"]
+    assert playbook["id"] == "agent_playbook"
+    assert playbook["path"] == "examples/agent-playbook.md"
+    assert playbook["content_command"] == (
+        "browser-cli example get --id agent_playbook"
+    )
+    assert playbook["package_resource"] == (
+        "browser_cli.agent_examples:agent-playbook.md"
+    )
+    assert "case_file_task" in playbook["related_workflows"]
+    assert payload["examples"]["page_inspection_case"]["format"] == "yaml"
+    assert payload["examples"]["form_fill_case"]["format"] == "yaml"
+
+
+def test_example_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "list", "--names-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.list"
+    assert payload["example_count"] == 3
+    assert payload["examples"] == [
+        "agent_playbook",
+        "form_fill_case",
+        "page_inspection_case",
+    ]
+
+
+def test_example_get_returns_packaged_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "page_inspection_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "page_inspection_case"
+    assert payload["example"]["id"] == "page_inspection_case"
+    assert payload["content_format"] == "yaml"
+    assert payload["content_included"] is True
+    assert payload["content_length"] == len(payload["content"])
+    assert "name: page-inspection" in payload["content"]
+    assert "action: open-url" in payload["content"]
+    assert "action: screenshot" in payload["content"]
+
+
+def test_example_get_metadata_only_omits_content(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "agent_playbook", "--metadata-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "agent_playbook"
+    assert payload["content_included"] is False
+    assert "content" not in payload
+    assert payload["example"]["content_command"] == (
+        "browser-cli example get --id agent_playbook"
+    )
+
+
+def test_example_get_fails_unknown_example_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "missing"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "example.get"
+    assert payload["error"] == "unknown_example"
+    assert payload["example_id"] == "missing"
+    assert payload["available_examples"] == [
+        "agent_playbook",
+        "form_fill_case",
+        "page_inspection_case",
+    ]
+    assert payload["fix"]["code"] == "inspect_available_agent_examples"
 
 
 def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
@@ -1367,6 +1492,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.wait-frame",
         "reference.list",
         "reference.get",
+        "example.list",
+        "example.get",
         "version",
         "case.validate",
         "case.run",
@@ -1446,6 +1573,8 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-frame" in catalog["missing_required_commands"]
     assert "reference.list" in catalog["missing_required_commands"]
     assert "reference.get" in catalog["missing_required_commands"]
+    assert "example.list" in catalog["missing_required_commands"]
+    assert "example.get" in catalog["missing_required_commands"]
     assert "version" in catalog["missing_required_commands"]
     assert "auth.connect-requirements" in catalog["missing_required_commands"]
     assert catalog["missing_required_workflows"] == [

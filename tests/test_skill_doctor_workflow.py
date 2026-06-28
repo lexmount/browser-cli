@@ -89,16 +89,20 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
+    assert "browser-cli reference list" in normalized
+    assert "browser-cli example list" in normalized
     assert (
         "Run `browser-cli commands --workflows-only` for a compact agent workflow map"
         in normalized
     )
     assert (
-        "`agent_references`, `agent_entrypoints`, and `agent_workflows`" in normalized
+        "`agent_references`, `agent_examples`, `agent_entrypoints`, and `agent_workflows`"
+        in normalized
     )
     assert (
         "Follow `agent_references` when detailed action guidance is needed"
         in normalized
     )
+    assert "browser-cli example get --id page_inspection_case" in normalized
     assert "then follow each workflow step's `read` array first" in normalized
     assert "auth availability, export usability, and context reuse fields" in normalized

@@ -19,7 +19,11 @@ build-backend = "setuptools.build_meta"
 include = ["browser_cli*"]
 
 [tool.setuptools.package-data]
-browser_cli = ["agent_references/*.md"]
+browser_cli = [
+    "agent_references/*.md",
+    "agent_examples/*.md",
+    "agent_examples/cases/*.yaml",
+]
 
 [dependency-groups]
 dev = [

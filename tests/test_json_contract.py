@@ -120,6 +120,10 @@ def test_commands_catalog_output_contract(
     assert payload["agent_references"]["action_playbook"]["package_resource"] == (
         "browser_cli.agent_references:action-playbook.md"
     )
+    assert payload["agent_examples"]["page_inspection_case"]["content_command"] == (
+        "browser-cli example get --id page_inspection_case"
+    )
+    assert payload["agent_examples"]["form_fill_case"]["format"] == "yaml"
     assert all(command["group"] == "action" for command in payload["commands"])
     open_url = next(
         command
@@ -170,6 +174,9 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`package_resource`" in text
     assert "`browser-cli reference list`" in text
     assert "`browser-cli reference get --id action_playbook`" in text
+    assert "`agent_examples`" in text
+    assert "`browser-cli example list`" in text
+    assert "`browser-cli example get --id page_inspection_case`" in text
     assert "`load_when`" in text
     assert "`related_workflows`" in text
     assert "`grep_patterns`" in text

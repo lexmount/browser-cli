@@ -62,6 +62,8 @@ DOCTOR_REQUIRED_COMMANDS = (
     "commands",
     "reference.list",
     "reference.get",
+    "example.list",
+    "example.get",
     "version",
     "doctor",
     "case.validate",
@@ -531,6 +533,83 @@ def _read_agent_reference_content(reference_id: str) -> str:
     )
 
 
+def _agent_examples() -> dict[str, Any]:
+    return {
+        "agent_playbook": {
+            "path": "examples/agent-playbook.md",
+            "content_command": "browser-cli example get --id agent_playbook",
+            "metadata_command": "browser-cli example list",
+            "package_resource": "browser_cli.agent_examples:agent-playbook.md",
+            "format": "markdown",
+            "purpose": (
+                "Show a complete agent-facing browser workflow with setup, "
+                "doctor checks, context reuse, diagnostics, and case files."
+            ),
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_auth",
+                "session_recovery",
+                "case_file_task",
+                "form_interaction",
+                "interactive_targeting",
+                "page_diagnostics",
+            ],
+            "load_when": [
+                "Starting from a fresh Codex/browser-cli setup.",
+                "Choosing a workflow for a common browser task.",
+                "Writing or reviewing Skill instructions for browser-cli.",
+            ],
+        },
+        "page_inspection_case": {
+            "path": "examples/cases/page-inspection.yaml",
+            "content_command": "browser-cli example get --id page_inspection_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:page-inspection.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a temporary-session page inspection case "
+                "that opens example.com, snapshots content, and saves a screenshot."
+            ),
+            "related_workflows": ["case_file_task", "one_off_page_task"],
+            "load_when": [
+                "Creating a repeatable page inspection smoke test.",
+                "Needing a small browser case file template with artifacts.",
+            ],
+        },
+        "form_fill_case": {
+            "path": "examples/cases/form-fill.yaml",
+            "content_command": "browser-cli example get --id form_fill_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": "browser_cli.agent_examples.cases:form-fill.yaml",
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local form-fill case that builds a tiny "
+                "page, fills a field, clicks submit, verifies state, and screenshots."
+            ),
+            "related_workflows": ["case_file_task", "form_interaction"],
+            "load_when": [
+                "Creating a repeatable form interaction smoke test.",
+                "Needing a small case file template for fill/click/verify steps.",
+            ],
+        },
+    }
+
+
+def _read_agent_example_content(example_id: str) -> str:
+    example = _agent_examples().get(example_id)
+    if example is None:
+        raise KeyError(example_id)
+    package_resource = str(example["package_resource"])
+    package, resource_name = package_resource.split(":", 1)
+    return (
+        importlib_resources.files(package)
+        .joinpath(resource_name)
+        .read_text(encoding="utf-8")
+    )
+
+
 def _command_catalog() -> dict[str, Any]:
     parser = build_parser()
     commands = _catalog_leaf_commands(parser)
@@ -555,6 +634,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
         },
         "agent_references": _agent_references(),
+        "agent_examples": _agent_examples(),
         "agent_entrypoints": {
             "setup": [
                 "browser-cli auth status",
@@ -11344,6 +11424,101 @@ def cmd_reference_get(args: argparse.Namespace) -> None:
     )
 
 
+def _agent_example_payload(
+    example_id: str,
+    example: dict[str, Any],
+) -> dict[str, Any]:
+    payload = {"id": example_id}
+    payload.update(example)
+    return payload
+
+
+def cmd_example_list(args: argparse.Namespace) -> None:
+    command = "example.list"
+    examples = _agent_examples()
+    if args.names_only:
+        _success(
+            command,
+            example_count=len(examples),
+            examples=sorted(examples),
+        )
+    _success(
+        command,
+        example_count=len(examples),
+        examples={
+            example_id: _agent_example_payload(example_id, example)
+            for example_id, example in sorted(examples.items())
+        },
+    )
+
+
+def cmd_example_get(args: argparse.Namespace) -> None:
+    command = "example.get"
+    example_id = str(args.example_id)
+    examples = _agent_examples()
+    example = examples.get(example_id)
+    available_examples = sorted(examples)
+    if example is None:
+        _failure(
+            command,
+            "unknown_example",
+            f"Unknown agent example: {example_id}",
+            example_id=example_id,
+            available_examples=available_examples,
+            fix=_doctor_fix(
+                "inspect_available_agent_examples",
+                commands=[
+                    "browser-cli example list",
+                    "browser-cli example list --names-only",
+                ],
+                guidance=[
+                    "Choose one of available_examples, then rerun example get with that --id value."
+                ],
+            ),
+        )
+
+    example_payload = _agent_example_payload(example_id, example)
+    if args.metadata_only:
+        _success(
+            command,
+            example_id=example_id,
+            example=example_payload,
+            content_included=False,
+        )
+
+    try:
+        content = _read_agent_example_content(example_id)
+    except Exception as exc:
+        _failure(
+            command,
+            "example_unavailable",
+            f"Agent example could not be loaded: {example_id}",
+            example_id=example_id,
+            package_resource=example.get("package_resource"),
+            error_class=exc.__class__.__name__,
+            fix=_doctor_fix(
+                "reinstall_browser_cli_example_resources",
+                commands=[
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    "browser-cli example list",
+                ],
+                guidance=[
+                    "The installed package should include packaged agent example files."
+                ],
+            ),
+        )
+
+    _success(
+        command,
+        example_id=example_id,
+        example=example_payload,
+        content_format=example.get("format"),
+        content_length=len(content),
+        content_included=True,
+        content=content,
+    )
+
+
 def cmd_commands(args: argparse.Namespace) -> None:
     command = "commands"
     catalog = _command_catalog()
@@ -11401,6 +11576,7 @@ def cmd_commands(args: argparse.Namespace) -> None:
             workflow_id=args.workflow,
             workflow=workflow,
             agent_references=catalog["agent_references"],
+            agent_examples=catalog["agent_examples"],
             agent_entrypoints=catalog["agent_entrypoints"],
             json_output=catalog["json_output"],
             secret_policy=catalog["secret_policy"],
@@ -11414,6 +11590,7 @@ def cmd_commands(args: argparse.Namespace) -> None:
             workflow_count=len(catalog["agent_workflows"]),
             agent_workflows=catalog["agent_workflows"],
             agent_references=catalog["agent_references"],
+            agent_examples=catalog["agent_examples"],
             agent_entrypoints=catalog["agent_entrypoints"],
             json_output=catalog["json_output"],
             secret_policy=catalog["secret_policy"],
@@ -13289,6 +13466,45 @@ def _add_reference_commands(subparsers: argparse._SubParsersAction[Any]) -> None
     reference_get.set_defaults(func=cmd_reference_get)
 
 
+def _add_example_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    example = subparsers.add_parser(
+        "example",
+        help="Inspect packaged agent examples and case files",
+    )
+    example_subparsers = example.add_subparsers(
+        dest="example_command",
+        required=True,
+    )
+
+    example_list = example_subparsers.add_parser(
+        "list",
+        help="List packaged agent examples",
+    )
+    example_list.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Return only example ids for compact agent discovery.",
+    )
+    example_list.set_defaults(func=cmd_example_list)
+
+    example_get = example_subparsers.add_parser(
+        "get",
+        help="Read one packaged agent example",
+    )
+    example_get.add_argument(
+        "--id",
+        dest="example_id",
+        required=True,
+        help="Example id from browser-cli example list.",
+    )
+    example_get.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Return example metadata without content.",
+    )
+    example_get.set_defaults(func=cmd_example_get)
+
+
 def _add_version_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     version_parser = subparsers.add_parser(
         "version",
@@ -13361,6 +13577,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_doctor_command(subparsers)
     _add_commands_command(subparsers)
     _add_reference_commands(subparsers)
+    _add_example_commands(subparsers)
     _add_alias_commands(subparsers)
     _add_json_compatibility_flag(parser)
 

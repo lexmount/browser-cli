@@ -46,6 +46,10 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli reference list" in prompt
     assert "browser-cli reference get --id action_playbook --metadata-only" in prompt
     assert "browser-cli reference get --id action_playbook" in prompt
+    assert "browser-cli example list" in prompt
+    assert "browser-cli example get --id agent_playbook --metadata-only" in prompt
+    assert "browser-cli example get --id page_inspection_case" in prompt
+    assert "browser-cli example get --id form_fill_case" in prompt
     assert "不要先写自定义 Playwright/JS" in prompt
     assert "browser-cli commands --workflow setup_and_verify" in prompt
     assert (
@@ -76,7 +80,7 @@ def test_codex_install_prompt_has_sequential_steps() -> None:
     steps = _codex_install_prompt_steps()
     numbers = [int(match) for match in re.findall(r"(?m)^(\d+)\. ", steps)]
 
-    assert numbers == list(range(1, 20))
+    assert numbers == list(range(1, 21))
 
 
 def test_codex_install_prompt_mentions_project_and_key_validation() -> None:

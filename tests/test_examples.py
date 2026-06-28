@@ -5,6 +5,7 @@ from pathlib import Path
 from lex_browser_runtime.browser.cases import validate_case_file
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PACKAGED_EXAMPLES = REPO_ROOT / "browser_cli" / "agent_examples"
 
 
 def test_example_case_files_validate() -> None:
@@ -15,6 +16,15 @@ def test_example_case_files_validate() -> None:
         result = validate_case_file(case_file)
         assert result.valid, f"{case_file}: {result.errors}"
         assert result.step_count > 0
+
+
+def test_packaged_examples_match_repo_examples() -> None:
+    assert (PACKAGED_EXAMPLES / "agent-playbook.md").read_text() == (
+        REPO_ROOT / "examples" / "agent-playbook.md"
+    ).read_text()
+    for case_file in sorted((REPO_ROOT / "examples" / "cases").glob("*.yaml")):
+        packaged_case = PACKAGED_EXAMPLES / "cases" / case_file.name
+        assert packaged_case.read_text() == case_file.read_text()
 
 
 def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
@@ -37,6 +47,9 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow form_interaction" in text
     assert "browser-cli commands --workflow interactive_targeting" in text
     assert "browser-cli commands --workflow page_diagnostics" in text
+    assert "browser-cli reference list" in text
+    assert "browser-cli example list" in text
+    assert "browser-cli example get --id page_inspection_case --metadata-only" in text
     assert "browser-cli commands --group action" in text
     assert "browser-cli commands --group action --names-only" in text
     assert "agent_workflows" in text

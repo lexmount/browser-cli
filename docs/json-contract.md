@@ -45,7 +45,7 @@ without parsing text output.
 
 `browser-cli commands` is the machine-readable command discovery surface. It
 returns `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
-`secret_policy`, `agent_references`, `agent_entrypoints`, and
+`secret_policy`, `agent_references`, `agent_examples`, `agent_entrypoints`, and
 `agent_workflows`; `--names-only` returns compact command names, and
 `--group <name>` filters by command group.
 Unknown command groups fail as JSON with `error=unknown_group`,
@@ -64,6 +64,10 @@ load detailed action guidance only when needed. `browser-cli reference list`
 returns packaged reference metadata, and
 `browser-cli reference get --id action_playbook` returns the installed markdown
 content as JSON.
+`agent_examples` describes packaged common-task examples and case files.
+`browser-cli example list` returns example metadata, and
+`browser-cli example get --id page_inspection_case` returns an installed example
+case file or playbook as JSON.
 `agent_workflows` describes ordered setup, Connect from Codex site requirements,
 Connect from Codex auth, device-code auth, scoped token lifecycle, session
 recovery, one-off page, case file task, persistent login state, form
@@ -184,6 +188,9 @@ Default behavior:
 - `reference list` and `reference get` expose packaged agent reference docs as
   JSON. `reference get --metadata-only` omits markdown content, and unknown ids
   fail as JSON with `error=unknown_reference` plus `available_references`.
+- `example list` and `example get` expose packaged agent playbooks and case
+  files as JSON. `example get --metadata-only` omits content, and unknown ids
+  fail as JSON with `error=unknown_example` plus `available_examples`.
 - `doctor --smoke-session` may report a temporary `session_id` and cleanup
   status, but must not print direct connect URLs or token values.
 - `doctor` reports `browser_cli.version_source` to show whether the browser-cli
