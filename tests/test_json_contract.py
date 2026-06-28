@@ -249,6 +249,10 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`next_commands`" in text
     assert "`events_path`" in text
     assert "`artifacts_dir`" in text
+    assert "`page-info`" in text
+    assert "`wait-url`" in text
+    assert "`wait-title`" in text
+    assert "`wait-load-state`" in text
     assert "form interaction" in text
     assert "interactive targeting" in text
     assert "`selection_order`" in text
@@ -364,10 +368,13 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "exists-role",
         "count",
         "wait-count",
+        "wait-state",
         "wait-state-role",
         "query",
         "inspect",
+        "get-attribute",
         "get-attribute-role",
+        "wait-attribute",
         "wait-attribute-role",
         "bounding-box",
         "bounding-box-role",

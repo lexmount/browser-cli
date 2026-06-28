@@ -2706,13 +2706,17 @@ def test_case_schema_returns_supported_actions_and_fields(
         "get-value-role",
         "interactive-snapshot",
         "open-url",
+        "page-info",
         "right-click",
         "right-click-role",
         "screenshot",
         "snapshot",
         "type",
+        "wait-load-state",
         "wait-selector",
         "wait-text",
+        "wait-title",
+        "wait-url",
     ]
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
@@ -2721,7 +2725,10 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["double-click-role"] == ["role"]
     assert payload["required_fields"]["right-click"] == ["selector"]
     assert payload["required_fields"]["right-click-role"] == ["role"]
+    assert payload["required_fields"]["wait-load-state"] == []
     assert payload["required_fields"]["wait-text"] == ["text"]
+    assert payload["required_fields"]["wait-title"] == ["title"]
+    assert payload["required_fields"]["wait-url"] == ["url"]
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
     assert "wait_until" in payload["actions"]["open-url"]["optional_fields"]
@@ -2742,6 +2749,12 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "context_menu" in payload["actions"]["right-click-role"][
         "result_fields"
     ]
+    assert "ready_state" in payload["actions"]["page-info"]["result_fields"]
+    assert "requested_url" in payload["actions"]["wait-url"]["result_fields"]
+    assert "requested_title" in payload["actions"]["wait-title"]["result_fields"]
+    assert "requested_state" in payload["actions"]["wait-load-state"][
+        "result_fields"
+    ]
     assert "steps" in payload["top_level"]["required_fields"]
     assert "session.create" in payload["top_level"]["target_options"]
     assert payload["workflow"]["validate"] == (
@@ -2759,7 +2772,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 20,
+        "action_count": 24,
         "supported_actions": [
             "accessibility-snapshot",
             "click",
@@ -2774,13 +2787,17 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "get-value-role",
             "interactive-snapshot",
             "open-url",
+            "page-info",
             "right-click",
             "right-click-role",
             "screenshot",
             "snapshot",
             "type",
+            "wait-load-state",
             "wait-selector",
             "wait-text",
+            "wait-title",
+            "wait-url",
         ],
     }
 
@@ -2939,6 +2956,118 @@ def test_extended_case_step_uses_semantic_action_expression(tmp_path: Any) -> No
     assert result["url"] == "https://example.test/form"
     assert "requestedLabel" in page.expressions[0]
     assert "Email" in page.expressions[0]
+
+
+@pytest.mark.parametrize(
+    ("step", "expression_snippet", "expected"),
+    [
+        (
+            {"action": "page-info"},
+            "visibilityState",
+            {
+                "url": "https://example.test/dashboard",
+                "ready_state": "complete",
+            },
+        ),
+        (
+            {
+                "action": "wait-url",
+                "url": "/dashboard",
+                "match": "contains",
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+            },
+            "requestedUrl",
+            {
+                "found": True,
+                "requested_url": "/dashboard",
+                "match": "contains",
+            },
+        ),
+        (
+            {
+                "action": "wait-title",
+                "title": "Dashboard",
+                "match": "exact",
+                "case_sensitive": True,
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+            },
+            "requestedTitle",
+            {
+                "found": True,
+                "requested_title": "Dashboard",
+                "match": "exact",
+                "case_sensitive": True,
+            },
+        ),
+        (
+            {
+                "action": "wait-load-state",
+                "state": "domcontentloaded",
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+            },
+            "requestedState",
+            {
+                "found": True,
+                "requested_state": "domcontentloaded",
+                "target_state": "interactive",
+            },
+        ),
+    ],
+)
+def test_extended_case_step_uses_navigation_status_expressions(
+    tmp_path: Any,
+    step: dict[str, Any],
+    expression_snippet: str,
+    expected: dict[str, Any],
+) -> None:
+    class FakePage:
+        url = "https://example.test/dashboard"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            if "requestedUrl" in expression:
+                return {
+                    "found": True,
+                    "requested_url": "/dashboard",
+                    "match": "contains",
+                    "waited_ms": 50,
+                }
+            if "requestedTitle" in expression:
+                return {
+                    "found": True,
+                    "title": "Dashboard",
+                    "requested_title": "Dashboard",
+                    "match": "exact",
+                    "case_sensitive": True,
+                    "waited_ms": 50,
+                }
+            if "requestedState" in expression:
+                return {
+                    "found": True,
+                    "state": "interactive",
+                    "requested_state": "domcontentloaded",
+                    "target_state": "interactive",
+                    "waited_ms": 50,
+                }
+            return {
+                "url": self.url,
+                "title": "Dashboard",
+                "ready_state": "complete",
+            }
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(page, step, tmp_path, 0)
+
+    assert expression_snippet in page.expressions[0]
+    for key, value in expected.items():
+        assert result[key] == value
+    assert result["url"] == "https://example.test/dashboard"
 
 
 def test_case_run_masks_connect_url_stdout(

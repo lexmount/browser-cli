@@ -304,7 +304,8 @@ Default behavior:
   original page actions plus semantic form and targeting actions such as
   `fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
   `get-value-role`, `form-snapshot`, `interactive-snapshot`, and
-  `accessibility-snapshot`.
+  `accessibility-snapshot`, plus navigation/status checks such as `page-info`,
+  `wait-url`, `wait-title`, and `wait-load-state`.
 - `case scaffold` returns a valid starter case spec and serialized YAML/JSON
   content, can write it to `--output`, refuses to overwrite without
   `--overwrite`, and reports `next_commands` for validate/run.
@@ -339,8 +340,8 @@ Default behavior:
   screenshot-selector, screenshot-role,
   wait-url, wait-title, wait-load-state, wait-network-idle,
   get-text, get-text-role, exists, exists-role, count, wait-count,
-  wait-state-role, query, inspect,
-  get-attribute-role, wait-attribute-role, bounding-box, bounding-box-role,
+  wait-state, wait-state-role, query, inspect,
+  get-attribute, get-attribute-role, wait-attribute, wait-attribute-role, bounding-box, bounding-box-role,
   select-option, select-label, select-role, check, uncheck, check-label,
   check-role, uncheck-label, uncheck-role, click-text, click-role, click-index,
   double-click, double-click-role, right-click, right-click-role,

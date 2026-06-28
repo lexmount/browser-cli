@@ -17982,8 +17982,12 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "form-snapshot": tuple(),
     "get-value-role": ("role",),
     "interactive-snapshot": tuple(),
+    "page-info": tuple(),
     "right-click": ("selector",),
     "right-click-role": ("role",),
+    "wait-load-state": tuple(),
+    "wait-title": ("title",),
+    "wait-url": ("url",),
     "wait-text": ("text",),
 }
 BROWSER_CLI_SUPPORTED_CASE_ACTIONS = frozenset(
@@ -18243,8 +18247,17 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "get-value-role": ["name", "exact", "case_sensitive"],
         "interactive-snapshot": ["include_hidden", "max_nodes"],
+        "page-info": [],
         "right-click": [],
         "right-click-role": ["name", "exact", "case_sensitive"],
+        "wait-load-state": ["state", "timeout_ms", "poll_ms"],
+        "wait-title": [
+            "match",
+            "case_sensitive",
+            "timeout_ms",
+            "poll_ms",
+        ],
+        "wait-url": ["match", "timeout_ms", "poll_ms"],
         "wait-text": [
             "selector",
             "state",
@@ -18307,6 +18320,14 @@ def _case_action_schema() -> dict[str, Any]:
             "url",
         ],
         "interactive-snapshot": ["nodes", "node_count", "url", "title"],
+        "page-info": [
+            "url",
+            "title",
+            "ready_state",
+            "visibility_state",
+            "viewport",
+            "scroll",
+        ],
         "right-click": [
             "found",
             "right_clicked",
@@ -18326,6 +18347,24 @@ def _case_action_schema() -> dict[str, Any]:
             "element",
             "url",
         ],
+        "wait-load-state": [
+            "found",
+            "state",
+            "requested_state",
+            "target_state",
+            "waited_ms",
+            "url",
+        ],
+        "wait-title": [
+            "found",
+            "title",
+            "requested_title",
+            "match",
+            "case_sensitive",
+            "waited_ms",
+            "url",
+        ],
+        "wait-url": ["found", "url", "requested_url", "match", "waited_ms"],
         "wait-text": ["found", "text", "selector", "waited_ms", "url"],
     }
     examples: dict[str, dict[str, Any]] = {
@@ -18382,12 +18421,20 @@ def _case_action_schema() -> dict[str, Any]:
             "name": "Email",
         },
         "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
+        "page-info": {"action": "page-info"},
         "right-click": {"action": "right-click", "selector": ".item"},
         "right-click-role": {
             "action": "right-click-role",
             "role": "row",
             "name": "Invoice",
         },
+        "wait-load-state": {"action": "wait-load-state", "state": "complete"},
+        "wait-title": {
+            "action": "wait-title",
+            "title": "Dashboard",
+            "match": "contains",
+        },
+        "wait-url": {"action": "wait-url", "url": "/dashboard"},
         "wait-text": {"action": "wait-text", "text": "Saved"},
     }
     return {
@@ -18742,6 +18789,8 @@ def _run_browser_cli_case_step(
                 max_nodes=_case_step_int(step, "max_nodes", default=80),
             ),
         )
+    if action == "page-info":
+        return _case_eval_expression(page, _page_info_expression())
     if action == "right-click":
         return _case_eval_expression(
             page,
@@ -18761,6 +18810,36 @@ def _run_browser_cli_case_step(
                 result_field="right_clicked",
                 exact=exact,
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-load-state":
+        return _case_eval_expression(
+            page,
+            _wait_load_state_expression(
+                state=str(step.get("state", "complete")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-title":
+        return _case_eval_expression(
+            page,
+            _wait_title_expression(
+                title=str(step["title"]),
+                match=str(step.get("match", "contains")),
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-url":
+        return _case_eval_expression(
+            page,
+            _wait_url_expression(
+                url=str(step["url"]),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
             ),
         )
     if action == "wait-text":

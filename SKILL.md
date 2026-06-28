@@ -238,8 +238,8 @@ browser-cli commands --workflow case_file_task
 Run `browser-cli case schema` before hand-writing a case file. Generate starters with
 `browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template form-fill`,
 validate, then run with `--close-created-session`. Read `supported_actions`,
-`required_fields`, semantic actions such as `fill-label`, `click-role`, `wait-text`,
-`accessibility-snapshot`, plus `valid`, `errors`, `step_count`, `next_commands`,
+`required_fields`, semantic/navigation actions such as `fill-label`, `click-role`,
+`wait-text`, `accessibility-snapshot`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, plus `valid`, `errors`, `step_count`, `next_commands`,
 `events_path`, `artifacts_dir`, `session`, and `steps`.
 
 For form tasks, prefer the more specific form workflow:
