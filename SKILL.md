@@ -73,8 +73,8 @@ run `browser-cli auth scopes --include-site-contract`,
 `browser-cli commands --workflow connect_from_codex_site_requirements` first.
 Read `browser_site_contract.scope_ui_fields`, `known_scopes`,
 `default_scopes`, `connect_from_codex.site_capability_status.missing`,
-`required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, `setup_blocks`, and `verification.doctor_command`.
+`required_device_code_endpoints`, `required_api_contract`, `required_token_lifecycle`,
+`required_runtime_auth`, `setup_blocks`, and `verification.doctor_command`.
 
 When `auth login` returns `handoff`, use it as the setup contract: open
 `connect_from_codex_url` or `login_url`, follow `copyable_commands`, require the

@@ -918,6 +918,7 @@ def _command_catalog() -> dict[str, Any]:
                             "device_code_available",
                             "connect_from_codex.url",
                             "connect_from_codex.requested_scope_details",
+                            "connect_from_codex.required_runtime_auth",
                             "handoff.setup_blocks",
                             "handoff.verification.doctor_command",
                         ],
@@ -971,6 +972,7 @@ def _command_catalog() -> dict[str, Any]:
                             "required_device_code_endpoints",
                             "required_browser_site_support",
                             "required_token_lifecycle",
+                            "required_runtime_auth",
                             "setup_blocks",
                             "verification.doctor_command",
                         ],
@@ -984,6 +986,7 @@ def _command_catalog() -> dict[str, Any]:
                             "manual_env_available",
                             "connect_from_codex.url",
                             "connect_from_codex.site_capability_status.missing",
+                            "connect_from_codex.required_runtime_auth",
                             "handoff.setup_blocks",
                         ],
                     },
@@ -999,6 +1002,7 @@ def _command_catalog() -> dict[str, Any]:
                             "device_code.required_endpoints",
                             "device_code.required_browser_site_support",
                             "fallback_handoff.setup_blocks",
+                            "connect_from_codex.required_runtime_auth",
                         ],
                     },
                     {
@@ -1035,6 +1039,7 @@ def _command_catalog() -> dict[str, Any]:
                             "device_code.verification_uri",
                             "device_code.verification_uri_complete",
                             "device_code.user_code",
+                            "connect_from_codex.required_runtime_auth",
                             "polling.requested",
                             "polling.authenticated",
                             "polling.status",
@@ -1056,6 +1061,7 @@ def _command_catalog() -> dict[str, Any]:
                             "manual_env_available",
                             "device_code_available",
                             "connect_from_codex.url",
+                            "connect_from_codex.required_runtime_auth",
                             "handoff.setup_blocks",
                             "handoff.verification.doctor_command",
                         ],
@@ -3930,6 +3936,17 @@ def _connect_from_codex_required_token_lifecycle() -> list[dict[str, Any]]:
                 "device_token.refresh_needed",
             ],
         },
+    ]
+
+
+def _connect_from_codex_required_runtime_auth() -> list[dict[str, Any]]:
+    return [
+        {
+            **item,
+            "required": True,
+            "purpose": "Allow scoped local tokens from Connect from Codex to drive browser actions.",
+        }
+        for item in _bearer_runtime_required_support()
     ]
 
 
@@ -14550,6 +14567,7 @@ def cmd_auth_scopes(args: argparse.Namespace) -> None:
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
             "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
+            "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
         }
 
@@ -14973,6 +14991,7 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
             "setup_blocks": setup_blocks,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
         },
         setup_blocks=setup_blocks,
@@ -14981,6 +15000,7 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
         required_device_code_support=_device_code_required_browser_site_support(),
         required_api_contract=_connect_from_codex_required_api_contract(),
         required_token_lifecycle=_connect_from_codex_required_token_lifecycle(),
+        required_runtime_auth=_connect_from_codex_required_runtime_auth(),
         verification={
             "status_command": "browser-cli auth status",
             "login_command": "browser-cli auth login",
@@ -15161,6 +15181,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                     "requested_scope_details": scope_details,
                     "site_capability_status": site_capability_status,
                     "site_capabilities": site_capabilities,
+                    "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
                     "verification_uri": device_code.get("verification_uri"),
                     "verification_uri_complete": device_code.get(
                         "verification_uri_complete"
@@ -15222,6 +15243,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "setup_blocks": setup_blocks,
                 "site_capability_status": site_capability_status,
                 "site_capabilities": site_capabilities,
+                "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
                 "fallback": "Use the manual_env steps until browser.lexmount.cn supports device-code login.",
             },
             flows=[
@@ -15272,6 +15294,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "setup_blocks": setup_blocks,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "expected_outputs": [
                 "Project ID for the selected project",
                 "Scoped API key or short-lived local token",

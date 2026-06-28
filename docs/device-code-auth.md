@@ -242,6 +242,9 @@ Current CLI support:
   SDK bearer-token client construction, API `Authorization: Bearer` support for
   scoped browser permissions, and browser gateway CDP websocket bearer-token
   authorization without `api_key` query parameters.
+- `browser-cli auth connect-requirements`, `auth scopes --include-site-contract`,
+  and `auth login` also expose those launch blockers as
+  `required_runtime_auth`.
 - `browser-cli auth token-info --required-scope <scope>` reports
   `scope_check.required_scopes`, `scope_check.missing_scopes`, and
   `scope_check.satisfied`.

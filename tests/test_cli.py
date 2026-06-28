@@ -387,8 +387,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "connect_from_codex.device_code_url" in site_steps[1]["read"]
     assert "required_device_code_endpoints" in site_steps[1]["read"]
     assert "required_token_lifecycle" in site_steps[1]["read"]
+    assert "required_runtime_auth" in site_steps[1]["read"]
     assert site_steps[2]["optional"] is True
+    assert "connect_from_codex.required_runtime_auth" in site_steps[2]["read"]
     assert site_steps[3]["command"] == "browser-cli auth login --device-code"
+    assert "connect_from_codex.required_runtime_auth" in site_steps[3]["read"]
     assert site_steps[4]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[0]["command"] == "browser-cli auth status"
@@ -401,6 +404,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "manual_env_available" in auth_steps[2]["read"]
     assert "device_code_available" in auth_steps[2]["read"]
     assert "connect_from_codex.url" in auth_steps[2]["read"]
+    assert "connect_from_codex.required_runtime_auth" in auth_steps[2]["read"]
     assert "usable" in auth_steps[3]["read"]
     assert "unusable_exports" in auth_steps[3]["read"]
     assert auth_steps[3]["local_shell_only"] is True
@@ -414,6 +418,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert device_steps[0]["command"] == "browser-cli auth login --device-code"
     assert "device_code.required_endpoints" in device_steps[0]["read"]
     assert "device_code.required_browser_site_support" in device_steps[0]["read"]
+    assert "connect_from_codex.required_runtime_auth" in device_steps[0]["read"]
     assert "device_code.verification_uri_complete" in device_steps[0]["read"]
     assert "polling.status" in device_steps[0]["read"]
     assert "credentials.device_token.valid" in device_steps[0]["read"]
@@ -424,6 +429,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert device_steps[1]["optional"] is True
     assert device_steps[1]["command"] == "browser-cli auth login"
     assert "manual_env_available" in device_steps[1]["read"]
+    assert "connect_from_codex.required_runtime_auth" in device_steps[1]["read"]
     assert "runtime_auth.usable" in device_steps[2]["read"]
     assert "runtime_auth.bearer_runtime.required_support" in device_steps[2]["read"]
     assert "device_token.valid" in device_steps[2]["read"]
@@ -1830,11 +1836,13 @@ def test_commands_catalog_returns_device_code_auth_workflow(
     assert "saved credentials" in steps[0]["success_condition"]
     assert "device_code.required_endpoints" in steps[0]["read"]
     assert "device_code.verification_uri_complete" in steps[0]["read"]
+    assert "connect_from_codex.required_runtime_auth" in steps[0]["read"]
     assert "polling.status" in steps[0]["read"]
     assert "credentials.device_token.valid" in steps[0]["read"]
     assert "fallback_handoff.setup_blocks" in steps[0]["read"]
     assert steps[1]["optional"] is True
     assert "manual_env_available" in steps[1]["read"]
+    assert "connect_from_codex.required_runtime_auth" in steps[1]["read"]
     assert "runtime_auth.usable" in steps[2]["read"]
     assert "runtime_auth.bearer_runtime.required_support" in steps[2]["read"]
     assert "device_token.valid" in steps[2]["read"]
@@ -4446,6 +4454,12 @@ def test_auth_scopes_filters_unknown_scopes_and_reports_site_contract(
         contract["required_token_lifecycle"][2]["endpoint"]
         == "POST /api/auth/token/revoke"
     )
+    assert [item["id"] for item in contract["required_runtime_auth"]] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
+    assert contract["required_runtime_auth"][0]["required"] is True
     assert contract["site_capability_status"]["missing_count"] == 6
     assert any(
         "permission names" in item for item in contract["browser_site_requirements"]
@@ -4525,6 +4539,12 @@ def test_auth_connect_requirements_reports_browser_site_contract(
         payload["required_token_lifecycle"][2]["endpoint"]
         == "POST /api/auth/token/revoke"
     )
+    assert [item["id"] for item in payload["required_runtime_auth"]] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
+    assert payload["required_runtime_auth"][1]["owner"] == "Lexmount API"
     assert (
         payload["required_api_contract"]["device_code"][0]["path"]
         == "/api/auth/device/code"
@@ -4548,6 +4568,7 @@ def test_auth_connect_requirements_reports_browser_site_contract(
     assert connect["project_id"] == "arg-project"
     assert connect["requested_scopes"] == ["browser:actions"]
     assert connect["setup_blocks"] == payload["setup_blocks"]
+    assert connect["required_runtime_auth"] == payload["required_runtime_auth"]
     assert connect["supported_response_modes"] == ["env", "device_code"]
     assert "response=env|device_code" in connect["required_query_parameters"]
     capability_ids = [
@@ -4742,6 +4763,11 @@ def test_auth_login_guides_manual_browser_flow(
     assert action_detail["label"] == "Browser actions"
     assert action_detail["risk"] == "high"
     assert action_detail["permissions"] == ["browser.actions:run"]
+    assert [item["id"] for item in connect["required_runtime_auth"]] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
     assert handoff["requested_scope_details"] == connect["requested_scope_details"]
     assert connect["requested_expires_in"] == "7d"
     assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
@@ -4821,6 +4847,7 @@ def test_auth_login_builds_connect_from_codex_contract_from_args(
         "export LEXMOUNT_PROJECT_ID=arg-project"
     )
     assert connect["setup_blocks"] == payload["handoff"]["setup_blocks"]
+    assert connect["required_runtime_auth"][0]["owner"] == "lexmount-python-sdk"
 
     query = parse_qs(urlsplit(connect["url"]).query)
     assert query["project_id"] == ["arg-project"]
@@ -4937,6 +4964,11 @@ def test_auth_login_device_code_reports_pending_browser_site_contract(
     assert connect["requested_scope_details"] == device_code["requested_scope_details"]
     assert connect["site_capability_status"]["available"] is False
     assert "device_code_oauth" in connect["site_capability_status"]["missing"]
+    assert [item["id"] for item in connect["required_runtime_auth"]] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
     device_code_oauth = next(
         item
         for item in connect["site_capabilities"]
@@ -5029,6 +5061,13 @@ def test_auth_login_device_code_starts_approval_with_configured_endpoint(
     assert payload["authenticated"] is False
     assert payload["credentials_saved"] is False
     assert payload["reason"] == "approval_required"
+    assert [
+        item["id"] for item in payload["connect_from_codex"]["required_runtime_auth"]
+    ] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
     assert payload["polling"] == {
         "requested": False,
         "authenticated": False,

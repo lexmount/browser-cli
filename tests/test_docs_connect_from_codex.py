@@ -33,6 +33,7 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "required_device_code_endpoints" in text
     assert "required_api_contract" in text
     assert "required_token_lifecycle" in text
+    assert "required_runtime_auth" in text
     assert "verification.doctor_command" in text
     assert "contains_secret_values" in text
     assert "contains_secret_placeholders" in text

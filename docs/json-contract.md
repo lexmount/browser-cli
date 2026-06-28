@@ -222,8 +222,12 @@ Default behavior:
   implementation contract without credentials: `connect_from_codex.url`,
   `connect_from_codex.device_code_url`, `site_capabilities`,
   `site_capability_status`, `required_device_code_endpoints`,
-  `required_api_contract`, `required_token_lifecycle`, `setup_blocks`, and
-  verification commands.
+  `required_api_contract`, `required_token_lifecycle`,
+  `required_runtime_auth`, `setup_blocks`, and verification commands.
+- `auth login` nested `connect_from_codex` output may also include
+  `required_runtime_auth` so agents can report browser.lexmount.cn, SDK, and
+  gateway gaps from either the login handoff or the standalone requirements
+  command.
 - `action guide` reports compact action routes for `form_interaction`,
   `interactive_targeting`, `page_diagnostics`, and `state_waits`, including
   inspect, preferred, fallback, and verification commands plus the custom

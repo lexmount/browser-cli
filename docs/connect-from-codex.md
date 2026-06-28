@@ -159,6 +159,10 @@ Expected behavior after the website page exists:
   permission names, risk level, and destructive marker; custom or future scopes
   are returned with
   `known: false` so browser.lexmount.cn can still render them explicitly.
+- `browser-cli auth connect-requirements`, `auth scopes --include-site-contract`,
+  and `auth login` expose `required_runtime_auth` so the page and API teams can
+  track SDK bearer-token construction, API bearer authorization, and browser
+  gateway websocket bearer authorization as separate launch requirements.
 - `browser-cli auth login --device-code` returns `available=false`,
   `reason=browser_site_endpoint_missing`, required device-code endpoints, and a
   `fallback_handoff` until an endpoint is configured. With

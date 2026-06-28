@@ -320,7 +320,7 @@ implementation contract without requiring credentials or opening a browser. It
 includes `connect_from_codex.url`, `connect_from_codex.device_code_url`,
 `site_capabilities`/`site_capability_status`, `setup_blocks`,
 `required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, and verification commands for
+`required_token_lifecycle`, `required_runtime_auth`, and verification commands for
 `browser-cli auth status`, `browser-cli auth login`, device-code fallback, and
 `browser-cli doctor --json`.
 

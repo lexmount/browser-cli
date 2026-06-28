@@ -161,6 +161,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli commands --workflow device_code_auth" in normalized
     assert "`required_api_contract`" in normalized
     assert "`required_token_lifecycle`" in normalized
+    assert "`required_runtime_auth`" in normalized
     assert "`browser_site_contract.scope_ui_fields`" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"

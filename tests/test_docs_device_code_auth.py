@@ -31,6 +31,7 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "runtime_auth_usable" in text
     assert "runtime_auth.usable" in text
     assert "runtime_auth.bearer_runtime.required_support" in text
+    assert "required_runtime_auth" in text
     assert "SDK bearer-token client construction" in text
     assert "device_token.valid" in text
     assert "device_token.refresh_needed" in text

@@ -195,6 +195,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`auth connect-requirements`" in text
     assert "`required_api_contract`" in text
     assert "`required_token_lifecycle`" in text
+    assert "`required_runtime_auth`" in text
     assert "Connect from Codex auth" in text
     assert "device-code auth" in text
     assert "`device_code.required_endpoints`" in text
