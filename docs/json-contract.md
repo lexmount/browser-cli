@@ -233,10 +233,16 @@ Default behavior:
   fail as JSON with `error=unknown_example` plus `available_examples`.
 - `case schema` returns `supported_actions`, `required_fields`, per-action
   `actions`, top-level target/session schema, optional `--names-only`, and
-  action-specific output with `--action`.
+  action-specific output with `--action`. Supported case actions include the
+  original page actions plus semantic form and targeting actions such as
+  `fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
+  `get-value-role`, `form-snapshot`, `interactive-snapshot`, and
+  `accessibility-snapshot`.
 - `case scaffold` returns a valid starter case spec and serialized YAML/JSON
   content, can write it to `--output`, refuses to overwrite without
   `--overwrite`, and reports `next_commands` for validate/run.
+- `case run` masks direct `connect_url` values in stdout and its event log by
+  default when they contain `api_key` or the current local API key.
 - `doctor --smoke-session` may report a temporary `session_id` and cleanup
   status, but must not print direct connect URLs or token values.
 - `doctor` reports `browser_cli.version_source` to show whether the browser-cli

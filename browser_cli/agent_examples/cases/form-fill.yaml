@@ -1,5 +1,5 @@
 name: form-fill
-description: Build a tiny form in the page, fill it, click submit, and verify state.
+description: Build a tiny form fixture, then fill, submit, and verify it with first-class browser-cli form actions.
 close_created_session: true
 session:
   create: true
@@ -12,24 +12,35 @@ steps:
     expression: |
       () => {
         document.body.innerHTML = `
-          <label for="q">Query</label>
-          <input id="q" name="q" />
-          <button id="submit" onclick="window.submitted = document.querySelector('#q').value">
-            Submit
-          </button>
+          <form id="search-form">
+            <label for="q">Query</label>
+            <input id="q" name="q" />
+            <button type="submit">Submit</button>
+            <output id="result" aria-live="polite"></output>
+          </form>
         `;
+        document.querySelector("#search-form").addEventListener("submit", (event) => {
+          event.preventDefault();
+          document.querySelector("#result").textContent =
+            "Submitted: " + document.querySelector("#q").value;
+        });
         return true;
       }
-  - action: type
-    selector: "#q"
+  - action: form-snapshot
+    selector: form
+    max_nodes: 20
+  - action: fill-label
+    label: Query
     text: lexmount browser
-  - action: click
-    selector: "#submit"
-  - action: eval
-    expression: |
-      () => ({
-        value: document.querySelector("#q").value,
-        submitted: window.submitted
-      })
+  - action: click-role
+    role: button
+    name: Submit
+  - action: wait-text
+    text: "Submitted: lexmount browser"
+    selector: "#result"
+    timeout_ms: 5000
+  - action: get-value-role
+    role: textbox
+    name: Query
   - action: screenshot
     output: form-filled.png

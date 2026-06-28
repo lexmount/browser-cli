@@ -28,6 +28,7 @@ from lex_browser_runtime.browser.actions import (
     BrowserActionTarget,
     ClickRequest,
     EvalRequest,
+    get_or_create_page,
     OpenUrlRequest,
     ScreenshotRequest,
     SnapshotRequest,
@@ -36,11 +37,16 @@ from lex_browser_runtime.browser.actions import (
     resolve_browser_action_connect_url,
     run_browser_action,
 )
-from lex_browser_runtime.browser.cases import run_case_file, validate_case_file
 from lex_browser_runtime.browser.cases import (
+    append_event,
+    CaseRunSummary,
+    CaseStepRunResult,
+    CaseValidationResult,
+    load_case_file,
     REQUIRED_CASE_FIELDS,
+    resolve_case_target,
+    run_case_step as _runtime_run_case_step,
     SUPPORTED_CASE_ACTIONS,
-    validate_case_spec,
 )
 from lex_browser_runtime.browser.lexmount import (
     LexmountBrowserAdmin,
@@ -675,7 +681,10 @@ def _agent_examples() -> dict[str, Any]:
             "grep_patterns": [
                 "name: form-fill",
                 "action: eval",
-                "action: type",
+                "action: fill-label",
+                "action: click-role",
+                "action: wait-text",
+                "action: get-value-role",
                 "action: screenshot",
             ],
         },
@@ -2144,7 +2153,7 @@ def _validate_case_example_content(content: str) -> list[str]:
         return [f"Invalid YAML: {exc}"]
     if not isinstance(spec, dict):
         return ["Case example root must be an object."]
-    return validate_case_spec(spec)
+    return _validate_browser_cli_case_spec(spec)
 
 
 def _doctor_agent_examples_check() -> dict[str, Any]:
@@ -15153,6 +15162,67 @@ def cmd_version(args: argparse.Namespace) -> None:
 
 CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill")
 
+EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "accessibility-snapshot": tuple(),
+    "click-role": ("role",),
+    "click-text": ("text",),
+    "fill-label": ("label", "text"),
+    "fill-role": ("role", "text"),
+    "form-snapshot": tuple(),
+    "get-value-role": ("role",),
+    "interactive-snapshot": tuple(),
+    "wait-text": ("text",),
+}
+BROWSER_CLI_SUPPORTED_CASE_ACTIONS = frozenset(
+    set(SUPPORTED_CASE_ACTIONS) | set(EXTENDED_CASE_REQUIRED_FIELDS)
+)
+BROWSER_CLI_REQUIRED_CASE_FIELDS: dict[str, tuple[str, ...]] = {
+    **{action: tuple(fields) for action, fields in REQUIRED_CASE_FIELDS.items()},
+    **EXTENDED_CASE_REQUIRED_FIELDS,
+}
+
+
+def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    steps = spec.get("steps")
+    if not isinstance(steps, list) or not steps:
+        errors.append("steps must be a non-empty array")
+        return errors
+
+    for index, step in enumerate(steps):
+        if not isinstance(step, dict):
+            errors.append(f"steps[{index}] must be an object")
+            continue
+        action = step.get("action")
+        if action not in BROWSER_CLI_SUPPORTED_CASE_ACTIONS:
+            errors.append(
+                "steps[{}].action must be one of {}".format(
+                    index, sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS)
+                )
+            )
+            continue
+        for field in BROWSER_CLI_REQUIRED_CASE_FIELDS[str(action)]:
+            if field not in step:
+                errors.append(f"steps[{index}] missing required field '{field}'")
+
+    if "target" in spec and not isinstance(spec["target"], dict):
+        errors.append("target must be an object when present")
+    if "session" in spec and not isinstance(spec["session"], dict):
+        errors.append("session must be an object when present")
+    return errors
+
+
+def validate_browser_cli_case_file(path: str | Path) -> CaseValidationResult:
+    spec = load_case_file(path)
+    errors = _validate_browser_cli_case_spec(spec)
+    steps = spec.get("steps", [])
+    return CaseValidationResult(
+        file=str(path),
+        valid=not errors,
+        errors=errors,
+        step_count=len(steps) if isinstance(steps, list) else 0,
+    )
+
 
 def _case_artifact_stem(name: str) -> str:
     stem = re.sub(r"[^a-zA-Z0-9_.-]+", "-", name.strip().lower())
@@ -15209,8 +15279,8 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
         return {
             "name": name,
             "description": (
-                "Build a tiny form in the page, fill it, click submit, "
-                "and verify state."
+                "Build a tiny form fixture, then fill, submit, and verify it "
+                "with first-class browser-cli form actions."
             ),
             "close_created_session": True,
             "session": {
@@ -15228,33 +15298,47 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                     "expression": """
 () => {
   document.body.innerHTML = `
-    <label for="q">Query</label>
-    <input id="q" name="q" />
-    <button id="submit" onclick="window.submitted = document.querySelector('#q').value">
-      Submit
-    </button>
+    <form id="search-form">
+      <label for="q">Query</label>
+      <input id="q" name="q" />
+      <button type="submit">Submit</button>
+      <output id="result" aria-live="polite"></output>
+    </form>
   `;
+  document.querySelector("#search-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    document.querySelector("#result").textContent =
+      "Submitted: " + document.querySelector("#q").value;
+  });
   return true;
 }
 """.strip(),
                 },
                 {
-                    "action": "type",
-                    "selector": "#q",
+                    "action": "form-snapshot",
+                    "selector": "form",
+                    "max_nodes": 20,
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Query",
                     "text": args.text,
                 },
                 {
-                    "action": "click",
-                    "selector": "#submit",
+                    "action": "click-role",
+                    "role": "button",
+                    "name": "Submit",
                 },
                 {
-                    "action": "eval",
-                    "expression": """
-() => ({
-  value: document.querySelector("#q").value,
-  submitted: window.submitted
-})
-""".strip(),
+                    "action": "wait-text",
+                    "text": f"Submitted: {args.text}",
+                    "selector": "#result",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-value-role",
+                    "role": "textbox",
+                    "name": "Query",
                 },
                 {
                     "action": "screenshot",
@@ -15331,6 +15415,28 @@ def _case_action_schema() -> dict[str, Any]:
         "screenshot": ["output", "full_page", "timeout_ms"],
         "eval": [],
         "snapshot": ["max_chars", "output", "timeout_ms"],
+        "accessibility-snapshot": ["include_hidden", "max_nodes"],
+        "click-role": ["name", "exact", "case_sensitive"],
+        "click-text": ["selector", "exact", "case_sensitive"],
+        "fill-label": ["exact", "case_sensitive"],
+        "fill-role": ["name", "exact", "case_sensitive"],
+        "form-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "reveal_sensitive_values",
+        ],
+        "get-value-role": ["name", "exact", "case_sensitive"],
+        "interactive-snapshot": ["include_hidden", "max_nodes"],
+        "wait-text": [
+            "selector",
+            "state",
+            "exact",
+            "case_sensitive",
+            "timeout_ms",
+            "poll_ms",
+            "include_hidden",
+        ],
     }
     result_fields: dict[str, list[str]] = {
         "open-url": ["url", "title", "status"],
@@ -15340,6 +15446,40 @@ def _case_action_schema() -> dict[str, Any]:
         "screenshot": ["path", "full_page", "url"],
         "eval": ["expression", "value", "url"],
         "snapshot": ["url", "title", "html", "text"],
+        "accessibility-snapshot": ["nodes", "node_count", "url", "title"],
+        "click-role": ["found", "clicked", "role", "name", "element", "url"],
+        "click-text": ["found", "clicked", "text", "element", "url"],
+        "fill-label": [
+            "found",
+            "filled",
+            "label",
+            "value",
+            "value_masked",
+            "element",
+            "url",
+        ],
+        "fill-role": [
+            "found",
+            "filled",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "element",
+            "url",
+        ],
+        "form-snapshot": ["fields", "field_count", "node_count", "url", "title"],
+        "get-value-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "url",
+        ],
+        "interactive-snapshot": ["nodes", "node_count", "url", "title"],
+        "wait-text": ["found", "text", "selector", "waited_ms", "url"],
     }
     examples: dict[str, dict[str, Any]] = {
         "open-url": {
@@ -15365,15 +15505,40 @@ def _case_action_schema() -> dict[str, Any]:
             "max_chars": 2000,
             "output": "snapshot.json",
         },
+        "accessibility-snapshot": {
+            "action": "accessibility-snapshot",
+            "max_nodes": 120,
+        },
+        "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
+        "click-text": {"action": "click-text", "text": "Submit"},
+        "fill-label": {
+            "action": "fill-label",
+            "label": "Email",
+            "text": "me@example.com",
+        },
+        "fill-role": {
+            "action": "fill-role",
+            "role": "textbox",
+            "name": "Email",
+            "text": "me@example.com",
+        },
+        "form-snapshot": {"action": "form-snapshot", "selector": "form"},
+        "get-value-role": {
+            "action": "get-value-role",
+            "role": "textbox",
+            "name": "Email",
+        },
+        "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
+        "wait-text": {"action": "wait-text", "text": "Saved"},
     }
     return {
         action: {
-            "required_fields": list(REQUIRED_CASE_FIELDS.get(action, ())),
+            "required_fields": list(BROWSER_CLI_REQUIRED_CASE_FIELDS.get(action, ())),
             "optional_fields": optional_fields.get(action, []),
             "result_fields": result_fields.get(action, []),
             "example_step": examples.get(action, {"action": action}),
         }
-        for action in sorted(SUPPORTED_CASE_ACTIONS)
+        for action in sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS)
     }
 
 
@@ -15407,11 +15572,11 @@ def cmd_case_schema(args: argparse.Namespace) -> None:
     }
     payload: dict[str, Any] = {
         "schema_version": 1,
-        "supported_actions": sorted(SUPPORTED_CASE_ACTIONS),
-        "action_count": len(SUPPORTED_CASE_ACTIONS),
+        "supported_actions": sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
+        "action_count": len(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
         "required_fields": {
             action: list(fields)
-            for action, fields in sorted(REQUIRED_CASE_FIELDS.items())
+            for action, fields in sorted(BROWSER_CLI_REQUIRED_CASE_FIELDS.items())
         },
         "actions": actions,
         "top_level": top_level,
@@ -15423,6 +15588,7 @@ def cmd_case_schema(args: argparse.Namespace) -> None:
         },
         "notes": [
             "Use case scaffold for common starter files before hand-writing YAML.",
+            "Use the enhanced semantic case actions for repeatable form, text, and interactive targeting smoke tests.",
             "Use action commands directly when a browser task needs actions outside this case runner schema.",
             "Run case validate before case run.",
         ],
@@ -15468,7 +15634,7 @@ def cmd_case_schema(args: argparse.Namespace) -> None:
 def cmd_case_scaffold(args: argparse.Namespace) -> None:
     command = "case.scaffold"
     spec = _case_scaffold_spec(args)
-    errors = validate_case_spec(spec)
+    errors = _validate_browser_cli_case_spec(spec)
     content = _serialize_case_spec(
         command=command,
         spec=spec,
@@ -15506,7 +15672,7 @@ def cmd_case_scaffold(args: argparse.Namespace) -> None:
         valid=not errors,
         errors=errors,
         step_count=len(spec.get("steps", [])),
-        supported_actions=sorted(SUPPORTED_CASE_ACTIONS),
+        supported_actions=sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
         safe_to_paste_in_chat=True,
         next_commands=_case_scaffold_next_commands(
             str(output_path) if output_path is not None else None
@@ -15516,10 +15682,395 @@ def cmd_case_scaffold(args: argparse.Namespace) -> None:
     )
 
 
+def _case_step_bool(
+    step: dict[str, Any],
+    name: str,
+    *,
+    default: bool = False,
+) -> bool:
+    return bool(step.get(name, default))
+
+
+def _case_step_int(step: dict[str, Any], name: str, *, default: int) -> int:
+    try:
+        return int(step.get(name, default))
+    except (TypeError, ValueError) as exc:
+        raise BrowserConfigError(f"{name} must be an integer") from exc
+
+
+def _case_step_float(step: dict[str, Any], name: str, *, default: float) -> float:
+    try:
+        return float(step.get(name, default))
+    except (TypeError, ValueError) as exc:
+        raise BrowserConfigError(f"{name} must be a number") from exc
+
+
+def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
+    if isinstance(result, dict):
+        payload = dict(result)
+    else:
+        payload = {"value": result}
+    payload.setdefault("url", page.url)
+    return payload
+
+
+def _case_eval_expression(page: Any, expression: str) -> dict[str, Any]:
+    return _case_step_result(page, page.evaluate(expression))
+
+
+def _accessibility_snapshot_expression(
+    *,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const root = document.body || document.documentElement;
+  const elements = root ? [...root.querySelectorAll("*")] : [];
+  const interesting = elements.filter((element) => {{
+    if (!visible(element)) return false;
+    const info = nodeInfo(element);
+    return Boolean(info.role || info.name || info.text);
+  }});
+  const nodes = limited(interesting).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "dom-accessibility",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && interesting.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+
+
+def _interactive_snapshot_expression(
+    *,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const elements = [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const nodes = limited(elements).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "interactive",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && elements.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+
+
+def _run_browser_cli_case_step(
+    page: Any,
+    step: dict[str, Any],
+    artifacts_dir: Path,
+    index: int,
+) -> dict[str, Any]:
+    action = step["action"]
+    if action in SUPPORTED_CASE_ACTIONS:
+        return _runtime_run_case_step(page, step, artifacts_dir, index)
+
+    exact = _case_step_bool(step, "exact")
+    case_sensitive = _case_step_bool(step, "case_sensitive")
+
+    if action == "click-role":
+        return _case_eval_expression(
+            page,
+            _click_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "accessibility-snapshot":
+        return _case_eval_expression(
+            page,
+            _accessibility_snapshot_expression(
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=120),
+            ),
+        )
+    if action == "click-text":
+        return _case_eval_expression(
+            page,
+            _click_text_expression(
+                text=str(step["text"]),
+                selector=str(step["selector"]) if step.get("selector") else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "fill-label":
+        return _case_eval_expression(
+            page,
+            _fill_label_expression(
+                label=str(step["label"]),
+                text=str(step["text"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "fill-role":
+        return _case_eval_expression(
+            page,
+            _fill_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                text=str(step["text"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "form-snapshot":
+        return _case_eval_expression(
+            page,
+            _form_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=80),
+                reveal_sensitive_values=_case_step_bool(
+                    step, "reveal_sensitive_values"
+                ),
+            ),
+        )
+    if action == "get-value-role":
+        return _case_eval_expression(
+            page,
+            _get_value_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "interactive-snapshot":
+        return _case_eval_expression(
+            page,
+            _interactive_snapshot_expression(
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=80),
+            ),
+        )
+    if action == "wait-text":
+        return _case_eval_expression(
+            page,
+            _wait_text_expression(
+                text=str(step["text"]),
+                selector=str(step["selector"]) if step.get("selector") else None,
+                state=str(step.get("state", "present")),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+
+    raise ValueError(f"Unsupported action: {action}")
+
+
+def _safe_case_payload(value: Any) -> Any:
+    return _sanitize_failure_value(value)
+
+
+def _case_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def run_browser_cli_case_file(
+    *,
+    file: str | Path,
+    run_id: str | None = None,
+    artifacts_dir: str | Path | None = None,
+    stop_on_error: bool = False,
+    close_created_session: bool = False,
+) -> CaseRunSummary:
+    spec = load_case_file(file)
+    errors = _validate_browser_cli_case_spec(spec)
+    if errors:
+        raise BrowserConfigError(f"Case validation failed: {errors}")
+
+    admin = LexmountBrowserAdmin()
+    target = resolve_case_target(admin, spec)
+    resolved_run_id = (
+        run_id or spec.get("run_id") or f"case-{_case_now()}-{time.time_ns()}"
+    )
+    resolved_artifacts_dir = Path(
+        artifacts_dir or f"/tmp/lexmount-runs/{resolved_run_id}"
+    )
+    resolved_artifacts_dir.mkdir(parents=True, exist_ok=True)
+    event_log = resolved_artifacts_dir / "events.jsonl"
+
+    safe_connect_url = _safe_case_payload(target.connect_url)
+    safe_session = _safe_case_payload(target.session)
+    append_event(
+        event_log,
+        "case_started",
+        run_id=resolved_run_id,
+        file=str(file),
+        artifacts_dir=str(resolved_artifacts_dir),
+    )
+    append_event(
+        event_log,
+        "session_resolved",
+        run_id=resolved_run_id,
+        created_session=target.created_session,
+        session=safe_session,
+        connect_url=safe_connect_url,
+    )
+
+    results: list[CaseStepRunResult] = []
+    created_session_id = target.session.get("session_id") if target.session else None
+    should_close_created = close_created_session or bool(
+        spec.get("close_created_session")
+    )
+
+    try:
+        try:
+            from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
+        except Exception as exc:
+            raise BrowserConfigError(
+                "Failed to import Playwright. Install lex-browser-runtime[browser] "
+                "or provide an environment that already includes playwright."
+            ) from exc
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.connect_over_cdp(target.connect_url)
+            try:
+                context = (
+                    browser.contexts[0] if browser.contexts else browser.new_context()
+                )
+                page = get_or_create_page(context)
+                for index, step in enumerate(spec["steps"]):
+                    started_at = time.time()
+                    append_event(
+                        event_log,
+                        "step_started",
+                        run_id=resolved_run_id,
+                        index=index,
+                        action=step.get("action"),
+                        step=_safe_case_payload(step),
+                    )
+                    try:
+                        result = _run_browser_cli_case_step(
+                            page, step, resolved_artifacts_dir, index
+                        )
+                        duration_ms = round((time.time() - started_at) * 1000, 2)
+                        safe_result = _safe_case_payload(result)
+                        step_result = CaseStepRunResult(
+                            index=index,
+                            action=step["action"],
+                            ok=True,
+                            duration_ms=duration_ms,
+                            result=safe_result,
+                        )
+                        results.append(step_result)
+                        append_event(
+                            event_log,
+                            "step_finished",
+                            run_id=resolved_run_id,
+                            index=index,
+                            action=step["action"],
+                            ok=True,
+                            duration_ms=duration_ms,
+                            result=safe_result,
+                        )
+                    except Exception as exc:
+                        duration_ms = round((time.time() - started_at) * 1000, 2)
+                        step_result = CaseStepRunResult(
+                            index=index,
+                            action=step.get("action"),
+                            ok=False,
+                            duration_ms=duration_ms,
+                            error=exc.__class__.__name__,
+                            message=_mask_sensitive_text(str(exc)),
+                        )
+                        results.append(step_result)
+                        append_event(
+                            event_log,
+                            "step_finished",
+                            run_id=resolved_run_id,
+                            index=index,
+                            action=step.get("action"),
+                            ok=False,
+                            duration_ms=duration_ms,
+                            error=exc.__class__.__name__,
+                            message=_mask_sensitive_text(str(exc)),
+                        )
+                        if stop_on_error:
+                            break
+            finally:
+                browser.close()
+                append_event(event_log, "browser_closed", run_id=resolved_run_id)
+    finally:
+        if target.created_session and created_session_id and should_close_created:
+            try:
+                admin.close_session(str(created_session_id))
+                if safe_session is not None:
+                    safe_session["closed_after_run"] = True
+                append_event(
+                    event_log,
+                    "session_closed",
+                    run_id=resolved_run_id,
+                    session_id=created_session_id,
+                    ok=True,
+                )
+            except Exception as exc:
+                if safe_session is not None:
+                    safe_session["close_after_run_error"] = _mask_sensitive_text(
+                        str(exc)
+                    )
+                append_event(
+                    event_log,
+                    "session_closed",
+                    run_id=resolved_run_id,
+                    session_id=created_session_id,
+                    ok=False,
+                    error=exc.__class__.__name__,
+                    message=_mask_sensitive_text(str(exc)),
+                )
+
+    summary = CaseRunSummary(
+        ok=all(item.ok for item in results),
+        file=str(file),
+        run_id=resolved_run_id,
+        artifacts_dir=str(resolved_artifacts_dir),
+        events_path=str(event_log),
+        connect_url=str(safe_connect_url),
+        session=safe_session,
+        steps=results,
+    )
+    (resolved_artifacts_dir / "summary.json").write_text(
+        json.dumps(summary.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    append_event(
+        event_log,
+        "case_finished",
+        run_id=resolved_run_id,
+        ok=summary.ok,
+        steps_total=len(results),
+        steps_ok=sum(1 for item in results if item.ok),
+        steps_failed=sum(1 for item in results if not item.ok),
+    )
+    return summary
+
+
 def cmd_case_validate(args: argparse.Namespace) -> None:
     command = "case.validate"
     try:
-        result = validate_case_file(args.file)
+        result = validate_browser_cli_case_file(args.file)
     except Exception as exc:
         _failure_from_exception(command, exc)
     _success(command, **result.model_dump(mode="json"))
@@ -15528,7 +16079,7 @@ def cmd_case_validate(args: argparse.Namespace) -> None:
 def cmd_case_run(args: argparse.Namespace) -> None:
     command = "case.run"
     try:
-        summary = run_case_file(
+        summary = run_browser_cli_case_file(
             file=args.file,
             run_id=args.run_id,
             artifacts_dir=args.artifacts_dir,
@@ -15537,7 +16088,13 @@ def cmd_case_run(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _json_dump(summary.model_dump(mode="json"), exit_code=0 if summary.ok else 1)
+    raw_payload = summary.model_dump(mode="json")
+    payload = _safe_case_payload(raw_payload)
+    assert isinstance(payload, dict)
+    payload["connect_url_masked"] = payload.get("connect_url") != raw_payload.get(
+        "connect_url"
+    )
+    _json_dump(payload, exit_code=0 if summary.ok else 1)
 
 
 def _add_session_target_args(parser: argparse.ArgumentParser) -> None:

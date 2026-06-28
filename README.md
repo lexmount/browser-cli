@@ -754,6 +754,12 @@ browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
 ```
 
+`case schema` supports repeatable semantic form and targeting steps such as
+`fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
+`get-value-role`, `form-snapshot`, `interactive-snapshot`, and
+`accessibility-snapshot`, so agents can encode common smoke tests without
+dropping into custom browser scripts.
+
 Common agent recipes:
 
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,

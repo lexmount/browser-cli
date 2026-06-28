@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lex_browser_runtime.browser.cases import validate_case_file
+from browser_cli.cli import validate_browser_cli_case_file as validate_case_file
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGED_EXAMPLES = REPO_ROOT / "browser_cli" / "agent_examples"
@@ -25,6 +25,16 @@ def test_packaged_examples_match_repo_examples() -> None:
     for case_file in sorted((REPO_ROOT / "examples" / "cases").glob("*.yaml")):
         packaged_case = PACKAGED_EXAMPLES / "cases" / case_file.name
         assert packaged_case.read_text() == case_file.read_text()
+
+
+def test_form_fill_case_uses_semantic_case_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "form-fill.yaml").read_text()
+
+    assert "action: fill-label" in text
+    assert "action: click-role" in text
+    assert "action: wait-text" in text
+    assert "action: get-value-role" in text
+    assert "action: type" not in text
 
 
 def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:

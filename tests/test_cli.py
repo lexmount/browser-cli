@@ -7,10 +7,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from lex_browser_runtime.browser.cases import validate_case_file
 
 from browser_cli import cli as cli_module
 from browser_cli.cli import main as cli_main
+from browser_cli.cli import validate_browser_cli_case_file as validate_case_file
 
 
 @pytest.fixture(autouse=True)
@@ -1427,18 +1427,36 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["command"] == "case.schema"
     assert payload["schema_version"] == 1
     assert payload["supported_actions"] == [
+        "accessibility-snapshot",
         "click",
+        "click-role",
+        "click-text",
         "eval",
+        "fill-label",
+        "fill-role",
+        "form-snapshot",
+        "get-value-role",
+        "interactive-snapshot",
         "open-url",
         "screenshot",
         "snapshot",
         "type",
         "wait-selector",
+        "wait-text",
     ]
     assert payload["required_fields"]["type"] == ["selector", "text"]
+    assert payload["required_fields"]["fill-label"] == ["label", "text"]
+    assert payload["required_fields"]["click-role"] == ["role"]
+    assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
     assert "wait_until" in payload["actions"]["open-url"]["optional_fields"]
+    assert payload["actions"]["fill-label"]["example_step"] == {
+        "action": "fill-label",
+        "label": "Email",
+        "text": "me@example.com",
+    }
+    assert "nodes" in payload["actions"]["accessibility-snapshot"]["result_fields"]
     assert payload["actions"]["type"]["example_step"] == {
         "action": "type",
         "selector": "input[name=q]",
@@ -1461,15 +1479,24 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 7,
+        "action_count": 16,
         "supported_actions": [
+            "accessibility-snapshot",
             "click",
+            "click-role",
+            "click-text",
             "eval",
+            "fill-label",
+            "fill-role",
+            "form-snapshot",
+            "get-value-role",
+            "interactive-snapshot",
             "open-url",
             "screenshot",
             "snapshot",
             "type",
             "wait-selector",
+            "wait-text",
         ],
     }
 
@@ -1571,9 +1598,14 @@ def test_case_scaffold_writes_valid_yaml_case_file(
     content = output.read_text()
     assert "hello from scaffold" in content
     assert "expression: |" in content
+    assert "action: fill-label" in content
+    assert "action: click-role" in content
+    assert "action: wait-text" in content
+    assert "action: get-value-role" in content
+    assert "action: type" not in content
     result = validate_case_file(output)
     assert result.valid is True
-    assert result.step_count == 6
+    assert result.step_count == 8
     assert payload["next_commands"] == [
         f"browser-cli case validate --file {str(output)}",
         f"browser-cli case run --file {str(output)} --close-created-session",
@@ -1597,6 +1629,66 @@ def test_case_scaffold_refuses_to_overwrite_existing_file(
     assert payload["error"] == "file_exists"
     assert payload["output"] == str(output)
     assert output.read_text(encoding="utf-8") == "keep me"
+
+
+def test_extended_case_step_uses_semantic_action_expression(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/form"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True, "filled": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {"action": "fill-label", "label": "Email", "text": "me@example.com"},
+        tmp_path,
+        0,
+    )
+
+    assert result["found"] is True
+    assert result["filled"] is True
+    assert result["url"] == "https://example.test/form"
+    assert "requestedLabel" in page.expressions[0]
+    assert "Email" in page.expressions[0]
+
+
+def test_case_run_masks_connect_url_stdout(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fake_run_browser_cli_case_file(**_: Any) -> Any:
+        return cli_module.CaseRunSummary(
+            ok=True,
+            file="case.yaml",
+            run_id="run-1",
+            artifacts_dir="/tmp/browser-cli-case",
+            events_path="/tmp/browser-cli-case/events.jsonl",
+            connect_url="wss://browser.example.test/devtools?api_key=secret",
+            session={
+                "session_id": "s1",
+                "connect_url": "wss://browser.example.test/devtools?api_key=secret",
+            },
+            steps=[],
+        )
+
+    monkeypatch.setattr(
+        cli_module, "run_browser_cli_case_file", fake_run_browser_cli_case_file
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["case", "run", "--file", "case.yaml"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["connect_url"] == "wss://browser.example.test/devtools?api_key=***"
+    assert payload["connect_url_masked"] is True
+    assert payload["session"]["connect_url"].endswith("api_key=***")
 
 
 def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
@@ -2525,7 +2617,12 @@ steps:
     assert "steps[0] missing required field 'expression'" in invalid["case_errors"]
     assert "steps[1] missing required field 'selector'" in invalid["case_errors"]
     assert "steps[1] missing required field 'text'" in invalid["case_errors"]
-    assert invalid["missing_patterns"] == []
+    assert invalid["missing_patterns"] == [
+        "action: fill-label",
+        "action: click-role",
+        "action: wait-text",
+        "action: get-value-role",
+    ]
     assert examples["fix"]["code"] == "repair_packaged_agent_examples"
     assert "browser-cli example list" in payload["repair_plan"]["commands"]
     assert (

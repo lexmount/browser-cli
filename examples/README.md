@@ -10,6 +10,10 @@ browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 ```
 
+Case files can use semantic actions such as `fill-label`, `click-role`,
+`wait-text`, `get-value-role`, `interactive-snapshot`, and
+`accessibility-snapshot`.
+
 Validate all case files:
 
 ```bash
