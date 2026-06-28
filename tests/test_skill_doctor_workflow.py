@@ -91,6 +91,7 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow persistent_login_state" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
+    assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli reference list" in normalized
     assert "browser-cli example list" in normalized

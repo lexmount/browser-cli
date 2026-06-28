@@ -20,10 +20,12 @@ browser-cli commands --workflow session_recovery
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli reference list
 browser-cli example list
@@ -85,6 +87,7 @@ browser-cli commands --workflows-only
 browser-cli commands --group action
 browser-cli commands --group action --names-only
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task state_waits
 ```
 
 Read `agent_workflows`, `required_options`, `required_one_of`, and
@@ -162,6 +165,17 @@ browser-cli action hover-role --session-id <session_id> --role button --name "Me
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-text --session-id <session_id> --text "Submit"
+```
+
+For deterministic page or target state, read the state-wait workflow before
+using sleeps or custom JavaScript:
+
+```bash
+browser-cli commands --workflow state_waits
+browser-cli action guide --task state_waits
+browser-cli action wait-load-state --session-id <session_id> --state networkidle
+browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
+browser-cli action wait-network --session-id <session_id> --url /api/search --url-match contains
 ```
 
 For page failures, runtime errors, or fetch/XHR issues, install diagnostics

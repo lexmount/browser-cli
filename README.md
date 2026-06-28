@@ -43,6 +43,7 @@ CLI for you:
 6. 读取 action guide 和 packaged agent reference 目录；后续选择浏览器 action 前，优先读取机器可读 guide 和 action_playbook，不要先写自定义 Playwright/JS：
    browser-cli action guide --names-only
    browser-cli action guide --task interactive_targeting
+   browser-cli action guide --task state_waits
    browser-cli reference list
    browser-cli reference get --id action_playbook --metadata-only
    browser-cli reference get --id action_playbook
@@ -93,9 +94,11 @@ CLI for you:
    browser-cli commands --workflow persistent_login_state
    browser-cli commands --workflow form_interaction
    browser-cli commands --workflow interactive_targeting
+   browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
    browser-cli action guide --task form_interaction
    browser-cli action guide --task interactive_targeting
+   browser-cli action guide --task state_waits
    browser-cli action guide --task page_diagnostics
 20. 如果验证失败，请按顺序排查：
    - uv 是否可用
@@ -238,6 +241,7 @@ browser-cli commands --names-only
 browser-cli commands --group action
 browser-cli action guide --names-only
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task state_waits
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_site_requirements
@@ -250,6 +254,7 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli reference list
 browser-cli reference get --id action_playbook --metadata-only
@@ -380,6 +385,7 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli doctor
 browser-cli doctor --json
@@ -421,6 +427,7 @@ Browser actions:
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli action open-url --session-id <session_id> --url https://example.com
 browser-cli action wait-selector --session-id <session_id> --selector "main"
@@ -678,7 +685,7 @@ playbook and case-file examples, readable with `browser-cli example list` and
 you only need the structured setup,
 Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page
 task, persistent login state, session recovery, case file task, form interaction,
-interactive targeting, and page diagnostics workflows, or
+interactive targeting, state waits, and page diagnostics workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,
@@ -811,6 +818,10 @@ Common agent recipes:
   use `--selector` and `--max-items` to keep output bounded. Fall back to
   `query` -> choose a zero-based candidate -> `click-index` when the list is not
   semantic.
+- Deterministic wait: run `browser-cli commands --workflow state_waits`, then
+  choose the narrowest `wait-*` command such as `wait-load-state`, `wait-url`,
+  `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or
+  `wait-cookie` before using sleeps or custom JavaScript.
 - Table or report data: `table-snapshot` -> read `headers`, `rows`, and `cells`;
   use `--selector`, `--max-rows`, and `--max-cells` to keep output bounded.
 - Text, alerts, or status messages: `text-snapshot` -> read `texts`,

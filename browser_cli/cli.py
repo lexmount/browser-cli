@@ -181,6 +181,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "persistent_login_state",
     "form_interaction",
     "interactive_targeting",
+    "state_waits",
     "page_diagnostics",
 )
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
@@ -264,6 +265,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "wait_target_ready",
         "activate_target",
         "verify_after_click",
+    ),
+    "state_waits": (
+        "inspect_action_guide",
+        "inspect_current_state",
+        "choose_wait_condition",
+        "wait_for_state",
+        "verify_after_wait",
     ),
     "page_diagnostics": (
         "inspect_action_guide",
@@ -572,6 +580,7 @@ def _agent_references() -> dict[str, Any]:
                 "Inspecting storage, cookies, masked action values, or structured result fields.",
             ],
             "related_workflows": [
+                "state_waits",
                 "one_off_page_task",
                 "form_interaction",
                 "interactive_targeting",
@@ -627,6 +636,7 @@ def _agent_examples() -> dict[str, Any]:
                 "case_file_task",
                 "form_interaction",
                 "interactive_targeting",
+                "state_waits",
                 "page_diagnostics",
             ],
             "load_when": [
@@ -833,6 +843,19 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
                 'browser-cli action click-text --session-id <session_id> --text "Submit"',
                 'browser-cli action click-index --session-id <session_id> --selector "button" --index 0',
+            ],
+            "state_waits": [
+                "browser-cli action guide --task state_waits",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "<name>" --state enabled',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded --value true --match exact',
+                'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+                "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains",
+                "browser-cli action wait-console --session-id <session_id> --source pageerror",
             ],
             "page_diagnostics": [
                 "browser-cli action guide --task page_diagnostics",
@@ -1682,6 +1705,107 @@ def _command_catalog() -> dict[str, Any]:
                         "fallback_commands": [
                             'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
                             "browser-cli action text-snapshot --session-id <session_id> --selector main",
+                        ],
+                    },
+                ],
+            },
+            "state_waits": {
+                "purpose": "Wait for deterministic page, target, URL, text, network, console, storage, or cookie state without sleeps or custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task state_waits",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_current_state",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "choose_wait_condition",
+                        "command": "<choose the narrowest wait-* command from the guide using task evidence>",
+                        "agent_action": True,
+                        "preferred_commands": [
+                            "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                            'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                            'browser-cli action wait-state-role --session-id <session_id> --role button --name "<name>" --state enabled',
+                            'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded --value true --match exact',
+                            'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                            'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+                            "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains",
+                            "browser-cli action wait-console --session-id <session_id> --source pageerror",
+                            'browser-cli action wait-storage --session-id <session_id> --area local --key "<key>" --value "<value>"',
+                            'browser-cli action wait-cookie --session-id <session_id> --name "<cookie>"',
+                        ],
+                        "selection_order": [
+                            "wait-load-state",
+                            "wait-url",
+                            "wait-state-role",
+                            "wait-attribute-role",
+                            "wait-selector",
+                            "wait-role",
+                            "wait-text",
+                            "wait-network",
+                            "wait-console",
+                            "wait-storage",
+                            "wait-cookie",
+                        ],
+                    },
+                    {
+                        "id": "wait_for_state",
+                        "command": "<run the selected wait-* command>",
+                        "agent_action": True,
+                        "read": [
+                            "found",
+                            "url",
+                            "title",
+                            "result.found",
+                            "result.exists",
+                            "result.role_found",
+                            "result.matched",
+                            "result.state_values",
+                            "result.attribute_found",
+                            "result.value",
+                            "result.requested_value",
+                            "result.count",
+                            "result.entry",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action wait-network-idle --session-id <session_id>",
+                            "browser-cli action wait-count --session-id <session_id> --selector <selector> --count <n>",
+                            "browser-cli action wait-state --session-id <session_id> --selector <selector> --state enabled",
+                        ],
+                        "success_condition": "the selected wait command reports found=true, match=true, or the expected result field for the waited state",
+                    },
+                    {
+                        "id": "verify_after_wait",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action exists-role --session-id <session_id> --role button --name "<name>"',
+                            'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<text>"',
                         ],
                     },
                 ],
@@ -12440,6 +12564,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
         "state_waits": {
             "purpose": "Wait for page, selector, role, URL, text, storage, cookie, console, or network state.",
             "related_workflows": [
+                "state_waits",
                 "one_off_page_task",
                 "form_interaction",
                 "interactive_targeting",
@@ -12476,6 +12601,10 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
                 'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
                 'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+                "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains",
+                "browser-cli action wait-console --session-id <session_id> --source pageerror",
+                'browser-cli action wait-storage --session-id <session_id> --area local --key "<key>" --value "<value>"',
+                'browser-cli action wait-cookie --session-id <session_id> --name "<cookie>"',
             ],
             "fallback_commands": [
                 "browser-cli action wait-network-idle --session-id <session_id>",
@@ -12573,6 +12702,7 @@ def cmd_action_guide(args: argparse.Namespace) -> None:
         next_commands=[
             "browser-cli action guide --task form_interaction",
             "browser-cli action guide --task interactive_targeting",
+            "browser-cli action guide --task state_waits",
             "browser-cli action guide --task page_diagnostics",
             "browser-cli commands --group action",
             "browser-cli reference get --id action_playbook",
@@ -16816,7 +16946,7 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_guide.add_argument(
         "--task",
-        help="Action task guide to inspect, such as form_interaction or interactive_targeting.",
+        help="Action task guide to inspect, such as form_interaction, interactive_targeting, state_waits, or page_diagnostics.",
     )
     action_guide.add_argument(
         "--names-only",

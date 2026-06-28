@@ -53,6 +53,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "scaffold/validate/run case files" in prompt
     assert "form_interaction" in prompt
     assert "interactive_targeting" in prompt
+    assert "state_waits" in prompt
     assert "page_diagnostics" in prompt
     assert "workflow read arrays" in prompt
     assert "required_runtime_auth" in prompt

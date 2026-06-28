@@ -105,11 +105,13 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow case_file_task" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
+    assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task <task>" in normalized
     assert "browser-cli action guide --names-only" in normalized
     assert "browser-cli action guide --task form_interaction" in normalized
     assert "browser-cli action guide --task interactive_targeting" in normalized
+    assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
     assert "browser-cli commands --names-only" in normalized
     assert "browser-cli commands --group action" in normalized
@@ -289,11 +291,14 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
         "Follow the guide's `inspect_commands`, `preferred_commands`, "
         "`verify_commands`, and `custom_js_boundary`" in normalized
     )
-    assert "then follow the workflow `read` fields for `form-snapshot`" in normalized
+    assert "then follow workflow `read` fields for `form-snapshot`" in normalized
     assert "For visible buttons, links, menus, and repeated controls" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "Read the guide's `selection_order`" in normalized
     assert "Choose `click-role`, `click-text`, or `click-index`" in normalized
+    assert "For deterministic state transitions" in normalized
+    assert "browser-cli commands --workflow state_waits" in normalized
+    assert "browser-cli action guide --task state_waits" in normalized
     assert "For page failures, fetch/XHR issues, or runtime errors" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "workflow's console, network, and visible-state steps" in normalized
@@ -550,10 +555,14 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Fill and submit a form" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
+    assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task form_interaction" in normalized
     assert "browser-cli action guide --task interactive_targeting" in normalized
+    assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
+    assert "Wait for deterministic state" in normalized
+    assert "`wait-storage`" in normalized
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
     assert "use `outline-snapshot` for page structure" in normalized
     assert "`fill-label` for labeled fields" in normalized

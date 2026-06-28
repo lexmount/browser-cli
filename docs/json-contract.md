@@ -238,6 +238,10 @@ Default behavior:
   inspect, preferred, fallback, and verification commands plus the custom
   JavaScript boundary for each task. Page diagnostics can include
   `set-viewport` to stabilize responsive screenshots and layout checks.
+  State waits should expose first-class `wait-load-state`, `wait-url`,
+  `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
+  `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and
+  custom JavaScript for common asynchronous state transitions.
 - `auth export-env` reports top-level `usable` and `unusable_exports` so agents
   can distinguish directly runnable export commands from placeholder or masked
   commands.

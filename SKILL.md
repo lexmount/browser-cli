@@ -36,9 +36,8 @@ export LEXMOUNT_PROJECT_ID="<project-id>"
 ```
 
 Do not ask the user to paste secrets into chat. Direct the user to
-`https://browser.lexmount.cn` for China region credentials. The China region
-defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only when a
-non-default API endpoint is needed.
+`https://browser.lexmount.cn` for China region credentials. China defaults to
+`https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
 
 Use local auth helpers instead of handling secrets in chat:
 
@@ -236,13 +235,12 @@ workflow before writing browser automation code:
 browser-cli commands --workflow case_file_task
 ```
 
-Run `browser-cli case schema` before hand-writing a case file. Generate a
-starter with `browser-cli case scaffold --template page-inspection` for page checks or
-`browser-cli case scaffold --template form-fill` for semantic form smoke tests. Validate first, then run with
-`--close-created-session`. Read `supported_actions`, `required_fields`,
-semantic case actions such as `fill-label`, `click-role`, `wait-text`, and
-`accessibility-snapshot`, plus `valid`, `errors`, `step_count`,
-`next_commands`, `events_path`, `artifacts_dir`, `session`, and `steps`.
+Run `browser-cli case schema` before hand-writing a case file. Generate starters with
+`browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template form-fill`,
+validate, then run with `--close-created-session`. Read `supported_actions`,
+`required_fields`, semantic actions such as `fill-label`, `click-role`, `wait-text`,
+`accessibility-snapshot`, plus `valid`, `errors`, `step_count`, `next_commands`,
+`events_path`, `artifacts_dir`, `session`, and `steps`.
 
 For form tasks, prefer the more specific form workflow:
 
@@ -251,14 +249,12 @@ browser-cli commands --workflow form_interaction
 browser-cli action guide --task form_interaction
 ```
 
-Follow the guide's `inspect_commands`, `preferred_commands`,
-`verify_commands`, and `custom_js_boundary`, then follow the workflow `read`
-fields for `form-snapshot`, `fill-label`, `fill-role`, `get-value-role`,
-`wait-value-role`, `focus-role`, `blur-role`, `clear-role`, `select-label`,
-`select-role`, `check-label`, `check-role`, `uncheck-role`, `wait-role`, `wait-state-role`, `click-role`,
-`exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`,
-`scroll-into-view-role`, and verification steps before falling back to custom
-JavaScript.
+Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`,
+and `custom_js_boundary`, then follow workflow `read` fields for
+`form-snapshot`, semantic fill/select/check commands, `wait-role`,
+`wait-state-role`, `click-role`, `exists-role`, `get-text-role`,
+`bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and
+verification steps before falling back to custom JavaScript.
 
 For visible buttons, links, menus, and repeated controls, prefer the interactive
 targeting workflow before writing selectors or JavaScript:
@@ -273,6 +269,8 @@ optional `accessibility-snapshot` fields. Use `exists-role`, `get-text-role`,
 or `bounding-box-role` to confirm semantic targets when needed. Choose
 `click-role`, `click-text`, or `click-index` from the preferred commands and
 verify with `page-info`, `wait-url`, or `wait-text`.
+
+For deterministic state transitions, prefer `browser-cli commands --workflow state_waits` and `browser-cli action guide --task state_waits`; choose `wait-load-state`, `wait-url`, `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or `wait-cookie` before sleeps or custom JS.
 
 For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic
 workflow before writing custom probes:
@@ -377,10 +375,12 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml

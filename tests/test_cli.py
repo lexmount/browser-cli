@@ -347,6 +347,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["interactive_targeting"]
     )
     assert (
+        "browser-cli action guide --task state_waits"
+        in payload["agent_entrypoints"]["state_waits"]
+    )
+    assert (
+        "browser-cli action wait-load-state --session-id <session_id> --state networkidle"
+        in payload["agent_entrypoints"]["state_waits"]
+    )
+    assert (
+        "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains"
+        in payload["agent_entrypoints"]["state_waits"]
+    )
+    assert (
         "browser-cli action console-snapshot --session-id <session_id> --install-only"
         in payload["agent_entrypoints"]["page_diagnostics"]
     )
@@ -683,6 +695,45 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in targeting_steps[5]["alternative_commands"][2]
     )
     assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
+    state_steps = workflows["state_waits"]["steps"]
+    assert [step["id"] for step in state_steps] == [
+        "inspect_action_guide",
+        "inspect_current_state",
+        "choose_wait_condition",
+        "wait_for_state",
+        "verify_after_wait",
+    ]
+    assert state_steps[0]["command"] == "browser-cli action guide --task state_waits"
+    assert "guide.selection_order" in state_steps[0]["read"]
+    assert state_steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "ready_state" in state_steps[1]["read"]
+    assert state_steps[2]["agent_action"] is True
+    assert state_steps[2]["selection_order"] == [
+        "wait-load-state",
+        "wait-url",
+        "wait-state-role",
+        "wait-attribute-role",
+        "wait-selector",
+        "wait-role",
+        "wait-text",
+        "wait-network",
+        "wait-console",
+        "wait-storage",
+        "wait-cookie",
+    ]
+    assert (
+        "browser-cli action wait-network"
+        in state_steps[2]["preferred_commands"][7]
+    )
+    assert state_steps[3]["agent_action"] is True
+    assert "result.matched" in state_steps[3]["read"]
+    assert (
+        "browser-cli action wait-network-idle"
+        in state_steps[3]["fallback_commands"][0]
+    )
+    assert "visibility_state" in state_steps[4]["read"]
     diagnostics_steps = workflows["page_diagnostics"]["steps"]
     assert [step["id"] for step in diagnostics_steps] == [
         "inspect_action_guide",
@@ -1105,6 +1156,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
 
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"][0] == "state_waits"
     assert payload["guide"]["selection_order"][:3] == [
         "wait-load-state",
         "wait-url",
@@ -1117,6 +1169,14 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action wait-attribute-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-network" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-storage" in command
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
@@ -1162,7 +1222,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 12
+    assert payload["workflow_count"] == 13
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1239,6 +1299,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.nodes"
         in payload["agent_workflows"]["interactive_targeting"]["steps"][1]["read"]
+    )
+    assert (
+        "result.matched"
+        in payload["agent_workflows"]["state_waits"]["steps"][3]["read"]
     )
     assert (
         "result.entries"
@@ -2078,6 +2142,50 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
 
+def test_commands_catalog_returns_state_waits_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "state_waits"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "state_waits"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_current_state",
+        "choose_wait_condition",
+        "wait_for_state",
+        "verify_after_wait",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task state_waits"
+    assert "guide.preferred_commands" in steps[0]["read"]
+    assert steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "ready_state" in steps[1]["read"]
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"][:4] == [
+        "wait-load-state",
+        "wait-url",
+        "wait-state-role",
+        "wait-attribute-role",
+    ]
+    assert "wait-storage" in steps[2]["selection_order"]
+    assert (
+        "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains"
+        in steps[2]["preferred_commands"]
+    )
+    assert steps[3]["agent_action"] is True
+    assert "result.attribute_found" in steps[3]["read"]
+    assert "browser-cli action wait-count" in steps[3]["fallback_commands"][1]
+    assert steps[-1]["id"] == "verify_after_wait"
+    assert "visibility_state" in steps[-1]["read"]
+
+
 def test_commands_catalog_returns_page_diagnostics_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2146,6 +2254,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "scoped_token_lifecycle",
         "session_recovery",
         "setup_and_verify",
+        "state_waits",
     ]
     assert payload["fix"] == {
         "code": "inspect_available_agent_workflows",
@@ -2302,7 +2411,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 12
+    assert checks["command_catalog"]["workflow_count"] == 13
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -2315,6 +2424,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "persistent_login_state",
         "form_interaction",
         "interactive_targeting",
+        "state_waits",
         "page_diagnostics",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
@@ -2410,6 +2520,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "wait_target_ready",
         "activate_target",
         "verify_after_click",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["state_waits"] == [
+        "inspect_action_guide",
+        "inspect_current_state",
+        "choose_wait_condition",
+        "wait_for_state",
+        "verify_after_wait",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["page_diagnostics"] == [
         "inspect_action_guide",
@@ -2607,6 +2724,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "persistent_login_state",
         "form_interaction",
         "interactive_targeting",
+        "state_waits",
         "page_diagnostics",
     ]
     assert catalog["missing_required_workflow_steps"] == {}
@@ -2856,6 +2974,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "verify_after_click"},
                     ],
                 },
+                "state_waits": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_current_state"},
+                        {"id": "choose_wait_condition"},
+                        {"id": "wait_for_state"},
+                    ],
+                },
                 "page_diagnostics": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -2890,6 +3016,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         ],
         "one_off_page_task": ["close_session"],
         "setup_and_verify": ["smoke_session"],
+        "state_waits": ["verify_after_wait"],
     }
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands" in payload["repair_plan"]["commands"]

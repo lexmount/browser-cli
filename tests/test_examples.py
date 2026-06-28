@@ -61,12 +61,14 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow persistent_login_state" in text
     assert "browser-cli commands --workflow form_interaction" in text
     assert "browser-cli commands --workflow interactive_targeting" in text
+    assert "browser-cli commands --workflow state_waits" in text
     assert "browser-cli commands --workflow page_diagnostics" in text
     assert "runtime_auth.usable" in text
     assert "runtime_auth.bearer_runtime.required_support" in text
     assert "browser-cli action guide --names-only" in text
     assert "browser-cli action guide --task form_interaction" in text
     assert "browser-cli action guide --task interactive_targeting" in text
+    assert "browser-cli action guide --task state_waits" in text
     assert "browser-cli action guide --task page_diagnostics" in text
     assert "browser-cli reference list" in text
     assert "browser-cli example list" in text
