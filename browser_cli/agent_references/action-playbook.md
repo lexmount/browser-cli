@@ -23,6 +23,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -33,6 +34,7 @@ browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task navigation_flow
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -330,10 +332,11 @@ then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
    `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
    `wait-storage`, or `wait-cookie`; use sleeps or custom JS only after those
    predicates cannot express the state.
-5. Navigate page history or async refresh: use `reload`, `go-back`, or
-   `go-forward`, then confirm with `page-info`, `wait-url`, `wait-title`,
-   `wait-load-state`, `wait-network-idle`, `performance-snapshot`, `wait-text`,
-   or `snapshot`.
+5. Navigate page history or async refresh: run `browser-cli commands --workflow
+   navigation_flow` and `browser-cli action guide --task navigation_flow`; use
+   `open-url`, `reload`, `go-back`, or `go-forward`, then confirm with
+   `page-info`, `wait-url`, `wait-title`, `wait-load-state`,
+   `wait-network-idle`, `performance-snapshot`, `wait-text`, or `snapshot`.
 6. Diagnose fetch/XHR calls: run `browser-cli commands --workflow
    page_diagnostics` and `browser-cli action guide --task page_diagnostics`,
    then run `network-snapshot --install-only`, trigger the suspected action,

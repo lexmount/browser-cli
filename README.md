@@ -47,6 +47,7 @@ CLI for you:
    browser-cli action guide --task browser_state_management
    browser-cli action guide --task file_upload
    browser-cli action guide --task dialog_frame_handling
+   browser-cli action guide --task navigation_flow
    browser-cli action guide --task menu_keyboard_flow
    browser-cli action guide --task state_waits
    browser-cli reference list
@@ -103,6 +104,7 @@ CLI for you:
    browser-cli commands --workflow browser_state_management
    browser-cli commands --workflow file_upload
    browser-cli commands --workflow dialog_frame_handling
+   browser-cli commands --workflow navigation_flow
    browser-cli commands --workflow menu_keyboard_flow
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
@@ -112,6 +114,7 @@ CLI for you:
    browser-cli action guide --task browser_state_management
    browser-cli action guide --task file_upload
    browser-cli action guide --task dialog_frame_handling
+   browser-cli action guide --task navigation_flow
    browser-cli action guide --task menu_keyboard_flow
    browser-cli action guide --task state_waits
    browser-cli action guide --task page_diagnostics
@@ -260,6 +263,7 @@ browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
+browser-cli action guide --task navigation_flow
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task state_waits
 browser-cli commands --workflows-only
@@ -274,11 +278,13 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
+browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
@@ -570,7 +576,7 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 
 `action guide` returns machine-readable task routes for `form_interaction`,
 `interactive_targeting`, `content_extraction`, `browser_state_management`,
-`file_upload`, `dialog_frame_handling`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
+`file_upload`, `dialog_frame_handling`, `navigation_flow`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
@@ -873,6 +879,10 @@ Common agent recipes:
   and `browser-cli action guide --task menu_keyboard_flow`, then use
   `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
   `list-snapshot`, or `press-key` before custom JavaScript.
+- Navigation: run `browser-cli commands --workflow navigation_flow` and
+  `browser-cli action guide --task navigation_flow`, then use `open-url`,
+  `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`, and
+  `wait-load-state` before custom JavaScript.
 - Deterministic wait: run `browser-cli commands --workflow state_waits`, then
   choose the narrowest `wait-*` command such as `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or
@@ -916,8 +926,9 @@ Common agent recipes:
 - Stuck selector: `inspect` to check `state.disabled`, `state.readonly`,
   `visible`, `in_viewport`, `attributes`, masked `value`, and optional sanitized
   HTML before trying another action.
-- Navigation or async refresh: use `reload`, `go-back`, or `go-forward`, then
-  confirm with `page-info`, `wait-url`, `wait-title`, `wait-load-state`,
+- Navigation or async refresh: run `browser-cli commands --workflow navigation_flow`;
+  use `open-url`, `reload`, `go-back`, or `go-forward`, then confirm with
+  `page-info`, `wait-url`, `wait-title`, `wait-load-state`,
   `wait-network-idle`, `performance-snapshot`, `wait-text`, or `snapshot`.
 - Runtime errors: install `console-snapshot --install-only`, trigger the
   suspected action, read `console-snapshot` or wait with `wait-console`, then use

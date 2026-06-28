@@ -235,7 +235,7 @@ Default behavior:
   command.
 - `action guide` reports compact action routes for `form_interaction`,
   `interactive_targeting`, `content_extraction`, `browser_state_management`,
-  `file_upload`, `dialog_frame_handling`, `menu_keyboard_flow`,
+  `file_upload`, `dialog_frame_handling`, `navigation_flow`, `menu_keyboard_flow`,
   `page_diagnostics`, and `state_waits`, including
   inspect, preferred, fallback, and verification commands plus the custom
   JavaScript boundary for each task. Page diagnostics can include
@@ -259,6 +259,9 @@ Default behavior:
   `press-role`, `wait-attribute-role`, `list-snapshot`, and `press-key` routes
   so agents can handle menus, popovers, listboxes, and global shortcuts before
   custom JavaScript.
+  Navigation flow should expose first-class `open-url`, `reload`, `go-back`,
+  `go-forward`, `wait-url`, `wait-title`, and `wait-load-state` routes so
+  agents can navigate and verify page transitions before custom JavaScript.
   State waits should expose first-class `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
   `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and

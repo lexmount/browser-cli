@@ -22,6 +22,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -32,6 +33,7 @@ browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task navigation_flow
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -251,6 +253,18 @@ browser-cli action guide --task state_waits
 browser-cli action wait-load-state --session-id <session_id> --state networkidle
 browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
 browser-cli action wait-network --session-id <session_id> --url /api/search --url-match contains
+```
+
+For page navigation, refresh, or browser history, read navigation workflow
+contracts before writing custom JavaScript:
+
+```bash
+browser-cli commands --workflow navigation_flow
+browser-cli action guide --task navigation_flow
+browser-cli action page-info --session-id <session_id>
+browser-cli action reload --session-id <session_id>
+browser-cli action wait-url --session-id <session_id> --url /dashboard
+browser-cli action wait-title --session-id <session_id> --title Dashboard
 ```
 
 For page failures, runtime errors, or fetch/XHR issues, install diagnostics

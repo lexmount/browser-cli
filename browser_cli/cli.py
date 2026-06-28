@@ -225,6 +225,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "scoped_token_lifecycle",
     "session_recovery",
     "one_off_page_task",
+    "navigation_flow",
     "case_file_task",
     "persistent_login_state",
     "browser_state_management",
@@ -283,6 +284,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "open_url",
         "find_targets",
         "close_session",
+    ),
+    "navigation_flow": (
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_navigation_action",
+        "run_navigation_action",
+        "verify_navigation_result",
     ),
     "case_file_task": (
         "inspect_case_commands",
@@ -676,6 +684,7 @@ def _agent_references() -> dict[str, Any]:
                 "content_extraction",
                 "browser_state_management",
                 "one_off_page_task",
+                "navigation_flow",
                 "form_interaction",
                 "file_upload",
                 "dialog_frame_handling",
@@ -732,6 +741,7 @@ def _agent_examples() -> dict[str, Any]:
                 "session_recovery",
                 "case_file_task",
                 "browser_state_management",
+                "navigation_flow",
                 "form_interaction",
                 "file_upload",
                 "dialog_frame_handling",
@@ -903,6 +913,17 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action interactive-snapshot --session-id <session_id>",
                 "browser-cli session close --session-id <session_id>",
+            ],
+            "navigation_flow": [
+                "browser-cli action guide --task navigation_flow",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                'browser-cli action wait-title --session-id <session_id> --title "<title text>"',
+                "browser-cli action reload --session-id <session_id>",
+                "browser-cli action go-back --session-id <session_id>",
+                "browser-cli action go-forward --session-id <session_id>",
             ],
             "case_file_task": [
                 "browser-cli commands --group case",
@@ -1476,6 +1497,85 @@ def _command_catalog() -> dict[str, Any]:
                         "id": "close_session",
                         "command": "browser-cli session close --session-id <session_id>",
                         "cleanup": True,
+                    },
+                ],
+            },
+            "navigation_flow": {
+                "purpose": "Open URLs, reload, go back or forward, and verify page navigation without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task navigation_flow",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_current_page",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "choose_navigation_action",
+                        "command": "<choose open-url, reload, go-back, or go-forward using task intent and current url/title>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "open-url",
+                            "reload",
+                            "go-back",
+                            "go-forward",
+                            "wait-load-state",
+                            "wait-url",
+                            "wait-title",
+                        ],
+                        "preferred_commands": [
+                            "browser-cli action open-url --session-id <session_id> --url <url>",
+                            "browser-cli action reload --session-id <session_id>",
+                            "browser-cli action go-back --session-id <session_id>",
+                            "browser-cli action go-forward --session-id <session_id>",
+                        ],
+                    },
+                    {
+                        "id": "run_navigation_action",
+                        "command": "<run the selected navigation command>",
+                        "agent_action": True,
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "result.url",
+                            "result.title",
+                            "result.navigation_requested",
+                            "result.waited_ms",
+                        ],
+                    },
+                    {
+                        "id": "verify_navigation_result",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected url text>"',
+                            'browser-cli action wait-title --session-id <session_id> --title "<expected title text>"',
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        ],
                     },
                 ],
             },
@@ -13332,6 +13432,71 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "commands cannot identify or activate the target."
             ),
         },
+        "navigation_flow": {
+            "purpose": "Open URLs, reload, move through browser history, and verify navigation before custom JavaScript.",
+            "related_workflows": [
+                "navigation_flow",
+                "state_waits",
+                "one_off_page_task",
+            ],
+            "when_to_use": [
+                "The task asks to open a URL, refresh a page, or use browser back/forward.",
+                "The next browser action depends on the final URL, title, or load state after navigation.",
+            ],
+            "selection_order": [
+                "page-info",
+                "open-url",
+                "reload",
+                "go-back",
+                "go-forward",
+                "wait-load-state",
+                "wait-url",
+                "wait-title",
+                "interactive-snapshot",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+            ],
+            "preferred_commands": [
+                "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action reload --session-id <session_id>",
+                "browser-cli action go-back --session-id <session_id>",
+                "browser-cli action go-forward --session-id <session_id>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<expected url text>"',
+                'browser-cli action wait-title --session-id <session_id> --title "<expected title text>"',
+            ],
+            "fallback_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                "browser-cli action wait-network-idle --session-id <session_id>",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<expected url text>"',
+                'browser-cli action wait-title --session-id <session_id> --title "<expected title text>"',
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "visibility_state",
+                "result.url",
+                "result.title",
+                "result.navigation_requested",
+                "result.waited_ms",
+                "result.nodes",
+                "result.node_count",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after open-url/reload/back/forward plus "
+                "wait-url, wait-title, wait-load-state, page-info, and snapshots "
+                "cannot express the navigation."
+            ),
+        },
         "menu_keyboard_flow": {
             "purpose": "Open menus, inspect menu/listbox items, and send keyboard shortcuts before custom JavaScript.",
             "related_workflows": [
@@ -13774,6 +13939,7 @@ def cmd_action_guide(args: argparse.Namespace) -> None:
             "browser-cli action guide --task file_upload",
             "browser-cli action guide --task dialog_frame_handling",
             "browser-cli action guide --task interactive_targeting",
+            "browser-cli action guide --task navigation_flow",
             "browser-cli action guide --task menu_keyboard_flow",
             "browser-cli action guide --task content_extraction",
             "browser-cli action guide --task browser_state_management",
@@ -18021,7 +18187,7 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_guide.add_argument(
         "--task",
-        help="Action task guide to inspect, such as form_interaction, file_upload, dialog_frame_handling, interactive_targeting, menu_keyboard_flow, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
+        help="Action task guide to inspect, such as form_interaction, file_upload, dialog_frame_handling, interactive_targeting, navigation_flow, menu_keyboard_flow, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
     )
     action_guide.add_argument(
         "--names-only",

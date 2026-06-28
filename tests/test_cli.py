@@ -262,6 +262,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
+    assert "navigation_flow" in references["action_playbook"]["related_workflows"]
     assert "page_diagnostics" in references["action_playbook"]["related_workflows"]
     assert (
         "Structured Results And Masking"
@@ -381,6 +382,22 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
         in payload["agent_entrypoints"]["interactive_targeting"]
+    )
+    assert (
+        "browser-cli action guide --task navigation_flow"
+        in payload["agent_entrypoints"]["navigation_flow"]
+    )
+    assert (
+        "browser-cli action reload --session-id <session_id>"
+        in payload["agent_entrypoints"]["navigation_flow"]
+    )
+    assert (
+        "browser-cli action go-back --session-id <session_id>"
+        in payload["agent_entrypoints"]["navigation_flow"]
+    )
+    assert (
+        'browser-cli action wait-title --session-id <session_id> --title "<title text>"'
+        in payload["agent_entrypoints"]["navigation_flow"]
     )
     assert (
         "browser-cli action guide --task menu_keyboard_flow"
@@ -584,6 +601,43 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "command": "browser-cli session close --session-id <session_id>",
         "cleanup": True,
     }
+    navigation_steps = workflows["navigation_flow"]["steps"]
+    assert [step["id"] for step in navigation_steps] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_navigation_action",
+        "run_navigation_action",
+        "verify_navigation_result",
+    ]
+    assert navigation_steps[0]["command"] == (
+        "browser-cli action guide --task navigation_flow"
+    )
+    assert "guide.selection_order" in navigation_steps[0]["read"]
+    assert navigation_steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "ready_state" in navigation_steps[1]["read"]
+    assert "scroll" in navigation_steps[1]["read"]
+    assert navigation_steps[2]["agent_action"] is True
+    assert navigation_steps[2]["selection_order"][:4] == [
+        "open-url",
+        "reload",
+        "go-back",
+        "go-forward",
+    ]
+    assert "browser-cli action open-url" in navigation_steps[2][
+        "preferred_commands"
+    ][0]
+    assert "browser-cli action reload" in navigation_steps[2]["preferred_commands"][1]
+    assert navigation_steps[3]["agent_action"] is True
+    assert "result.navigation_requested" in navigation_steps[3]["read"]
+    assert "result.waited_ms" in navigation_steps[3]["read"]
+    assert "browser-cli action wait-load-state" in navigation_steps[4][
+        "fallback_commands"
+    ][0]
+    assert "browser-cli action wait-title" in navigation_steps[4][
+        "fallback_commands"
+    ][2]
     case_steps = workflows["case_file_task"]["steps"]
     assert [step["id"] for step in case_steps] == [
         "inspect_case_commands",
@@ -1247,7 +1301,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 9,
+        "task_count": 10,
         "tasks": [
             "browser_state_management",
             "content_extraction",
@@ -1256,6 +1310,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
             "form_interaction",
             "interactive_targeting",
             "menu_keyboard_flow",
+            "navigation_flow",
             "page_diagnostics",
             "state_waits",
         ],
@@ -1285,6 +1340,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "form_interaction",
         "interactive_targeting",
         "menu_keyboard_flow",
+        "navigation_flow",
         "page_diagnostics",
         "state_waits",
     ]
@@ -1375,6 +1431,44 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["next_commands"][0] == (
         "browser-cli commands --workflow menu_keyboard_flow"
     )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "navigation_flow"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "navigation_flow",
+        "state_waits",
+        "one_off_page_task",
+    ]
+    assert payload["guide"]["selection_order"][:5] == [
+        "page-info",
+        "open-url",
+        "reload",
+        "go-back",
+        "go-forward",
+    ]
+    assert any(
+        "browser-cli action open-url" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action reload" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-load-state" in command
+        for command in payload["guide"]["verify_commands"]
+    )
+    assert "result.navigation_requested" in payload["guide"]["read_fields"]
+    assert "result.waited_ms" in payload["guide"]["read_fields"]
+    assert "open-url/reload/back/forward" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"] == [
+        "browser-cli commands --workflow navigation_flow",
+        "browser-cli commands --workflow state_waits",
+        "browser-cli commands --workflow one_off_page_task",
+    ]
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "form_interaction"])
@@ -1666,6 +1760,7 @@ def test_action_guide_fails_unknown_task_as_json(
         "form_interaction",
         "interactive_targeting",
         "menu_keyboard_flow",
+        "navigation_flow",
         "page_diagnostics",
         "state_waits",
     ]
@@ -1685,7 +1780,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 18
+    assert payload["workflow_count"] == 19
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1726,6 +1821,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.nodes"
         in payload["agent_workflows"]["one_off_page_task"]["steps"][3]["read"]
+    )
+    assert (
+        "result.navigation_requested"
+        in payload["agent_workflows"]["navigation_flow"]["steps"][3]["read"]
     )
     assert (
         "events_path"
@@ -1826,6 +1925,51 @@ def test_commands_catalog_returns_single_workflow(
         "browser-cli session create"
         in payload["agent_entrypoints"]["one_off_page_task"]
     )
+
+
+def test_commands_catalog_returns_navigation_flow_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "navigation_flow"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "navigation_flow"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_navigation_action",
+        "run_navigation_action",
+        "verify_navigation_result",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task navigation_flow"
+    assert "guide.custom_js_boundary" in steps[0]["read"]
+    assert steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "visibility_state" in steps[1]["read"]
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"] == [
+        "open-url",
+        "reload",
+        "go-back",
+        "go-forward",
+        "wait-load-state",
+        "wait-url",
+        "wait-title",
+    ]
+    assert "browser-cli action reload" in steps[2]["preferred_commands"][1]
+    assert steps[3]["agent_action"] is True
+    assert "result.navigation_requested" in steps[3]["read"]
+    assert steps[-1]["id"] == "verify_navigation_result"
+    assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][1]
+    assert "browser-cli action guide --task navigation_flow" in payload[
+        "agent_entrypoints"
+    ]["navigation_flow"][0]
 
 
 def test_reference_list_returns_packaged_agent_references(
@@ -2939,6 +3083,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "form_interaction",
         "interactive_targeting",
         "menu_keyboard_flow",
+        "navigation_flow",
         "one_off_page_task",
         "page_diagnostics",
         "persistent_login_state",
@@ -3102,7 +3247,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 18
+    assert checks["command_catalog"]["workflow_count"] == 19
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -3111,6 +3256,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "scoped_token_lifecycle",
         "session_recovery",
         "one_off_page_task",
+        "navigation_flow",
         "case_file_task",
         "persistent_login_state",
         "browser_state_management",
@@ -3177,6 +3323,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "open_url",
         "find_targets",
         "close_session",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "navigation_flow"
+    ] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_navigation_action",
+        "run_navigation_action",
+        "verify_navigation_result",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["case_file_task"] == [
         "inspect_case_commands",
@@ -3557,6 +3712,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "scoped_token_lifecycle",
         "session_recovery",
         "one_off_page_task",
+        "navigation_flow",
         "case_file_task",
         "persistent_login_state",
         "browser_state_management",
@@ -3776,6 +3932,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "find_targets"},
                     ],
                 },
+                "navigation_flow": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_current_page"},
+                        {"id": "choose_navigation_action"},
+                        {"id": "run_navigation_action"},
+                    ],
+                },
                 "case_file_task": {
                     "steps": [
                         {"id": "inspect_case_commands"},
@@ -3901,6 +4065,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
             "scaffold_form_case_file",
         ],
         "one_off_page_task": ["close_session"],
+        "navigation_flow": ["verify_navigation_result"],
         "setup_and_verify": ["smoke_session"],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],

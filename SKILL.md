@@ -265,6 +265,7 @@ For dialogs, cookie banners, confirmation prompts, and iframes, prefer `browser-
 
 For menus, popovers, listboxes, and keyboard shortcuts, prefer `browser-cli commands --workflow menu_keyboard_flow` and `browser-cli action guide --task menu_keyboard_flow`; use role hover/focus/press, list snapshots, and `press-key` before custom JS.
 
+For page navigation, refresh, or history, prefer `browser-cli commands --workflow navigation_flow` and `browser-cli action guide --task navigation_flow`; use `open-url`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`, and `wait-load-state` before custom JS.
 For deterministic state transitions, prefer `browser-cli commands --workflow state_waits` and `browser-cli action guide --task state_waits`; choose `wait-load-state`, `wait-url`, `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or `wait-cookie` before sleeps or custom JS.
 
 For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic workflow before writing custom probes:
@@ -364,6 +365,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -374,6 +376,7 @@ browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task navigation_flow
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
