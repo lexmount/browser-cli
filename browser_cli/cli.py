@@ -187,6 +187,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
         "auth_status",
         "doctor",
+        "smoke_session",
     ),
     "connect_from_codex_auth": (
         "auth_status",
@@ -878,8 +879,15 @@ def _command_catalog() -> dict[str, Any]:
                         "optional": True,
                         "success_condition": "browser_smoke_session.status=pass",
                         "read": [
+                            "browser_smoke_session.status",
                             "browser_smoke_session.created",
                             "browser_smoke_session.closed",
+                            "browser_smoke_session.session_id",
+                        ],
+                        "on_failure_read": [
+                            "browser_smoke_session.status",
+                            "browser_smoke_session.stage",
+                            "browser_smoke_session.fix.commands",
                         ],
                     },
                 ],

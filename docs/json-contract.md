@@ -88,6 +88,11 @@ to the preferred action without parsing help text.
 Workflow `read` arrays include current auth availability fields, scope catalog
 fields, export usability fields, and context reuse availability fields when
 those values drive the next agent decision.
+The setup workflow includes `auth status`, `doctor --json`, and optional
+`doctor --smoke-session` steps; the smoke step reads
+`browser_smoke_session.status`, `browser_smoke_session.created`, and
+`browser_smoke_session.closed` so agents can verify a temporary session can be
+created and cleaned up.
 The scoped token lifecycle workflow includes token validity, scope coverage,
 scope catalog lookup, refresh availability, browser readiness, and local logout/revoke-pending fields
 without exposing token values.
@@ -96,9 +101,9 @@ The Connect from Codex site requirements workflow includes
 `browser_site_contract.scope_ui_fields`,
 `connect_from_codex.site_capability_status.missing`,
 `required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, `setup_blocks`, and verification commands so
-agents can coordinate browser.lexmount.cn changes without pretending a user is
-logging in.
+`required_token_lifecycle`, `required_runtime_auth`, `setup_blocks`, and
+verification commands so agents can coordinate browser.lexmount.cn changes
+without pretending a user is logging in.
 The device-code auth workflow includes `auth login --device-code`,
 `device_code.required_endpoints`, `device_code.required_browser_site_support`,
 `connect_from_codex.site_capability_status.missing`, and `fallback_handoff`

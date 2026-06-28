@@ -190,6 +190,9 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`related_workflows`" in text
     assert "`grep_patterns`" in text
     assert "Connect from Codex site requirements" in text
+    assert "The setup workflow includes" in text
+    assert "`doctor --smoke-session`" in text
+    assert "`browser_smoke_session.created`" in text
     assert "`auth scopes --include-site-contract`" in text
     assert "`browser_site_contract.scope_ui_fields`" in text
     assert "`auth connect-requirements`" in text
