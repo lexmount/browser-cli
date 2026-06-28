@@ -135,6 +135,8 @@ browser-cli action form-snapshot --session-id <session_id> --selector form
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
+browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
+browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action wait-value-role --session-id <session_id> --role textbox --name "Email" --value "me@example.com"
 browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
@@ -233,7 +235,7 @@ active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
 actions such as `wait-role`, `click-role`, `click-text`,
-`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `check-label`, `interactive-snapshot`, and
+`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as

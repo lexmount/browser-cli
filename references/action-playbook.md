@@ -80,10 +80,13 @@ browser-cli action scroll-into-view --session-id <session_id> --selector "button
 browser-cli action bounding-box --session-id <session_id> --selector "button"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
+browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action check-label --session-id <session_id> --label "Remember me"
 browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
+browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
+browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
@@ -143,8 +146,8 @@ Prefer built-in actions over writing custom JavaScript. `page-info`, `reload`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
 `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `clear`, `clear-role`,
 `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
-`scroll-into-view`, `bounding-box`, `select-option`, `select-label`, `check`,
-`uncheck`, `check-label`, `uncheck-label`, `hover`, `press`, and `press-key`
+`scroll-into-view`, `bounding-box`, `select-option`, `select-label`, `select-role`, `check`,
+`uncheck`, `check-label`, `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `press`, and `press-key`
 plus `click-text`, `click-role`, `click-index`, `fill-label`, `fill-role`, `link-snapshot`,
 `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
 `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`,
@@ -153,8 +156,8 @@ plus `click-text`, `click-role`, `click-index`, `fill-label`, `fill-role`, `link
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are
 DOM/eval-backed, so always parse their structured `result` fields.
 
-Important result fields include `found`, `exists`, `count`, `checked`,
-`selected`, `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`,
+Important result fields include `found`, `exists`, `count`, `checkable`,
+`checked`, `selectable`, `selected`, `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`,
 `set`, `removed`, `deleted`, `clearable`, `cleared`, `items`, `cleared_count`,
 `requested_count`, `state`, `matched`, `role_found`, `state_values`, `attribute_found`,
 `requested_value`, `network_idle`, `quiet_ms`, `submitted`, `hovered`,
@@ -219,8 +222,8 @@ console/page error entries and the reported page URL.
    URLs, `list-snapshot` for reading list/menu item state, `fill-label` for
    labeled text fields, `fill-role` for writable role/name fields,
    `focus-role`, `blur-role`, and `clear-role` for role/name form controls,
-   `select-label` for labeled native selects, and
-   `check-label` for labeled checkbox or switch controls.
+   `select-label` or `select-role` for native selects, and
+   `check-label`, `check-role`, or `uncheck-role` for checkbox or switch controls.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
    `wait-count`, `wait-state`, `query`, `inspect`, `get-attribute`,
    `wait-attribute`, `wait-text`, `get-text`, `wait-selector`, `click`, `type`,
@@ -256,9 +259,9 @@ console/page error entries and the reported page URL.
    `set-value` for stable selectors, and `set-file-input` for upload controls;
    `clear-role` or `clear` before replacement text when needed, use
    `get-value-role`, `wait-value-role`, `get-value`, or `wait-value` to confirm form state, use `blur-role` or `blur` for
-   focus-driven validation, use `select-label` for labeled selects,
+   focus-driven validation, use `select-label` or `select-role` for selects,
    `select-option` or `check` for stable selector controls, prefer
-   `check-label` for labeled controls, use `wait-state --state enabled` or
+   `check-label`, `check-role`, or `uncheck-role` for semantic controls, use `wait-state --state enabled` or
    `wait-role` for async submit buttons, use `dispatch-event --event input
    --event change` when the app needs explicit events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.

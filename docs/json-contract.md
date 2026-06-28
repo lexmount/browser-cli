@@ -247,7 +247,8 @@ Default behavior:
   the Skill workflow or missing critical workflow steps such as cleanup. The
   required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, hover, scroll,
-  get-text, exists, select-option, check, uncheck, click-text, click-role,
+  get-text, exists, select-option, select-role, check, uncheck, check-role,
+  uncheck-role, click-text, click-role,
   focus-role, fill-label, fill-role, get-value-role, wait-value-role,
   blur-role, clear-role,
   accessibility snapshot, and interactive-only snapshot.

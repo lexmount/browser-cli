@@ -69,8 +69,8 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`focus-role`, `blur-role`, and `clear-role`" in normalized
     assert "`get-value-role`" in normalized
     assert "`wait-value-role`" in normalized
-    assert "`select-label` for labeled native selects" in normalized
-    assert "`check-label` for labeled checkbox or switch controls" in normalized
+    assert "`select-label` or `select-role` for native selects" in normalized
+    assert "`check-label`, `check-role`, or `uncheck-role`" in normalized
     assert (
         "Use `eval` only for page-local work not covered by a first-class action"
         in normalized
@@ -335,10 +335,13 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`bounding-box`",
         "`select-option`",
         "`select-label`",
+        "`select-role`",
         "`check`",
         "`uncheck`",
         "`check-label`",
+        "`check-role`",
         "`uncheck-label`",
+        "`uncheck-role`",
         "`press-key`",
         "`link-snapshot`",
         "`table-snapshot`",
@@ -523,9 +526,9 @@ def test_skill_includes_common_task_recipes() -> None:
         in normalized
     )
     assert "use `blur-role` or `blur` for focus-driven validation" in normalized
-    assert "`select-label` for labeled selects" in normalized
+    assert "`select-label` or `select-role` for selects" in normalized
     assert "`select-option` or `check`" in normalized
-    assert "prefer `check-label` for labeled controls" in normalized
+    assert "prefer `check-label`, `check-role`, or `uncheck-role`" in normalized
     assert (
         "`wait-state --state enabled` or `wait-role` for async submit buttons"
         in normalized

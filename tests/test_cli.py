@@ -622,6 +622,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.press-key",
         "action.click-role",
         "action.focus-role",
+        "action.select-role",
+        "action.check-role",
+        "action.uncheck-role",
         "action.fill-label",
         "action.fill-role",
         "action.get-value-role",
@@ -681,6 +684,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     clear_role = commands["action.clear-role"]
     assert clear_role["required_options"] == ["--role"]
     assert any("--name" in option["flags"] for option in clear_role["options"])
+    select_role = commands["action.select-role"]
+    assert select_role["required_options"] == ["--role"]
+    assert select_role["required_one_of"] == [["--value", "--option-label"]]
+    assert any("--name" in option["flags"] for option in select_role["options"])
+    check_role = commands["action.check-role"]
+    assert check_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in check_role["options"])
+    uncheck_role = commands["action.uncheck-role"]
+    assert uncheck_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in uncheck_role["options"])
     interactive = commands["action.interactive-snapshot"]
     interactive_only = commands["action.interactive-only-snapshot"]
     assert interactive["aliases"] == ["action.interactive-only-snapshot"]
@@ -775,9 +788,19 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     payload = json.loads(capsys.readouterr().out)
     assert "fill-role" in payload["guide"]["selection_order"]
     assert "clear-role" in payload["guide"]["selection_order"]
+    assert "select-role" in payload["guide"]["selection_order"]
+    assert "check-role" in payload["guide"]["selection_order"]
     assert "blur-role" in payload["guide"]["selection_order"]
     assert any(
         "browser-cli action fill-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action select-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action check-role" in command
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
@@ -786,6 +809,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action focus-role" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert any(
+        "browser-cli action uncheck-role" in command
         for command in payload["guide"]["fallback_commands"]
     )
     assert any(
@@ -1928,8 +1955,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.get-text",
         "action.exists",
         "action.select-option",
+        "action.select-role",
         "action.check",
         "action.uncheck",
+        "action.check-role",
+        "action.uncheck-role",
         "action.click-text",
         "action.click-role",
         "action.focus-role",
@@ -2046,6 +2076,9 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["workflow_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
+    assert "action.select-role" in catalog["missing_required_commands"]
+    assert "action.check-role" in catalog["missing_required_commands"]
+    assert "action.uncheck-role" in catalog["missing_required_commands"]
     assert "action.focus-role" in catalog["missing_required_commands"]
     assert "action.get-value-role" in catalog["missing_required_commands"]
     assert "action.wait-value-role" in catalog["missing_required_commands"]
@@ -6194,6 +6227,7 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
     assert "sensitiveNamePattern" in expression
     assert "maskValue(element, element.value)" in expression
     assert "valueNameOf(element)" in expression
+    assert "nameFromLabels(element)" in expression
     assert "element.value ||" not in expression
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "action.interactive-snapshot"
@@ -7208,6 +7242,130 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "found": True,
                 "clicked": True,
                 "text": "Save",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "select-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "combobox",
+                "--name",
+                "Plan",
+                "--option-label",
+                "Pro",
+            ],
+            "action.select-role",
+            {
+                "role": "combobox",
+                "name": "Plan",
+                "found": True,
+                "role_found": True,
+                "selectable": True,
+                "selected": True,
+                "requested_value": "pro",
+                "requested_option_label": "Pro",
+                "option_found": True,
+                "value": "pro",
+                "option_label": "Pro",
+                "previous_value": "free",
+                "changed": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "combobox",
+                "name": "Plan",
+                "found": True,
+                "role_found": True,
+                "selectable": True,
+                "selected": True,
+                "requested_value": "pro",
+                "requested_option_label": "Pro",
+                "option_found": True,
+                "value": "pro",
+                "option_label": "Pro",
+                "previous_value": "free",
+                "changed": True,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "check-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "checkbox",
+                "--name",
+                "Remember me",
+            ],
+            "action.check-role",
+            {
+                "role": "checkbox",
+                "name": "Remember me",
+                "found": True,
+                "role_found": True,
+                "checkable": True,
+                "requested_checked": True,
+                "previous_checked": False,
+                "checked": True,
+                "changed": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "checkbox",
+                "name": "Remember me",
+                "found": True,
+                "role_found": True,
+                "checkable": True,
+                "requested_checked": True,
+                "previous_checked": False,
+                "checked": True,
+                "changed": True,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "uncheck-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "checkbox",
+                "--name",
+                "Remember me",
+            ],
+            "action.uncheck-role",
+            {
+                "role": "checkbox",
+                "name": "Remember me",
+                "found": True,
+                "role_found": True,
+                "checkable": True,
+                "requested_checked": False,
+                "previous_checked": True,
+                "checked": False,
+                "changed": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "checkbox",
+                "name": "Remember me",
+                "found": True,
+                "role_found": True,
+                "checkable": True,
+                "requested_checked": False,
+                "previous_checked": True,
+                "checked": False,
+                "changed": True,
+                "candidate_count": 1,
                 "url": "https://example.test",
             },
         ),

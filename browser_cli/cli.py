@@ -98,8 +98,11 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.wait-state",
     "action.scroll",
     "action.select-option",
+    "action.select-role",
     "action.check",
     "action.uncheck",
+    "action.check-role",
+    "action.uncheck-role",
     "action.hover",
     "action.press",
     "action.click-text",
@@ -760,6 +763,8 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
                 'browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
+                'browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"',
+                'browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"',
                 'browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
@@ -1461,8 +1466,12 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "result.found",
                             "result.selected",
+                            "result.role_found",
                             "result.option_found",
                             "result.option_label",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
                         ],
                     },
                     {
@@ -1472,7 +1481,12 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "result.found",
                             "result.checked",
+                            "result.role_found",
                             "result.changed",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                            'browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "<accessible name>"',
                         ],
                     },
                     {
@@ -4020,9 +4034,25 @@ def _dom_helpers_expression(
         .join(" ")
     );
   }};
+  const nameFromLabels = (element) => {{
+    const explicitLabels = "labels" in element && element.labels
+      ? [...element.labels]
+      : [];
+    if (explicitLabels.length) {{
+      return normalize(explicitLabels.map((label) => rawTextOf(label)).join(" "));
+    }}
+    const id = element.id;
+    if (!id) return "";
+    return normalize(
+      [...document.querySelectorAll(`label[for="${{CSS.escape(id)}}"]`)]
+        .map((label) => rawTextOf(label))
+        .join(" ")
+    );
+  }};
   const accessibleName = (element) => normalize(
     element.getAttribute("aria-label") ||
     nameFromLabelledBy(element) ||
+    nameFromLabels(element) ||
     element.getAttribute("alt") ||
     element.getAttribute("title") ||
     element.getAttribute("placeholder") ||
@@ -4447,6 +4477,95 @@ def _check_label_expression(
 """.strip()
 
 
+def _check_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    checked: bool,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    checkable_selector = _js_literal(
+        ",".join(
+            [
+                "input[type=checkbox]",
+                "input[type=radio]",
+                "[role~=checkbox]",
+                "[role~=radio]",
+                "[role~=switch]",
+                "[aria-checked]",
+            ]
+        )
+    )
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedChecked = {_js_literal(checked)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(checkable_selector)}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      found: false,
+      role_found: false,
+      checkable: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_checked: requestedChecked,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const hasNativeChecked = "checked" in element;
+  const ariaCheckable = element.hasAttribute("aria-checked") ||
+    ["checkbox", "radio", "switch"].includes(roleOf(element));
+  if (!hasNativeChecked && !ariaCheckable) {{
+    return {{
+      found: true,
+      role_found: true,
+      checkable: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_checked: requestedChecked,
+      candidate_count: roleMatch.candidate_count,
+      element: nodeInfo(element)
+    }};
+  }}
+  const previousChecked = hasNativeChecked
+    ? Boolean(element.checked)
+    : element.getAttribute("aria-checked") === "true";
+  if (hasNativeChecked) {{
+    element.checked = requestedChecked;
+  }} else {{
+    element.setAttribute("aria-checked", requestedChecked ? "true" : "false");
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const currentChecked = hasNativeChecked
+    ? Boolean(element.checked)
+    : element.getAttribute("aria-checked") === "true";
+  return {{
+    found: true,
+    role_found: true,
+    checkable: true,
+    role: requestedRole,
+    name: requestedName,
+    requested_checked: requestedChecked,
+    previous_checked: previousChecked,
+    checked: currentChecked,
+    changed: previousChecked !== currentChecked,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _select_label_expression(
     *,
     label: str,
@@ -4537,6 +4656,114 @@ def _select_label_expression(
     changed: previousValue !== element.value,
     element: nodeInfo(element),
     label_element: match.label_element
+  }};
+}}
+""".strip()
+
+
+def _select_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    value: str | None,
+    option_label: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedValueInput = {_js_literal(value)};
+  const requestedOptionLabel = {_js_literal(option_label)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("select,[role]"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      found: false,
+      role_found: false,
+      selectable: false,
+      selected: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_value: requestedValueInput,
+      requested_option_label: requestedOptionLabel,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  if (element.tagName.toLowerCase() !== "select") {{
+    return {{
+      found: true,
+      role_found: true,
+      selectable: false,
+      selected: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_value: requestedValueInput,
+      requested_option_label: requestedOptionLabel,
+      candidate_count: roleMatch.candidate_count,
+      element: nodeInfo(element)
+    }};
+  }}
+  const options = [...element.options];
+  const previousValue = element.value;
+  const previousOptionLabel = element.selectedOptions[0]
+    ? textOf(element.selectedOptions[0])
+    : null;
+  let requestedValue = requestedValueInput;
+  let optionFound = null;
+  if (requestedOptionLabel !== null) {{
+    const option = options.find((candidate) =>
+      matchesText(textOf(candidate), requestedOptionLabel, exact, caseSensitive)
+    );
+    optionFound = Boolean(option);
+    if (!option) {{
+      return {{
+        found: true,
+        role_found: true,
+        selectable: true,
+        selected: false,
+        role: requestedRole,
+        name: requestedName,
+        requested_value: null,
+        requested_option_label: requestedOptionLabel,
+        option_found: false,
+        value: element.value,
+        previous_value: previousValue,
+        previous_option_label: previousOptionLabel,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }};
+    }}
+    requestedValue = option.value;
+  }}
+  element.value = requestedValue;
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const selectedOption = element.selectedOptions[0] || null;
+  return {{
+    found: true,
+    role_found: true,
+    selectable: true,
+    selected: element.value === requestedValue,
+    role: requestedRole,
+    name: requestedName,
+    requested_value: requestedValue,
+    requested_option_label: requestedOptionLabel,
+    option_found: optionFound,
+    value: element.value,
+    option_label: selectedOption ? textOf(selectedOption) : null,
+    previous_value: previousValue,
+    previous_option_label: previousOptionLabel,
+    changed: previousValue !== element.value,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
   }};
 }}
 """.strip()
@@ -10043,7 +10270,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "fill-role",
                 "clear-role",
                 "select-label",
+                "select-role",
                 "check-label",
+                "check-role",
                 "focus-role",
                 "blur-role",
                 "click-role",
@@ -10058,13 +10287,16 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
                 'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
+                'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
                 'browser-cli action check-label --session-id <session_id> --label "<label>"',
+                'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
             ],
             "fallback_commands": [
                 'browser-cli action clear-role --session-id <session_id> --role textbox --name "<accessible name>"',
                 'browser-cli action focus-role --session-id <session_id> --role textbox --name "<accessible name>"',
                 'browser-cli action blur-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "<accessible name>"',
                 'browser-cli action set-value --session-id <session_id> --selector "<selector>" --value "<value>"',
                 'browser-cli action dispatch-event --session-id <session_id> --selector "<selector>" --event input --event change',
                 'browser-cli action click --session-id <session_id> --selector "<selector>"',
@@ -10085,7 +10317,10 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.role_found",
                 "result.clearable",
                 "result.cleared",
+                "result.selectable",
                 "result.selected",
+                "result.option_found",
+                "result.checkable",
                 "result.checked",
                 "result.clicked",
                 "result.focused",
@@ -11080,12 +11315,55 @@ def cmd_action_uncheck_label(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_check_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.check-role",
+        _check_role_expression(
+            role=args.role,
+            name=args.name,
+            checked=True,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_uncheck_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.uncheck-role",
+        _check_role_expression(
+            role=args.role,
+            name=args.name,
+            checked=False,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_select_label(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.select-label",
         _select_label_expression(
             label=args.label,
+            value=args.value,
+            option_label=args.option_label,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_select_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.select-role",
+        _select_role_expression(
+            role=args.role,
+            name=args.name,
             value=args.value,
             option_label=args.option_label,
             exact=args.exact,
@@ -14370,6 +14648,19 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_text_match_args(action_select_label)
     action_select_label.set_defaults(func=cmd_action_select_label)
 
+    action_select_role = action_subparsers.add_parser(
+        "select-role",
+        help="Select an option in a native select matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_select_role)
+    action_select_role.add_argument("--role", required=True)
+    action_select_role.add_argument("--name")
+    select_role_value = action_select_role.add_mutually_exclusive_group(required=True)
+    select_role_value.add_argument("--value")
+    select_role_value.add_argument("--option-label")
+    _add_text_match_args(action_select_role)
+    action_select_role.set_defaults(func=cmd_action_select_role)
+
     action_check = action_subparsers.add_parser(
         "check",
         help="Check a checkbox-like element",
@@ -14395,6 +14686,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_text_match_args(action_check_label)
     action_check_label.set_defaults(func=cmd_action_check_label)
 
+    action_check_role = action_subparsers.add_parser(
+        "check-role",
+        help="Check a checkbox, radio, or switch matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_check_role)
+    action_check_role.add_argument("--role", required=True)
+    action_check_role.add_argument("--name")
+    _add_text_match_args(action_check_role)
+    action_check_role.set_defaults(func=cmd_action_check_role)
+
     action_uncheck_label = action_subparsers.add_parser(
         "uncheck-label",
         help="Uncheck a checkbox or switch matched by label or accessible name",
@@ -14403,6 +14704,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_uncheck_label.add_argument("--label", required=True)
     _add_text_match_args(action_uncheck_label)
     action_uncheck_label.set_defaults(func=cmd_action_uncheck_label)
+
+    action_uncheck_role = action_subparsers.add_parser(
+        "uncheck-role",
+        help="Uncheck a checkbox or switch matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_uncheck_role)
+    action_uncheck_role.add_argument("--role", required=True)
+    action_uncheck_role.add_argument("--name")
+    _add_text_match_args(action_uncheck_role)
+    action_uncheck_role.set_defaults(func=cmd_action_uncheck_role)
 
     action_hover = action_subparsers.add_parser(
         "hover",

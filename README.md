@@ -446,10 +446,13 @@ browser-cli action bounding-box --session-id <session_id> --selector "button[typ
 browser-cli action inspect --session-id <session_id> --selector "button[type=submit]"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
+browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
 browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action check-label --session-id <session_id> --label "Remember me"
 browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
+browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
+browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
@@ -490,14 +493,14 @@ the boundary for custom JavaScript.
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
-`select-option`, `select-label`, `check`, `uncheck`, `check-label`,
-`uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
+`select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
+`check-role`, `uncheck-label`, `uncheck-role`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
-such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
+such as `found`, `exists`, `checkable`, `checked`, `selectable`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `clearable`, `cleared`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
 `matched`, `role_found`, `state_values`, `attribute_found`, `requested_value`, `network_idle`,
@@ -730,8 +733,8 @@ Common agent recipes:
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,
   `set-value`, `set-file-input`, `clear-role`, or `clear` -> `wait-value-role`, `get-value-role`,
   `wait-value`, or `get-value` ->
-  `blur-role` or `blur` if validation is focus-driven -> `select-label`, `select-option`,
-  `check-label`, or `check` -> `wait-state --state enabled` or `wait-role` for
+  `blur-role` or `blur` if validation is focus-driven -> `select-label`, `select-role`, or `select-option`,
+  `check-label`, `check-role`, `uncheck-role`, or `check` -> `wait-state --state enabled` or `wait-role` for
   async submit buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
   `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
