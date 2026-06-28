@@ -107,3 +107,12 @@ def test_codex_install_prompt_mentions_project_and_key_validation() -> None:
     assert "API Key 是否已过期、被 revoke" in prompt
     assert "scoped API Key" in prompt
     assert "created=true、closed=true" in prompt
+
+
+def test_readme_documents_doctor_connect_from_codex_blockers() -> None:
+    text = README.read_text()
+
+    assert "`repair_plan.connect_from_codex.required_runtime_auth`" in text
+    assert "`required_token_lifecycle`" in text
+    assert "`site_capability_status`" in text
+    assert "browser.lexmount.cn, SDK, API, and gateway blockers" in text

@@ -4407,14 +4407,25 @@ def _doctor_connect_from_codex_fix() -> dict[str, Any]:
     project_id_source = "env" if project_id else "unset"
     scopes = list(DEFAULT_CODEX_CONNECT_SCOPES)
     expires_in = DEFAULT_CODEX_CONNECT_EXPIRES_IN
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
     connect_url = _connect_from_codex_url(
         project_id=project_id,
         scopes=scopes,
         expires_in=expires_in,
     )
+    device_connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=expires_in,
+        response="device_code",
+    )
     return {
         "available": False,
         "url": connect_url,
+        "device_code_url": device_connect_url,
         "open_command": "browser-cli auth login --open",
         "auth_login_command": "browser-cli auth login",
         "project_id": project_id,
@@ -4422,6 +4433,11 @@ def _doctor_connect_from_codex_fix() -> dict[str, Any]:
         "requested_scopes": scopes,
         "requested_scope_details": _scope_details(scopes),
         "requested_expires_in": expires_in,
+        "site_capability_status": site_capability_status,
+        "site_capabilities": site_capabilities,
+        "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
+        "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+        "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
         "setup_blocks": _auth_login_setup_blocks(project_id),
         "verification": {
             "status_command": "browser-cli auth status",

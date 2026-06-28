@@ -287,6 +287,10 @@ def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     assert "`fix` object" in text
     assert "`connect_from_codex`" in text
     assert "`open_command`" in text
+    assert "`device_code_url`" in text
+    assert "`site_capability_status`" in text
+    assert "`required_token_lifecycle`" in text
+    assert "`required_runtime_auth`" in text
 
 
 def test_json_contract_documents_context_selection_decision_fields() -> None:

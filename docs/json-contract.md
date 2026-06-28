@@ -301,9 +301,11 @@ Default behavior:
   blur-role, clear-role,
   accessibility snapshot, and interactive-only snapshot.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
-  `connect_from_codex` with a safe `/connect/codex` URL, `open_command`,
-  requested scopes, setup blocks, and verification commands. This handoff must
-  not contain API key values or direct connect URLs.
+  `connect_from_codex` with safe `/connect/codex` URLs, `open_command`,
+  `device_code_url`, requested scopes, `site_capability_status`,
+  `required_token_lifecycle`, `required_runtime_auth`, setup blocks,
+  browser-site requirements, and verification commands. This handoff must not
+  contain API key values or direct connect URLs.
 - `auth logout` may report local credential file deletion metadata,
   `revoke_endpoint`, `remote_revoke`, and `revoked`, but must not print token
   values or unset environment variables. With `--revoke` and a configured token

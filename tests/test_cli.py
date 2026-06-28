@@ -3179,6 +3179,26 @@ def test_doctor_fails_missing_required_env(
         "browser:actions",
     ]
     assert connect["requested_expires_in"] == "7d"
+    assert connect["device_code_url"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert connect["site_capability_status"]["available"] is False
+    assert connect["site_capability_status"]["missing_count"] == 6
+    assert [item["id"] for item in connect["required_token_lifecycle"]] == [
+        "issue_scoped_key",
+        "refresh_token",
+        "revoke_token",
+        "expire_token",
+    ]
+    assert [item["id"] for item in connect["required_runtime_auth"]] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
+    assert any(
+        "Implement /connect/codex" in item
+        for item in connect["browser_site_requirements"]
+    )
     assert connect["verification"]["doctor_command"] == "browser-cli doctor --json"
     query = parse_qs(urlsplit(connect["url"]).query)
     assert "project_id" not in query
@@ -3588,6 +3608,19 @@ def test_auth_status_reports_connect_from_codex_fix_when_env_is_missing(
     assert connect["project_id"] == "status-project"
     assert connect["project_id_source"] == "env"
     assert connect["open_command"] == "browser-cli auth login --open"
+    assert [item["id"] for item in connect["required_runtime_auth"]] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
+    assert connect["site_capability_status"]["missing"] == [
+        "project_id_display",
+        "scoped_api_key",
+        "copy_install_and_env",
+        "doctor_verification",
+        "scoped_key_lifecycle",
+        "device_code_oauth",
+    ]
     assert connect["verification"]["doctor_command"] == "browser-cli doctor --json"
 
 
