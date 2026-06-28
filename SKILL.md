@@ -171,8 +171,9 @@ as proof that browser sessions will work.
 
 Run `browser-cli commands --workflows-only` for a compact agent workflow map,
 `browser-cli commands --workflow <id>` for one task path, and
-`browser-cli commands --names-only` or `browser-cli commands --group action`
-when the installed CLI version is uncertain or before writing custom JavaScript.
+`browser-cli commands --names-only`, `browser-cli commands --group action`, or
+`browser-cli action guide --task <task>` when the installed CLI version is
+uncertain or before writing custom JavaScript.
 Use the catalog's `browser_target.exactly_one_of`, `required_options`,
 `required_one_of`, `json_output`, `secret_policy`, `agent_references`,
 `agent_examples`, `agent_entrypoints`, and `agent_workflows` fields instead of
@@ -241,28 +242,34 @@ For form tasks, prefer the more specific form workflow:
 
 ```bash
 browser-cli commands --workflow form_interaction
+browser-cli action guide --task form_interaction
 ```
 
-Follow its `read` fields for `form-snapshot`, `fill-label`, `select-label`,
-`check-label`, `wait-role`, `click-role`, and verification steps before falling
-back to custom JavaScript.
+Follow the guide's `inspect_commands`, `preferred_commands`,
+`verify_commands`, and `custom_js_boundary`, then follow the workflow `read`
+fields for `form-snapshot`, `fill-label`, `select-label`, `check-label`,
+`wait-role`, `click-role`, and verification steps before falling back to custom
+JavaScript.
 
 For visible buttons, links, menus, and repeated controls, prefer the interactive
 targeting workflow before writing selectors or JavaScript:
 
 ```bash
 browser-cli commands --workflow interactive_targeting
+browser-cli action guide --task interactive_targeting
 ```
 
-Read `interactive-snapshot` and optional `accessibility-snapshot` fields, then
-choose `click-role`, `click-text`, or `click-index` from the workflow's
-preferred commands and verify with `page-info`, `wait-url`, or `wait-text`.
+Read the guide's `selection_order`, then read `interactive-snapshot` and
+optional `accessibility-snapshot` fields. Choose `click-role`, `click-text`, or
+`click-index` from the preferred commands and verify with `page-info`,
+`wait-url`, or `wait-text`.
 
 For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic
 workflow before writing custom probes:
 
 ```bash
 browser-cli commands --workflow page_diagnostics
+browser-cli action guide --task page_diagnostics
 ```
 
 Install console/network capture before reproducing the issue, then read the
@@ -357,6 +364,10 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
+browser-cli action guide --names-only
+browser-cli action guide --task form_interaction
+browser-cli action guide --task interactive_targeting
+browser-cli action guide --task page_diagnostics
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli doctor
@@ -401,6 +412,9 @@ If only the installed CLI is available, read the same packaged content with
 Core action rules:
 
 - Prefer built-in CLI actions over writing custom JavaScript.
+- Use `browser-cli action guide --task <task>` for task-specific
+  `selection_order`, `inspect_commands`, `preferred_commands`,
+  `verify_commands`, `read_fields`, and `custom_js_boundary`.
 - Inspect first with `snapshot`, `interactive-snapshot`, `accessibility-snapshot`,
   `form-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
   `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
@@ -426,8 +440,9 @@ It is safe to include `--json` at the top level or after subcommands because it
 does not change output.
 For `commands`, use the parser-backed catalog to discover installed commands and
 options before guessing. Prefer `--workflows-only` or `--workflow <id>` for
-agent task flows, `--names-only` for quick availability checks, and `--group action`
-before choosing browser actions.
+agent task flows, `--names-only` for quick availability checks, and
+`--group action` or `action guide --task <task>` before choosing browser
+actions.
 Do not paste API keys, Project IDs, or full direct connect URLs into chat, docs,
 commits, screenshots, or test fixtures. By default, browser direct URLs are
 masked. Use reveal flags only for local debugging in a trusted shell.

@@ -163,6 +163,14 @@ def test_json_contract_documents_agent_workflows() -> None:
 
     assert "`--workflows-only`" in text
     assert "`--workflow <id>`" in text
+    assert "`browser-cli action guide`" in text
+    assert "`selection_policy`" in text
+    assert "`guide.inspect_commands`" in text
+    assert "`guide.preferred_commands`" in text
+    assert "`guide.verify_commands`" in text
+    assert "`guide.custom_js_boundary`" in text
+    assert "`error=unknown_action_guide_task`" in text
+    assert "`available_tasks`" in text
     assert "`error=unknown_group`" in text
     assert "`available_groups`" in text
     assert "commands for inspecting valid groups" in normalized

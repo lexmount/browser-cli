@@ -22,7 +22,14 @@ browser-cli commands --group action --names-only
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
+browser-cli action guide --names-only
+browser-cli action guide --task form_interaction
+browser-cli action guide --task interactive_targeting
+browser-cli action guide --task page_diagnostics
 ```
+
+`action guide` is the compact machine-readable route for a known browser task;
+use it before loading the longer playbook when the task category is clear.
 
 Common actions:
 
@@ -233,19 +240,22 @@ console/page error entries and the reported page URL.
 ## Common Task Recipes
 
 1. Fill and submit a form: run `browser-cli commands --workflow
-   form_interaction`, then run `form-snapshot` or `interactive-snapshot`, use
-   `fill-label` for labeled fields, `set-value` for stable selectors, and
-   `set-file-input` for upload controls; `clear` before replacement text when
-   needed, use `get-value` or `wait-value` to confirm form state, use `blur`
-   for focus-driven validation, use `select-label` for labeled selects,
+   form_interaction` and `browser-cli action guide --task form_interaction`,
+   then run `form-snapshot` or `interactive-snapshot`, use `fill-label` for
+   labeled fields, `set-value` for stable selectors, and `set-file-input` for
+   upload controls; `clear` before replacement text when needed, use
+   `get-value` or `wait-value` to confirm form state, use `blur` for
+   focus-driven validation, use `select-label` for labeled selects,
    `select-option` or `check` for stable selector controls, prefer
    `check-label` for labeled controls, use `wait-state --state enabled` or
    `wait-role` for async submit buttons, use `dispatch-event --event input
    --event change` when the app needs explicit events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
 2. Click a visible control: run `browser-cli commands --workflow
-   interactive_targeting`, use `interactive-snapshot` or
-   `accessibility-snapshot` to choose a target, use `wait-role` when the
+   interactive_targeting` and
+   `browser-cli action guide --task interactive_targeting`, use
+   `interactive-snapshot` or `accessibility-snapshot` to choose a target, use
+   `wait-role` when the
    control appears asynchronously, use `link-snapshot` when the task is to
    choose, inspect, or report navigation URLs, use `list-snapshot` before
    choosing from menus, listboxes, task lists, or search results, prefer
@@ -258,14 +268,16 @@ console/page error entries and the reported page URL.
    `wait-load-state`, `wait-network-idle`, `performance-snapshot`, `wait-text`,
    or `snapshot`.
 4. Diagnose fetch/XHR calls: run `browser-cli commands --workflow
-   page_diagnostics`, then run `network-snapshot --install-only`, trigger the
-   suspected action, read `network-snapshot` or wait with `wait-network`, and
-   parse `entries`, `method`, `status`, `ok`, `failed`, `duration_ms`, and
-   masked URLs; use `--failed-only` when looking for transport failures.
+   page_diagnostics` and `browser-cli action guide --task page_diagnostics`,
+   then run `network-snapshot --install-only`, trigger the suspected action,
+   read `network-snapshot` or wait with `wait-network`, and parse `entries`,
+   `method`, `status`, `ok`, `failed`, `duration_ms`, and masked URLs; use
+   `--failed-only` when looking for transport failures.
 5. Capture runtime errors: run `browser-cli commands --workflow
-   page_diagnostics`, then run `console-snapshot --install-only`, trigger the
-   suspected action, read `console-snapshot` or wait with `wait-console`, then
-   use `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
+   page_diagnostics` and `browser-cli action guide --task page_diagnostics`,
+   then run `console-snapshot --install-only`, trigger the suspected action,
+   read `console-snapshot` or wait with `wait-console`, then use
+   `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
    `inspect` to correlate visible state with JS errors.
 6. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
    selector-scoped keys, `press-key` for active/global shortcuts such as

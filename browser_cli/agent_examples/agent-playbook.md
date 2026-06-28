@@ -21,6 +21,10 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
+browser-cli action guide --names-only
+browser-cli action guide --task form_interaction
+browser-cli action guide --task interactive_targeting
+browser-cli action guide --task page_diagnostics
 browser-cli reference list
 browser-cli example list
 browser-cli example get --id page_inspection_case --metadata-only
@@ -77,11 +81,13 @@ Use command discovery before guessing new action names:
 browser-cli commands --workflows-only
 browser-cli commands --group action
 browser-cli commands --group action --names-only
+browser-cli action guide --task interactive_targeting
 ```
 
 Read `agent_workflows`, `required_options`, `required_one_of`, and
 `browser_target.exactly_one_of` from the catalog instead of parsing help text.
-For each workflow step, follow its `read` array first; it names auth availability,
+For known browser tasks, read `action guide --task <task>` before choosing an
+action. For each workflow step, follow its `read` array first; it names auth availability,
 export usability, and context reuse fields that decide the next safe action.
 
 When validating a fresh local setup, run the stronger live check:
@@ -124,6 +130,7 @@ For forms, read the dedicated workflow before choosing fields:
 
 ```bash
 browser-cli commands --workflow form_interaction
+browser-cli action guide --task form_interaction
 browser-cli action form-snapshot --session-id <session_id> --selector form
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
@@ -134,6 +141,7 @@ workflow before writing selectors:
 
 ```bash
 browser-cli commands --workflow interactive_targeting
+browser-cli action guide --task interactive_targeting
 browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
@@ -145,6 +153,7 @@ before reproducing the suspected action:
 
 ```bash
 browser-cli commands --workflow page_diagnostics
+browser-cli action guide --task page_diagnostics
 browser-cli action console-snapshot --session-id <session_id> --install-only
 browser-cli action network-snapshot --session-id <session_id> --install-only
 # Run the action under investigation, then read both buffers.

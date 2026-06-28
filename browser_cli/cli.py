@@ -84,6 +84,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "context.status",
     "session.create",
     "session.close",
+    "action.guide",
     "action.open-url",
     "action.wait-selector",
     "action.click",
@@ -194,6 +195,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "close_session",
     ),
     "form_interaction": (
+        "inspect_action_guide",
         "inspect_form",
         "fill_labeled_field",
         "choose_labeled_option",
@@ -203,6 +205,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "verify_result",
     ),
     "interactive_targeting": (
+        "inspect_action_guide",
         "inspect_interactive_targets",
         "inspect_accessibility_context",
         "choose_click_method",
@@ -211,6 +214,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "verify_after_click",
     ),
     "page_diagnostics": (
+        "inspect_action_guide",
         "page_info_before",
         "install_console_capture",
         "install_network_capture",
@@ -745,11 +749,13 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
             ],
             "form_interaction": [
+                "browser-cli action guide --task form_interaction",
                 "browser-cli action form-snapshot --session-id <session_id> --selector form",
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
             ],
             "interactive_targeting": [
+                "browser-cli action guide --task interactive_targeting",
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                 "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 'browser-cli action wait-role --session-id <session_id> --role button --name "Submit"',
@@ -758,6 +764,7 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action click-index --session-id <session_id> --selector "button" --index 0',
             ],
             "page_diagnostics": [
+                "browser-cli action guide --task page_diagnostics",
                 "browser-cli action console-snapshot --session-id <session_id> --install-only",
                 "browser-cli action network-snapshot --session-id <session_id> --install-only",
                 "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
@@ -1251,6 +1258,17 @@ def _command_catalog() -> dict[str, Any]:
                 "purpose": "Find and activate visible controls with snapshot, role, text, or indexed click commands without custom JavaScript.",
                 "steps": [
                     {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task interactive_targeting",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
                         "id": "inspect_interactive_targets",
                         "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                         "read": [
@@ -1394,6 +1412,17 @@ def _command_catalog() -> dict[str, Any]:
                 "purpose": "Inspect, fill, submit, and verify a common web form without custom JavaScript.",
                 "steps": [
                     {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task form_interaction",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
                         "id": "inspect_form",
                         "command": "browser-cli action form-snapshot --session-id <session_id> --selector form",
                         "read": [
@@ -1470,6 +1499,17 @@ def _command_catalog() -> dict[str, Any]:
             "page_diagnostics": {
                 "purpose": "Capture page state, console/page errors, and fetch/XHR activity around a suspicious browser action.",
                 "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task page_diagnostics",
+                        "read": [
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
                     {
                         "id": "page_info_before",
                         "command": "browser-cli action page-info --session-id <session_id>",
@@ -9465,6 +9505,285 @@ def _scroll_into_view_expression(
 """.strip()
 
 
+def _action_guide_tasks() -> dict[str, dict[str, Any]]:
+    return {
+        "form_interaction": {
+            "purpose": "Inspect, fill, submit, and verify forms without page-specific JavaScript.",
+            "related_workflows": ["form_interaction"],
+            "when_to_use": [
+                "The page has labels, form fields, selects, checkboxes, radios, or submit buttons.",
+                "The agent needs to fill visible controls and verify a result.",
+            ],
+            "selection_order": [
+                "form-snapshot",
+                "fill-label",
+                "select-label",
+                "check-label",
+                "click-role",
+                "wait-text",
+                "get-value",
+            ],
+            "inspect_commands": [
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+            ],
+            "preferred_commands": [
+                'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
+                'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
+                'browser-cli action check-label --session-id <session_id> --label "<label>"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+            ],
+            "fallback_commands": [
+                'browser-cli action set-value --session-id <session_id> --selector "<selector>" --value "<value>"',
+                'browser-cli action dispatch-event --session-id <session_id> --selector "<selector>" --event input --event change',
+                'browser-cli action click --session-id <session_id> --selector "<selector>"',
+            ],
+            "verify_commands": [
+                'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                'browser-cli action get-value --session-id <session_id> --selector "<selector>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.fields",
+                "result.filled",
+                "result.selected",
+                "result.checked",
+                "result.clicked",
+                "value_masked",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after form-snapshot, label actions, selector "
+                "actions, and role/text clicks cannot express the interaction."
+            ),
+        },
+        "interactive_targeting": {
+            "purpose": "Find and activate visible controls with semantic actions before custom JavaScript.",
+            "related_workflows": ["interactive_targeting"],
+            "when_to_use": [
+                "The task asks to click a button, link, menu item, tab, or repeated control.",
+                "The page target can be identified by role, accessible name, visible text, or index.",
+            ],
+            "selection_order": [
+                "interactive-snapshot",
+                "accessibility-snapshot",
+                "wait-role",
+                "click-role",
+                "click-text",
+                "click-index",
+                "click",
+            ],
+            "inspect_commands": [
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+            ],
+            "preferred_commands": [
+                'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
+            ],
+            "fallback_commands": [
+                'browser-cli action hover --session-id <session_id> --selector "<selector>"',
+                'browser-cli action press --session-id <session_id> --selector "<selector>" --key Enter',
+                'browser-cli action click --session-id <session_id> --selector "<selector>"',
+            ],
+            "verify_commands": [
+                'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.nodes",
+                "result.node_count",
+                "result.element",
+                "result.clicked",
+                "result.url",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after snapshots plus role/text/index/selector "
+                "commands cannot identify or activate the target."
+            ),
+        },
+        "page_diagnostics": {
+            "purpose": "Capture page state, console errors, and fetch/XHR activity around a browser issue.",
+            "related_workflows": ["page_diagnostics"],
+            "when_to_use": [
+                "A page action fails, navigation stalls, data does not load, or runtime errors are suspected.",
+                "The agent needs evidence before changing selectors or writing JavaScript.",
+            ],
+            "selection_order": [
+                "page-info",
+                "console-snapshot --install-only",
+                "network-snapshot --install-only",
+                "reproduce issue",
+                "console-snapshot",
+                "network-snapshot",
+                "text-snapshot",
+                "screenshot",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action console-snapshot --session-id <session_id> --install-only",
+                "browser-cli action network-snapshot --session-id <session_id> --install-only",
+            ],
+            "preferred_commands": [
+                "<run the browser action that should be diagnosed>",
+                "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+            ],
+            "fallback_commands": [
+                "browser-cli action wait-console --session-id <session_id> --source pageerror",
+                "browser-cli action wait-network --session-id <session_id> --failed-only",
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+            ],
+            "read_fields": [
+                "ready_state",
+                "visibility_state",
+                "result.entries",
+                "result.entry_count",
+                "result.texts",
+                "result.text_count",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after page-info, console/network capture, "
+                "text snapshots, and screenshots do not explain the issue."
+            ),
+        },
+        "state_waits": {
+            "purpose": "Wait for page, selector, role, URL, text, storage, cookie, console, or network state.",
+            "related_workflows": [
+                "one_off_page_task",
+                "form_interaction",
+                "interactive_targeting",
+                "page_diagnostics",
+            ],
+            "when_to_use": [
+                "The next action depends on page readiness or a visible state transition.",
+                "The agent needs deterministic polling instead of sleeps.",
+            ],
+            "selection_order": [
+                "wait-load-state",
+                "wait-url",
+                "wait-selector",
+                "wait-role",
+                "wait-text",
+                "wait-network",
+                "wait-console",
+                "wait-storage",
+                "wait-cookie",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action exists --session-id <session_id> --selector <selector>",
+            ],
+            "preferred_commands": [
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+            ],
+            "fallback_commands": [
+                "browser-cli action wait-network-idle --session-id <session_id>",
+                "browser-cli action wait-count --session-id <session_id> --selector <selector> --count <n>",
+                "browser-cli action wait-state --session-id <session_id> --selector <selector> --state enabled",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+            ],
+            "read_fields": [
+                "found",
+                "url",
+                "title",
+                "result.found",
+                "result.count",
+                "result.entry",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only when no wait-* command can express the "
+                "state predicate."
+            ),
+        },
+    }
+
+
+def cmd_action_guide(args: argparse.Namespace) -> None:
+    command = "action.guide"
+    tasks = _action_guide_tasks()
+    task_ids = sorted(tasks)
+    if args.task and args.task not in tasks:
+        _failure(
+            command,
+            "unknown_action_guide_task",
+            f"Unknown action guide task: {args.task}",
+            task=args.task,
+            available_tasks=task_ids,
+            fix=_doctor_fix(
+                "inspect_action_guide_tasks",
+                commands=[
+                    "browser-cli action guide --names-only",
+                    "browser-cli action guide",
+                ],
+                guidance=[
+                    "Choose one of available_tasks, then rerun action guide with that --task value."
+                ],
+            ),
+        )
+
+    selection_policy = {
+        "inspect_before_acting": True,
+        "prefer_semantic_actions": True,
+        "prefer_waits_over_sleep": True,
+        "custom_javascript_last": True,
+        "reference_command": "browser-cli reference get --id action_playbook",
+        "command_catalog": "browser-cli commands --group action",
+    }
+    if args.names_only:
+        _success(
+            command,
+            schema_version=1,
+            task_count=len(task_ids),
+            tasks=task_ids,
+            selection_policy=selection_policy,
+        )
+
+    if args.task:
+        _success(
+            command,
+            schema_version=1,
+            task=args.task,
+            guide=tasks[args.task],
+            available_tasks=task_ids,
+            selection_policy=selection_policy,
+            next_commands=[
+                f"browser-cli commands --workflow {workflow}"
+                for workflow in tasks[args.task]["related_workflows"]
+            ],
+        )
+
+    _success(
+        command,
+        schema_version=1,
+        task_count=len(task_ids),
+        tasks=tasks,
+        selection_policy=selection_policy,
+        next_commands=[
+            "browser-cli action guide --task form_interaction",
+            "browser-cli action guide --task interactive_targeting",
+            "browser-cli action guide --task page_diagnostics",
+            "browser-cli commands --group action",
+            "browser-cli reference get --id action_playbook",
+        ],
+    )
+
+
 def cmd_action_open_url(args: argparse.Namespace) -> None:
     _run_action_command(
         args,
@@ -12578,6 +12897,21 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action = subparsers.add_parser("action", help="Run browser actions")
     action_subparsers = action.add_subparsers(dest="action_command", required=True)
+
+    action_guide = action_subparsers.add_parser(
+        "guide",
+        help="Show machine-readable action selection guidance for agents",
+    )
+    action_guide.add_argument(
+        "--task",
+        help="Action task guide to inspect, such as form_interaction or interactive_targeting.",
+    )
+    action_guide.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Only list available action guide task ids.",
+    )
+    action_guide.set_defaults(func=cmd_action_guide)
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)

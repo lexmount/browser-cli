@@ -16,6 +16,7 @@ def test_skill_prefers_cli_workflow_over_custom_playwright() -> None:
     assert "Use `browser-cli` as the primary interface" in text
     assert "Prefer CLI commands and JSON output" in text
     assert "browser-cli commands --group action" in text
+    assert "browser-cli action guide --task <task>" in text
     assert "before writing custom JavaScript" in text
     assert "ad hoc Playwright scripts" in text
     assert "Write custom Playwright only when the CLI cannot express the task" in text

@@ -509,6 +509,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     form_steps = workflows["form_interaction"]["steps"]
     assert [step["id"] for step in form_steps] == [
+        "inspect_action_guide",
         "inspect_form",
         "fill_labeled_field",
         "choose_labeled_option",
@@ -517,23 +518,28 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "submit_form",
         "verify_result",
     ]
-    assert form_steps[0]["command"] == (
+    assert (
+        form_steps[0]["command"] == "browser-cli action guide --task form_interaction"
+    )
+    assert "guide.preferred_commands" in form_steps[0]["read"]
+    assert form_steps[1]["command"] == (
         "browser-cli action form-snapshot --session-id <session_id> --selector form"
     )
-    assert "result.fields" in form_steps[0]["read"]
-    assert "result.field_count" in form_steps[0]["read"]
-    assert "result.filled" in form_steps[1]["read"]
-    assert form_steps[2]["optional"] is True
-    assert "result.option_found" in form_steps[2]["read"]
+    assert "result.fields" in form_steps[1]["read"]
+    assert "result.field_count" in form_steps[1]["read"]
+    assert "result.filled" in form_steps[2]["read"]
     assert form_steps[3]["optional"] is True
-    assert "result.checked" in form_steps[3]["read"]
-    assert "result.element" in form_steps[4]["read"]
-    assert "result.clicked" in form_steps[5]["read"]
-    assert form_steps[6]["optional"] is True
-    assert "found" in form_steps[6]["read"]
-    assert "browser-cli action wait-text" in form_steps[6]["fallback_commands"][0]
+    assert "result.option_found" in form_steps[3]["read"]
+    assert form_steps[4]["optional"] is True
+    assert "result.checked" in form_steps[4]["read"]
+    assert "result.element" in form_steps[5]["read"]
+    assert "result.clicked" in form_steps[6]["read"]
+    assert form_steps[7]["optional"] is True
+    assert "found" in form_steps[7]["read"]
+    assert "browser-cli action wait-text" in form_steps[7]["fallback_commands"][0]
     targeting_steps = workflows["interactive_targeting"]["steps"]
     assert [step["id"] for step in targeting_steps] == [
+        "inspect_action_guide",
         "inspect_interactive_targets",
         "inspect_accessibility_context",
         "choose_click_method",
@@ -542,31 +548,36 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "verify_after_click",
     ]
     assert targeting_steps[0]["command"] == (
+        "browser-cli action guide --task interactive_targeting"
+    )
+    assert "guide.selection_order" in targeting_steps[0]["read"]
+    assert targeting_steps[1]["command"] == (
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
     )
-    assert "result.nodes" in targeting_steps[0]["read"]
-    assert "result.node_count" in targeting_steps[0]["read"]
-    assert targeting_steps[1]["optional"] is True
-    assert "result.truncated" in targeting_steps[1]["read"]
-    assert targeting_steps[2]["agent_action"] is True
-    assert targeting_steps[2]["selection_order"] == [
+    assert "result.nodes" in targeting_steps[1]["read"]
+    assert "result.node_count" in targeting_steps[1]["read"]
+    assert targeting_steps[2]["optional"] is True
+    assert "result.truncated" in targeting_steps[2]["read"]
+    assert targeting_steps[3]["agent_action"] is True
+    assert targeting_steps[3]["selection_order"] == [
         "click-role",
         "click-text",
         "click-index",
     ]
     assert (
-        "browser-cli action click-text" in targeting_steps[2]["preferred_commands"][1]
+        "browser-cli action click-text" in targeting_steps[3]["preferred_commands"][1]
     )
-    assert "result.element" in targeting_steps[3]["read"]
-    assert "browser-cli action wait-text" in targeting_steps[3]["fallback_commands"][0]
-    assert "result.clicked" in targeting_steps[4]["read"]
+    assert "result.element" in targeting_steps[4]["read"]
+    assert "browser-cli action wait-text" in targeting_steps[4]["fallback_commands"][0]
+    assert "result.clicked" in targeting_steps[5]["read"]
     assert (
         "browser-cli action click-index"
-        in targeting_steps[4]["alternative_commands"][1]
+        in targeting_steps[5]["alternative_commands"][1]
     )
-    assert "browser-cli action wait-url" in targeting_steps[5]["fallback_commands"][0]
+    assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
     diagnostics_steps = workflows["page_diagnostics"]["steps"]
     assert [step["id"] for step in diagnostics_steps] == [
+        "inspect_action_guide",
         "page_info_before",
         "install_console_capture",
         "install_network_capture",
@@ -575,16 +586,20 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "read_network_entries",
         "capture_visible_state",
     ]
-    assert diagnostics_steps[1]["command"] == (
+    assert diagnostics_steps[0]["command"] == (
+        "browser-cli action guide --task page_diagnostics"
+    )
+    assert "guide.read_fields" in diagnostics_steps[0]["read"]
+    assert diagnostics_steps[2]["command"] == (
         "browser-cli action console-snapshot --session-id <session_id> --install-only"
     )
-    assert "result.newly_installed" in diagnostics_steps[1]["read"]
-    assert "result.buffered_count_after" in diagnostics_steps[2]["read"]
-    assert diagnostics_steps[3]["agent_action"] is True
-    assert "result.entries" in diagnostics_steps[4]["read"]
-    assert "result.entry_count" in diagnostics_steps[5]["read"]
+    assert "result.newly_installed" in diagnostics_steps[2]["read"]
+    assert "result.buffered_count_after" in diagnostics_steps[3]["read"]
+    assert diagnostics_steps[4]["agent_action"] is True
+    assert "result.entries" in diagnostics_steps[5]["read"]
+    assert "result.entry_count" in diagnostics_steps[6]["read"]
     assert (
-        "browser-cli action screenshot" in diagnostics_steps[6]["fallback_commands"][0]
+        "browser-cli action screenshot" in diagnostics_steps[7]["fallback_commands"][0]
     )
 
     for name in (
@@ -599,6 +614,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "case.run",
         "session.create",
         "context.pick",
+        "action.guide",
         "action.open-url",
         "action.page-info",
         "action.wait-title",
@@ -631,6 +647,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "exactly_one_of": ["--connect-url", "--direct-url", "--session-id"],
     }
     assert "--url" in open_url["required_options"]
+    action_guide = commands["action.guide"]
+    assert action_guide["required_options"] == []
+    assert action_guide["required_one_of"] == []
+    assert any("--task" in option["flags"] for option in action_guide["options"])
     interactive = commands["action.interactive-snapshot"]
     interactive_only = commands["action.interactive-only-snapshot"]
     assert interactive["aliases"] == ["action.interactive-only-snapshot"]
@@ -655,6 +675,100 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         for option in commands["example.get"]["options"]
     )
     assert "super-secret-key" not in json.dumps(payload)
+
+
+def test_action_guide_lists_tasks_and_returns_task_guidance(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--names-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": "action.guide",
+        "schema_version": 1,
+        "task_count": 4,
+        "tasks": [
+            "form_interaction",
+            "interactive_targeting",
+            "page_diagnostics",
+            "state_waits",
+        ],
+        "selection_policy": {
+            "inspect_before_acting": True,
+            "prefer_semantic_actions": True,
+            "prefer_waits_over_sleep": True,
+            "custom_javascript_last": True,
+            "reference_command": "browser-cli reference get --id action_playbook",
+            "command_catalog": "browser-cli commands --group action",
+        },
+    }
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "interactive_targeting"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "action.guide"
+    assert payload["task"] == "interactive_targeting"
+    assert payload["available_tasks"] == [
+        "form_interaction",
+        "interactive_targeting",
+        "page_diagnostics",
+        "state_waits",
+    ]
+    assert payload["selection_policy"]["custom_javascript_last"] is True
+    guide = payload["guide"]
+    assert guide["related_workflows"] == ["interactive_targeting"]
+    assert guide["selection_order"][:3] == [
+        "interactive-snapshot",
+        "accessibility-snapshot",
+        "wait-role",
+    ]
+    assert "browser-cli action accessibility-snapshot" in guide["inspect_commands"][1]
+    assert "browser-cli action click-role" in guide["preferred_commands"][1]
+    assert "browser-cli action hover" in guide["fallback_commands"][0]
+    assert "browser-cli action wait-url" in guide["verify_commands"][0]
+    assert "result.nodes" in guide["read_fields"]
+    assert "action eval only after" in guide["custom_js_boundary"]
+    assert payload["next_commands"] == [
+        "browser-cli commands --workflow interactive_targeting"
+    ]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "form_interaction"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert (
+        "browser-cli action dispatch-event --session-id <session_id> "
+        '--selector "<selector>" --event input --event change'
+    ) in payload["guide"]["fallback_commands"]
+
+
+def test_action_guide_fails_unknown_task_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "missing"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "action.guide"
+    assert payload["error"] == "unknown_action_guide_task"
+    assert payload["task"] == "missing"
+    assert payload["available_tasks"] == [
+        "form_interaction",
+        "interactive_targeting",
+        "page_diagnostics",
+        "state_waits",
+    ]
+    assert payload["fix"]["code"] == "inspect_action_guide_tasks"
+    assert "browser-cli action guide --names-only" in payload["fix"]["commands"]
 
 
 def test_commands_catalog_returns_workflows_only(
@@ -737,15 +851,15 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "result.filled"
-        in payload["agent_workflows"]["form_interaction"]["steps"][1]["read"]
+        in payload["agent_workflows"]["form_interaction"]["steps"][2]["read"]
     )
     assert (
         "result.nodes"
-        in payload["agent_workflows"]["interactive_targeting"]["steps"][0]["read"]
+        in payload["agent_workflows"]["interactive_targeting"]["steps"][1]["read"]
     )
     assert (
         "result.entries"
-        in payload["agent_workflows"]["page_diagnostics"]["steps"][4]["read"]
+        in payload["agent_workflows"]["page_diagnostics"]["steps"][5]["read"]
     )
     assert "browser-cli auth login" in payload["agent_entrypoints"]["setup"]
     assert payload["json_output"]["always_json"] is True
@@ -1211,16 +1325,21 @@ def test_commands_catalog_returns_form_interaction_workflow(
     assert payload["ok"] is True
     assert payload["workflow_id"] == "form_interaction"
     assert "agent_workflows" not in payload
-    assert payload["workflow"]["steps"][0]["id"] == "inspect_form"
+    assert payload["workflow"]["steps"][0]["id"] == "inspect_action_guide"
     assert payload["workflow"]["steps"][0]["command"] == (
+        "browser-cli action guide --task form_interaction"
+    )
+    assert "guide.preferred_commands" in payload["workflow"]["steps"][0]["read"]
+    assert payload["workflow"]["steps"][1]["id"] == "inspect_form"
+    assert payload["workflow"]["steps"][1]["command"] == (
         "browser-cli action form-snapshot --session-id <session_id> --selector form"
     )
-    assert payload["workflow"]["steps"][1]["id"] == "fill_labeled_field"
-    assert "result.filled" in payload["workflow"]["steps"][1]["read"]
+    assert payload["workflow"]["steps"][2]["id"] == "fill_labeled_field"
+    assert "result.filled" in payload["workflow"]["steps"][2]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "verify_result"
     assert payload["workflow"]["steps"][-1]["optional"] is True
     assert (
-        "browser-cli action form-snapshot"
+        "browser-cli action guide --task form_interaction"
         in payload["agent_entrypoints"]["form_interaction"][0]
     )
 
@@ -1396,6 +1515,7 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert "agent_workflows" not in payload
     steps = payload["workflow"]["steps"]
     assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
         "inspect_interactive_targets",
         "inspect_accessibility_context",
         "choose_click_method",
@@ -1404,14 +1524,18 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
         "verify_after_click",
     ]
     assert steps[0]["command"] == (
+        "browser-cli action guide --task interactive_targeting"
+    )
+    assert "guide.inspect_commands" in steps[0]["read"]
+    assert steps[1]["command"] == (
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
     )
-    assert "result.nodes" in steps[0]["read"]
-    assert steps[1]["optional"] is True
-    assert steps[2]["agent_action"] is True
-    assert steps[2]["selection_order"] == ["click-role", "click-text", "click-index"]
-    assert "browser-cli action click-role" in steps[2]["preferred_commands"][0]
-    assert "browser-cli action click-text" in steps[4]["alternative_commands"][0]
+    assert "result.nodes" in steps[1]["read"]
+    assert steps[2]["optional"] is True
+    assert steps[3]["agent_action"] is True
+    assert steps[3]["selection_order"] == ["click-role", "click-text", "click-index"]
+    assert "browser-cli action click-role" in steps[3]["preferred_commands"][0]
+    assert "browser-cli action click-text" in steps[5]["alternative_commands"][0]
     assert steps[-1]["id"] == "verify_after_click"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
@@ -1427,14 +1551,18 @@ def test_commands_catalog_returns_page_diagnostics_workflow(
     assert payload["ok"] is True
     assert payload["workflow_id"] == "page_diagnostics"
     assert "agent_workflows" not in payload
-    assert payload["workflow"]["steps"][0]["id"] == "page_info_before"
-    assert payload["workflow"]["steps"][1]["command"] == (
+    assert payload["workflow"]["steps"][0]["id"] == "inspect_action_guide"
+    assert payload["workflow"]["steps"][0]["command"] == (
+        "browser-cli action guide --task page_diagnostics"
+    )
+    assert payload["workflow"]["steps"][1]["id"] == "page_info_before"
+    assert payload["workflow"]["steps"][2]["command"] == (
         "browser-cli action console-snapshot --session-id <session_id> --install-only"
     )
-    assert payload["workflow"]["steps"][3]["id"] == "reproduce_issue"
-    assert payload["workflow"]["steps"][3]["agent_action"] is True
-    assert payload["workflow"]["steps"][4]["id"] == "read_console_entries"
-    assert "result.entries" in payload["workflow"]["steps"][4]["read"]
+    assert payload["workflow"]["steps"][4]["id"] == "reproduce_issue"
+    assert payload["workflow"]["steps"][4]["agent_action"] is True
+    assert payload["workflow"]["steps"][5]["id"] == "read_console_entries"
+    assert "result.entries" in payload["workflow"]["steps"][5]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "capture_visible_state"
     assert (
         "browser-cli action screenshot"
@@ -1701,6 +1829,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "close_session",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["form_interaction"] == [
+        "inspect_action_guide",
         "inspect_form",
         "fill_labeled_field",
         "choose_labeled_option",
@@ -1712,6 +1841,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["required_workflow_steps"][
         "interactive_targeting"
     ] == [
+        "inspect_action_guide",
         "inspect_interactive_targets",
         "inspect_accessibility_context",
         "choose_click_method",
@@ -1720,6 +1850,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "verify_after_click",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["page_diagnostics"] == [
+        "inspect_action_guide",
         "page_info_before",
         "install_console_capture",
         "install_network_capture",
@@ -1847,6 +1978,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["command_count"] == 3
     assert catalog["workflow_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
+    assert "action.guide" in catalog["missing_required_commands"]
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
@@ -2094,6 +2226,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 },
                 "form_interaction": {
                     "steps": [
+                        {"id": "inspect_action_guide"},
                         {"id": "inspect_form"},
                         {"id": "fill_labeled_field"},
                         {"id": "choose_labeled_option"},
@@ -2105,6 +2238,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 },
                 "interactive_targeting": {
                     "steps": [
+                        {"id": "inspect_action_guide"},
                         {"id": "inspect_interactive_targets"},
                         {"id": "inspect_accessibility_context"},
                         {"id": "choose_click_method"},
@@ -2115,6 +2249,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 },
                 "page_diagnostics": {
                     "steps": [
+                        {"id": "inspect_action_guide"},
                         {"id": "page_info_before"},
                         {"id": "install_console_capture"},
                         {"id": "install_network_capture"},

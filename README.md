@@ -40,7 +40,9 @@ CLI for you:
    browser-cli commands --workflow connect_from_codex_auth
    browser-cli commands --workflow device_code_auth
    browser-cli commands --workflow scoped_token_lifecycle
-6. 读取 packaged agent reference 目录；后续选择浏览器 action 前，优先读取 action_playbook，不要先写自定义 Playwright/JS：
+6. 读取 action guide 和 packaged agent reference 目录；后续选择浏览器 action 前，优先读取机器可读 guide 和 action_playbook，不要先写自定义 Playwright/JS：
+   browser-cli action guide --names-only
+   browser-cli action guide --task interactive_targeting
    browser-cli reference list
    browser-cli reference get --id action_playbook --metadata-only
    browser-cli reference get --id action_playbook
@@ -78,7 +80,7 @@ CLI for you:
    browser-cli doctor --smoke-session
    browser-cli session list
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
-19. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约；选择具体 action 时先查 action_playbook、packaged examples 和 commands catalog，只有 CLI 无法表达时才写自定义 Playwright/JS：
+19. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约；选择具体 action 时先查 action guide、action_playbook、packaged examples 和 commands catalog，只有 CLI 无法表达时才写自定义 Playwright/JS：
    browser-cli commands --workflow session_recovery
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow case_file_task
@@ -86,6 +88,9 @@ CLI for you:
    browser-cli commands --workflow form_interaction
    browser-cli commands --workflow interactive_targeting
    browser-cli commands --workflow page_diagnostics
+   browser-cli action guide --task form_interaction
+   browser-cli action guide --task interactive_targeting
+   browser-cli action guide --task page_diagnostics
 20. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
@@ -211,6 +216,8 @@ For machine-readable command discovery, run:
 browser-cli commands
 browser-cli commands --names-only
 browser-cli commands --group action
+browser-cli action guide --names-only
+browser-cli action guide --task interactive_targeting
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_site_requirements
@@ -237,6 +244,9 @@ browser target requirements, JSON/secret policies, and agent entrypoint recipes.
 Agents should use `--workflows-only` for compact setup/task flow discovery,
 `--workflow <id>` for one concrete task path, and the command catalog when
 deciding whether a first-class action exists before writing custom JavaScript.
+Use `browser-cli action guide --task <task>` for a compact task-specific action
+route with `inspect_commands`, `preferred_commands`, `verify_commands`, and the
+`custom_js_boundary`.
 Unknown groups return JSON with `error=unknown_group`, `available_groups`, and a
 `fix` object so agents can repair typos instead of treating an empty command
 list as capability absence. Unknown workflows similarly return
@@ -375,6 +385,10 @@ browser-cli context delete --context-id <context_id>
 Browser actions:
 
 ```bash
+browser-cli action guide --names-only
+browser-cli action guide --task form_interaction
+browser-cli action guide --task interactive_targeting
+browser-cli action guide --task page_diagnostics
 browser-cli action open-url --session-id <session_id> --url https://example.com
 browser-cli action wait-selector --session-id <session_id> --selector "main"
 browser-cli action click --session-id <session_id> --selector "button[type=submit]"
@@ -457,6 +471,11 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action interactive-snapshot --session-id <session_id>
 browser-cli action interactive-only-snapshot --session-id <session_id>
 ```
+
+`action guide` returns machine-readable task routes for `form_interaction`,
+`interactive_targeting`, `page_diagnostics`, and `state_waits`, including
+selection order, inspect/preferred/fallback/verify commands, read fields, and
+the boundary for custom JavaScript.
 
 `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `exists`, `count`, `query`,
@@ -591,7 +610,9 @@ local reveal flag.
 `secret_policy`, `agent_references`, `agent_examples`, `agent_entrypoints`, and
 `agent_workflows`.
 Use `--names-only` for compact command discovery and `--group action` when
-choosing a browser action. Use `agent_references` to load detailed Skill
+choosing a browser action. Use `browser-cli action guide --task <task>` for
+compact task-specific action selection before reading larger references. Use
+`agent_references` to load detailed Skill
 references such as `references/action-playbook.md` only when action selection,
 structured result parsing, masking, or browser-target details are needed.
 `agent_references.action_playbook.content_command` points to

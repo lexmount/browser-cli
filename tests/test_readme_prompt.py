@@ -68,6 +68,10 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli commands --workflow form_interaction" in prompt
     assert "browser-cli commands --workflow interactive_targeting" in prompt
     assert "browser-cli commands --workflow page_diagnostics" in prompt
+    assert "browser-cli action guide --names-only" in prompt
+    assert "browser-cli action guide --task form_interaction" in prompt
+    assert "browser-cli action guide --task interactive_targeting" in prompt
+    assert "browser-cli action guide --task page_diagnostics" in prompt
     assert "workflow.steps" in prompt
     assert "connect_from_codex.url" in prompt
     assert "browser-cli auth export-env" in prompt

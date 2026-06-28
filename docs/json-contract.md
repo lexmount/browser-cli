@@ -57,6 +57,14 @@ groups.
 `--workflow <id>` returns one workflow as `workflow_id` and `workflow`; unknown
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
+`browser-cli action guide` is the compact machine-readable action selection
+surface. It returns `schema_version`, `selection_policy`, and `tasks`; with
+`--task <id>` it returns `guide.inspect_commands`,
+`guide.preferred_commands`, `guide.fallback_commands`,
+`guide.verify_commands`, `guide.read_fields`, and
+`guide.custom_js_boundary` for that browser task. Unknown task ids fail as JSON
+with `error=unknown_action_guide_task`, `available_tasks`, and a `fix` object
+with commands for inspecting valid guide tasks.
 `agent_references` describes optional Skill reference files such as
 `references/action-playbook.md`, with `content_command`, `package_resource`,
 `load_when`, `related_workflows`, `covers`, and `grep_patterns` so agents can
@@ -114,6 +122,9 @@ without custom JavaScript.
 The page diagnostics workflow also exposes console/network capture steps and
 visible-state fallback commands so agents can reproduce a suspected issue before
 reading `result.entries`, `result.entry_count`, and masked diagnostic fields.
+The form interaction, interactive targeting, and page diagnostics workflows
+start with an `inspect_action_guide` step so agents read the compact task guide
+before selecting first-class actions or considering custom JavaScript.
 
 `context pick` and session context reuse return `selection_summary` with stable
 counts such as `checked`, `metadata_matches`, `metadata_mismatches`,
@@ -189,6 +200,10 @@ Default behavior:
   `site_capability_status`, `required_device_code_endpoints`,
   `required_api_contract`, `required_token_lifecycle`, `setup_blocks`, and
   verification commands.
+- `action guide` reports compact action routes for `form_interaction`,
+  `interactive_targeting`, `page_diagnostics`, and `state_waits`, including
+  inspect, preferred, fallback, and verification commands plus the custom
+  JavaScript boundary for each task.
 - `auth export-env` reports top-level `usable` and `unusable_exports` so agents
   can distinguish directly runnable export commands from placeholder or masked
   commands.
