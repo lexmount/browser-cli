@@ -106,6 +106,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action wait-state-role" in text
     assert "browser-cli action set-viewport" in text
     assert "browser-cli action screenshot-selector" in text
+    assert "browser-cli action screenshot-role" in text
     assert "browser-cli action get-attribute-role" in text
     assert "browser-cli action wait-attribute-role" in text
     assert "browser-cli action select-role" in text
@@ -129,7 +130,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "click-text" in text
     assert "page-info" in text
     assert "stable viewport" in text
-    assert "selector screenshots" in text
+    assert "selector or role screenshots" in text
     assert "wait-title" in text
     assert "waiting for text to disappear" in text
     assert "active/global shortcut keys" in text

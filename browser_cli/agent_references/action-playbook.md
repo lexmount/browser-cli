@@ -40,6 +40,7 @@ browser-cli action click --session-id <session_id> --selector "button"
 browser-cli action type --session-id <session_id> --selector "input[name=q]" --text "query"
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action screenshot-selector --session-id <session_id> --selector "main" --output /tmp/main.png
+browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/submit.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
 browser-cli action page-info --session-id <session_id>
@@ -148,7 +149,7 @@ browser-cli action wait-cookie --session-id <session_id> --name consent --value 
 
 ## Structured Results And Masking
 
-Prefer built-in actions over writing custom JavaScript. `page-info`, `set-viewport`, `screenshot-selector`, `reload`,
+Prefer built-in actions over writing custom JavaScript. `page-info`, `set-viewport`, `screenshot-selector`, `screenshot-role`, `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-title`, `wait-load-state`,
 `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`, `inspect`,
 `get-attribute`, `get-attribute-role`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-attribute-role`, `wait-text`,
@@ -348,9 +349,10 @@ console/page error entries and the reported page URL.
    `value`, `attributes`, and `in_viewport`; use `wait-count`, `wait-state`, or
    `wait-attribute` for async DOM changes.
 10. Capture final evidence: use `set-viewport` when evidence needs a stable
-    browser size, `screenshot-selector` for a known panel/control, then
-    `screenshot` for full viewport/page evidence and close the session unless
-    the user asks to keep it open.
+    browser size, `screenshot-role` for a semantic target,
+    `screenshot-selector` for a known panel/control, then `screenshot` for full
+    viewport/page evidence and close the session unless the user asks to keep
+    it open.
 
 ## Target Contract
 

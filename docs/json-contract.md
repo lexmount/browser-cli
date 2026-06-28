@@ -250,7 +250,7 @@ Default behavior:
   required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, press-role,
   hover, hover-role, scroll, scroll-into-view-role, set-viewport,
-  screenshot-selector,
+  screenshot-selector, screenshot-role,
   get-text, get-text-role, exists, exists-role, wait-state-role,
   get-attribute-role, wait-attribute-role, bounding-box-role,
   select-option, select-role, check, uncheck, check-role,

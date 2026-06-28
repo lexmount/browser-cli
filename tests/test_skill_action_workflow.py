@@ -301,6 +301,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`page-info`",
         "`set-viewport`",
         "`screenshot-selector`",
+        "`screenshot-role`",
         "`get-text`",
         "`get-text-role`",
         "`count`",
@@ -648,5 +649,6 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "HttpOnly cookies" in normalized
     assert "Capture final evidence" in normalized
     assert "use `set-viewport` when evidence needs a stable browser size" in normalized
+    assert "`screenshot-role` for a semantic target" in normalized
     assert "`screenshot-selector` for a known panel/control" in normalized
     assert "`screenshot` for full viewport/page evidence" in normalized

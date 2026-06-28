@@ -346,6 +346,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png"
         in payload["agent_entrypoints"]["page_diagnostics"]
     )
+    assert (
+        'browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png'
+        in payload["agent_entrypoints"]["page_diagnostics"]
+    )
     workflows = payload["agent_workflows"]
     assert workflows["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -646,11 +650,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.entries" in diagnostics_steps[6]["read"]
     assert "result.entry_count" in diagnostics_steps[7]["read"]
     assert (
-        "browser-cli action screenshot-selector"
+        "browser-cli action screenshot-role"
         in diagnostics_steps[8]["fallback_commands"][0]
     )
     assert (
-        "browser-cli action screenshot" in diagnostics_steps[8]["fallback_commands"][1]
+        "browser-cli action screenshot-selector"
+        in diagnostics_steps[8]["fallback_commands"][1]
+    )
+    assert (
+        "browser-cli action screenshot" in diagnostics_steps[8]["fallback_commands"][2]
     )
 
     for name in (
@@ -670,6 +678,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.page-info",
         "action.set-viewport",
         "action.screenshot-selector",
+        "action.screenshot-role",
         "action.wait-title",
         "action.wait-state-role",
         "action.press-key",
@@ -726,6 +735,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert screenshot_selector["browser_target"] == open_url["browser_target"]
     assert any(
         "--output" in option["flags"] for option in screenshot_selector["options"]
+    )
+    screenshot_role = commands["action.screenshot-role"]
+    assert screenshot_role["required_options"] == ["--role"]
+    assert screenshot_role["browser_target"] == open_url["browser_target"]
+    assert any("--name" in option["flags"] for option in screenshot_role["options"])
+    assert any(
+        "--include-hidden" in option["flags"] for option in screenshot_role["options"]
     )
     action_guide = commands["action.guide"]
     assert action_guide["required_options"] == []
@@ -1005,7 +1021,12 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert "result.viewport" in payload["guide"]["read_fields"]
     assert "result.window_viewport" in payload["guide"]["read_fields"]
+    assert "screenshot-role" in payload["guide"]["selection_order"]
     assert "screenshot-selector" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action screenshot-role" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
     assert any(
         "browser-cli action screenshot-selector" in command
         for command in payload["guide"]["fallback_commands"]
@@ -1890,12 +1911,16 @@ def test_commands_catalog_returns_page_diagnostics_workflow(
     assert "result.entries" in payload["workflow"]["steps"][6]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "capture_visible_state"
     assert (
-        "browser-cli action screenshot-selector"
+        "browser-cli action screenshot-role"
         in payload["workflow"]["steps"][-1]["fallback_commands"][0]
     )
     assert (
-        "browser-cli action screenshot"
+        "browser-cli action screenshot-selector"
         in payload["workflow"]["steps"][-1]["fallback_commands"][1]
+    )
+    assert (
+        "browser-cli action screenshot"
+        in payload["workflow"]["steps"][-1]["fallback_commands"][2]
     )
 
 
@@ -1981,6 +2006,7 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.page-info" in payload["commands"]
     assert "action.set-viewport" in payload["commands"]
     assert "action.screenshot-selector" in payload["commands"]
+    assert "action.screenshot-role" in payload["commands"]
     assert "action.wait-title" in payload["commands"]
     assert "action.press-key" in payload["commands"]
     assert "action.link-snapshot" in payload["commands"]
@@ -2201,6 +2227,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.scroll-into-view-role",
         "action.set-viewport",
         "action.screenshot-selector",
+        "action.screenshot-role",
         "action.get-text",
         "action.get-text-role",
         "action.exists",
@@ -2335,6 +2362,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
     assert "action.set-viewport" in catalog["missing_required_commands"]
     assert "action.screenshot-selector" in catalog["missing_required_commands"]
+    assert "action.screenshot-role" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
@@ -6821,6 +6849,146 @@ def test_action_screenshot_selector_rejects_invalid_index_as_json(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
     assert payload["command"] == "action.screenshot-selector"
+    assert payload["error"] == "argument_error"
+    assert payload["index"] == -1
+
+
+def test_action_screenshot_role_emits_structured_result(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+    connect_url = "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+
+    def fake_resolve(target: Any) -> str:
+        assert target.session_id == "s1"
+        return connect_url
+
+    def fake_screenshot_role(
+        *,
+        connect_url: str,
+        role: str,
+        name: str | None,
+        output: str | None,
+        index: int,
+        timeout_ms: float,
+        exact: bool,
+        include_hidden: bool,
+    ) -> dict[str, Any]:
+        observed.update(
+            {
+                "connect_url": connect_url,
+                "role": role,
+                "name": name,
+                "output": output,
+                "index": index,
+                "timeout_ms": timeout_ms,
+                "exact": exact,
+                "include_hidden": include_hidden,
+            }
+        )
+        return {
+            "url": "https://example.test",
+            "role": role,
+            "name": name,
+            "exact": exact,
+            "include_hidden": include_hidden,
+            "index": index,
+            "found": True,
+            "role_found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": output,
+            "match_count": 1,
+            "bounding_box": {"x": 10, "y": 20, "width": 140, "height": 40},
+        }
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url", fake_resolve
+    )
+    monkeypatch.setattr("browser_cli.cli._screenshot_role", fake_screenshot_role)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "screenshot-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+                "--output",
+                "/tmp/submit.png",
+                "--index",
+                "0",
+                "--timeout-ms",
+                "1234",
+                "--exact",
+                "--include-hidden",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed == {
+        "connect_url": connect_url,
+        "role": "button",
+        "name": "Submit",
+        "output": "/tmp/submit.png",
+        "index": 0,
+        "timeout_ms": 1234.0,
+        "exact": True,
+        "include_hidden": True,
+    }
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": True,
+        "command": "action.screenshot-role",
+        "session_id": "s1",
+        "connect_url": (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=***"
+        ),
+        "connect_url_masked": True,
+        "result": {
+            "url": "https://example.test",
+            "role": "button",
+            "name": "Submit",
+            "exact": True,
+            "include_hidden": True,
+            "index": 0,
+            "found": True,
+            "role_found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": "/tmp/submit.png",
+            "match_count": 1,
+            "bounding_box": {"x": 10, "y": 20, "width": 140, "height": 40},
+        },
+    }
+
+
+def test_action_screenshot_role_rejects_invalid_index_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "screenshot-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--index",
+                "-1",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "action.screenshot-role"
     assert payload["error"] == "argument_error"
     assert payload["index"] == -1
 

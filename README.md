@@ -395,6 +395,7 @@ browser-cli action click --session-id <session_id> --selector "button[type=submi
 browser-cli action type --session-id <session_id> --selector "input[name=q]" --text "hello"
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action screenshot-selector --session-id <session_id> --selector "main" --output /tmp/main.png
+browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/submit.png
 browser-cli action eval --session-id <session_id> --script "() => document.title"
 browser-cli action snapshot --session-id <session_id> --max-chars 8000
 browser-cli action page-info --session-id <session_id>
@@ -497,7 +498,7 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
-`page-info`, `set-viewport`, `screenshot-selector`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
+`page-info`, `set-viewport`, `screenshot-selector`, `screenshot-role`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`,
 `get-attribute`, `get-attribute-role`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-attribute-role`, `wait-text`, `wait-role`, `focus`, `focus-role`,
 `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `blur-role`, `storage-get`, `storage-set`, `storage-remove`,
@@ -845,8 +846,9 @@ Common agent recipes:
   metadata, `inspect` for state, `get-attribute` for href/value/aria checks,
   then `wait-count`, `wait-state`, or `wait-attribute` for async DOM changes.
 - Final evidence: `set-viewport` when evidence needs a stable browser size,
-  `screenshot-selector` for a known panel/control, then `screenshot` for full
-  viewport/page evidence before closing the session unless it should stay open.
+  `screenshot-role` for a semantic target, `screenshot-selector` for a known
+  panel/control, then `screenshot` for full viewport/page evidence before
+  closing the session unless it should stay open.
 
 Use `session create --context-metadata-json '{"purpose":"codex-login"}'
 --create-context-if-missing --context-mode read_write` when login state or

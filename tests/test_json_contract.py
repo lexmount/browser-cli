@@ -301,6 +301,7 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "scroll-into-view-role",
         "set-viewport",
         "screenshot-selector",
+        "screenshot-role",
         "get-text",
         "get-text-role",
         "exists",

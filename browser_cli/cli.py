@@ -110,6 +110,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.page-info",
     "action.set-viewport",
     "action.screenshot-selector",
+    "action.screenshot-role",
     "action.get-text",
     "action.get-text-role",
     "action.exists",
@@ -819,6 +820,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action network-snapshot --session-id <session_id> --install-only",
                 "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
                 "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+                'browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png',
                 "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
             ],
         },
@@ -1673,6 +1675,7 @@ def _command_catalog() -> dict[str, Any]:
                             "result.text_truncated",
                         ],
                         "fallback_commands": [
+                            'browser-cli action screenshot-role --session-id <session_id> --role button --name "<name>" --output /tmp/browser-cli-target.png',
                             "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
                             "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
                             "browser-cli action page-info --session-id <session_id>",
@@ -3975,6 +3978,125 @@ def _screenshot_selector(
     return _run_with_playwright_page(connect_url=connect_url, operation=apply)
 
 
+def _screenshot_role(
+    *,
+    connect_url: str,
+    role: str,
+    name: str | None,
+    output: str | None,
+    index: int,
+    timeout_ms: float,
+    exact: bool,
+    include_hidden: bool,
+) -> dict[str, Any]:
+    output_path = output or str(
+        Path("/tmp")
+        / f"browser-cli-role-screenshot-{int(datetime.now(timezone.utc).timestamp())}.png"
+    )
+
+    def apply(page: Any) -> dict[str, Any]:
+        matches = page.get_by_role(
+            role,
+            name=name,
+            exact=exact,
+            include_hidden=include_hidden,
+        )
+        target = matches.nth(index)
+        try:
+            target.wait_for(state="attached", timeout=timeout_ms)
+        except Exception:
+            match_count = matches.count()
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": False,
+                "role_found": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "error": "role_not_found",
+            }
+
+        match_count = matches.count()
+        if index >= match_count:
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": False,
+                "role_found": match_count > 0,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "error": "index_out_of_range",
+            }
+
+        try:
+            target.wait_for(state="visible", timeout=timeout_ms)
+        except Exception:
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": True,
+                "role_found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": target.bounding_box(),
+                "error": "element_not_visible",
+            }
+
+        bounding_box = target.bounding_box()
+        if bounding_box is None:
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": True,
+                "role_found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": None,
+                "error": "missing_bounding_box",
+            }
+
+        target.screenshot(path=output_path, timeout=timeout_ms)
+        return {
+            "url": page.url,
+            "role": role,
+            "name": name,
+            "exact": exact,
+            "include_hidden": include_hidden,
+            "index": index,
+            "found": True,
+            "role_found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": output_path,
+            "match_count": match_count,
+            "bounding_box": bounding_box,
+        }
+
+    return _run_with_playwright_page(connect_url=connect_url, operation=apply)
+
+
 def _run_set_viewport_action_command(args: argparse.Namespace) -> None:
     command = "action.set-viewport"
     if args.width <= 0 or args.height <= 0:
@@ -4036,6 +4158,51 @@ def _run_screenshot_selector_action_command(args: argparse.Namespace) -> None:
             output=args.output,
             index=args.index,
             timeout_ms=args.timeout_ms,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def _run_screenshot_role_action_command(args: argparse.Namespace) -> None:
+    command = "action.screenshot-role"
+    if args.index < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--index must be zero or greater.",
+            exit_code=2,
+            index=args.index,
+        )
+    if args.timeout_ms < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--timeout-ms must be zero or greater.",
+            exit_code=2,
+            timeout_ms=args.timeout_ms,
+        )
+
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = _screenshot_role(
+            connect_url=connect_url,
+            role=args.role,
+            name=args.name,
+            output=args.output,
+            index=args.index,
+            timeout_ms=args.timeout_ms,
+            exact=args.exact,
+            include_hidden=args.include_hidden,
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
@@ -11232,6 +11399,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "console-snapshot",
                 "network-snapshot",
                 "text-snapshot",
+                "screenshot-role",
                 "screenshot-selector",
                 "screenshot",
             ],
@@ -11251,6 +11419,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "fallback_commands": [
                 "browser-cli action wait-console --session-id <session_id> --source pageerror",
                 "browser-cli action wait-network --session-id <session_id> --failed-only",
+                'browser-cli action screenshot-role --session-id <session_id> --role button --name "<name>" --output /tmp/browser-cli-target.png',
                 "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
                 "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
             ],
@@ -11483,6 +11652,10 @@ def cmd_action_screenshot(args: argparse.Namespace) -> None:
 
 def cmd_action_screenshot_selector(args: argparse.Namespace) -> None:
     _run_screenshot_selector_action_command(args)
+
+
+def cmd_action_screenshot_role(args: argparse.Namespace) -> None:
+    _run_screenshot_role_action_command(args)
 
 
 def cmd_action_eval(args: argparse.Namespace) -> None:
@@ -14951,6 +15124,28 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_screenshot_selector.add_argument("--index", type=int, default=0)
     action_screenshot_selector.add_argument("--timeout-ms", type=float, default=30000)
     action_screenshot_selector.set_defaults(func=cmd_action_screenshot_selector)
+
+    action_screenshot_role = action_subparsers.add_parser(
+        "screenshot-role",
+        help="Capture a screenshot of one element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_screenshot_role)
+    action_screenshot_role.add_argument("--role", required=True)
+    action_screenshot_role.add_argument("--name")
+    action_screenshot_role.add_argument("--output")
+    action_screenshot_role.add_argument("--index", type=int, default=0)
+    action_screenshot_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_screenshot_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden accessibility nodes when matching role/name.",
+    )
+    action_screenshot_role.add_argument(
+        "--exact",
+        action="store_true",
+        help="Match the accessible name exactly.",
+    )
+    action_screenshot_role.set_defaults(func=cmd_action_screenshot_role)
 
     action_eval = action_subparsers.add_parser(
         "eval",
