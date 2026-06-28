@@ -177,6 +177,8 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`browser_state_management`" in text
     assert "`storage-set`" in text
     assert "`cookie-set`" in text
+    assert "`file_upload`" in text
+    assert "`set-file-input`" in text
     assert "`state_waits`" in text
     assert "`wait-network`" in text
     assert "`wait-storage`" in text

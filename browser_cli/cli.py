@@ -153,7 +153,9 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.wait-value-role",
     "action.blur-role",
     "action.clear-role",
+    "action.set-file-input",
     "action.accessibility-snapshot",
+    "action.form-snapshot",
     "action.interactive-snapshot",
     "action.interactive-only-snapshot",
     "action.link-snapshot",
@@ -196,6 +198,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "persistent_login_state",
     "browser_state_management",
     "form_interaction",
+    "file_upload",
     "interactive_targeting",
     "content_extraction",
     "state_waits",
@@ -281,6 +284,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "wait_submit_ready",
         "submit_form",
         "verify_result",
+    ),
+    "file_upload": (
+        "inspect_action_guide",
+        "inspect_upload_controls",
+        "attach_files",
+        "verify_upload_state",
+        "submit_if_requested",
     ),
     "interactive_targeting": (
         "inspect_action_guide",
@@ -617,6 +627,7 @@ def _agent_references() -> dict[str, Any]:
                 "browser_state_management",
                 "one_off_page_task",
                 "form_interaction",
+                "file_upload",
                 "interactive_targeting",
                 "page_diagnostics",
             ],
@@ -670,6 +681,7 @@ def _agent_examples() -> dict[str, Any]:
                 "case_file_task",
                 "browser_state_management",
                 "form_interaction",
+                "file_upload",
                 "interactive_targeting",
                 "content_extraction",
                 "state_waits",
@@ -877,6 +889,15 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled',
                 'browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
+            ],
+            "file_upload": [
+                "browser-cli action guide --task file_upload",
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./upload.txt',
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./front.png --file ./back.png',
+                'browser-cli action wait-text --session-id <session_id> --text "uploaded"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
             ],
             "interactive_targeting": [
@@ -1995,6 +2016,91 @@ def _command_catalog() -> dict[str, Any]:
                         "fallback_commands": [
                             'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
                             "browser-cli action text-snapshot --session-id <session_id> --selector main",
+                        ],
+                    },
+                ],
+            },
+            "file_upload": {
+                "purpose": "Attach one or more local files to an input[type=file], verify the file input state, and optionally submit without opening an OS file picker.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task file_upload",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_upload_controls",
+                        "command": "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                        "read": [
+                            "result.fields",
+                            "result.field_count",
+                            "result.visible_count",
+                            "result.truncated",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action query --session-id <session_id> --selector "input[type=file]" --max-nodes 20',
+                            'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                        ],
+                    },
+                    {
+                        "id": "attach_files",
+                        "command": 'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path>',
+                        "agent_action": True,
+                        "read": [
+                            "result.found",
+                            "result.file_input",
+                            "result.set",
+                            "result.multiple",
+                            "result.requested_count",
+                            "result.requested_files",
+                            "result.previous_count",
+                            "result.file_count",
+                            "result.files",
+                            "result.value_masked",
+                            "result.dispatched_events",
+                            "result.error",
+                            "result.message",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path1> --file <path2>',
+                            'browser-cli action set-file-input --session-id <session_id> --selector "<file input selector>" --file <path> --no-events',
+                        ],
+                    },
+                    {
+                        "id": "verify_upload_state",
+                        "command": 'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                        "read": [
+                            "result.found",
+                            "result.file_input",
+                            "result.file_count",
+                            "result.files",
+                            "result.value_masked",
+                            "result.element",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<uploaded filename or success text>"',
+                            "browser-cli action page-info --session-id <session_id>",
+                        ],
+                    },
+                    {
+                        "id": "submit_if_requested",
+                        "command": 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+                        "optional": True,
+                        "user_requested_only": True,
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action submit --session-id <session_id> --selector "form"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
                         ],
                     },
                 ],
@@ -12714,6 +12820,72 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "actions, and role/text clicks cannot express the interaction."
             ),
         },
+        "file_upload": {
+            "purpose": "Attach local files to input[type=file] controls before custom JavaScript or OS file-picker workarounds.",
+            "related_workflows": [
+                "file_upload",
+                "form_interaction",
+                "interactive_targeting",
+            ],
+            "when_to_use": [
+                "The task asks to upload, attach, import, or choose one or more local files in a browser form.",
+                "The page exposes or can be inspected for an input[type=file] control.",
+            ],
+            "selection_order": [
+                "form-snapshot",
+                "query input[type=file]",
+                "inspect",
+                "set-file-input",
+                "wait-text",
+                "click-role",
+                "submit",
+            ],
+            "inspect_commands": [
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                'browser-cli action query --session-id <session_id> --selector "input[type=file]" --max-nodes 20',
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+            ],
+            "preferred_commands": [
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path>',
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path1> --file <path2>',
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                'browser-cli action wait-text --session-id <session_id> --text "<uploaded filename or success text>"',
+            ],
+            "fallback_commands": [
+                'browser-cli action set-file-input --session-id <session_id> --selector "<file input selector>" --file <path> --no-events',
+                'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+                'browser-cli action submit --session-id <session_id> --selector "form"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "verify_commands": [
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.fields",
+                "result.nodes",
+                "result.found",
+                "result.file_input",
+                "result.set",
+                "result.multiple",
+                "result.requested_count",
+                "result.requested_files",
+                "result.previous_count",
+                "result.file_count",
+                "result.files",
+                "result.value_masked",
+                "result.dispatched_events",
+                "result.error",
+                "result.message",
+                "result.clicked",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after form-snapshot/query/inspect and "
+                "set-file-input cannot attach the file; do not click file "
+                "inputs to open an OS picker for agent-controlled uploads."
+            ),
+        },
         "interactive_targeting": {
             "purpose": "Find and activate visible controls with semantic actions before custom JavaScript.",
             "related_workflows": ["interactive_targeting"],
@@ -13145,6 +13317,7 @@ def cmd_action_guide(args: argparse.Namespace) -> None:
         selection_policy=selection_policy,
         next_commands=[
             "browser-cli action guide --task form_interaction",
+            "browser-cli action guide --task file_upload",
             "browser-cli action guide --task interactive_targeting",
             "browser-cli action guide --task content_extraction",
             "browser-cli action guide --task browser_state_management",
@@ -17392,7 +17565,7 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_guide.add_argument(
         "--task",
-        help="Action task guide to inspect, such as form_interaction, interactive_targeting, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
+        help="Action task guide to inspect, such as form_interaction, file_upload, interactive_targeting, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
     )
     action_guide.add_argument(
         "--names-only",

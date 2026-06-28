@@ -76,6 +76,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli commands --workflow interactive_targeting" in prompt
     assert "browser-cli commands --workflow content_extraction" in prompt
     assert "browser-cli commands --workflow browser_state_management" in prompt
+    assert "browser-cli commands --workflow file_upload" in prompt
     assert "browser-cli commands --workflow state_waits" in prompt
     assert "browser-cli commands --workflow page_diagnostics" in prompt
     assert "browser-cli action guide --names-only" in prompt
@@ -83,6 +84,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli action guide --task interactive_targeting" in prompt
     assert "browser-cli action guide --task content_extraction" in prompt
     assert "browser-cli action guide --task browser_state_management" in prompt
+    assert "browser-cli action guide --task file_upload" in prompt
     assert "browser-cli action guide --task state_waits" in prompt
     assert "browser-cli action guide --task page_diagnostics" in prompt
     assert "workflow.steps" in prompt

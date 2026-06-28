@@ -355,6 +355,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["form_interaction"]
     )
     assert (
+        "browser-cli action guide --task file_upload"
+        in payload["agent_entrypoints"]["file_upload"]
+    )
+    assert (
+        'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./upload.txt'
+        in payload["agent_entrypoints"]["file_upload"]
+    )
+    assert (
+        'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./front.png --file ./back.png'
+        in payload["agent_entrypoints"]["file_upload"]
+    )
+    assert (
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
         in payload["agent_entrypoints"]["interactive_targeting"]
     )
@@ -688,6 +700,34 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert form_steps[7]["optional"] is True
     assert "found" in form_steps[7]["read"]
     assert "browser-cli action wait-text" in form_steps[7]["fallback_commands"][0]
+    upload_steps = workflows["file_upload"]["steps"]
+    assert [step["id"] for step in upload_steps] == [
+        "inspect_action_guide",
+        "inspect_upload_controls",
+        "attach_files",
+        "verify_upload_state",
+        "submit_if_requested",
+    ]
+    assert upload_steps[0]["command"] == "browser-cli action guide --task file_upload"
+    assert "guide.custom_js_boundary" in upload_steps[0]["read"]
+    assert upload_steps[1]["command"] == (
+        "browser-cli action form-snapshot --session-id <session_id> --selector form"
+    )
+    assert "result.fields" in upload_steps[1]["read"]
+    assert "browser-cli action query" in upload_steps[1]["fallback_commands"][0]
+    assert upload_steps[2]["agent_action"] is True
+    assert "browser-cli action set-file-input" in upload_steps[2]["command"]
+    assert "result.requested_files" in upload_steps[2]["read"]
+    assert "result.file_count" in upload_steps[2]["read"]
+    assert "result.dispatched_events" in upload_steps[2]["read"]
+    assert "browser-cli action set-file-input" in upload_steps[2][
+        "alternative_commands"
+    ][0]
+    assert "result.file_input" in upload_steps[3]["read"]
+    assert "browser-cli action wait-text" in upload_steps[3]["fallback_commands"][0]
+    assert upload_steps[4]["optional"] is True
+    assert upload_steps[4]["user_requested_only"] is True
+    assert "browser-cli action submit" in upload_steps[4]["fallback_commands"][0]
     targeting_steps = workflows["interactive_targeting"]["steps"]
     assert [step["id"] for step in targeting_steps] == [
         "inspect_action_guide",
@@ -1079,10 +1119,11 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 6,
+        "task_count": 7,
         "tasks": [
             "browser_state_management",
             "content_extraction",
+            "file_upload",
             "form_interaction",
             "interactive_targeting",
             "page_diagnostics",
@@ -1109,6 +1150,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["available_tasks"] == [
         "browser_state_management",
         "content_extraction",
+        "file_upload",
         "form_interaction",
         "interactive_targeting",
         "page_diagnostics",
@@ -1220,6 +1262,35 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli action dispatch-event --session-id <session_id> "
         '--selector "<selector>" --event input --event change'
     ) in payload["guide"]["fallback_commands"]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "file_upload"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "file_upload",
+        "form_interaction",
+        "interactive_targeting",
+    ]
+    assert payload["guide"]["selection_order"][:4] == [
+        "form-snapshot",
+        "query input[type=file]",
+        "inspect",
+        "set-file-input",
+    ]
+    assert any(
+        "browser-cli action set-file-input" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action submit" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert "result.requested_files" in payload["guide"]["read_fields"]
+    assert "result.file_count" in payload["guide"]["read_fields"]
+    assert "OS picker" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"][0] == "browser-cli commands --workflow file_upload"
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "page_diagnostics"])
@@ -1383,6 +1454,7 @@ def test_action_guide_fails_unknown_task_as_json(
     assert payload["available_tasks"] == [
         "browser_state_management",
         "content_extraction",
+        "file_upload",
         "form_interaction",
         "interactive_targeting",
         "page_diagnostics",
@@ -1404,7 +1476,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 15
+    assert payload["workflow_count"] == 16
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1481,6 +1553,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.filled"
         in payload["agent_workflows"]["form_interaction"]["steps"][2]["read"]
+    )
+    assert (
+        "result.requested_files"
+        in payload["agent_workflows"]["file_upload"]["steps"][2]["read"]
     )
     assert (
         "result.nodes"
@@ -2083,6 +2159,47 @@ def test_commands_catalog_returns_form_interaction_workflow(
     )
 
 
+def test_commands_catalog_returns_file_upload_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "file_upload"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "file_upload"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_upload_controls",
+        "attach_files",
+        "verify_upload_state",
+        "submit_if_requested",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task file_upload"
+    assert "guide.read_fields" in steps[0]["read"]
+    assert steps[1]["command"] == (
+        "browser-cli action form-snapshot --session-id <session_id> --selector form"
+    )
+    assert "result.fields" in steps[1]["read"]
+    assert "browser-cli action query" in steps[1]["fallback_commands"][0]
+    assert steps[2]["agent_action"] is True
+    assert "browser-cli action set-file-input" in steps[2]["command"]
+    assert "result.requested_files" in steps[2]["read"]
+    assert "result.file_count" in steps[2]["read"]
+    assert "result.dispatched_events" in steps[2]["read"]
+    assert "browser-cli action set-file-input" in steps[2]["alternative_commands"][0]
+    assert steps[3]["command"] == (
+        'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"'
+    )
+    assert "result.file_input" in steps[3]["read"]
+    assert steps[-1]["id"] == "submit_if_requested"
+    assert steps[-1]["optional"] is True
+    assert steps[-1]["user_requested_only"] is True
+
+
 def test_commands_catalog_returns_device_code_auth_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2524,6 +2641,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "connect_from_codex_site_requirements",
         "content_extraction",
         "device_code_auth",
+        "file_upload",
         "form_interaction",
         "interactive_targeting",
         "one_off_page_task",
@@ -2689,7 +2807,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 15
+    assert checks["command_catalog"]["workflow_count"] == 16
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -2702,6 +2820,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "persistent_login_state",
         "browser_state_management",
         "form_interaction",
+        "file_upload",
         "interactive_targeting",
         "content_extraction",
         "state_waits",
@@ -2800,6 +2919,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "submit_form",
         "verify_result",
     ]
+    assert checks["command_catalog"]["required_workflow_steps"]["file_upload"] == [
+        "inspect_action_guide",
+        "inspect_upload_controls",
+        "attach_files",
+        "verify_upload_state",
+        "submit_if_requested",
+    ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "interactive_targeting"
     ] == [
@@ -2872,7 +2998,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.wait-value-role",
         "action.blur-role",
         "action.clear-role",
+        "action.set-file-input",
         "action.accessibility-snapshot",
+        "action.form-snapshot",
         "action.interactive-only-snapshot",
         "action.storage-get",
         "action.storage-set",
@@ -3009,7 +3137,9 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-value-role" in catalog["missing_required_commands"]
     assert "action.blur-role" in catalog["missing_required_commands"]
     assert "action.clear-role" in catalog["missing_required_commands"]
+    assert "action.set-file-input" in catalog["missing_required_commands"]
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
+    assert "action.form-snapshot" in catalog["missing_required_commands"]
     assert "action.link-snapshot" in catalog["missing_required_commands"]
     assert "action.table-snapshot" in catalog["missing_required_commands"]
     assert "action.list-snapshot" in catalog["missing_required_commands"]
@@ -3048,6 +3178,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "persistent_login_state",
         "browser_state_management",
         "form_interaction",
+        "file_upload",
         "interactive_targeting",
         "content_extraction",
         "state_waits",
@@ -3298,6 +3429,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "verify_result"},
                     ],
                 },
+                "file_upload": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_upload_controls"},
+                        {"id": "attach_files"},
+                        {"id": "verify_upload_state"},
+                    ],
+                },
                 "interactive_targeting": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -3360,6 +3499,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "one_off_page_task": ["close_session"],
         "setup_and_verify": ["smoke_session"],
         "browser_state_management": ["cleanup_state"],
+        "file_upload": ["submit_if_requested"],
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],
     }

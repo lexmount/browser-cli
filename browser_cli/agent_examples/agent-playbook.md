@@ -19,6 +19,7 @@ browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow file_upload
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -26,6 +27,7 @@ browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
+browser-cli action guide --task file_upload
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -197,6 +199,19 @@ browser-cli action cookie-get --session-id <session_id> --name consent
 browser-cli action cookie-set --session-id <session_id> --name consent --value yes --path /
 browser-cli action wait-storage --session-id <session_id> --area local --key seenIntro --value true --match exact
 browser-cli action wait-cookie --session-id <session_id> --name consent --value yes --match exact
+```
+
+For file uploads, read the file upload workflow before clicking upload controls
+or writing page-specific JavaScript:
+
+```bash
+browser-cli commands --workflow file_upload
+browser-cli action guide --task file_upload
+browser-cli action form-snapshot --session-id <session_id> --selector form
+browser-cli action inspect --session-id <session_id> --selector "input[type=file]"
+browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./upload.txt
+browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./front.png --file ./back.png
+browser-cli action wait-text --session-id <session_id> --text "uploaded"
 ```
 
 For deterministic page or target state, read the state-wait workflow before

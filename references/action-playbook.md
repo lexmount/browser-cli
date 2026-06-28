@@ -20,6 +20,7 @@ Start from the installed command catalog before guessing:
 browser-cli commands --group action
 browser-cli commands --group action --names-only
 browser-cli commands --workflow form_interaction
+browser-cli commands --workflow file_upload
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -27,6 +28,7 @@ browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
+browser-cli action guide --task file_upload
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -286,6 +288,10 @@ console/page error entries and the reported page URL.
    `wait-role` for async submit buttons, use `dispatch-event --event input
    --event change` when the app needs explicit events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
+Upload files: run `browser-cli commands --workflow file_upload` and
+`browser-cli action guide --task file_upload`, inspect upload controls with
+`form-snapshot`, `query`, or `inspect`, then use `set-file-input`; read
+`requested_files`, `file_count`, `files`, and `value_masked` before submitting.
 2. Click a visible control: run `browser-cli commands --workflow
    interactive_targeting` and
    `browser-cli action guide --task interactive_targeting`, use
