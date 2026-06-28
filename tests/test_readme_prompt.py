@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -11,6 +12,13 @@ def _codex_install_prompt() -> str:
     start = text.index("## Codex Install Prompt")
     end = text.index("## Manual Install")
     return text[start:end]
+
+
+def _codex_install_prompt_steps() -> str:
+    prompt = _codex_install_prompt()
+    start = prompt.index("步骤：")
+    end = prompt.index("完成后告诉我：")
+    return prompt[start:end]
 
 
 def test_codex_install_prompt_keeps_secrets_out_of_chat() -> None:
@@ -35,6 +43,10 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli auth connect-requirements" in prompt
     assert "browser-cli auth login" in prompt
     assert "browser-cli commands --workflows-only" in prompt
+    assert "browser-cli reference list" in prompt
+    assert "browser-cli reference get --id action_playbook --metadata-only" in prompt
+    assert "browser-cli reference get --id action_playbook" in prompt
+    assert "不要先写自定义 Playwright/JS" in prompt
     assert "browser-cli commands --workflow setup_and_verify" in prompt
     assert (
         "browser-cli commands --workflow connect_from_codex_site_requirements" in prompt
@@ -58,6 +70,13 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "ready_for_browser_actions=true" in prompt
     assert "browser_smoke_session.status 应该是 pass" in prompt
     assert "browser-cli session list" in prompt
+
+
+def test_codex_install_prompt_has_sequential_steps() -> None:
+    steps = _codex_install_prompt_steps()
+    numbers = [int(match) for match in re.findall(r"(?m)^(\d+)\. ", steps)]
+
+    assert numbers == list(range(1, 20))
 
 
 def test_codex_install_prompt_mentions_project_and_key_validation() -> None:

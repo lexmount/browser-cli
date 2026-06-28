@@ -40,33 +40,37 @@ CLI for you:
    browser-cli commands --workflow connect_from_codex_auth
    browser-cli commands --workflow device_code_auth
    browser-cli commands --workflow scoped_token_lifecycle
-6. 运行下面命令查看本机是否已经配置凭证：
+6. 读取 packaged agent reference 目录；后续选择浏览器 action 前，优先读取 action_playbook，不要先写自定义 Playwright/JS：
+   browser-cli reference list
+   browser-cli reference get --id action_playbook --metadata-only
+   browser-cli reference get --id action_playbook
+7. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
-7. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先运行：
+8. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先运行：
    browser-cli auth connect-requirements
-8. 如果未配置，引导我运行：
+9. 如果未配置，引导我运行：
    browser-cli auth login
-9. 如果我希望直接打开本机浏览器，可以让我运行：
+10. 如果我希望直接打开本机浏览器，可以让我运行：
    browser-cli auth login --open
-10. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
-11. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
-12. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
+11. 从 auth login 的 JSON 中读取 connect_from_codex.url 或 handoff.login_url，优先引导我打开 https://browser.lexmount.cn/connect/codex，并登录账号。
+12. 引导我在 browser.lexmount.cn 控制台中选择正确项目，确认当前 Project ID，并创建或复制面向 agent 的 scoped API Key。
+13. 引导我运行下面命令生成本机 shell export 模板，并只在本机终端里填入真实值：
    browser-cli auth export-env
    export LEXMOUNT_API_KEY="<从 browser.lexmount.cn 获取的 API Key>"
    export LEXMOUNT_PROJECT_ID="<从 browser.lexmount.cn 获取的 Project ID>"
-13. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
+14. 只有在本机可信 shell 中需要可直接执行的 export 行时，才让我自己运行：
    browser-cli auth export-env --from-current --reveal-secrets
    browser-cli auth export-env --reveal-secrets
    并提醒我不要把该输出粘贴到聊天里。
-14. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
-15. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
-16. 运行下面命令验证：
+15. 告诉我中国区默认会使用 https://api.lexmount.cn，通常不需要设置 LEXMOUNT_BASE_URL。
+16. 如果我希望长期保存配置，引导我把这些 export 写入当前 shell 配置文件，例如 ~/.zshrc 或 ~/.bashrc。
+17. 运行下面命令验证：
    browser-cli --help
    browser-cli doctor --json
    browser-cli doctor --smoke-session
    browser-cli session list
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
-17. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约：
+18. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约；选择具体 action 时先查 action_playbook 和 commands catalog，只有 CLI 无法表达时才写自定义 Playwright/JS：
    browser-cli commands --workflow session_recovery
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow case_file_task
@@ -74,7 +78,7 @@ CLI for you:
    browser-cli commands --workflow form_interaction
    browser-cli commands --workflow interactive_targeting
    browser-cli commands --workflow page_diagnostics
-17. 如果验证失败，请按顺序排查：
+19. 如果验证失败，请按顺序排查：
    - uv 是否可用
    - browser-cli 是否在 PATH 中
    - browser-cli auth status 是否显示 configured 为 true
@@ -101,6 +105,7 @@ browser-cli --help
 browser-cli --version
 browser-cli commands --names-only
 browser-cli commands --workflows-only
+browser-cli reference list
 ```
 
 For local development:
@@ -208,6 +213,8 @@ browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
+browser-cli reference list
+browser-cli reference get --id action_playbook --metadata-only
 ```
 
 `commands` returns the current parser-backed command catalog, option metadata,
