@@ -621,10 +621,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.wait-title",
         "action.press-key",
         "action.click-role",
+        "action.focus-role",
         "action.fill-label",
         "action.fill-role",
         "action.get-value-role",
         "action.wait-value-role",
+        "action.blur-role",
+        "action.clear-role",
         "action.link-snapshot",
         "action.table-snapshot",
         "action.list-snapshot",
@@ -666,6 +669,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "--role" in wait_value_role["required_options"]
     assert "--value" in wait_value_role["required_options"]
     assert any("--exact" in option["flags"] for option in wait_value_role["options"])
+    focus_role = commands["action.focus-role"]
+    assert focus_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in focus_role["options"])
+    assert any(
+        "--prevent-scroll" in option["flags"] for option in focus_role["options"]
+    )
+    blur_role = commands["action.blur-role"]
+    assert blur_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in blur_role["options"])
+    clear_role = commands["action.clear-role"]
+    assert clear_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in clear_role["options"])
     interactive = commands["action.interactive-snapshot"]
     interactive_only = commands["action.interactive-only-snapshot"]
     assert interactive["aliases"] == ["action.interactive-only-snapshot"]
@@ -759,9 +774,23 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert "fill-role" in payload["guide"]["selection_order"]
+    assert "clear-role" in payload["guide"]["selection_order"]
+    assert "blur-role" in payload["guide"]["selection_order"]
     assert any(
         "browser-cli action fill-role" in command
         for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action clear-role" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert any(
+        "browser-cli action focus-role" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert any(
+        "browser-cli action blur-role" in command
+        for command in payload["guide"]["verify_commands"]
     )
     assert any(
         "browser-cli action wait-value-role" in command
@@ -1903,10 +1932,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.uncheck",
         "action.click-text",
         "action.click-role",
+        "action.focus-role",
         "action.fill-label",
         "action.fill-role",
         "action.get-value-role",
         "action.wait-value-role",
+        "action.blur-role",
+        "action.clear-role",
         "action.accessibility-snapshot",
         "action.interactive-only-snapshot",
         "action.wait-dialog",
@@ -2014,8 +2046,11 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["workflow_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
+    assert "action.focus-role" in catalog["missing_required_commands"]
     assert "action.get-value-role" in catalog["missing_required_commands"]
     assert "action.wait-value-role" in catalog["missing_required_commands"]
+    assert "action.blur-role" in catalog["missing_required_commands"]
+    assert "action.clear-role" in catalog["missing_required_commands"]
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
@@ -6240,6 +6275,19 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
         (
             [
                 "action",
+                "clear-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Password",
+            ],
+            ["previous_value_masked", "value_masked", "role_found"],
+        ),
+        (
+            [
+                "action",
                 "fill-label",
                 "--session-id",
                 "s1",
@@ -9362,6 +9410,39 @@ def test_third_batch_eval_backed_action_commands_emit_structured_results(
         (
             [
                 "action",
+                "focus-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Search",
+                "--prevent-scroll",
+            ],
+            "action.focus-role",
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "focused": True,
+                "prevent_scroll": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "focused": True,
+                "prevent_scroll": True,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
                 "get-value",
                 "--session-id",
                 "s1",
@@ -9527,6 +9608,40 @@ def test_third_batch_eval_backed_action_commands_emit_structured_results(
             },
         ),
         (
+            [
+                "action",
+                "blur-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Search",
+            ],
+            "action.blur-role",
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "blurred": True,
+                "was_focused": True,
+                "focused": False,
+                "candidate_count": 1,
+            },
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "blurred": True,
+                "was_focused": True,
+                "focused": False,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
             ["action", "clear", "--session-id", "s1", "--selector", "input[name=q]"],
             "action.clear",
             {
@@ -9544,6 +9659,42 @@ def test_third_batch_eval_backed_action_commands_emit_structured_results(
                 "cleared": True,
                 "previous_value": "query",
                 "value": "",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "clear-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Search",
+            ],
+            "action.clear-role",
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "clearable": True,
+                "cleared": True,
+                "previous_value": "query",
+                "value": "",
+                "candidate_count": 1,
+            },
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "clearable": True,
+                "cleared": True,
+                "previous_value": "query",
+                "value": "",
+                "candidate_count": 1,
                 "url": "https://example.test",
             },
         ),

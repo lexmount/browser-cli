@@ -66,6 +66,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`click-index` for a chosen repeated selector match" in normalized
     assert "`fill-label` for labeled text fields" in normalized
     assert "`fill-role` for writable role/name fields" in normalized
+    assert "`focus-role`, `blur-role`, and `clear-role`" in normalized
     assert "`get-value-role`" in normalized
     assert "`wait-value-role`" in normalized
     assert "`select-label` for labeled native selects" in normalized
@@ -307,11 +308,13 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`click`",
         "`type`",
         "`focus`",
+        "`focus-role`",
         "`get-value`",
         "`get-value-role`",
         "`wait-value`",
         "`wait-value-role`",
         "`blur`",
+        "`blur-role`",
         "`storage-get`",
         "`storage-set`",
         "`storage-remove`",
@@ -323,6 +326,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`cookie-clear`",
         "`wait-cookie`",
         "`clear`",
+        "`clear-role`",
         "`set-value`",
         "`set-file-input`",
         "`dispatch-event`",
@@ -513,12 +517,12 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`fill-role` for accessible role/name textboxes" in normalized
     assert "`set-value` for stable selectors" in normalized
     assert "`set-file-input` for upload controls" in normalized
-    assert "`clear` before replacement text" in normalized
+    assert "`clear-role` or `clear` before replacement text" in normalized
     assert (
         "`get-value-role`, `wait-value-role`, `get-value`, or `wait-value` to confirm form state"
         in normalized
     )
-    assert "use `blur` for focus-driven validation" in normalized
+    assert "use `blur-role` or `blur` for focus-driven validation" in normalized
     assert "`select-label` for labeled selects" in normalized
     assert "`select-option` or `check`" in normalized
     assert "prefer `check-label` for labeled controls" in normalized
@@ -573,10 +577,12 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `wait-count`, `wait-state`, or `wait-attribute`" in normalized
     assert "Open menus or keyboard flows" in normalized
     assert (
-        "use `focus`, `hover` for menus, `press` for selector-scoped keys" in normalized
+        "use `focus-role` or `focus`, `hover` for menus, `press` for selector-scoped keys"
+        in normalized
     )
     assert "`press-key` for active/global shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized
+    assert "`blur-role` or `blur`" in normalized
     assert "run `wait-dialog` when the dialog appears asynchronously" in normalized
     assert "otherwise run `dialog-snapshot`, choose from `controls`" in normalized
     assert "run `wait-frame` when the frame appears asynchronously" in normalized

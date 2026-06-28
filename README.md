@@ -416,11 +416,13 @@ browser-cli action wait-text --session-id <session_id> --text "Ready" --selector
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
+browser-cli action focus-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "hello"
 browser-cli action wait-value-role --session-id <session_id> --role textbox --name "Search" --value "hello"
 browser-cli action blur --session-id <session_id> --selector "input[name=q]"
+browser-cli action blur-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
 browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
 browser-cli action storage-remove --session-id <session_id> --area session --key draft
@@ -432,6 +434,7 @@ browser-cli action cookie-delete --session-id <session_id> --name consent --path
 browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
 browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action clear-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "hello"
 browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./avatar.png
 browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
@@ -482,10 +485,10 @@ the boundary for custom JavaScript.
 
 `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `exists`, `count`, `query`,
-`get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`,
-`get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
+`get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `focus-role`,
+`get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `blur-role`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
-`cookie-clear`, `wait-cookie`, `clear`, `set-value`, `set-file-input`,
+`cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `check`, `uncheck`, `check-label`,
 `uncheck-label`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
@@ -495,9 +498,9 @@ the boundary for custom JavaScript.
 runtime action surface catches up. They are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checked`, `selected`, `clicked`, `filled`,
-`focused`, `value`, `readable`, `blurred`, `set`, `removed`, `cleared`,
+`focused`, `value`, `readable`, `blurred`, `set`, `removed`, `clearable`, `cleared`,
 `deleted`, `items`, `cleared_count`, `requested_count`, `state`,
-`matched`, `state_values`, `attribute_found`, `requested_value`, `network_idle`,
+`matched`, `role_found`, `state_values`, `attribute_found`, `requested_value`, `network_idle`,
 `quiet_ms`, `submitted`, `dispatched`, `dispatched_events`, `fields`,
 `value_masked`, `file_input`, `file_count`, `requested_files`, `bounding_box`,
 `in_viewport`, `index`, `attributes`, `html_truncated`, `candidate_count`,
@@ -725,9 +728,9 @@ browser-cli session close --session-id <session_id>
 Common agent recipes:
 
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,
-  `set-value`, `set-file-input`, or `clear` -> `wait-value-role`, `get-value-role`,
+  `set-value`, `set-file-input`, `clear-role`, or `clear` -> `wait-value-role`, `get-value-role`,
   `wait-value`, or `get-value` ->
-  `blur` if validation is focus-driven -> `select-label`, `select-option`,
+  `blur-role` or `blur` if validation is focus-driven -> `select-label`, `select-option`,
   `check-label`, or `check` -> `wait-state --state enabled` or `wait-role` for
   async submit buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
   `submit --selector <form-or-field>`,

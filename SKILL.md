@@ -248,7 +248,8 @@ browser-cli action guide --task form_interaction
 Follow the guide's `inspect_commands`, `preferred_commands`,
 `verify_commands`, and `custom_js_boundary`, then follow the workflow `read`
 fields for `form-snapshot`, `fill-label`, `fill-role`, `get-value-role`,
-`wait-value-role`, `select-label`, `check-label`, `wait-role`, `click-role`,
+`wait-value-role`, `focus-role`, `blur-role`, `clear-role`, `select-label`,
+`check-label`, `wait-role`, `click-role`,
 and verification steps before falling back to custom
 JavaScript.
 
@@ -420,8 +421,8 @@ Core action rules:
   `form-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
   `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
 - Prefer semantic actions such as `wait-role`, `click-role`, `click-text`,
-  `click-index`, `fill-label`, `fill-role`, `get-value-role`,
-  `wait-value-role`, `select-label`, and `check-label` before raw
+  `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
+  `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, and `check-label` before raw
   selectors when the page provides visible labels or accessibility names.
 - Use selector actions such as `exists`, `count`, `wait-state`, `query`,
   `inspect`, `get-attribute`, `wait-text`, `get-text`, `click`, `type`,

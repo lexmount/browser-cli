@@ -62,12 +62,15 @@ browser-cli action wait-text --session-id <session_id> --text "Ready" --selector
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
+browser-cli action focus-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "query"
 browser-cli action wait-value-role --session-id <session_id> --role textbox --name "Search" --value "query"
 browser-cli action blur --session-id <session_id> --selector "input[name=q]"
+browser-cli action blur-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action clear-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "query"
 browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./avatar.png
 browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
@@ -135,10 +138,10 @@ Prefer built-in actions over writing custom JavaScript. `page-info`, `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-title`, `wait-load-state`,
 `wait-network-idle`, `get-text`, `exists`, `count`, `query`, `inspect`,
 `get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`,
-`wait-role`, `focus`, `get-value`, `get-value-role`, `wait-value`,
-`wait-value-role`, `blur`, `storage-get`,
+`wait-role`, `focus`, `focus-role`, `get-value`, `get-value-role`, `wait-value`,
+`wait-value-role`, `blur`, `blur-role`, `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
-`cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `clear`,
+`cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `clear`, `clear-role`,
 `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
 `scroll-into-view`, `bounding-box`, `select-option`, `select-label`, `check`,
 `uncheck`, `check-label`, `uncheck-label`, `hover`, `press`, and `press-key`
@@ -152,7 +155,7 @@ DOM/eval-backed, so always parse their structured `result` fields.
 
 Important result fields include `found`, `exists`, `count`, `checked`,
 `selected`, `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`,
-`set`, `removed`, `deleted`, `cleared`, `items`, `cleared_count`,
+`set`, `removed`, `deleted`, `clearable`, `cleared`, `items`, `cleared_count`,
 `requested_count`, `state`, `matched`, `role_found`, `state_values`, `attribute_found`,
 `requested_value`, `network_idle`, `quiet_ms`, `submitted`, `hovered`,
 `pressed`, `dispatched`, `dispatched_events`, `fields`, `value_masked`,
@@ -215,6 +218,7 @@ console/page error entries and the reported page URL.
    repeated selector match, `link-snapshot` for choosing or reporting navigation
    URLs, `list-snapshot` for reading list/menu item state, `fill-label` for
    labeled text fields, `fill-role` for writable role/name fields,
+   `focus-role`, `blur-role`, and `clear-role` for role/name form controls,
    `select-label` for labeled native selects, and
    `check-label` for labeled checkbox or switch controls.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
@@ -250,8 +254,8 @@ console/page error entries and the reported page URL.
    then run `form-snapshot` or `interactive-snapshot`, use `fill-label` for
    labeled fields, `fill-role` for accessible role/name textboxes,
    `set-value` for stable selectors, and `set-file-input` for upload controls;
-   `clear` before replacement text when needed, use
-   `get-value-role`, `wait-value-role`, `get-value`, or `wait-value` to confirm form state, use `blur` for
+   `clear-role` or `clear` before replacement text when needed, use
+   `get-value-role`, `wait-value-role`, `get-value`, or `wait-value` to confirm form state, use `blur-role` or `blur` for
    focus-driven validation, use `select-label` for labeled selects,
    `select-option` or `check` for stable selector controls, prefer
    `check-label` for labeled controls, use `wait-state --state enabled` or
@@ -286,9 +290,9 @@ console/page error entries and the reported page URL.
    read `console-snapshot` or wait with `wait-console`, then use
    `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
    `inspect` to correlate visible state with JS errors.
-6. Open menus or keyboard flows: use `focus`, `hover` for menus, `press` for
+6. Open menus or keyboard flows: use `focus-role` or `focus`, `hover` for menus, `press` for
    selector-scoped keys, `press-key` for active/global shortcuts such as
-   Enter/Escape, `dispatch-event` for explicit DOM events, and `blur` for
+   Enter/Escape, `dispatch-event` for explicit DOM events, and `blur-role` or `blur` for
    focus-driven validation, then inspect again with `interactive-snapshot`. For
    modal dialogs, alert dialogs, cookie banners, or confirmation prompts, run
    `wait-dialog` when the dialog appears asynchronously, otherwise run

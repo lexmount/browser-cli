@@ -104,10 +104,13 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.press",
     "action.click-text",
     "action.click-role",
+    "action.focus-role",
     "action.fill-label",
     "action.fill-role",
     "action.get-value-role",
     "action.wait-value-role",
+    "action.blur-role",
+    "action.clear-role",
     "action.accessibility-snapshot",
     "action.interactive-snapshot",
     "action.interactive-only-snapshot",
@@ -755,7 +758,9 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action guide --task form_interaction",
                 "browser-cli action form-snapshot --session-id <session_id> --selector form",
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
+                'browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
+                'browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
             ],
@@ -8167,6 +8172,71 @@ def _focus_expression(*, selector: str, prevent_scroll: bool) -> str:
     )
 
 
+def _role_target_helpers_expression(selector_source: str) -> str:
+    return f"""
+  const roleTargetSelector = {selector_source};
+  const findRoleTargetElement = () => {{
+    const candidates = [...document.querySelectorAll(roleTargetSelector)].filter(visible);
+    const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+    const element = roleMatches.find((candidate) =>
+      requestedName === null ||
+      matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+    );
+    return {{
+      element: element || null,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    }};
+  }};
+""".rstrip()
+
+
+def _focus_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    prevent_scroll: bool,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      focused: false,
+      prevent_scroll: {_js_literal(prevent_scroll)},
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  element.focus({{ preventScroll: {_js_literal(prevent_scroll)} }});
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    focused: document.activeElement === element,
+    prevent_scroll: {_js_literal(prevent_scroll)},
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _form_value_helpers_expression() -> str:
     return """
   const readFormValue = (node) => {
@@ -8657,6 +8727,54 @@ def _blur_expression(selector: str) -> str:
   };
 """.rstrip(),
     )
+
+
+def _blur_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      blurred: false,
+      was_focused: false,
+      focused: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const wasFocused = document.activeElement === element;
+  element.blur?.();
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    blurred: document.activeElement !== element,
+    was_focused: wasFocused,
+    focused: document.activeElement === element,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
 
 
 def _storage_area_expression(area: str) -> str:
@@ -9412,6 +9530,82 @@ def _clear_expression(selector: str) -> str:
     )
 
 
+def _clear_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_value_helpers_expression()}
+  const roleMatch = findRoleValueElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      clearable: false,
+      cleared: false,
+      value: null,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const dispatch = (event) => element.dispatchEvent(event);
+  const previousValue = element.isContentEditable
+    ? element.textContent
+    : ("value" in element ? element.value : null);
+  if (element.isContentEditable) {{
+    element.textContent = "";
+  }} else if ("value" in element) {{
+    element.value = "";
+  }} else {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: true,
+      role_found: true,
+      clearable: false,
+      cleared: false,
+      previous_value: maskValue(element, previousValue),
+      previous_value_masked: shouldMaskValue(element, previousValue),
+      value: null,
+      candidate_count: roleMatch.candidate_count,
+      element: nodeInfo(element)
+    }};
+  }}
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  const value = element.isContentEditable ? element.textContent : element.value;
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    clearable: true,
+    cleared: value === "",
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, value),
+    value_masked: shouldMaskValue(element, value),
+    value_length: shouldMaskValue(element, value) ? String(value ?? "").length : null,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -> str:
     return _event_expression(
         selector,
@@ -9847,8 +10041,11 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "form-snapshot",
                 "fill-label",
                 "fill-role",
+                "clear-role",
                 "select-label",
                 "check-label",
+                "focus-role",
+                "blur-role",
                 "click-role",
                 "wait-text",
                 "get-value",
@@ -9865,11 +10062,15 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
             ],
             "fallback_commands": [
+                'browser-cli action clear-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action focus-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action blur-role --session-id <session_id> --role textbox --name "<accessible name>"',
                 'browser-cli action set-value --session-id <session_id> --selector "<selector>" --value "<value>"',
                 'browser-cli action dispatch-event --session-id <session_id> --selector "<selector>" --event input --event change',
                 'browser-cli action click --session-id <session_id> --selector "<selector>"',
             ],
             "verify_commands": [
+                'browser-cli action blur-role --session-id <session_id> --role textbox --name "<accessible name>"',
                 'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
                 'browser-cli action wait-value-role --session-id <session_id> --role textbox --name "<accessible name>" --value "<expected value>"',
                 'browser-cli action get-value-role --session-id <session_id> --role textbox --name "<accessible name>"',
@@ -9882,9 +10083,13 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.role",
                 "result.name",
                 "result.role_found",
+                "result.clearable",
+                "result.cleared",
                 "result.selected",
                 "result.checked",
                 "result.clicked",
+                "result.focused",
+                "result.blurred",
                 "value_masked",
             ],
             "custom_js_boundary": (
@@ -10465,6 +10670,20 @@ def cmd_action_focus(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_focus_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.focus-role",
+        _focus_role_expression(
+            role=args.role,
+            name=args.name,
+            prevent_scroll=args.prevent_scroll,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_get_value(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -10523,6 +10742,19 @@ def cmd_action_blur(args: argparse.Namespace) -> None:
         args,
         "action.blur",
         _blur_expression(args.selector),
+    )
+
+
+def cmd_action_blur_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.blur-role",
+        _blur_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
     )
 
 
@@ -10664,6 +10896,19 @@ def cmd_action_clear(args: argparse.Namespace) -> None:
         args,
         "action.clear",
         _clear_expression(args.selector),
+    )
+
+
+def cmd_action_clear_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.clear-role",
+        _clear_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
     )
 
 
@@ -13661,6 +13906,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_focus.set_defaults(func=cmd_action_focus)
 
+    action_focus_role = action_subparsers.add_parser(
+        "focus-role",
+        help="Focus an interactive element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_focus_role)
+    action_focus_role.add_argument("--role", required=True)
+    action_focus_role.add_argument("--name")
+    action_focus_role.add_argument(
+        "--prevent-scroll",
+        action="store_true",
+        help="Focus without scrolling the element into view.",
+    )
+    _add_text_match_args(action_focus_role)
+    action_focus_role.set_defaults(func=cmd_action_focus_role)
+
     action_get_value = action_subparsers.add_parser(
         "get-value",
         help="Read the value, checked state, or selected options from a form field",
@@ -13736,6 +13996,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_blur)
     action_blur.add_argument("--selector", required=True)
     action_blur.set_defaults(func=cmd_action_blur)
+
+    action_blur_role = action_subparsers.add_parser(
+        "blur-role",
+        help="Blur an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_blur_role)
+    action_blur_role.add_argument("--role", required=True)
+    action_blur_role.add_argument("--name")
+    _add_text_match_args(action_blur_role)
+    action_blur_role.set_defaults(func=cmd_action_blur_role)
 
     action_storage_get = action_subparsers.add_parser(
         "storage-get",
@@ -13943,6 +14213,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_clear)
     action_clear.add_argument("--selector", required=True)
     action_clear.set_defaults(func=cmd_action_clear)
+
+    action_clear_role = action_subparsers.add_parser(
+        "clear-role",
+        help="Clear a form field or editable element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_clear_role)
+    action_clear_role.add_argument("--role", required=True)
+    action_clear_role.add_argument("--name")
+    _add_text_match_args(action_clear_role)
+    action_clear_role.set_defaults(func=cmd_action_clear_role)
 
     action_set_value = action_subparsers.add_parser(
         "set-value",

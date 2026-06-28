@@ -248,7 +248,8 @@ Default behavior:
   required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, hover, scroll,
   get-text, exists, select-option, check, uncheck, click-text, click-role,
-  fill-label, fill-role, get-value-role, wait-value-role,
+  focus-role, fill-label, fill-role, get-value-role, wait-value-role,
+  blur-role, clear-role,
   accessibility snapshot, and interactive-only snapshot.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
   `connect_from_codex` with a safe `/connect/codex` URL, `open_command`,

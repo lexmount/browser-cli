@@ -302,10 +302,13 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "uncheck",
         "click-text",
         "click-role",
+        "focus-role",
         "fill-label",
         "fill-role",
         "get-value-role",
         "wait-value-role",
+        "blur-role",
+        "clear-role",
         "accessibility snapshot",
         "interactive-only snapshot",
     ):
