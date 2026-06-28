@@ -47,6 +47,7 @@ CLI for you:
    browser-cli action guide --task browser_state_management
    browser-cli action guide --task file_upload
    browser-cli action guide --task dialog_frame_handling
+   browser-cli action guide --task menu_keyboard_flow
    browser-cli action guide --task state_waits
    browser-cli reference list
    browser-cli reference get --id action_playbook --metadata-only
@@ -102,6 +103,7 @@ CLI for you:
    browser-cli commands --workflow browser_state_management
    browser-cli commands --workflow file_upload
    browser-cli commands --workflow dialog_frame_handling
+   browser-cli commands --workflow menu_keyboard_flow
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
    browser-cli action guide --task form_interaction
@@ -110,6 +112,7 @@ CLI for you:
    browser-cli action guide --task browser_state_management
    browser-cli action guide --task file_upload
    browser-cli action guide --task dialog_frame_handling
+   browser-cli action guide --task menu_keyboard_flow
    browser-cli action guide --task state_waits
    browser-cli action guide --task page_diagnostics
 20. 如果验证失败，请按顺序排查：
@@ -257,6 +260,7 @@ browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
+browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task state_waits
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
@@ -270,10 +274,12 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
+browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli reference list
@@ -455,6 +461,7 @@ browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
+browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli action open-url --session-id <session_id> --url https://example.com
@@ -563,7 +570,7 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 
 `action guide` returns machine-readable task routes for `form_interaction`,
 `interactive_targeting`, `content_extraction`, `browser_state_management`,
-`file_upload`, `dialog_frame_handling`, `page_diagnostics`, and `state_waits`, including
+`file_upload`, `dialog_frame_handling`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
@@ -862,6 +869,10 @@ Common agent recipes:
   and `browser-cli action guide --task dialog_frame_handling`, then use
   `wait-dialog`, `dialog-snapshot`, `wait-frame`, or `frame-snapshot` before
   custom JavaScript.
+- Menus and keyboard: run `browser-cli commands --workflow menu_keyboard_flow`
+  and `browser-cli action guide --task menu_keyboard_flow`, then use
+  `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
+  `list-snapshot`, or `press-key` before custom JavaScript.
 - Deterministic wait: run `browser-cli commands --workflow state_waits`, then
   choose the narrowest `wait-*` command such as `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or
@@ -912,7 +923,8 @@ Common agent recipes:
   suspected action, read `console-snapshot` or wait with `wait-console`, then use
   `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or `inspect`
   to correlate visible state with JS errors.
-- Menu or keyboard flow: `focus-role`, `hover-role`, `press-role`,
+- Menu or keyboard flow: run `browser-cli commands --workflow menu_keyboard_flow`;
+  then use `focus-role`, `hover-role`, `press-role`,
   `scroll-into-view-role`, selector-scoped `focus`, `hover`, or `press`,
   active/global `press-key`, `wait-attribute-role` for `aria-expanded` or
   `aria-selected`, or `dispatch-event`, then inspect again with

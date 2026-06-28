@@ -23,6 +23,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
@@ -32,6 +33,7 @@ browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
@@ -298,6 +300,10 @@ Dialogs and frames: run `browser-cli commands --workflow dialog_frame_handling`
 and `browser-cli action guide --task dialog_frame_handling`, then use
 `wait-dialog`, `dialog-snapshot`, `wait-frame`, or `frame-snapshot` before
 custom JavaScript.
+Menus and keyboard flows: run `browser-cli commands --workflow
+menu_keyboard_flow` and `browser-cli action guide --task menu_keyboard_flow`,
+then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
+`list-snapshot`, or `press-key` before custom JavaScript.
 2. Click a visible control: run `browser-cli commands --workflow
    interactive_targeting` and
    `browser-cli action guide --task interactive_targeting`, use
@@ -340,7 +346,9 @@ custom JavaScript.
    read `console-snapshot` or wait with `wait-console`, then use
    `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
    `inspect` to correlate visible state with JS errors.
-8. Open menus or keyboard flows: use `focus-role`, `hover-role`, `press-role`,
+8. Open menus or keyboard flows: run `browser-cli commands --workflow
+   menu_keyboard_flow` and `browser-cli action guide --task
+   menu_keyboard_flow`, then use `focus-role`, `hover-role`, `press-role`,
    or `scroll-into-view-role` when role/name is known; use `focus`, `hover`, or `press` for
    stable selector-scoped keys, `press-key` for active/global shortcuts such as
    Enter/Escape, `wait-attribute-role` for `aria-expanded` or `aria-selected`,

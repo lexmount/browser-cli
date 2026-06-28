@@ -251,13 +251,7 @@ browser-cli action guide --task form_interaction
 
 Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`, and `custom_js_boundary`, then follow workflow `read` fields for `form-snapshot`, semantic fill/select/check commands, `wait-role`, `wait-state-role`, `click-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before custom JavaScript.
 
-For visible buttons, links, menus, and repeated controls, prefer the interactive
-targeting workflow before writing selectors or JavaScript:
-
-```bash
-browser-cli commands --workflow interactive_targeting
-browser-cli action guide --task interactive_targeting
-```
+For visible buttons, links, menus, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` and `browser-cli action guide --task interactive_targeting` before writing selectors or JavaScript.
 
 Read `selection_order`, then `interactive-snapshot` and optional `accessibility-snapshot`; confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose `click-role`, `click-text`, or `click-index`, then verify with `page-info`, `wait-url`, or `wait-text`.
 
@@ -268,6 +262,8 @@ For browser state setup or cleanup, prefer `browser-cli commands --workflow brow
 For file uploads, prefer `browser-cli commands --workflow file_upload` and `browser-cli action guide --task file_upload`; inspect controls, then use `set-file-input` before custom JS or OS file picker workarounds.
 
 For dialogs, cookie banners, confirmation prompts, and iframes, prefer `browser-cli commands --workflow dialog_frame_handling` and `browser-cli action guide --task dialog_frame_handling`; use dialog/frame snapshots and waits before custom JS.
+
+For menus, popovers, listboxes, and keyboard shortcuts, prefer `browser-cli commands --workflow menu_keyboard_flow` and `browser-cli action guide --task menu_keyboard_flow`; use role hover/focus/press, list snapshots, and `press-key` before custom JS.
 
 For deterministic state transitions, prefer `browser-cli commands --workflow state_waits` and `browser-cli action guide --task state_waits`; choose `wait-load-state`, `wait-url`, `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or `wait-cookie` before sleeps or custom JS.
 
@@ -368,6 +364,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
@@ -377,6 +374,7 @@ browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits

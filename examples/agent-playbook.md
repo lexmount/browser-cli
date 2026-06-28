@@ -22,6 +22,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
@@ -31,6 +32,7 @@ browser-cli action guide --task form_interaction
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
@@ -226,6 +228,18 @@ browser-cli action wait-dialog --session-id <session_id> --text "Confirm" --moda
 browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 40 --max-controls 40
 browser-cli action wait-frame --session-id <session_id> --url /checkout --url-match contains --readable-only
 browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 40 --max-chars 1000
+```
+
+For menus, popovers, listboxes, or keyboard shortcuts, read the menu/keyboard
+workflow before writing page-specific JavaScript:
+
+```bash
+browser-cli commands --workflow menu_keyboard_flow
+browser-cli action guide --task menu_keyboard_flow
+browser-cli action hover-role --session-id <session_id> --role button --name "Menu"
+browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
+browser-cli action list-snapshot --session-id <session_id> --selector "[role=menu], [role=listbox], nav" --max-items 50
+browser-cli action press-key --session-id <session_id> --key Escape
 ```
 
 For deterministic page or target state, read the state-wait workflow before

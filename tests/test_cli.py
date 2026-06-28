@@ -383,6 +383,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["interactive_targeting"]
     )
     assert (
+        "browser-cli action guide --task menu_keyboard_flow"
+        in payload["agent_entrypoints"]["menu_keyboard_flow"]
+    )
+    assert (
+        "browser-cli action press-key --session-id <session_id> --key Escape"
+        in payload["agent_entrypoints"]["menu_keyboard_flow"]
+    )
+    assert (
+        'browser-cli action list-snapshot --session-id <session_id> --selector "[role=menu], [role=listbox], nav" --max-items 50'
+        in payload["agent_entrypoints"]["menu_keyboard_flow"]
+    )
+    assert (
         "browser-cli action guide --task content_extraction"
         in payload["agent_entrypoints"]["content_extraction"]
     )
@@ -849,6 +861,45 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in targeting_steps[5]["alternative_commands"][2]
     )
     assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
+    menu_steps = workflows["menu_keyboard_flow"]["steps"]
+    assert [step["id"] for step in menu_steps] == [
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "open_or_focus_menu",
+        "verify_menu_state",
+        "inspect_menu_items",
+        "send_keyboard_input",
+        "verify_result",
+    ]
+    assert menu_steps[0]["command"] == (
+        "browser-cli action guide --task menu_keyboard_flow"
+    )
+    assert "guide.verify_commands" in menu_steps[0]["read"]
+    assert menu_steps[1]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in menu_steps[1]["read"]
+    assert "browser-cli action accessibility-snapshot" in menu_steps[1][
+        "fallback_commands"
+    ][0]
+    assert menu_steps[2]["agent_action"] is True
+    assert "browser-cli action hover-role" in menu_steps[2]["command"]
+    assert "result.hovered" in menu_steps[2]["read"]
+    assert "browser-cli action focus-role" in menu_steps[2]["alternative_commands"][0]
+    assert menu_steps[3]["optional"] is True
+    assert "browser-cli action wait-attribute-role" in menu_steps[3]["command"]
+    assert "result.attribute_found" in menu_steps[3]["read"]
+    assert "result.requested_value" in menu_steps[3]["read"]
+    assert "browser-cli action list-snapshot" in menu_steps[4]["command"]
+    assert "result.items" in menu_steps[4]["read"]
+    assert "result.selected" in menu_steps[4]["read"]
+    assert menu_steps[5]["optional"] is True
+    assert menu_steps[5]["agent_action"] is True
+    assert "browser-cli action press-key" in menu_steps[5]["command"]
+    assert "result.keydown_accepted" in menu_steps[5]["read"]
+    assert "result.navigation_requested" in menu_steps[5]["read"]
+    assert "browser-cli action click-role" in menu_steps[5]["alternative_commands"][1]
+    assert "browser-cli action wait-text" in menu_steps[6]["fallback_commands"][1]
     extraction_steps = workflows["content_extraction"]["steps"]
     assert [step["id"] for step in extraction_steps] == [
         "inspect_action_guide",
@@ -1172,7 +1223,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 8,
+        "task_count": 9,
         "tasks": [
             "browser_state_management",
             "content_extraction",
@@ -1180,6 +1231,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
             "file_upload",
             "form_interaction",
             "interactive_targeting",
+            "menu_keyboard_flow",
             "page_diagnostics",
             "state_waits",
         ],
@@ -1208,6 +1260,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
+        "menu_keyboard_flow",
         "page_diagnostics",
         "state_waits",
     ]
@@ -1257,6 +1310,47 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["next_commands"] == [
         "browser-cli commands --workflow interactive_targeting"
     ]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "menu_keyboard_flow"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "menu_keyboard_flow",
+        "interactive_targeting",
+        "state_waits",
+    ]
+    assert payload["guide"]["selection_order"][:4] == [
+        "interactive-snapshot",
+        "accessibility-snapshot",
+        "hover-role",
+        "focus-role",
+    ]
+    assert "press-key" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action hover-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action press-key" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-attribute-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action click-role" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert "result.items" in payload["guide"]["read_fields"]
+    assert "result.keydown_accepted" in payload["guide"]["read_fields"]
+    assert "result.navigation_requested" in payload["guide"]["read_fields"]
+    assert "press-key" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"][0] == (
+        "browser-cli commands --workflow menu_keyboard_flow"
+    )
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "form_interaction"])
@@ -1547,6 +1641,7 @@ def test_action_guide_fails_unknown_task_as_json(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
+        "menu_keyboard_flow",
         "page_diagnostics",
         "state_waits",
     ]
@@ -1566,7 +1661,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 17
+    assert payload["workflow_count"] == 18
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1655,6 +1750,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.nodes"
         in payload["agent_workflows"]["interactive_targeting"]["steps"][1]["read"]
+    )
+    assert (
+        "result.keydown_accepted"
+        in payload["agent_workflows"]["menu_keyboard_flow"]["steps"][5]["read"]
     )
     assert (
         "result.texts"
@@ -2579,6 +2678,46 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
 
+def test_commands_catalog_returns_menu_keyboard_flow_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "menu_keyboard_flow"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "menu_keyboard_flow"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "open_or_focus_menu",
+        "verify_menu_state",
+        "inspect_menu_items",
+        "send_keyboard_input",
+        "verify_result",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task menu_keyboard_flow"
+    assert "guide.read_fields" in steps[0]["read"]
+    assert "browser-cli action interactive-snapshot" in steps[1]["command"]
+    assert "browser-cli action hover-role" in steps[2]["command"]
+    assert steps[2]["agent_action"] is True
+    assert "result.hovered" in steps[2]["read"]
+    assert "browser-cli action wait-attribute-role" in steps[3]["command"]
+    assert "result.requested_value" in steps[3]["read"]
+    assert "browser-cli action list-snapshot" in steps[4]["command"]
+    assert "result.items" in steps[4]["read"]
+    assert "browser-cli action press-key" in steps[5]["command"]
+    assert "result.keydown_accepted" in steps[5]["read"]
+    assert steps[-1]["id"] == "verify_result"
+    assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
+    assert "browser-cli action guide --task menu_keyboard_flow" in payload[
+        "agent_entrypoints"
+    ]["menu_keyboard_flow"][0]
+
+
 def test_commands_catalog_returns_state_waits_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2775,6 +2914,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
+        "menu_keyboard_flow",
         "one_off_page_task",
         "page_diagnostics",
         "persistent_login_state",
@@ -2938,7 +3078,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 17
+    assert checks["command_catalog"]["workflow_count"] == 18
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -2954,6 +3094,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "file_upload",
         "dialog_frame_handling",
         "interactive_targeting",
+        "menu_keyboard_flow",
         "content_extraction",
         "state_waits",
         "page_diagnostics",
@@ -3080,6 +3221,17 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "verify_after_click",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
+        "menu_keyboard_flow"
+    ] == [
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "open_or_focus_menu",
+        "verify_menu_state",
+        "inspect_menu_items",
+        "send_keyboard_input",
+        "verify_result",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
         "content_extraction"
     ] == [
         "inspect_action_guide",
@@ -3110,6 +3262,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     for command_name in (
         "action.press",
         "action.press-role",
+        "action.press-key",
         "action.hover",
         "action.hover-role",
         "action.scroll",
@@ -3117,6 +3270,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.set-viewport",
         "action.screenshot-selector",
         "action.screenshot-role",
+        "action.wait-url",
+        "action.wait-load-state",
         "action.get-text",
         "action.get-text-role",
         "action.exists",
@@ -3154,6 +3309,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.cookie-delete",
         "action.cookie-clear",
         "action.wait-cookie",
+        "action.wait-text",
+        "action.wait-role",
         "action.dialog-snapshot",
         "action.wait-dialog",
         "action.frame-snapshot",
@@ -3261,11 +3418,14 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["workflow_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
     assert "action.press-role" in catalog["missing_required_commands"]
+    assert "action.press-key" in catalog["missing_required_commands"]
     assert "action.hover-role" in catalog["missing_required_commands"]
     assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
     assert "action.set-viewport" in catalog["missing_required_commands"]
     assert "action.screenshot-selector" in catalog["missing_required_commands"]
     assert "action.screenshot-role" in catalog["missing_required_commands"]
+    assert "action.wait-url" in catalog["missing_required_commands"]
+    assert "action.wait-load-state" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
@@ -3299,6 +3459,8 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.cookie-delete" in catalog["missing_required_commands"]
     assert "action.cookie-clear" in catalog["missing_required_commands"]
     assert "action.wait-cookie" in catalog["missing_required_commands"]
+    assert "action.wait-text" in catalog["missing_required_commands"]
+    assert "action.wait-role" in catalog["missing_required_commands"]
     assert "action.dialog-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.frame-snapshot" in catalog["missing_required_commands"]
@@ -3327,6 +3489,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "file_upload",
         "dialog_frame_handling",
         "interactive_targeting",
+        "menu_keyboard_flow",
         "content_extraction",
         "state_waits",
         "page_diagnostics",
@@ -3604,6 +3767,16 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "verify_after_click"},
                     ],
                 },
+                "menu_keyboard_flow": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_interactive_targets"},
+                        {"id": "open_or_focus_menu"},
+                        {"id": "verify_menu_state"},
+                        {"id": "inspect_menu_items"},
+                        {"id": "send_keyboard_input"},
+                    ],
+                },
                 "content_extraction": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -3657,6 +3830,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
         "dialog_frame_handling": ["verify_result"],
+        "menu_keyboard_flow": ["verify_result"],
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],
     }

@@ -235,7 +235,8 @@ Default behavior:
   command.
 - `action guide` reports compact action routes for `form_interaction`,
   `interactive_targeting`, `content_extraction`, `browser_state_management`,
-  `file_upload`, `dialog_frame_handling`, `page_diagnostics`, and `state_waits`, including
+  `file_upload`, `dialog_frame_handling`, `menu_keyboard_flow`,
+  `page_diagnostics`, and `state_waits`, including
   inspect, preferred, fallback, and verification commands plus the custom
   JavaScript boundary for each task. Page diagnostics can include
   `set-viewport` to stabilize responsive screenshots and layout checks.
@@ -254,6 +255,10 @@ Default behavior:
   Dialog/frame handling should expose first-class `dialog-snapshot`,
   `wait-dialog`, `frame-snapshot`, and `wait-frame` routes so agents can handle
   modal prompts and embedded apps before custom JavaScript.
+  Menu/keyboard flow should expose first-class `hover-role`, `focus-role`,
+  `press-role`, `wait-attribute-role`, `list-snapshot`, and `press-key` routes
+  so agents can handle menus, popovers, listboxes, and global shortcuts before
+  custom JavaScript.
   State waits should expose first-class `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
   `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and
@@ -311,9 +316,10 @@ Default behavior:
   the Skill workflow or missing critical workflow steps such as cleanup. The
   required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, press-role,
+  press-key,
   hover, hover-role, scroll, scroll-into-view-role, set-viewport,
   screenshot-selector, screenshot-role,
-  get-text, get-text-role, exists, exists-role, wait-state-role,
+  wait-url, wait-load-state, get-text, get-text-role, exists, exists-role, wait-state-role,
   get-attribute-role, wait-attribute-role, bounding-box-role,
   select-option, select-role, check, uncheck, check-role,
   uncheck-role, click-text, click-role,
@@ -321,7 +327,8 @@ Default behavior:
   link-snapshot, table-snapshot, list-snapshot, text-snapshot, dialog-snapshot,
   wait-dialog, frame-snapshot, wait-frame, outline-snapshot,
   storage-get, storage-set, storage-remove, storage-clear, wait-storage,
-  cookie-get, cookie-set, cookie-delete, cookie-clear, wait-cookie, blur-role,
+  cookie-get, cookie-set, cookie-delete, cookie-clear, wait-cookie, wait-text,
+  wait-role, blur-role,
   clear-role, set-file-input, form-snapshot,
   accessibility snapshot, and interactive-only snapshot.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
