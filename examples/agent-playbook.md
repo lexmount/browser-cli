@@ -151,6 +151,9 @@ browser-cli action guide --task interactive_targeting
 browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
+browser-cli action hover-role --session-id <session_id> --role button --name "Menu"
+browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
+browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 ```
 
@@ -235,7 +238,7 @@ active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
 actions such as `wait-role`, `click-role`, `click-text`,
-`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `interactive-snapshot`, and
+`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as

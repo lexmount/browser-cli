@@ -246,7 +246,8 @@ Default behavior:
   `workflow_count` so agents can detect an installed CLI that is too old for
   the Skill workflow or missing critical workflow steps such as cleanup. The
   required command set covers setup commands, reference/example discovery, case
-  scaffold/validate/run, and core browser actions such as press, hover, scroll,
+  scaffold/validate/run, and core browser actions such as press, press-role,
+  hover, hover-role, scroll, scroll-into-view-role,
   get-text, exists, select-option, select-role, check, uncheck, check-role,
   uncheck-role, click-text, click-role,
   focus-role, fill-label, fill-role, get-value-role, wait-value-role,

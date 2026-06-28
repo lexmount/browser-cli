@@ -562,18 +562,31 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert targeting_steps[3]["agent_action"] is True
     assert targeting_steps[3]["selection_order"] == [
         "click-role",
+        "hover-role",
+        "press-role",
+        "scroll-into-view-role",
         "click-text",
         "click-index",
     ]
     assert (
-        "browser-cli action click-text" in targeting_steps[3]["preferred_commands"][1]
+        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][1]
+    )
+    assert (
+        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][2]
+    )
+    assert (
+        "browser-cli action scroll-into-view-role"
+        in targeting_steps[3]["preferred_commands"][3]
     )
     assert "result.element" in targeting_steps[4]["read"]
     assert "browser-cli action wait-text" in targeting_steps[4]["fallback_commands"][0]
     assert "result.clicked" in targeting_steps[5]["read"]
+    assert "result.hovered" in targeting_steps[5]["read"]
+    assert "result.pressed" in targeting_steps[5]["read"]
+    assert "result.scrolled" in targeting_steps[5]["read"]
     assert (
-        "browser-cli action click-index"
-        in targeting_steps[5]["alternative_commands"][1]
+        "browser-cli action scroll-into-view-role"
+        in targeting_steps[5]["alternative_commands"][2]
     )
     assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
     diagnostics_steps = workflows["page_diagnostics"]["steps"]
@@ -622,6 +635,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.press-key",
         "action.click-role",
         "action.focus-role",
+        "action.hover-role",
+        "action.press-role",
+        "action.scroll-into-view-role",
         "action.select-role",
         "action.check-role",
         "action.uncheck-role",
@@ -694,6 +710,17 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     uncheck_role = commands["action.uncheck-role"]
     assert uncheck_role["required_options"] == ["--role"]
     assert any("--name" in option["flags"] for option in uncheck_role["options"])
+    hover_role = commands["action.hover-role"]
+    assert hover_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in hover_role["options"])
+    press_role = commands["action.press-role"]
+    assert "--role" in press_role["required_options"]
+    assert "--key" in press_role["required_options"]
+    assert any("--name" in option["flags"] for option in press_role["options"])
+    scroll_role = commands["action.scroll-into-view-role"]
+    assert scroll_role["required_options"] == ["--role"]
+    assert any("--block" in option["flags"] for option in scroll_role["options"])
+    assert any("--name" in option["flags"] for option in scroll_role["options"])
     interactive = commands["action.interactive-snapshot"]
     interactive_only = commands["action.interactive-only-snapshot"]
     assert interactive["aliases"] == ["action.interactive-only-snapshot"]
@@ -773,7 +800,22 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     ]
     assert "browser-cli action accessibility-snapshot" in guide["inspect_commands"][1]
     assert "browser-cli action click-role" in guide["preferred_commands"][1]
-    assert "browser-cli action hover" in guide["fallback_commands"][0]
+    assert any(
+        "browser-cli action hover-role" in command
+        for command in guide["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action press-role" in command
+        for command in guide["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action scroll-into-view-role" in command
+        for command in guide["fallback_commands"]
+    )
+    assert any(
+        "browser-cli action hover --session-id" in command
+        for command in guide["fallback_commands"]
+    )
     assert "browser-cli action wait-url" in guide["verify_commands"][0]
     assert "result.nodes" in guide["read_fields"]
     assert "action eval only after" in guide["custom_js_boundary"]
@@ -809,6 +851,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action focus-role" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert any(
+        "browser-cli action press-role" in command
         for command in payload["guide"]["fallback_commands"]
     )
     assert any(
@@ -1621,9 +1667,17 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert "result.nodes" in steps[1]["read"]
     assert steps[2]["optional"] is True
     assert steps[3]["agent_action"] is True
-    assert steps[3]["selection_order"] == ["click-role", "click-text", "click-index"]
+    assert steps[3]["selection_order"] == [
+        "click-role",
+        "hover-role",
+        "press-role",
+        "scroll-into-view-role",
+        "click-text",
+        "click-index",
+    ]
     assert "browser-cli action click-role" in steps[3]["preferred_commands"][0]
-    assert "browser-cli action click-text" in steps[5]["alternative_commands"][0]
+    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][1]
+    assert "browser-cli action click-text" in steps[5]["alternative_commands"][3]
     assert steps[-1]["id"] == "verify_after_click"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
@@ -1950,8 +2004,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
     for command_name in (
         "action.press",
+        "action.press-role",
         "action.hover",
+        "action.hover-role",
         "action.scroll",
+        "action.scroll-into-view-role",
         "action.get-text",
         "action.exists",
         "action.select-option",
@@ -2075,6 +2132,9 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["command_count"] == 3
     assert catalog["workflow_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
+    assert "action.press-role" in catalog["missing_required_commands"]
+    assert "action.hover-role" in catalog["missing_required_commands"]
+    assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.select-role" in catalog["missing_required_commands"]
     assert "action.check-role" in catalog["missing_required_commands"]
@@ -7387,6 +7447,114 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "clicked": True,
                 "role": "button",
                 "name": "Submit",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "hover-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Menu",
+            ],
+            "action.hover-role",
+            {
+                "role": "button",
+                "name": "Menu",
+                "found": True,
+                "role_found": True,
+                "hovered": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "button",
+                "name": "Menu",
+                "found": True,
+                "role_found": True,
+                "hovered": True,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "press-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Search",
+                "--key",
+                "Enter",
+            ],
+            "action.press-role",
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "focused": True,
+                "key": "Enter",
+                "pressed": True,
+                "keydown_accepted": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "focused": True,
+                "key": "Enter",
+                "pressed": True,
+                "keydown_accepted": True,
+                "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "scroll-into-view-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+                "--block",
+                "center",
+            ],
+            "action.scroll-into-view-role",
+            {
+                "role": "button",
+                "name": "Submit",
+                "found": True,
+                "role_found": True,
+                "scrolled": True,
+                "block": "center",
+                "inline": "nearest",
+                "behavior": "auto",
+                "in_viewport": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "button",
+                "name": "Submit",
+                "found": True,
+                "role_found": True,
+                "scrolled": True,
+                "block": "center",
+                "inline": "nearest",
+                "behavior": "auto",
+                "in_viewport": True,
+                "candidate_count": 1,
                 "url": "https://example.test",
             },
         ),

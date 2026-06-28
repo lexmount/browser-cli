@@ -293,8 +293,11 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
 
     for phrase in (
         "press",
+        "press-role",
         "hover",
+        "hover-role",
         "scroll",
+        "scroll-into-view-role",
         "get-text",
         "exists",
         "select-option",

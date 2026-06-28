@@ -67,6 +67,9 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`fill-label` for labeled text fields" in normalized
     assert "`fill-role` for writable role/name fields" in normalized
     assert "`focus-role`, `blur-role`, and `clear-role`" in normalized
+    assert "`hover-role`" in normalized
+    assert "`press-role`" in normalized
+    assert "`scroll-into-view-role`" in normalized
     assert "`get-value-role`" in normalized
     assert "`wait-value-role`" in normalized
     assert "`select-label` or `select-role` for native selects" in normalized
@@ -332,6 +335,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`dispatch-event`",
         "`submit`",
         "`scroll-into-view`",
+        "`scroll-into-view-role`",
         "`bounding-box`",
         "`select-option`",
         "`select-label`",
@@ -342,6 +346,10 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`check-role`",
         "`uncheck-label`",
         "`uncheck-role`",
+        "`hover`",
+        "`hover-role`",
+        "`press`",
+        "`press-role`",
         "`press-key`",
         "`link-snapshot`",
         "`table-snapshot`",
@@ -580,8 +588,11 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `wait-count`, `wait-state`, or `wait-attribute`" in normalized
     assert "Open menus or keyboard flows" in normalized
     assert (
-        "use `focus-role` or `focus`, `hover` for menus, `press` for selector-scoped keys"
+        "use `focus-role`, `hover-role`, `press-role`, or `scroll-into-view-role`"
         in normalized
+    )
+    assert (
+        "use `focus`, `hover`, or `press` for stable selector-scoped keys" in normalized
     )
     assert "`press-key` for active/global shortcuts" in normalized
     assert "`dispatch-event` for explicit DOM events" in normalized

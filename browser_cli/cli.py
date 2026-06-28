@@ -104,7 +104,10 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.check-role",
     "action.uncheck-role",
     "action.hover",
+    "action.hover-role",
     "action.press",
+    "action.press-role",
+    "action.scroll-into-view-role",
     "action.click-text",
     "action.click-role",
     "action.focus-role",
@@ -775,6 +778,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 'browser-cli action wait-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action hover-role --session-id <session_id> --role button --name "Menu"',
+                'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
                 'browser-cli action click-text --session-id <session_id> --text "Submit"',
                 'browser-cli action click-index --session-id <session_id> --selector "button" --index 0',
             ],
@@ -1310,11 +1315,17 @@ def _command_catalog() -> dict[str, Any]:
                         "agent_action": True,
                         "selection_order": [
                             "click-role",
+                            "hover-role",
+                            "press-role",
+                            "scroll-into-view-role",
                             "click-text",
                             "click-index",
                         ],
                         "preferred_commands": [
                             'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
+                            'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
                             'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
                         ],
@@ -1339,11 +1350,18 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "result.found",
                             "result.clicked",
+                            "result.hovered",
+                            "result.pressed",
+                            "result.scrolled",
+                            "result.in_viewport",
                             "result.element",
                             "result.candidate_count",
                             "result.candidates",
                         ],
                         "alternative_commands": [
+                            'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
+                            'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
                             'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
                         ],
@@ -10255,6 +10273,76 @@ def _scroll_into_view_expression(
 """.strip()
 
 
+def _scroll_into_view_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    block: str,
+    inline: str,
+    behavior: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    before_rect = _rect_object_expression("before")
+    after_rect = _rect_object_expression("after")
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const block = {_js_literal(block)};
+  const inline = {_js_literal(inline)};
+  const behavior = {_js_literal(behavior)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      scrolled: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const before = element.getBoundingClientRect();
+  element.scrollIntoView({{ block, inline, behavior }});
+  const after = element.getBoundingClientRect();
+  const inViewport = after.bottom >= 0 &&
+    after.right >= 0 &&
+    after.top <= window.innerHeight &&
+    after.left <= window.innerWidth;
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    scrolled: true,
+    block,
+    inline,
+    behavior,
+    before: {before_rect},
+    after: {after_rect},
+    in_viewport: inViewport,
+    visible: visible(element),
+    candidate_count: roleMatch.candidate_count,
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _action_guide_tasks() -> dict[str, dict[str, Any]]:
     return {
         "form_interaction": {
@@ -10296,6 +10384,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action clear-role --session-id <session_id> --role textbox --name "<accessible name>"',
                 'browser-cli action focus-role --session-id <session_id> --role textbox --name "<accessible name>"',
                 'browser-cli action blur-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action press-role --session-id <session_id> --role textbox --name "<accessible name>" --key Enter',
                 'browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "<accessible name>"',
                 'browser-cli action set-value --session-id <session_id> --selector "<selector>" --value "<value>"',
                 'browser-cli action dispatch-event --session-id <session_id> --selector "<selector>" --event input --event change',
@@ -10344,6 +10433,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "accessibility-snapshot",
                 "wait-role",
                 "click-role",
+                "hover-role",
+                "press-role",
+                "scroll-into-view-role",
                 "click-text",
                 "click-index",
                 "click",
@@ -10355,10 +10447,13 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "preferred_commands": [
                 'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
                 'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
                 'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
             ],
             "fallback_commands": [
+                'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action hover --session-id <session_id> --selector "<selector>"',
                 'browser-cli action press --session-id <session_id> --selector "<selector>" --key Enter',
                 'browser-cli action click --session-id <session_id> --selector "<selector>"',
@@ -10373,6 +10468,10 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.node_count",
                 "result.element",
                 "result.clicked",
+                "result.hovered",
+                "result.pressed",
+                "result.scrolled",
+                "result.in_viewport",
                 "result.url",
             ],
             "custom_js_boundary": (
@@ -11255,6 +11354,22 @@ def cmd_action_scroll_into_view(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_scroll_into_view_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.scroll-into-view-role",
+        _scroll_into_view_role_expression(
+            role=args.role,
+            name=args.name,
+            block=args.block,
+            inline=args.inline,
+            behavior=args.behavior,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_select_option(args: argparse.Namespace) -> None:
     value = _js_literal(args.value)
     _run_eval_backed_action_command(
@@ -11430,6 +11545,53 @@ def cmd_action_hover(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_hover_role(args: argparse.Namespace) -> None:
+    name_source = "null" if args.name is None else _js_literal(args.name)
+    expression = f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(args.role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(args.exact)};
+  const caseSensitive = {_js_literal(args.case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      hovered: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const init = {{
+    view: window,
+    bubbles: true,
+    cancelable: true,
+    clientX: element.getBoundingClientRect().left,
+    clientY: element.getBoundingClientRect().top
+  }};
+  for (const type of ["mouseover", "mouseenter", "mousemove"]) {{
+    element.dispatchEvent(new MouseEvent(type, init));
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    hovered: true,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.hover-role", expression)
+
+
 def cmd_action_press(args: argparse.Namespace) -> None:
     key = _js_literal(args.key)
     _run_eval_backed_action_command(
@@ -11455,6 +11617,56 @@ def cmd_action_press(args: argparse.Namespace) -> None:
 """.rstrip(),
         ),
     )
+
+
+def cmd_action_press_role(args: argparse.Namespace) -> None:
+    key = _js_literal(args.key)
+    name_source = "null" if args.name is None else _js_literal(args.name)
+    expression = f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(args.role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(args.exact)};
+  const caseSensitive = {_js_literal(args.case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      focused: false,
+      key: {key},
+      pressed: false,
+      keydown_accepted: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const key = {key};
+  element.focus();
+  const init = {{ key, code: key, bubbles: true, cancelable: true }};
+  const keydownAccepted = element.dispatchEvent(new KeyboardEvent("keydown", init));
+  element.dispatchEvent(new KeyboardEvent("keypress", init));
+  element.dispatchEvent(new KeyboardEvent("keyup", init));
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    focused: document.activeElement === element,
+    key,
+    pressed: true,
+    keydown_accepted: keydownAccepted,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+    _run_eval_backed_action_command(args, "action.press-role", expression)
 
 
 def _press_key_expression(
@@ -14627,6 +14839,33 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_scroll_into_view.set_defaults(func=cmd_action_scroll_into_view)
 
+    action_scroll_into_view_role = action_subparsers.add_parser(
+        "scroll-into-view-role",
+        help="Scroll an interactive element matched by role and optional accessible name into the viewport",
+    )
+    _add_session_target_args(action_scroll_into_view_role)
+    action_scroll_into_view_role.add_argument("--role", required=True)
+    action_scroll_into_view_role.add_argument("--name")
+    action_scroll_into_view_role.add_argument(
+        "--block",
+        choices=["start", "center", "end", "nearest"],
+        default="center",
+        help="Vertical alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view_role.add_argument(
+        "--inline",
+        choices=["start", "center", "end", "nearest"],
+        default="nearest",
+        help="Horizontal alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view_role.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+    )
+    _add_text_match_args(action_scroll_into_view_role)
+    action_scroll_into_view_role.set_defaults(func=cmd_action_scroll_into_view_role)
+
     action_select_option = action_subparsers.add_parser(
         "select-option",
         help="Set the value of a select-like element",
@@ -14723,6 +14962,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_hover.add_argument("--selector", required=True)
     action_hover.set_defaults(func=cmd_action_hover)
 
+    action_hover_role = action_subparsers.add_parser(
+        "hover-role",
+        help="Dispatch hover events for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_hover_role)
+    action_hover_role.add_argument("--role", required=True)
+    action_hover_role.add_argument("--name")
+    _add_text_match_args(action_hover_role)
+    action_hover_role.set_defaults(func=cmd_action_hover_role)
+
     action_press = action_subparsers.add_parser(
         "press",
         help="Focus a selector and dispatch key events",
@@ -14731,6 +14980,17 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_press.add_argument("--selector", required=True)
     action_press.add_argument("--key", required=True)
     action_press.set_defaults(func=cmd_action_press)
+
+    action_press_role = action_subparsers.add_parser(
+        "press-role",
+        help="Focus an element matched by role/name and dispatch key events",
+    )
+    _add_session_target_args(action_press_role)
+    action_press_role.add_argument("--role", required=True)
+    action_press_role.add_argument("--name")
+    action_press_role.add_argument("--key", required=True)
+    _add_text_match_args(action_press_role)
+    action_press_role.set_defaults(func=cmd_action_press_role)
 
     action_press_key = action_subparsers.add_parser(
         "press-key",

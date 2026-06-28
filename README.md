@@ -442,6 +442,7 @@ browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
 browser-cli action scroll-into-view --session-id <session_id> --selector "button[type=submit]"
+browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
 browser-cli action bounding-box --session-id <session_id> --selector "button[type=submit]"
 browser-cli action inspect --session-id <session_id> --selector "button[type=submit]"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
@@ -454,7 +455,9 @@ browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
 browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action hover --session-id <session_id> --selector ".menu"
+browser-cli action hover-role --session-id <session_id> --role button --name "Menu"
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
+browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
@@ -492,9 +495,9 @@ the boundary for custom JavaScript.
 `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `blur-role`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
-`dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
+`dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `inspect`,
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
-`check-role`, `uncheck-label`, `uncheck-role`, `hover`, `press`, `press-key`, `click-text`, `click-role`,
+`check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
@@ -795,7 +798,8 @@ Common agent recipes:
   suspected action, read `console-snapshot` or wait with `wait-console`, then use
   `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or `inspect`
   to correlate visible state with JS errors.
-- Menu or keyboard flow: `focus`, `hover`, selector-scoped `press`,
+- Menu or keyboard flow: `focus-role`, `hover-role`, `press-role`,
+  `scroll-into-view-role`, selector-scoped `focus`, `hover`, or `press`,
   active/global `press-key`, or `dispatch-event`, then inspect again with
   `interactive-snapshot`.
 - Dialog flow: use `wait-dialog` when the dialog appears asynchronously,
