@@ -23,6 +23,7 @@ browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
+browser-cli commands --workflow visual_capture
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -34,6 +35,7 @@ browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task navigation_flow
+browser-cli action guide --task visual_capture
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -265,6 +267,19 @@ browser-cli action page-info --session-id <session_id>
 browser-cli action reload --session-id <session_id>
 browser-cli action wait-url --session-id <session_id> --url /dashboard
 browser-cli action wait-title --session-id <session_id> --title Dashboard
+```
+
+For visual evidence, read visual capture workflow contracts before writing
+custom screenshot scripts:
+
+```bash
+browser-cli commands --workflow visual_capture
+browser-cli action guide --task visual_capture
+browser-cli action page-info --session-id <session_id>
+browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720
+browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png
+browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png
+browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page
 ```
 
 For page failures, runtime errors, or fetch/XHR issues, install diagnostics

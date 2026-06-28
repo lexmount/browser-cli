@@ -263,6 +263,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "navigation_flow" in references["action_playbook"]["related_workflows"]
+    assert "visual_capture" in references["action_playbook"]["related_workflows"]
     assert "page_diagnostics" in references["action_playbook"]["related_workflows"]
     assert (
         "Structured Results And Masking"
@@ -398,6 +399,22 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         'browser-cli action wait-title --session-id <session_id> --title "<title text>"'
         in payload["agent_entrypoints"]["navigation_flow"]
+    )
+    assert (
+        "browser-cli action guide --task visual_capture"
+        in payload["agent_entrypoints"]["visual_capture"]
+    )
+    assert (
+        "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page"
+        in payload["agent_entrypoints"]["visual_capture"]
+    )
+    assert (
+        "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png"
+        in payload["agent_entrypoints"]["visual_capture"]
+    )
+    assert (
+        'browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png'
+        in payload["agent_entrypoints"]["visual_capture"]
     )
     assert (
         "browser-cli action guide --task menu_keyboard_flow"
@@ -638,6 +655,42 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser-cli action wait-title" in navigation_steps[4][
         "fallback_commands"
     ][2]
+    visual_steps = workflows["visual_capture"]["steps"]
+    assert [step["id"] for step in visual_steps] == [
+        "inspect_action_guide",
+        "inspect_page_context",
+        "set_viewport_if_needed",
+        "choose_capture_target",
+        "capture_visual_evidence",
+        "verify_capture_artifact",
+    ]
+    assert visual_steps[0]["command"] == (
+        "browser-cli action guide --task visual_capture"
+    )
+    assert "guide.read_fields" in visual_steps[0]["read"]
+    assert visual_steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "viewport" in visual_steps[1]["read"]
+    assert visual_steps[2]["optional"] is True
+    assert "browser-cli action set-viewport" in visual_steps[2]["command"]
+    assert "result.window_viewport" in visual_steps[2]["read"]
+    assert visual_steps[3]["agent_action"] is True
+    assert visual_steps[3]["selection_order"][:3] == [
+        "screenshot-role",
+        "screenshot-selector",
+        "screenshot",
+    ]
+    assert "browser-cli action screenshot-role" in visual_steps[3][
+        "preferred_commands"
+    ][0]
+    assert visual_steps[4]["agent_action"] is True
+    assert "result.screenshot" in visual_steps[4]["read"]
+    assert "result.path" in visual_steps[4]["read"]
+    assert "result.bounding_box" in visual_steps[4]["read"]
+    assert "browser-cli action text-snapshot" in visual_steps[5][
+        "fallback_commands"
+    ][1]
     case_steps = workflows["case_file_task"]["steps"]
     assert [step["id"] for step in case_steps] == [
         "inspect_case_commands",
@@ -1301,7 +1354,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 10,
+        "task_count": 11,
         "tasks": [
             "browser_state_management",
             "content_extraction",
@@ -1313,6 +1366,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
             "navigation_flow",
             "page_diagnostics",
             "state_waits",
+            "visual_capture",
         ],
         "selection_policy": {
             "inspect_before_acting": True,
@@ -1343,6 +1397,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "navigation_flow",
         "page_diagnostics",
         "state_waits",
+        "visual_capture",
     ]
     assert payload["selection_policy"]["custom_javascript_last"] is True
     guide = payload["guide"]
@@ -1468,6 +1523,41 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli commands --workflow navigation_flow",
         "browser-cli commands --workflow state_waits",
         "browser-cli commands --workflow one_off_page_task",
+    ]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "visual_capture"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "visual_capture",
+        "page_diagnostics",
+        "interactive_targeting",
+    ]
+    assert payload["guide"]["selection_order"][:5] == [
+        "page-info",
+        "set-viewport",
+        "screenshot-role",
+        "screenshot-selector",
+        "screenshot",
+    ]
+    assert any(
+        "browser-cli action screenshot-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action screenshot-selector" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert "result.screenshot" in payload["guide"]["read_fields"]
+    assert "result.path" in payload["guide"]["read_fields"]
+    assert "result.bounding_box" in payload["guide"]["read_fields"]
+    assert "viewport setup" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"] == [
+        "browser-cli commands --workflow visual_capture",
+        "browser-cli commands --workflow page_diagnostics",
+        "browser-cli commands --workflow interactive_targeting",
     ]
 
     with pytest.raises(SystemExit) as exc_info:
@@ -1763,6 +1853,7 @@ def test_action_guide_fails_unknown_task_as_json(
         "navigation_flow",
         "page_diagnostics",
         "state_waits",
+        "visual_capture",
     ]
     assert payload["fix"]["code"] == "inspect_action_guide_tasks"
     assert "browser-cli action guide --names-only" in payload["fix"]["commands"]
@@ -1780,7 +1871,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 19
+    assert payload["workflow_count"] == 20
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1873,6 +1964,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.nodes"
         in payload["agent_workflows"]["interactive_targeting"]["steps"][1]["read"]
+    )
+    assert (
+        "result.screenshot"
+        in payload["agent_workflows"]["visual_capture"]["steps"][4]["read"]
     )
     assert (
         "result.keydown_accepted"
@@ -1970,6 +2065,49 @@ def test_commands_catalog_returns_navigation_flow_workflow(
     assert "browser-cli action guide --task navigation_flow" in payload[
         "agent_entrypoints"
     ]["navigation_flow"][0]
+
+
+def test_commands_catalog_returns_visual_capture_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "visual_capture"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "visual_capture"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_page_context",
+        "set_viewport_if_needed",
+        "choose_capture_target",
+        "capture_visual_evidence",
+        "verify_capture_artifact",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task visual_capture"
+    assert "guide.custom_js_boundary" in steps[0]["read"]
+    assert steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "viewport" in steps[1]["read"]
+    assert steps[2]["optional"] is True
+    assert "browser-cli action set-viewport" in steps[2]["command"]
+    assert steps[3]["agent_action"] is True
+    assert steps[3]["selection_order"][:3] == [
+        "screenshot-role",
+        "screenshot-selector",
+        "screenshot",
+    ]
+    assert steps[4]["agent_action"] is True
+    assert "result.screenshot" in steps[4]["read"]
+    assert "result.path" in steps[4]["read"]
+    assert "browser-cli action text-snapshot" in steps[-1]["fallback_commands"][1]
+    assert "browser-cli action guide --task visual_capture" in payload[
+        "agent_entrypoints"
+    ]["visual_capture"][0]
 
 
 def test_reference_list_returns_packaged_agent_references(
@@ -3091,6 +3229,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "session_recovery",
         "setup_and_verify",
         "state_waits",
+        "visual_capture",
     ]
     assert payload["fix"] == {
         "code": "inspect_available_agent_workflows",
@@ -3247,7 +3386,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 19
+    assert checks["command_catalog"]["workflow_count"] == 20
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -3264,6 +3403,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "file_upload",
         "dialog_frame_handling",
         "interactive_targeting",
+        "visual_capture",
         "menu_keyboard_flow",
         "content_extraction",
         "state_waits",
@@ -3398,6 +3538,14 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "wait_target_ready",
         "activate_target",
         "verify_after_click",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["visual_capture"] == [
+        "inspect_action_guide",
+        "inspect_page_context",
+        "set_viewport_if_needed",
+        "choose_capture_target",
+        "capture_visual_evidence",
+        "verify_capture_artifact",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "menu_keyboard_flow"
@@ -3720,6 +3868,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "file_upload",
         "dialog_frame_handling",
         "interactive_targeting",
+        "visual_capture",
         "menu_keyboard_flow",
         "content_extraction",
         "state_waits",
@@ -4006,6 +4155,15 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "verify_after_click"},
                     ],
                 },
+                "visual_capture": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_page_context"},
+                        {"id": "set_viewport_if_needed"},
+                        {"id": "choose_capture_target"},
+                        {"id": "capture_visual_evidence"},
+                    ],
+                },
                 "menu_keyboard_flow": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -4070,6 +4228,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
         "dialog_frame_handling": ["verify_result"],
+        "visual_capture": ["verify_capture_artifact"],
         "menu_keyboard_flow": ["verify_result"],
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],

@@ -256,16 +256,12 @@ For visible buttons, links, menus, and repeated controls, prefer `browser-cli co
 Read `selection_order`, then `interactive-snapshot` and optional `accessibility-snapshot`; confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose `click-role`, `click-text`, or `click-index`, then verify with `page-info`, `wait-url`, or `wait-text`.
 
 For page content extraction, prefer `browser-cli commands --workflow content_extraction` and `browser-cli action guide --task content_extraction`; choose outline/text/link/table/list/accessibility snapshots before bounded `snapshot` or custom JS.
-
 For browser state setup or cleanup, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands for local/session storage and document.cookie-visible cookies before custom JS.
-
 For file uploads, prefer `browser-cli commands --workflow file_upload` and `browser-cli action guide --task file_upload`; inspect controls, then use `set-file-input` before custom JS or OS file picker workarounds.
-
 For dialogs, cookie banners, confirmation prompts, and iframes, prefer `browser-cli commands --workflow dialog_frame_handling` and `browser-cli action guide --task dialog_frame_handling`; use dialog/frame snapshots and waits before custom JS.
-
 For menus, popovers, listboxes, and keyboard shortcuts, prefer `browser-cli commands --workflow menu_keyboard_flow` and `browser-cli action guide --task menu_keyboard_flow`; use role hover/focus/press, list snapshots, and `press-key` before custom JS.
-
 For page navigation, refresh, or history, prefer `browser-cli commands --workflow navigation_flow` and `browser-cli action guide --task navigation_flow`; use `open-url`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`, and `wait-load-state` before custom JS.
+For visual evidence, prefer `browser-cli commands --workflow visual_capture` and `browser-cli action guide --task visual_capture`; use `set-viewport`, `screenshot-role`, `screenshot-selector`, full-page `screenshot`, and bounded `text-snapshot` before custom JS.
 For deterministic state transitions, prefer `browser-cli commands --workflow state_waits` and `browser-cli action guide --task state_waits`; choose `wait-load-state`, `wait-url`, `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or `wait-cookie` before sleeps or custom JS.
 
 For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic workflow before writing custom probes:
@@ -366,6 +362,7 @@ browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
+browser-cli commands --workflow visual_capture
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -377,6 +374,7 @@ browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task navigation_flow
+browser-cli action guide --task visual_capture
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management

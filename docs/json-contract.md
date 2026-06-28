@@ -235,11 +235,14 @@ Default behavior:
   command.
 - `action guide` reports compact action routes for `form_interaction`,
   `interactive_targeting`, `content_extraction`, `browser_state_management`,
-  `file_upload`, `dialog_frame_handling`, `navigation_flow`, `menu_keyboard_flow`,
-  `page_diagnostics`, and `state_waits`, including
+  `file_upload`, `dialog_frame_handling`, `navigation_flow`, `visual_capture`,
+  `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
   inspect, preferred, fallback, and verification commands plus the custom
   JavaScript boundary for each task. Page diagnostics can include
   `set-viewport` to stabilize responsive screenshots and layout checks.
+  Visual capture exposes `set-viewport`, `screenshot-role`,
+  `screenshot-selector`, full-page `screenshot`, and bounded `text-snapshot`
+  routes so agents can collect visual evidence before custom JavaScript.
   Content extraction should expose first-class `outline-snapshot`,
   `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
   `accessibility-snapshot`, and bounded `snapshot` routes so agents can avoid

@@ -58,6 +58,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "file_upload" in prompt
     assert "dialog_frame_handling" in prompt
     assert "navigation_flow" in prompt
+    assert "visual_capture" in prompt
     assert "menu_keyboard_flow" in prompt
     assert "state_waits" in prompt
     assert "page_diagnostics" in prompt

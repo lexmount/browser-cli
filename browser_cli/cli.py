@@ -233,6 +233,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "file_upload",
     "dialog_frame_handling",
     "interactive_targeting",
+    "visual_capture",
     "menu_keyboard_flow",
     "content_extraction",
     "state_waits",
@@ -349,6 +350,14 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "wait_target_ready",
         "activate_target",
         "verify_after_click",
+    ),
+    "visual_capture": (
+        "inspect_action_guide",
+        "inspect_page_context",
+        "set_viewport_if_needed",
+        "choose_capture_target",
+        "capture_visual_evidence",
+        "verify_capture_artifact",
     ),
     "menu_keyboard_flow": (
         "inspect_action_guide",
@@ -689,6 +698,7 @@ def _agent_references() -> dict[str, Any]:
                 "file_upload",
                 "dialog_frame_handling",
                 "interactive_targeting",
+                "visual_capture",
                 "menu_keyboard_flow",
                 "page_diagnostics",
             ],
@@ -746,6 +756,7 @@ def _agent_examples() -> dict[str, Any]:
                 "file_upload",
                 "dialog_frame_handling",
                 "interactive_targeting",
+                "visual_capture",
                 "menu_keyboard_flow",
                 "content_extraction",
                 "state_waits",
@@ -997,6 +1008,15 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
                 'browser-cli action click-text --session-id <session_id> --text "Submit"',
                 'browser-cli action click-index --session-id <session_id> --selector "button" --index 0',
+            ],
+            "visual_capture": [
+                "browser-cli action guide --task visual_capture",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                'browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png',
+                "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
             ],
             "menu_keyboard_flow": [
                 "browser-cli action guide --task menu_keyboard_flow",
@@ -1793,6 +1813,98 @@ def _command_catalog() -> dict[str, Any]:
                             'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
                             'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50",
+                        ],
+                    },
+                ],
+            },
+            "visual_capture": {
+                "purpose": "Capture page, region, or semantic target screenshots with viewport context and text fallback before custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task visual_capture",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page_context",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "set_viewport_if_needed",
+                        "command": "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                        "optional": True,
+                        "read": [
+                            "result.requested_viewport",
+                            "result.previous_viewport",
+                            "result.viewport",
+                            "result.window_viewport",
+                            "result.changed",
+                        ],
+                    },
+                    {
+                        "id": "choose_capture_target",
+                        "command": "<choose screenshot-role, screenshot-selector, screenshot, or text-snapshot using task intent and target evidence>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "screenshot-role",
+                            "screenshot-selector",
+                            "screenshot",
+                            "text-snapshot",
+                            "page-info",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action screenshot-role --session-id <session_id> --role <role> --name "<name>" --output /tmp/browser-cli-target.png',
+                            'browser-cli action screenshot-selector --session-id <session_id> --selector "<selector>" --output /tmp/browser-cli-region.png',
+                            "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page",
+                        ],
+                    },
+                    {
+                        "id": "capture_visual_evidence",
+                        "command": "<run the selected screenshot or text-snapshot command>",
+                        "agent_action": True,
+                        "read": [
+                            "result.screenshot",
+                            "result.path",
+                            "result.output",
+                            "result.found",
+                            "result.role_found",
+                            "result.visible",
+                            "result.match_count",
+                            "result.bounding_box",
+                            "result.texts",
+                            "result.text_count",
+                            "result.text_truncated",
+                        ],
+                    },
+                    {
+                        "id": "verify_capture_artifact",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png",
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                         ],
                     },
                 ],
@@ -13497,6 +13609,72 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "cannot express the navigation."
             ),
         },
+        "visual_capture": {
+            "purpose": "Capture viewport, full-page, selector, or role-target screenshots with bounded text fallback before custom JavaScript.",
+            "related_workflows": [
+                "visual_capture",
+                "page_diagnostics",
+                "interactive_targeting",
+            ],
+            "when_to_use": [
+                "The task asks to capture, inspect, or provide visual evidence of a page or target.",
+                "The agent needs a stable viewport or screenshot artifact before diagnosing or reporting state.",
+            ],
+            "selection_order": [
+                "page-info",
+                "set-viewport",
+                "screenshot-role",
+                "screenshot-selector",
+                "screenshot",
+                "text-snapshot",
+                "interactive-snapshot",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+            ],
+            "preferred_commands": [
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                'browser-cli action screenshot-role --session-id <session_id> --role <role> --name "<name>" --output /tmp/browser-cli-target.png',
+                'browser-cli action screenshot-selector --session-id <session_id> --selector "<selector>" --output /tmp/browser-cli-region.png',
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page",
+            ],
+            "fallback_commands": [
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 20 --max-chars 300",
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "visibility_state",
+                "result.viewport",
+                "result.window_viewport",
+                "result.screenshot",
+                "result.path",
+                "result.output",
+                "result.found",
+                "result.role_found",
+                "result.visible",
+                "result.match_count",
+                "result.bounding_box",
+                "result.texts",
+                "result.text_count",
+                "result.text_truncated",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after page-info, viewport setup, role/"
+                "selector/full-page screenshots, text snapshots, and interactive "
+                "snapshots cannot capture the requested evidence."
+            ),
+        },
         "menu_keyboard_flow": {
             "purpose": "Open menus, inspect menu/listbox items, and send keyboard shortcuts before custom JavaScript.",
             "related_workflows": [
@@ -13940,6 +14118,7 @@ def cmd_action_guide(args: argparse.Namespace) -> None:
             "browser-cli action guide --task dialog_frame_handling",
             "browser-cli action guide --task interactive_targeting",
             "browser-cli action guide --task navigation_flow",
+            "browser-cli action guide --task visual_capture",
             "browser-cli action guide --task menu_keyboard_flow",
             "browser-cli action guide --task content_extraction",
             "browser-cli action guide --task browser_state_management",
@@ -18187,7 +18366,7 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_guide.add_argument(
         "--task",
-        help="Action task guide to inspect, such as form_interaction, file_upload, dialog_frame_handling, interactive_targeting, navigation_flow, menu_keyboard_flow, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
+        help="Action task guide to inspect, such as form_interaction, file_upload, dialog_frame_handling, interactive_targeting, navigation_flow, visual_capture, menu_keyboard_flow, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
     )
     action_guide.add_argument(
         "--names-only",
