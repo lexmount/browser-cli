@@ -184,6 +184,11 @@ the returned `commands` as directly runnable.
 `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or `--credentials-file` without printing
 access or refresh token values. Until bearer-token runtime support lands,
 `runtime_auth_usable` is true only when env API-key credentials are configured.
+Read `runtime_auth.usable`, `runtime_auth.source`,
+`runtime_auth.fallback_missing_env`, and
+`runtime_auth.bearer_runtime.required_support` before deciding whether browser
+actions can use the current credential source. Device tokens remain local
+metadata until the SDK, API, and browser gateway all accept bearer tokens.
 When env credentials are incomplete, `auth status` also reports `missing_env`
 and a `fix` object with safe `browser-cli auth login` / Connect from Codex setup
 commands.
@@ -305,6 +310,10 @@ it calls `POST /api/auth/token/refresh`, saves refreshed metadata on success,
 and keeps token values out of JSON output. Agents should still use
 `runtime_auth_usable` and `next_steps` before relying on bearer-token runtime
 auth for browser actions.
+`auth status` and `doctor` also include `runtime_auth`, whose
+`bearer_runtime.required_support` lists the SDK/API/browser-gateway changes
+needed before device tokens can replace env API-key credentials for browser
+actions.
 
 `auth connect-requirements` returns the browser.lexmount.cn `/connect/codex`
 implementation contract without requiring credentials or opening a browser. It

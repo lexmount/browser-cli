@@ -391,6 +391,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert site_steps[3]["command"] == "browser-cli auth login --device-code"
     assert site_steps[4]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
+    assert auth_steps[0]["command"] == "browser-cli auth status"
+    assert "runtime_auth.usable" in auth_steps[0]["read"]
+    assert "runtime_auth.source" in auth_steps[0]["read"]
     assert auth_steps[1]["command"] == "browser-cli auth scopes"
     assert "default_scopes" in auth_steps[1]["read"]
     assert auth_steps[2]["command"] == "browser-cli auth login"
@@ -421,6 +424,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert device_steps[1]["optional"] is True
     assert device_steps[1]["command"] == "browser-cli auth login"
     assert "manual_env_available" in device_steps[1]["read"]
+    assert "runtime_auth.usable" in device_steps[2]["read"]
+    assert "runtime_auth.bearer_runtime.required_support" in device_steps[2]["read"]
     assert "device_token.valid" in device_steps[2]["read"]
     assert device_steps[3]["command"] == "browser-cli doctor --json"
     token_steps = workflows["scoped_token_lifecycle"]["steps"]
@@ -433,6 +438,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "logout_or_revoke_when_requested",
     ]
     assert token_steps[0]["command"] == "browser-cli auth status"
+    assert "runtime_auth.usable" in token_steps[0]["read"]
+    assert "runtime_auth.bearer_runtime.available" in token_steps[0]["read"]
+    assert "runtime_auth.bearer_runtime.required_support" in token_steps[0]["read"]
     assert "device_token.refresh_needed" in token_steps[0]["read"]
     assert token_steps[1]["command"] == (
         "browser-cli auth scopes --scope browser:actions"
@@ -1827,6 +1835,8 @@ def test_commands_catalog_returns_device_code_auth_workflow(
     assert "fallback_handoff.setup_blocks" in steps[0]["read"]
     assert steps[1]["optional"] is True
     assert "manual_env_available" in steps[1]["read"]
+    assert "runtime_auth.usable" in steps[2]["read"]
+    assert "runtime_auth.bearer_runtime.required_support" in steps[2]["read"]
     assert "device_token.valid" in steps[2]["read"]
     assert steps[3]["command"] == "browser-cli doctor --json"
     assert (
@@ -1857,6 +1867,8 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     ]
     assert steps[0]["command"] == "browser-cli auth status"
     assert "device_token.valid" in steps[0]["read"]
+    assert "runtime_auth.usable" in steps[0]["read"]
+    assert "runtime_auth.bearer_runtime.required_support" in steps[0]["read"]
     assert steps[1]["command"] == ("browser-cli auth scopes --scope browser:actions")
     assert "scopes[0].permissions" in steps[1]["read"]
     assert steps[2]["command"] == (
@@ -3233,11 +3245,25 @@ def test_doctor_reports_device_token_without_treating_it_as_runtime_auth(
     assert "secret-refresh-token" not in serialized
     assert payload["auth_source"] == "device_token"
     assert payload["runtime_auth_usable"] is False
+    assert payload["runtime_auth"]["usable"] is False
+    assert payload["runtime_auth"]["source"] == "device_token_pending_runtime"
+    assert payload["runtime_auth"]["bearer_runtime"]["device_token_valid"] is True
+    assert [
+        item["id"]
+        for item in payload["runtime_auth"]["bearer_runtime"]["required_support"]
+    ] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
     assert payload["ready_for_browser_actions"] is False
     assert payload["device_token"]["valid"] is True
     checks = _checks_by_name(payload)
     assert checks["local_device_token"]["status"] == "pass"
     assert checks["local_device_token"]["device_token"]["token_id"] == "tok_123"
+    assert checks["local_device_token"]["runtime_auth"]["source"] == (
+        "device_token_pending_runtime"
+    )
     assert (
         "bearer-token runtime auth is pending"
         in checks["local_device_token"]["message"]
@@ -3429,6 +3455,49 @@ def test_auth_status_reports_env_without_revealing_api_key(
     assert payload["command"] == "auth.status"
     assert payload["configured"] is True
     assert payload["missing_env"] == []
+    assert payload["runtime_auth"] == {
+        "usable": True,
+        "source": "env_api_key",
+        "browser_actions_auth": "env_api_key",
+        "fallback_missing_env": [],
+        "device_token_runtime_usable": False,
+        "bearer_runtime": {
+            "available": False,
+            "reason": "bearer_token_runtime_not_enabled",
+            "device_token_present": False,
+            "device_token_valid": False,
+            "required_support": [
+                {
+                    "id": "sdk_accepts_bearer_token",
+                    "owner": "lexmount-python-sdk",
+                    "required_change": (
+                        "Lexmount client accepts scoped bearer/access tokens and sends "
+                        "Authorization: Bearer without requiring LEXMOUNT_API_KEY."
+                    ),
+                },
+                {
+                    "id": "api_accepts_bearer_token",
+                    "owner": "Lexmount API",
+                    "required_change": (
+                        "Session, context, and action-related APIs accept project-bound "
+                        "scoped bearer tokens with browser.* permissions."
+                    ),
+                },
+                {
+                    "id": "browser_gateway_accepts_bearer_token",
+                    "owner": "Lexmount browser gateway",
+                    "required_change": (
+                        "Browser CDP websocket connection can be authorized with a "
+                        "short-lived bearer token instead of an api_key query parameter."
+                    ),
+                },
+            ],
+        },
+        "next_steps": [
+            "Run `browser-cli doctor --json` to verify live API connectivity.",
+            "Continue using env API-key credentials for browser actions until bearer-token runtime support lands.",
+        ],
+    }
     assert "fix" not in payload
     assert payload["api_key"] == {
         "present": True,
@@ -3464,6 +3533,13 @@ def test_auth_status_reports_connect_from_codex_fix_when_env_is_missing(
     assert payload["ok"] is True
     assert payload["configured"] is False
     assert payload["runtime_auth_usable"] is False
+    assert payload["runtime_auth"]["usable"] is False
+    assert payload["runtime_auth"]["source"] == "missing"
+    assert payload["runtime_auth"]["browser_actions_auth"] == "missing_env_api_key"
+    assert payload["runtime_auth"]["fallback_missing_env"] == ["LEXMOUNT_API_KEY"]
+    assert payload["runtime_auth"]["bearer_runtime"]["reason"] == (
+        "no_device_token_metadata"
+    )
     assert payload["missing_env"] == ["LEXMOUNT_API_KEY"]
     assert payload["auth_source"] == "missing"
     assert "status-project" in serialized
@@ -3525,6 +3601,22 @@ def test_auth_status_reports_device_token_file_without_revealing_tokens(
     assert payload["configured"] is False
     assert payload["auth_source"] == "device_token"
     assert payload["runtime_auth_usable"] is False
+    assert payload["runtime_auth"]["usable"] is False
+    assert payload["runtime_auth"]["source"] == "device_token_pending_runtime"
+    assert payload["runtime_auth"]["fallback_missing_env"] == [
+        "LEXMOUNT_API_KEY",
+        "LEXMOUNT_PROJECT_ID",
+    ]
+    bearer_runtime = payload["runtime_auth"]["bearer_runtime"]
+    assert bearer_runtime["available"] is False
+    assert bearer_runtime["reason"] == "bearer_token_runtime_not_enabled"
+    assert bearer_runtime["device_token_present"] is True
+    assert bearer_runtime["device_token_valid"] is True
+    assert [item["id"] for item in bearer_runtime["required_support"]] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
     token = payload["device_token"]
     assert token["present"] is True
     assert token["path"] == str(credentials_file)

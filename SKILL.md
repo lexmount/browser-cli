@@ -99,9 +99,10 @@ still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
 a trusted local terminal. Check top-level `usable` and `unusable_exports` before
 treating returned `commands` as directly runnable.
 
-`auth status` reports `auth_source`, `runtime_auth_usable`, and safe
-`device_token` metadata when a local scoped-token credentials file exists or
-`--credentials-file` is passed. When env credentials are incomplete, read
+`auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`, and
+safe `device_token` metadata. Read `runtime_auth.usable`,
+`runtime_auth.source`, and `runtime_auth.bearer_runtime.required_support`
+before choosing a credential source. When env credentials are incomplete, read
 `missing_env` and the `fix` object instead of inventing setup steps. Use
 `auth scopes` to inspect known Connect from Codex scopes, `default_scopes`,
 `permission_count`, `risk`, `destructive`, `unknown_scopes`, and the optional
@@ -117,9 +118,8 @@ without changing environment variables; `--revoke` calls
 `POST /api/auth/token/revoke` only when a token lifecycle base URL is
 configured, otherwise it reports remote revoke pending.
 These commands never report access or refresh token values. Until bearer-token
-runtime support lands, continue to require env API-key credentials for browser
-actions when `runtime_auth_usable` is false.
-
+runtime support lands, require env API-key credentials for browser actions when
+`runtime_auth.usable` is false.
 For scoped token checks, refresh, or local logout, prefer the lifecycle workflow:
 
 ```bash
@@ -478,6 +478,7 @@ not report API key values. For `auth login`, prefer the `handoff` object's
 blocking on the local browser.
 For device-token metadata in `auth status`, `auth token-info`, `auth refresh`,
 `auth logout`, or `doctor`, report `auth_source`, `runtime_auth_usable`,
+`runtime_auth.usable`, `runtime_auth.bearer_runtime.required_support`,
 `device_token.valid`, `device_token.expired`, `device_token.refresh_needed`,
 `device_token.scopes`, and `scope_check`; do not report token values. For
 `auth refresh`, report `refresh_needed`, `has_refresh_token`,
@@ -486,8 +487,7 @@ For device-token metadata in `auth status`, `auth token-info`, `auth refresh`,
 URL is configured. For `auth logout`, report `deleted`, `present_before`,
 `present_after`, `revoke_requested`, `revoke_available`, `revoked`,
 `remote_revoke`, and `warnings`; it does not unset env vars. Do not start
-browser actions from a device token while
-`runtime_auth_usable` is false.
+browser actions from a device token while `runtime_auth.usable` is false.
 For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,

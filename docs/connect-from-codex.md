@@ -166,7 +166,9 @@ Expected behavior after the website page exists:
   can start the device-code flow; with `--wait`, it polls and saves approved
   local scoped-token metadata without printing token values.
 - `browser-cli auth status` remains local and never calls the website unless a
-  token-based flow is configured.
+  token-based flow is configured. It reports `runtime_auth` so agents can tell
+  whether browser actions are actually usable from env API-key credentials or
+  blocked on bearer-token runtime support.
 - `browser-cli auth token-info` remains local and reports safe scoped-token
   metadata plus scope checks without printing token values.
 - `browser-cli auth refresh` remains local/pending when no token lifecycle base
@@ -187,6 +189,11 @@ Expected behavior after the website page exists:
 - `browser-cli doctor --json` checks local env, package availability, command
   catalog compatibility, API connectivity, and optionally session creation when
   the user opts in.
+- `browser-cli doctor --json` reports `runtime_auth.bearer_runtime.required_support`
+  when a local device token exists but cannot yet drive browser actions. The
+  required support spans lexmount-python-sdk bearer-token construction,
+  Lexmount API `Authorization: Bearer` handling for scoped browser permissions,
+  and browser gateway bearer-token authorization for CDP websocket connections.
 - When credentials are missing, `browser-cli doctor --json` reports
   `repair_plan.connect_from_codex` with the same safe `/connect/codex` URL,
   requested scopes, setup blocks, and verification commands used by

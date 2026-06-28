@@ -29,6 +29,9 @@ def test_device_code_doc_tracks_current_token_status_contract() -> None:
     assert "--credentials-file" in text
     assert "auth_source" in text
     assert "runtime_auth_usable" in text
+    assert "runtime_auth.usable" in text
+    assert "runtime_auth.bearer_runtime.required_support" in text
+    assert "SDK bearer-token client construction" in text
     assert "device_token.valid" in text
     assert "device_token.refresh_needed" in text
     assert "scope_check.required_scopes" in text

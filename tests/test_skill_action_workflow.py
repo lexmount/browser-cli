@@ -183,7 +183,11 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "manual env fallback" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "Check top-level `usable` and `unusable_exports`" in normalized
-    assert "`auth status` reports `auth_source`, `runtime_auth_usable`" in normalized
+    assert (
+        "`auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`"
+        in normalized
+    )
+    assert "`runtime_auth.bearer_runtime.required_support`" in normalized
     assert "When env credentials are incomplete, read `missing_env`" in normalized
     assert "and the `fix` object instead of inventing setup steps" in normalized
     assert "`auth scopes` to inspect known Connect from Codex scopes" in normalized
@@ -199,11 +203,16 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
         "`refresh_available`, `refreshed`, `revoke_available`, and `warnings`"
         in normalized
     )
+    assert (
+        "`runtime_auth.usable`, `runtime_auth.bearer_runtime.required_support`"
+        in normalized
+    )
     assert "`device_token.valid`, `device_token.expired`" in normalized
     assert "and `scope_check`" in normalized
     assert "`refresh_needed`, `has_refresh_token`" in normalized
     assert "`remote_revoke`, and `warnings`" in normalized
     assert "Do not start browser actions from a device token" in normalized
+    assert "`runtime_auth.usable` is false" in normalized
     assert "do not report API key values" in normalized
 
 

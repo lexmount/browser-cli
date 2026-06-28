@@ -190,6 +190,16 @@ Default behavior:
   may report local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh
   token values.
+- `auth status` and `doctor` report `runtime_auth` so agents do not confuse
+  local scoped-token metadata with browser-action readiness. Read
+  `runtime_auth.usable`, `runtime_auth.source`,
+  `runtime_auth.fallback_missing_env`,
+  `runtime_auth.bearer_runtime.available`, and
+  `runtime_auth.bearer_runtime.required_support`. Device-token runtime auth
+  remains unavailable until the SDK accepts bearer tokens, the API accepts
+  `Authorization: Bearer` for scoped browser permissions, and the browser
+  gateway can authorize CDP websocket connections without an `api_key` query
+  parameter.
 - When env API-key credentials are incomplete, `auth status` reports
   `missing_env` plus a `fix` object with safe Connect from Codex setup commands
   and no API key values.

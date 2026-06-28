@@ -200,6 +200,8 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`device_code.required_endpoints`" in text
     assert "`fallback_handoff`" in text
     assert "scoped token lifecycle" in text
+    assert "`runtime_auth.usable`" in text
+    assert "`runtime_auth.bearer_runtime.required_support`" in text
     assert "scope catalog lookup" in text
     assert "refresh availability" in text
     assert "local logout/revoke-pending fields" in text

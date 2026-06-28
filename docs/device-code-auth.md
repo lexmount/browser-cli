@@ -235,6 +235,13 @@ Current CLI support:
 - Output includes safe metadata such as `auth_source`, `runtime_auth_usable`,
   `device_token.valid`, `device_token.expired`, `device_token.refresh_needed`,
   `device_token.scopes`, and `device_token.token_id`.
+- `browser-cli auth status` and `browser-cli doctor` include `runtime_auth`.
+  Agents should read `runtime_auth.usable` and
+  `runtime_auth.bearer_runtime.required_support` before treating a local device
+  token as usable for browser actions. Required bearer-runtime support is:
+  SDK bearer-token client construction, API `Authorization: Bearer` support for
+  scoped browser permissions, and browser gateway CDP websocket bearer-token
+  authorization without `api_key` query parameters.
 - `browser-cli auth token-info --required-scope <scope>` reports
   `scope_check.required_scopes`, `scope_check.missing_scopes`, and
   `scope_check.satisfied`.

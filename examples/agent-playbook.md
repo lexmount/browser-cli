@@ -63,6 +63,7 @@ and `credentials`; use `--wait` only after approval instructions are visible.
 When a local scoped token exists, use
 `browser-cli commands --workflow scoped_token_lifecycle` before manual token
 handling. Read `device_token.valid`, `scope_check.missing_scopes`,
+`runtime_auth.usable`, `runtime_auth.bearer_runtime.required_support`,
 `refresh_available`, `refreshed`, and `revoke_available`.
 
 Run doctor before the first browser action, after credential changes, and when

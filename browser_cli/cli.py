@@ -856,6 +856,8 @@ def _command_catalog() -> dict[str, Any]:
                             "configured",
                             "auth_source",
                             "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.source",
                             "device_token.valid",
                         ],
                     },
@@ -892,6 +894,8 @@ def _command_catalog() -> dict[str, Any]:
                             "configured",
                             "auth_source",
                             "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.source",
                             "device_token.valid",
                         ],
                     },
@@ -1064,6 +1068,8 @@ def _command_catalog() -> dict[str, Any]:
                             "configured",
                             "auth_source",
                             "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.bearer_runtime.required_support",
                             "device_token.present",
                             "device_token.valid",
                             "missing_env",
@@ -1091,6 +1097,9 @@ def _command_catalog() -> dict[str, Any]:
                             "configured",
                             "auth_source",
                             "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.bearer_runtime.available",
+                            "runtime_auth.bearer_runtime.required_support",
                             "device_token.present",
                             "device_token.valid",
                             "device_token.expired",
@@ -3248,6 +3257,104 @@ def _auth_source(
     if device_token_status.get("present"):
         return "device_token"
     return "missing"
+
+
+def _bearer_runtime_required_support() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "sdk_accepts_bearer_token",
+            "owner": "lexmount-python-sdk",
+            "required_change": (
+                "Lexmount client accepts scoped bearer/access tokens and sends "
+                "Authorization: Bearer without requiring LEXMOUNT_API_KEY."
+            ),
+        },
+        {
+            "id": "api_accepts_bearer_token",
+            "owner": "Lexmount API",
+            "required_change": (
+                "Session, context, and action-related APIs accept project-bound "
+                "scoped bearer tokens with browser.* permissions."
+            ),
+        },
+        {
+            "id": "browser_gateway_accepts_bearer_token",
+            "owner": "Lexmount browser gateway",
+            "required_change": (
+                "Browser CDP websocket connection can be authorized with a "
+                "short-lived bearer token instead of an api_key query parameter."
+            ),
+        },
+    ]
+
+
+def _runtime_auth_status(
+    *,
+    env_configured: bool,
+    missing_env: list[str],
+    device_token_status: dict[str, Any],
+) -> dict[str, Any]:
+    device_token_present = bool(device_token_status.get("present"))
+    device_token_valid = bool(device_token_status.get("valid"))
+    bearer_runtime_required = _bearer_runtime_required_support()
+    if env_configured:
+        return {
+            "usable": True,
+            "source": "env_api_key",
+            "browser_actions_auth": "env_api_key",
+            "fallback_missing_env": [],
+            "device_token_runtime_usable": False,
+            "bearer_runtime": {
+                "available": False,
+                "reason": "bearer_token_runtime_not_enabled",
+                "device_token_present": device_token_present,
+                "device_token_valid": device_token_valid,
+                "required_support": bearer_runtime_required,
+            },
+            "next_steps": [
+                f"Run `{AGENT_DOCTOR_COMMAND}` to verify live API connectivity.",
+                "Continue using env API-key credentials for browser actions until bearer-token runtime support lands.",
+            ],
+        }
+    if device_token_present:
+        return {
+            "usable": False,
+            "source": "device_token_pending_runtime",
+            "browser_actions_auth": "unavailable",
+            "fallback_missing_env": missing_env,
+            "device_token_runtime_usable": False,
+            "bearer_runtime": {
+                "available": False,
+                "reason": "bearer_token_runtime_not_enabled",
+                "device_token_present": device_token_present,
+                "device_token_valid": device_token_valid,
+                "required_support": bearer_runtime_required,
+            },
+            "next_steps": [
+                "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions today.",
+                "Track runtime_auth.bearer_runtime.required_support before treating device tokens as browser-action credentials.",
+                "Run `browser-cli commands --workflow scoped_token_lifecycle` for refresh, scope, and logout checks.",
+            ],
+        }
+    return {
+        "usable": False,
+        "source": "missing",
+        "browser_actions_auth": "missing_env_api_key",
+        "fallback_missing_env": missing_env,
+        "device_token_runtime_usable": False,
+        "bearer_runtime": {
+            "available": False,
+            "reason": "no_device_token_metadata",
+            "device_token_present": False,
+            "device_token_valid": False,
+            "required_support": bearer_runtime_required,
+        },
+        "next_steps": [
+            "Run `browser-cli auth login` for Connect from Codex setup guidance.",
+            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+            f"Run `{AGENT_DOCTOR_COMMAND}` after setting credentials.",
+        ],
+    }
 
 
 def _device_token_scope_check(
@@ -14028,6 +14135,19 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     device_token_status = _local_device_token_status(
         getattr(args, "credentials_file", None)
     )
+    missing_env = [
+        name
+        for name, value in (
+            ("LEXMOUNT_API_KEY", api_key),
+            ("LEXMOUNT_PROJECT_ID", project_id),
+        )
+        if not value
+    ]
+    runtime_auth = _runtime_auth_status(
+        env_configured=env_configured,
+        missing_env=missing_env,
+        device_token_status=device_token_status,
+    )
     auth_source = _auth_source(
         env_configured=env_configured,
         device_token_status=device_token_status,
@@ -14097,6 +14217,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                     else "Local device token metadata needs attention."
                 ),
                 device_token=device_token_status,
+                runtime_auth=runtime_auth,
                 fix=_doctor_fix(
                     "use_env_credentials_until_bearer_auth_lands",
                     commands=[
@@ -14312,6 +14433,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "skipped_checks": _doctor_check_names(checks, status="skipped"),
         "auth_source": auth_source,
         "runtime_auth_usable": env_configured,
+        "runtime_auth": runtime_auth,
         "device_token": device_token_status,
         "ready_for_browser_actions": (
             not failed
@@ -14452,11 +14574,17 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
         env_configured=configured,
         device_token_status=device_token_status,
     )
+    runtime_auth = _runtime_auth_status(
+        env_configured=configured,
+        missing_env=missing_env,
+        device_token_status=device_token_status,
+    )
 
     payload: dict[str, Any] = {
         "configured": configured,
         "auth_source": auth_source,
         "runtime_auth_usable": configured,
+        "runtime_auth": runtime_auth,
         "missing_env": missing_env,
         "api_key": _env_value_status("LEXMOUNT_API_KEY", secret=True),
         "project_id": _env_value_status("LEXMOUNT_PROJECT_ID"),

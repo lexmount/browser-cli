@@ -62,6 +62,8 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "command catalog compatibility" in text
     assert "command catalog warnings" in text
     assert "ready_for_browser_actions" in text
+    assert "runtime_auth.bearer_runtime.required_support" in text
+    assert "lexmount-python-sdk bearer-token construction" in text
     assert "repair_plan.commands" in text
     assert "repair_plan.env" in text
     assert "repair_plan.guidance" in text
