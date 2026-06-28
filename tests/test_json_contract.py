@@ -253,6 +253,13 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`wait-url`" in text
     assert "`wait-title`" in text
     assert "`wait-load-state`" in text
+    assert "`select-label`" in text
+    assert "`check-role`" in text
+    assert "`hover-role`" in text
+    assert "`press-role`" in text
+    assert "`scroll-into-view-role`" in text
+    assert "`get-text-role`" in text
+    assert "`exists-role`" in text
     assert "form interaction" in text
     assert "interactive targeting" in text
     assert "`selection_order`" in text

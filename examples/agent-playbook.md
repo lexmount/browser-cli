@@ -389,10 +389,11 @@ browser-cli case run --file examples/cases/page-inspection.yaml --close-created-
 Case files are good for smoke tests, regression checks, and demos because they
 produce structured JSON summaries and event logs. `case schema` includes
 semantic form and targeting steps such as `fill-label`, `click-role`,
-`wait-text`, `get-value-role`, `interactive-snapshot`, and
-`accessibility-snapshot`, plus navigation/status checks such as `page-info`,
-`wait-url`, `wait-title`, and `wait-load-state`; use those before falling back
-to case-level `eval`.
+`wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
+`select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
+`scroll-into-view-role`, `interactive-snapshot`, and `accessibility-snapshot`,
+plus navigation/status checks such as `page-info`, `wait-url`, `wait-title`,
+and `wait-load-state`; use those before falling back to case-level `eval`.
 Read `valid`, `errors`, `step_count`, `next_commands`, `events_path`,
 `artifacts_dir`, `session`, and `steps`.
 

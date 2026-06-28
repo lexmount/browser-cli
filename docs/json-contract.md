@@ -303,7 +303,9 @@ Default behavior:
   action-specific output with `--action`. Supported case actions include the
   original page actions plus semantic form and targeting actions such as
   `fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
-  `get-value-role`, `form-snapshot`, `interactive-snapshot`, and
+  `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
+  `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
+  `scroll-into-view-role`, `form-snapshot`, `interactive-snapshot`, and
   `accessibility-snapshot`, plus navigation/status checks such as `page-info`,
   `wait-url`, `wait-title`, and `wait-load-state`.
 - `case scaffold` returns a valid starter case spec and serialized YAML/JSON

@@ -303,6 +303,11 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "`supported_actions`, `required_fields`" in normalized
     assert "`page-info`, `wait-url`, `wait-title`, `wait-load-state`" in normalized
     assert (
+        "`select-label`, `check-role`, `hover-role`, `press-role`, "
+        "`scroll-into-view-role`"
+        in normalized
+    )
+    assert (
         "`next_commands`, `events_path`, `artifacts_dir`, `session`, and `steps`"
         in normalized
     )

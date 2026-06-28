@@ -6777,6 +6777,258 @@ def _event_expression(selector: str, body: str) -> str:
     )
 
 
+def _get_text_expression(selector: str) -> str:
+    return _selector_expression(
+        selector,
+        """
+  const text = element.innerText ?? element.textContent ?? "";
+  return { selector, found: true, text };
+""".rstrip(),
+    )
+
+
+def _exists_expression(selector: str) -> str:
+    selector_source = _js_literal(selector)
+    return f"""
+() => {{
+  const selector = {selector_source};
+  return {{ selector, exists: Boolean(document.querySelector(selector)) }};
+}}
+""".strip()
+
+
+def _scroll_expression(
+    *,
+    selector: str | None,
+    x: float,
+    y: float,
+    behavior: str,
+) -> str:
+    x_source = _js_literal(x)
+    y_source = _js_literal(y)
+    behavior_source = _js_literal(behavior)
+    if selector:
+        return _selector_expression(
+            selector,
+            f"""
+  element.scrollBy({{ left: {x_source}, top: {y_source}, behavior: {behavior_source} }});
+  return {{ selector, found: true, scrolled: true, x: {x_source}, y: {y_source} }};
+""".rstrip(),
+        )
+    return f"""
+() => {{
+  window.scrollBy({{ left: {x_source}, top: {y_source}, behavior: {behavior_source} }});
+  return {{
+    selector: null,
+    found: true,
+    scrolled: true,
+    x: {x_source},
+    y: {y_source},
+    scroll_x: window.scrollX,
+    scroll_y: window.scrollY
+  }};
+}}
+""".strip()
+
+
+def _select_option_expression(*, selector: str, value: str) -> str:
+    value_source = _js_literal(value)
+    return _event_expression(
+        selector,
+        f"""
+  const requestedValue = {value_source};
+  const previousValue = element.value;
+  element.value = requestedValue;
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    selected: element.value === requestedValue,
+    value: element.value,
+    requested_value: requestedValue,
+    previous_value: previousValue
+  }};
+""".rstrip(),
+    )
+
+
+def _checkbox_action_expression(*, selector: str, checked: bool) -> str:
+    checked_source = _js_literal(checked)
+    return _event_expression(
+        selector,
+        f"""
+  if (!("checked" in element)) {{
+    return {{
+      selector,
+      found: true,
+      checkable: false,
+      checked: Boolean(element.checked)
+    }};
+  }}
+  element.checked = {checked_source};
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    checkable: true,
+    checked: Boolean(element.checked)
+  }};
+""".rstrip(),
+    )
+
+
+def _hover_expression(selector: str) -> str:
+    return _event_expression(
+        selector,
+        """
+  const init = {
+    view: window,
+    bubbles: true,
+    cancelable: true,
+    clientX: element.getBoundingClientRect().left,
+    clientY: element.getBoundingClientRect().top
+  };
+  for (const type of ["mouseover", "mouseenter", "mousemove"]) {
+    dispatch(new MouseEvent(type, init));
+  }
+  return { selector, found: true, hovered: true };
+""".rstrip(),
+    )
+
+
+def _hover_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      hovered: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const init = {{
+    view: window,
+    bubbles: true,
+    cancelable: true,
+    clientX: element.getBoundingClientRect().left,
+    clientY: element.getBoundingClientRect().top
+  }};
+  for (const type of ["mouseover", "mouseenter", "mousemove"]) {{
+    element.dispatchEvent(new MouseEvent(type, init));
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    hovered: true,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _press_expression(*, selector: str, key: str) -> str:
+    key_source = _js_literal(key)
+    return _event_expression(
+        selector,
+        f"""
+  const key = {key_source};
+  element.focus();
+  const init = {{ key, code: key, bubbles: true, cancelable: true }};
+  const keydownAccepted = dispatch(new KeyboardEvent("keydown", init));
+  dispatch(new KeyboardEvent("keypress", init));
+  dispatch(new KeyboardEvent("keyup", init));
+  return {{
+    selector,
+    found: true,
+    focused: document.activeElement === element,
+    key,
+    pressed: true,
+    keydown_accepted: keydownAccepted
+  }};
+""".rstrip(),
+    )
+
+
+def _press_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    key: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    key_source = _js_literal(key)
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      focused: false,
+      key: {key_source},
+      pressed: false,
+      keydown_accepted: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const key = {key_source};
+  element.focus();
+  const init = {{ key, code: key, bubbles: true, cancelable: true }};
+  const keydownAccepted = element.dispatchEvent(new KeyboardEvent("keydown", init));
+  element.dispatchEvent(new KeyboardEvent("keypress", init));
+  element.dispatchEvent(new KeyboardEvent("keyup", init));
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    focused: document.activeElement === element,
+    key,
+    pressed: true,
+    keydown_accepted: keydownAccepted,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _dom_helpers_expression(
     *,
     include_hidden: bool = False,
@@ -14986,13 +15238,7 @@ def cmd_action_get_text(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.get-text",
-        _selector_expression(
-            args.selector,
-            """
-  const text = element.innerText ?? element.textContent ?? "";
-  return { selector, found: true, text };
-""".rstrip(),
-        ),
+        _get_text_expression(args.selector),
     )
 
 
@@ -15011,16 +15257,10 @@ def cmd_action_get_text_role(args: argparse.Namespace) -> None:
 
 
 def cmd_action_exists(args: argparse.Namespace) -> None:
-    selector = _js_literal(args.selector)
     _run_eval_backed_action_command(
         args,
         "action.exists",
-        f"""
-() => {{
-  const selector = {selector};
-  return {{ selector, exists: Boolean(document.querySelector(selector)) }};
-}}
-""".strip(),
+        _exists_expression(args.selector),
     )
 
 
@@ -15551,36 +15791,16 @@ def cmd_action_submit(args: argparse.Namespace) -> None:
 
 
 def cmd_action_scroll(args: argparse.Namespace) -> None:
-    selector = getattr(args, "selector", None)
-    x = _js_literal(args.x)
-    y = _js_literal(args.y)
-    behavior = _js_literal(args.behavior)
-
-    if selector:
-        expression = _selector_expression(
-            selector,
-            f"""
-  element.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
-  return {{ selector, found: true, scrolled: true, x: {x}, y: {y} }};
-""".rstrip(),
-        )
-    else:
-        expression = f"""
-() => {{
-  window.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
-  return {{
-    selector: null,
-    found: true,
-    scrolled: true,
-    x: {x},
-    y: {y},
-    scroll_x: window.scrollX,
-    scroll_y: window.scrollY
-  }};
-}}
-""".strip()
-
-    _run_eval_backed_action_command(args, "action.scroll", expression)
+    _run_eval_backed_action_command(
+        args,
+        "action.scroll",
+        _scroll_expression(
+            selector=getattr(args, "selector", None),
+            x=args.x,
+            y=args.y,
+            behavior=args.behavior,
+        ),
+    )
 
 
 def cmd_action_bounding_box(args: argparse.Namespace) -> None:
@@ -15635,28 +15855,10 @@ def cmd_action_scroll_into_view_role(args: argparse.Namespace) -> None:
 
 
 def cmd_action_select_option(args: argparse.Namespace) -> None:
-    value = _js_literal(args.value)
     _run_eval_backed_action_command(
         args,
         "action.select-option",
-        _event_expression(
-            args.selector,
-            f"""
-  const requestedValue = {value};
-  const previousValue = element.value;
-  element.value = requestedValue;
-  dispatch(new Event("input", {{ bubbles: true }}));
-  dispatch(new Event("change", {{ bubbles: true }}));
-  return {{
-    selector,
-    found: true,
-    selected: element.value === requestedValue,
-    value: element.value,
-    requested_value: requestedValue,
-    previous_value: previousValue
-  }};
-""".rstrip(),
-        ),
+        _select_option_expression(selector=args.selector, value=args.value),
     )
 
 
@@ -15757,32 +15959,10 @@ def _run_checkbox_action(
     checked: bool,
     command: str,
 ) -> None:
-    checked_literal = _js_literal(checked)
     _run_eval_backed_action_command(
         args,
         command,
-        _event_expression(
-            args.selector,
-            f"""
-  if (!("checked" in element)) {{
-    return {{
-      selector,
-      found: true,
-      checkable: false,
-      checked: Boolean(element.checked)
-    }};
-  }}
-  element.checked = {checked_literal};
-  dispatch(new Event("input", {{ bubbles: true }}));
-  dispatch(new Event("change", {{ bubbles: true }}));
-  return {{
-    selector,
-    found: true,
-    checkable: true,
-    checked: Boolean(element.checked)
-  }};
-""".rstrip(),
-        ),
+        _checkbox_action_expression(selector=args.selector, checked=checked),
     )
 
 
@@ -15790,147 +15970,43 @@ def cmd_action_hover(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.hover",
-        _event_expression(
-            args.selector,
-            """
-  const init = {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    clientX: element.getBoundingClientRect().left,
-    clientY: element.getBoundingClientRect().top
-  };
-  for (const type of ["mouseover", "mouseenter", "mousemove"]) {
-    dispatch(new MouseEvent(type, init));
-  }
-  return { selector, found: true, hovered: true };
-""".rstrip(),
-        ),
+        _hover_expression(args.selector),
     )
 
 
 def cmd_action_hover_role(args: argparse.Namespace) -> None:
-    name_source = "null" if args.name is None else _js_literal(args.name)
-    expression = f"""
-() => {{
-{_dom_helpers_expression()}
-  const requestedRole = {_js_literal(args.role)};
-  const requestedName = {name_source};
-  const exact = {_js_literal(args.exact)};
-  const caseSensitive = {_js_literal(args.case_sensitive)};
-{_role_target_helpers_expression("interactiveSelector")}
-  const roleMatch = findRoleTargetElement();
-  const element = roleMatch.element;
-  if (!element) {{
-    return {{
-      role: requestedRole,
-      name: requestedName,
-      found: false,
-      role_found: false,
-      hovered: false,
-      candidate_count: roleMatch.candidate_count,
-      candidates: roleMatch.candidates
-    }};
-  }}
-  const init = {{
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    clientX: element.getBoundingClientRect().left,
-    clientY: element.getBoundingClientRect().top
-  }};
-  for (const type of ["mouseover", "mouseenter", "mousemove"]) {{
-    element.dispatchEvent(new MouseEvent(type, init));
-  }}
-  return {{
-    role: requestedRole,
-    name: requestedName,
-    found: true,
-    role_found: true,
-    hovered: true,
-    candidate_count: roleMatch.candidate_count,
-    element: nodeInfo(element)
-  }};
-}}
-""".strip()
-    _run_eval_backed_action_command(args, "action.hover-role", expression)
-
-
-def cmd_action_press(args: argparse.Namespace) -> None:
-    key = _js_literal(args.key)
     _run_eval_backed_action_command(
         args,
-        "action.press",
-        _event_expression(
-            args.selector,
-            f"""
-  const key = {key};
-  element.focus();
-  const init = {{ key, code: key, bubbles: true, cancelable: true }};
-  const keydownAccepted = dispatch(new KeyboardEvent("keydown", init));
-  dispatch(new KeyboardEvent("keypress", init));
-  dispatch(new KeyboardEvent("keyup", init));
-  return {{
-    selector,
-    found: true,
-    focused: document.activeElement === element,
-    key,
-    pressed: true,
-    keydown_accepted: keydownAccepted
-  }};
-""".rstrip(),
+        "action.hover-role",
+        _hover_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
         ),
     )
 
 
+def cmd_action_press(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.press",
+        _press_expression(selector=args.selector, key=args.key),
+    )
+
+
 def cmd_action_press_role(args: argparse.Namespace) -> None:
-    key = _js_literal(args.key)
-    name_source = "null" if args.name is None else _js_literal(args.name)
-    expression = f"""
-() => {{
-{_dom_helpers_expression()}
-  const requestedRole = {_js_literal(args.role)};
-  const requestedName = {name_source};
-  const exact = {_js_literal(args.exact)};
-  const caseSensitive = {_js_literal(args.case_sensitive)};
-{_role_target_helpers_expression("interactiveSelector")}
-  const roleMatch = findRoleTargetElement();
-  const element = roleMatch.element;
-  if (!element) {{
-    return {{
-      role: requestedRole,
-      name: requestedName,
-      found: false,
-      role_found: false,
-      focused: false,
-      key: {key},
-      pressed: false,
-      keydown_accepted: false,
-      candidate_count: roleMatch.candidate_count,
-      candidates: roleMatch.candidates
-    }};
-  }}
-  const key = {key};
-  element.focus();
-  const init = {{ key, code: key, bubbles: true, cancelable: true }};
-  const keydownAccepted = element.dispatchEvent(new KeyboardEvent("keydown", init));
-  element.dispatchEvent(new KeyboardEvent("keypress", init));
-  element.dispatchEvent(new KeyboardEvent("keyup", init));
-  return {{
-    role: requestedRole,
-    name: requestedName,
-    found: true,
-    role_found: true,
-    focused: document.activeElement === element,
-    key,
-    pressed: true,
-    keydown_accepted: keydownAccepted,
-    candidate_count: roleMatch.candidate_count,
-    element: nodeInfo(element)
-  }};
-}}
-""".strip()
-    _run_eval_backed_action_command(args, "action.press-role", expression)
+    _run_eval_backed_action_command(
+        args,
+        "action.press-role",
+        _press_role_expression(
+            role=args.role,
+            name=args.name,
+            key=args.key,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
 
 
 def _press_key_expression(
@@ -17973,18 +18049,38 @@ CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill")
 
 EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "accessibility-snapshot": tuple(),
+    "check": ("selector",),
+    "check-label": ("label",),
+    "check-role": ("role",),
     "click-role": ("role",),
     "click-text": ("text",),
     "double-click": ("selector",),
     "double-click-role": ("role",),
+    "exists": ("selector",),
+    "exists-role": ("role",),
     "fill-label": ("label", "text"),
     "fill-role": ("role", "text"),
     "form-snapshot": tuple(),
+    "get-text": ("selector",),
+    "get-text-role": ("role",),
     "get-value-role": ("role",),
+    "hover": ("selector",),
+    "hover-role": ("role",),
     "interactive-snapshot": tuple(),
     "page-info": tuple(),
+    "press": ("selector", "key"),
+    "press-role": ("role", "key"),
     "right-click": ("selector",),
     "right-click-role": ("role",),
+    "scroll": tuple(),
+    "scroll-into-view": ("selector",),
+    "scroll-into-view-role": ("role",),
+    "select-label": ("label",),
+    "select-option": ("selector", "value"),
+    "select-role": ("role",),
+    "uncheck": ("selector",),
+    "uncheck-label": ("label",),
+    "uncheck-role": ("role",),
     "wait-load-state": tuple(),
     "wait-title": ("title",),
     "wait-url": ("url",),
@@ -18021,6 +18117,17 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
         for field in BROWSER_CLI_REQUIRED_CASE_FIELDS[str(action)]:
             if field not in step:
                 errors.append(f"steps[{index}] missing required field '{field}'")
+        if action in {"select-label", "select-role"}:
+            has_value = "value" in step
+            has_option_label = "option_label" in step
+            if not has_value and not has_option_label:
+                errors.append(
+                    f"steps[{index}] missing one of 'value' or 'option_label'"
+                )
+            if has_value and has_option_label:
+                errors.append(
+                    f"steps[{index}] must not set both 'value' and 'option_label'"
+                )
 
     if "target" in spec and not isinstance(spec["target"], dict):
         errors.append("target must be an object when present")
@@ -18233,10 +18340,15 @@ def _case_action_schema() -> dict[str, Any]:
         "eval": [],
         "snapshot": ["max_chars", "output", "timeout_ms"],
         "accessibility-snapshot": ["include_hidden", "max_nodes"],
+        "check": [],
+        "check-label": ["exact", "case_sensitive"],
+        "check-role": ["name", "exact", "case_sensitive"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
         "double-click": [],
         "double-click-role": ["name", "exact", "case_sensitive"],
+        "exists": [],
+        "exists-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "fill-label": ["exact", "case_sensitive"],
         "fill-role": ["name", "exact", "case_sensitive"],
         "form-snapshot": [
@@ -18245,11 +18357,39 @@ def _case_action_schema() -> dict[str, Any]:
             "max_nodes",
             "reveal_sensitive_values",
         ],
+        "get-text": [],
+        "get-text-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "get-value-role": ["name", "exact", "case_sensitive"],
+        "hover": [],
+        "hover-role": ["name", "exact", "case_sensitive"],
         "interactive-snapshot": ["include_hidden", "max_nodes"],
         "page-info": [],
+        "press": [],
+        "press-role": ["name", "exact", "case_sensitive"],
         "right-click": [],
         "right-click-role": ["name", "exact", "case_sensitive"],
+        "scroll": ["selector", "x", "y", "behavior"],
+        "scroll-into-view": ["block", "inline", "behavior"],
+        "scroll-into-view-role": [
+            "name",
+            "block",
+            "inline",
+            "behavior",
+            "exact",
+            "case_sensitive",
+        ],
+        "select-label": ["value", "option_label", "exact", "case_sensitive"],
+        "select-option": [],
+        "select-role": [
+            "name",
+            "value",
+            "option_label",
+            "exact",
+            "case_sensitive",
+        ],
+        "uncheck": [],
+        "uncheck-label": ["exact", "case_sensitive"],
+        "uncheck-role": ["name", "exact", "case_sensitive"],
         "wait-load-state": ["state", "timeout_ms", "poll_ms"],
         "wait-title": [
             "match",
@@ -18268,6 +18408,10 @@ def _case_action_schema() -> dict[str, Any]:
             "include_hidden",
         ],
     }
+    required_one_of: dict[str, list[list[str]]] = {
+        "select-label": [["value", "option_label"]],
+        "select-role": [["value", "option_label"]],
+    }
     result_fields: dict[str, list[str]] = {
         "open-url": ["url", "title", "status"],
         "wait-selector": ["selector", "state", "text", "url"],
@@ -18277,6 +18421,29 @@ def _case_action_schema() -> dict[str, Any]:
         "eval": ["expression", "value", "url"],
         "snapshot": ["url", "title", "html", "text"],
         "accessibility-snapshot": ["nodes", "node_count", "url", "title"],
+        "check": ["selector", "found", "checkable", "checked", "url"],
+        "check-label": [
+            "found",
+            "checkable",
+            "label",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
+            "url",
+        ],
+        "check-role": [
+            "found",
+            "role_found",
+            "checkable",
+            "role",
+            "name",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
+            "url",
+        ],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
         "click-text": ["found", "clicked", "text", "element", "url"],
         "double-click": ["found", "double_clicked", "events", "element", "url"],
@@ -18288,6 +18455,15 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "events",
             "element",
+            "url",
+        ],
+        "exists": ["selector", "exists", "url"],
+        "exists-role": [
+            "found",
+            "exists",
+            "role_found",
+            "role",
+            "name",
             "url",
         ],
         "fill-label": [
@@ -18310,6 +18486,16 @@ def _case_action_schema() -> dict[str, Any]:
             "url",
         ],
         "form-snapshot": ["fields", "field_count", "node_count", "url", "title"],
+        "get-text": ["selector", "found", "text", "url"],
+        "get-text-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "text",
+            "text_length",
+            "url",
+        ],
         "get-value-role": [
             "found",
             "role_found",
@@ -18317,6 +18503,15 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "value",
             "value_masked",
+            "url",
+        ],
+        "hover": ["selector", "found", "hovered", "url"],
+        "hover-role": [
+            "found",
+            "role_found",
+            "hovered",
+            "role",
+            "name",
             "url",
         ],
         "interactive-snapshot": ["nodes", "node_count", "url", "title"],
@@ -18327,6 +18522,26 @@ def _case_action_schema() -> dict[str, Any]:
             "visibility_state",
             "viewport",
             "scroll",
+        ],
+        "press": [
+            "selector",
+            "found",
+            "focused",
+            "key",
+            "pressed",
+            "keydown_accepted",
+            "url",
+        ],
+        "press-role": [
+            "found",
+            "role_found",
+            "focused",
+            "key",
+            "pressed",
+            "keydown_accepted",
+            "role",
+            "name",
+            "url",
         ],
         "right-click": [
             "found",
@@ -18345,6 +18560,96 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "events",
             "element",
+            "url",
+        ],
+        "scroll": [
+            "selector",
+            "found",
+            "scrolled",
+            "x",
+            "y",
+            "scroll_x",
+            "scroll_y",
+            "url",
+        ],
+        "scroll-into-view": [
+            "selector",
+            "found",
+            "scrolled",
+            "block",
+            "inline",
+            "behavior",
+            "in_viewport",
+            "url",
+        ],
+        "scroll-into-view-role": [
+            "found",
+            "role_found",
+            "scrolled",
+            "role",
+            "name",
+            "block",
+            "inline",
+            "behavior",
+            "in_viewport",
+            "url",
+        ],
+        "select-label": [
+            "found",
+            "selectable",
+            "selected",
+            "label",
+            "requested_value",
+            "requested_option_label",
+            "value",
+            "option_label",
+            "changed",
+            "url",
+        ],
+        "select-option": [
+            "selector",
+            "found",
+            "selected",
+            "value",
+            "requested_value",
+            "previous_value",
+            "url",
+        ],
+        "select-role": [
+            "found",
+            "role_found",
+            "selectable",
+            "selected",
+            "role",
+            "name",
+            "requested_value",
+            "requested_option_label",
+            "value",
+            "option_label",
+            "changed",
+            "url",
+        ],
+        "uncheck": ["selector", "found", "checkable", "checked", "url"],
+        "uncheck-label": [
+            "found",
+            "checkable",
+            "label",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
+            "url",
+        ],
+        "uncheck-role": [
+            "found",
+            "role_found",
+            "checkable",
+            "role",
+            "name",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
             "url",
         ],
         "wait-load-state": [
@@ -18395,6 +18700,9 @@ def _case_action_schema() -> dict[str, Any]:
             "action": "accessibility-snapshot",
             "max_nodes": 120,
         },
+        "check": {"action": "check", "selector": "input[name=agree]"},
+        "check-label": {"action": "check-label", "label": "I agree"},
+        "check-role": {"action": "check-role", "role": "checkbox", "name": "I agree"},
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
         "double-click": {"action": "double-click", "selector": ".item"},
@@ -18403,6 +18711,8 @@ def _case_action_schema() -> dict[str, Any]:
             "role": "button",
             "name": "Edit",
         },
+        "exists": {"action": "exists", "selector": ".toast"},
+        "exists-role": {"action": "exists-role", "role": "alert", "name": "Saved"},
         "fill-label": {
             "action": "fill-label",
             "label": "Email",
@@ -18420,13 +18730,54 @@ def _case_action_schema() -> dict[str, Any]:
             "role": "textbox",
             "name": "Email",
         },
+        "get-text": {"action": "get-text", "selector": ".status"},
+        "get-text-role": {"action": "get-text-role", "role": "alert", "name": "Saved"},
+        "hover": {"action": "hover", "selector": ".menu-button"},
+        "hover-role": {"action": "hover-role", "role": "button", "name": "Menu"},
         "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
         "page-info": {"action": "page-info"},
+        "press": {"action": "press", "selector": "input[name=q]", "key": "Enter"},
+        "press-role": {
+            "action": "press-role",
+            "role": "textbox",
+            "name": "Search",
+            "key": "Enter",
+        },
         "right-click": {"action": "right-click", "selector": ".item"},
         "right-click-role": {
             "action": "right-click-role",
             "role": "row",
             "name": "Invoice",
+        },
+        "scroll": {"action": "scroll", "y": 600},
+        "scroll-into-view": {"action": "scroll-into-view", "selector": "#details"},
+        "scroll-into-view-role": {
+            "action": "scroll-into-view-role",
+            "role": "button",
+            "name": "Save",
+        },
+        "select-label": {
+            "action": "select-label",
+            "label": "Plan",
+            "option_label": "Pro",
+        },
+        "select-option": {
+            "action": "select-option",
+            "selector": "select[name=plan]",
+            "value": "pro",
+        },
+        "select-role": {
+            "action": "select-role",
+            "role": "combobox",
+            "name": "Plan",
+            "option_label": "Pro",
+        },
+        "uncheck": {"action": "uncheck", "selector": "input[name=subscribe]"},
+        "uncheck-label": {"action": "uncheck-label", "label": "Subscribe"},
+        "uncheck-role": {
+            "action": "uncheck-role",
+            "role": "checkbox",
+            "name": "Subscribe",
         },
         "wait-load-state": {"action": "wait-load-state", "state": "complete"},
         "wait-title": {
@@ -18440,6 +18791,7 @@ def _case_action_schema() -> dict[str, Any]:
     return {
         action: {
             "required_fields": list(BROWSER_CLI_REQUIRED_CASE_FIELDS.get(action, ())),
+            "required_one_of": required_one_of.get(action, []),
             "optional_fields": optional_fields.get(action, []),
             "result_fields": result_fields.get(action, []),
             "example_step": examples.get(action, {"action": action}),
@@ -18699,6 +19051,32 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "check":
+        return _case_eval_expression(
+            page,
+            _checkbox_action_expression(selector=str(step["selector"]), checked=True),
+        )
+    if action == "check-label":
+        return _case_eval_expression(
+            page,
+            _check_label_expression(
+                label=str(step["label"]),
+                checked=True,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "check-role":
+        return _case_eval_expression(
+            page,
+            _check_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                checked=True,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
     if action == "accessibility-snapshot":
         return _case_eval_expression(
             page,
@@ -18738,6 +19116,19 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "exists":
+        return _case_eval_expression(page, _exists_expression(str(step["selector"])))
+    if action == "exists-role":
+        return _case_eval_expression(
+            page,
+            _exists_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
     if action == "fill-label":
         return _case_eval_expression(
             page,
@@ -18771,10 +19162,35 @@ def _run_browser_cli_case_step(
                 ),
             ),
         )
+    if action == "get-text":
+        return _case_eval_expression(page, _get_text_expression(str(step["selector"])))
+    if action == "get-text-role":
+        return _case_eval_expression(
+            page,
+            _get_text_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
     if action == "get-value-role":
         return _case_eval_expression(
             page,
             _get_value_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "hover":
+        return _case_eval_expression(page, _hover_expression(str(step["selector"])))
+    if action == "hover-role":
+        return _case_eval_expression(
+            page,
+            _hover_role_expression(
                 role=str(step["role"]),
                 name=str(step["name"]) if step.get("name") is not None else None,
                 exact=exact,
@@ -18791,6 +19207,22 @@ def _run_browser_cli_case_step(
         )
     if action == "page-info":
         return _case_eval_expression(page, _page_info_expression())
+    if action == "press":
+        return _case_eval_expression(
+            page,
+            _press_expression(selector=str(step["selector"]), key=str(step["key"])),
+        )
+    if action == "press-role":
+        return _case_eval_expression(
+            page,
+            _press_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                key=str(step["key"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
     if action == "right-click":
         return _case_eval_expression(
             page,
@@ -18808,6 +19240,104 @@ def _run_browser_cli_case_step(
                 name=str(step["name"]) if step.get("name") is not None else None,
                 action="right-click",
                 result_field="right_clicked",
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "scroll":
+        return _case_eval_expression(
+            page,
+            _scroll_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                x=_case_step_float(step, "x", default=0),
+                y=_case_step_float(step, "y", default=600),
+                behavior=str(step.get("behavior", "auto")),
+            ),
+        )
+    if action == "scroll-into-view":
+        return _case_eval_expression(
+            page,
+            _scroll_into_view_expression(
+                selector=str(step["selector"]),
+                block=str(step.get("block", "center")),
+                inline=str(step.get("inline", "nearest")),
+                behavior=str(step.get("behavior", "auto")),
+            ),
+        )
+    if action == "scroll-into-view-role":
+        return _case_eval_expression(
+            page,
+            _scroll_into_view_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                block=str(step.get("block", "center")),
+                inline=str(step.get("inline", "nearest")),
+                behavior=str(step.get("behavior", "auto")),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "select-label":
+        return _case_eval_expression(
+            page,
+            _select_label_expression(
+                label=str(step["label"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                option_label=(
+                    str(step["option_label"])
+                    if step.get("option_label") is not None
+                    else None
+                ),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "select-option":
+        return _case_eval_expression(
+            page,
+            _select_option_expression(
+                selector=str(step["selector"]),
+                value=str(step["value"]),
+            ),
+        )
+    if action == "select-role":
+        return _case_eval_expression(
+            page,
+            _select_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                value=str(step["value"]) if step.get("value") is not None else None,
+                option_label=(
+                    str(step["option_label"])
+                    if step.get("option_label") is not None
+                    else None
+                ),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "uncheck":
+        return _case_eval_expression(
+            page,
+            _checkbox_action_expression(selector=str(step["selector"]), checked=False),
+        )
+    if action == "uncheck-label":
+        return _case_eval_expression(
+            page,
+            _check_label_expression(
+                label=str(step["label"]),
+                checked=False,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "uncheck-role":
+        return _case_eval_expression(
+            page,
+            _check_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                checked=False,
                 exact=exact,
                 case_sensitive=case_sensitive,
             ),

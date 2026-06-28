@@ -2694,24 +2694,44 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["schema_version"] == 1
     assert payload["supported_actions"] == [
         "accessibility-snapshot",
+        "check",
+        "check-label",
+        "check-role",
         "click",
         "click-role",
         "click-text",
         "double-click",
         "double-click-role",
         "eval",
+        "exists",
+        "exists-role",
         "fill-label",
         "fill-role",
         "form-snapshot",
+        "get-text",
+        "get-text-role",
         "get-value-role",
+        "hover",
+        "hover-role",
         "interactive-snapshot",
         "open-url",
         "page-info",
+        "press",
+        "press-role",
         "right-click",
         "right-click-role",
         "screenshot",
+        "scroll",
+        "scroll-into-view",
+        "scroll-into-view-role",
+        "select-label",
+        "select-option",
+        "select-role",
         "snapshot",
         "type",
+        "uncheck",
+        "uncheck-label",
+        "uncheck-role",
         "wait-load-state",
         "wait-selector",
         "wait-text",
@@ -2725,6 +2745,14 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["double-click-role"] == ["role"]
     assert payload["required_fields"]["right-click"] == ["selector"]
     assert payload["required_fields"]["right-click-role"] == ["role"]
+    assert payload["required_fields"]["select-label"] == ["label"]
+    assert payload["required_fields"]["select-role"] == ["role"]
+    assert payload["actions"]["select-label"]["required_one_of"] == [
+        ["value", "option_label"]
+    ]
+    assert payload["actions"]["select-role"]["required_one_of"] == [
+        ["value", "option_label"]
+    ]
     assert payload["required_fields"]["wait-load-state"] == []
     assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["wait-title"] == ["title"]
@@ -2755,6 +2783,13 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "requested_state" in payload["actions"]["wait-load-state"][
         "result_fields"
     ]
+    assert "hovered" in payload["actions"]["hover-role"]["result_fields"]
+    assert "pressed" in payload["actions"]["press-role"]["result_fields"]
+    assert "selected" in payload["actions"]["select-label"]["result_fields"]
+    assert "checked" in payload["actions"]["check-role"]["result_fields"]
+    assert "text" in payload["actions"]["get-text-role"]["result_fields"]
+    assert "exists" in payload["actions"]["exists-role"]["result_fields"]
+    assert "scrolled" in payload["actions"]["scroll-into-view-role"]["result_fields"]
     assert "steps" in payload["top_level"]["required_fields"]
     assert "session.create" in payload["top_level"]["target_options"]
     assert payload["workflow"]["validate"] == (
@@ -2772,27 +2807,47 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 24,
+        "action_count": 44,
         "supported_actions": [
             "accessibility-snapshot",
+            "check",
+            "check-label",
+            "check-role",
             "click",
             "click-role",
             "click-text",
             "double-click",
             "double-click-role",
             "eval",
+            "exists",
+            "exists-role",
             "fill-label",
             "fill-role",
             "form-snapshot",
+            "get-text",
+            "get-text-role",
             "get-value-role",
+            "hover",
+            "hover-role",
             "interactive-snapshot",
             "open-url",
             "page-info",
+            "press",
+            "press-role",
             "right-click",
             "right-click-role",
             "screenshot",
+            "scroll",
+            "scroll-into-view",
+            "scroll-into-view-role",
+            "select-label",
+            "select-option",
+            "select-role",
             "snapshot",
             "type",
+            "uncheck",
+            "uncheck-label",
+            "uncheck-role",
             "wait-load-state",
             "wait-selector",
             "wait-text",
@@ -2818,14 +2873,14 @@ def test_case_schema_single_action_and_unknown_action_json(
     assert payload["action_schema"]["example_step"]["selector"] == "main"
 
     with pytest.raises(SystemExit) as exc_info:
-        cli_main(["case", "schema", "--action", "hover"])
+        cli_main(["case", "schema", "--action", "storage-get"])
 
     assert exc_info.value.code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
     assert payload["command"] == "case.schema"
     assert payload["error"] == "unknown_case_action"
-    assert payload["action"] == "hover"
+    assert payload["action"] == "storage-get"
     assert "wait-selector" in payload["available_actions"]
     assert payload["fix"]["code"] == "inspect_available_case_actions"
 
@@ -2930,6 +2985,47 @@ def test_case_scaffold_refuses_to_overwrite_existing_file(
     assert payload["error"] == "file_exists"
     assert payload["output"] == str(output)
     assert output.read_text(encoding="utf-8") == "keep me"
+
+
+def test_case_validate_select_actions_require_value_or_option_label(
+    tmp_path: Any,
+) -> None:
+    missing = tmp_path / "missing-select-target.json"
+    missing.write_text(
+        json.dumps({"steps": [{"action": "select-label", "label": "Plan"}]}),
+        encoding="utf-8",
+    )
+
+    missing_result = validate_case_file(missing)
+    assert missing_result.valid is False
+    assert (
+        "steps[0] missing one of 'value' or 'option_label'"
+        in missing_result.errors
+    )
+
+    both = tmp_path / "both-select-targets.json"
+    both.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "action": "select-role",
+                        "role": "combobox",
+                        "value": "pro",
+                        "option_label": "Pro",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    both_result = validate_case_file(both)
+    assert both_result.valid is False
+    assert (
+        "steps[0] must not set both 'value' and 'option_label'"
+        in both_result.errors
+    )
 
 
 def test_extended_case_step_uses_semantic_action_expression(tmp_path: Any) -> None:
@@ -3068,6 +3164,96 @@ def test_extended_case_step_uses_navigation_status_expressions(
     for key, value in expected.items():
         assert result[key] == value
     assert result["url"] == "https://example.test/dashboard"
+
+
+@pytest.mark.parametrize(
+    ("step", "expression_snippet"),
+    [
+        ({"action": "check", "selector": "#agree"}, "element.checked = true"),
+        ({"action": "check-label", "label": "Agree"}, "requestedChecked = true"),
+        (
+            {"action": "check-role", "role": "checkbox", "name": "Agree"},
+            "requestedChecked = true",
+        ),
+        ({"action": "exists", "selector": ".toast"}, "document.querySelector"),
+        (
+            {"action": "exists-role", "role": "alert", "name": "Saved"},
+            "exists: true",
+        ),
+        ({"action": "get-text", "selector": ".status"}, "innerText"),
+        (
+            {"action": "get-text-role", "role": "alert", "name": "Saved"},
+            "text_length",
+        ),
+        ({"action": "hover", "selector": ".menu"}, "mouseover"),
+        (
+            {"action": "hover-role", "role": "button", "name": "Menu"},
+            "hovered",
+        ),
+        ({"action": "press", "selector": "input", "key": "Enter"}, "KeyboardEvent"),
+        (
+            {
+                "action": "press-role",
+                "role": "textbox",
+                "name": "Search",
+                "key": "Enter",
+            },
+            "KeyboardEvent",
+        ),
+        ({"action": "scroll", "y": 400}, "scrollBy"),
+        ({"action": "scroll-into-view", "selector": "#details"}, "scrollIntoView"),
+        (
+            {
+                "action": "scroll-into-view-role",
+                "role": "button",
+                "name": "Save",
+            },
+            "scrollIntoView",
+        ),
+        (
+            {"action": "select-label", "label": "Plan", "option_label": "Pro"},
+            "requestedOptionLabel",
+        ),
+        (
+            {"action": "select-option", "selector": "select", "value": "pro"},
+            "requestedValue",
+        ),
+        (
+            {"action": "select-role", "role": "combobox", "value": "pro"},
+            "requestedValue",
+        ),
+        ({"action": "uncheck", "selector": "#subscribe"}, "element.checked = false"),
+        (
+            {"action": "uncheck-label", "label": "Subscribe"},
+            "requestedChecked = false",
+        ),
+        (
+            {"action": "uncheck-role", "role": "checkbox", "name": "Subscribe"},
+            "requestedChecked = false",
+        ),
+    ],
+)
+def test_extended_case_step_uses_form_and_control_action_expressions(
+    tmp_path: Any,
+    step: dict[str, Any],
+    expression_snippet: str,
+) -> None:
+    class FakePage:
+        url = "https://example.test/form"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(page, step, tmp_path, 0)
+
+    assert result["found"] is True
+    assert result["url"] == "https://example.test/form"
+    assert expression_snippet in page.expressions[0]
 
 
 def test_case_run_masks_connect_url_stdout(

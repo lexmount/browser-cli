@@ -866,7 +866,9 @@ browser-cli session close --session-id <session_id>
 
 `case schema` supports repeatable semantic form and targeting steps such as
 `fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
-`get-value-role`, `form-snapshot`, `interactive-snapshot`, and
+`get-value-role`, `get-text-role`, `exists-role`, `select-label`,
+`select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
+`scroll-into-view-role`, `form-snapshot`, `interactive-snapshot`, and
 `accessibility-snapshot`, plus navigation/status checks such as `page-info`,
 `wait-url`, `wait-title`, and `wait-load-state`, so agents can encode common
 smoke tests without dropping into custom browser scripts.
