@@ -238,6 +238,7 @@ Then use the returned context-selection steps, typically:
 
 ```bash
 browser-cli context create
+browser-cli context status --context-id <context_id>
 browser-cli session create --context-id <context_id> --context-mode read_write
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing --dry-run
@@ -259,8 +260,9 @@ report that a busy context was skipped. Inspect `selection_summary` for
 adjust filters. Use
 `context pick --metadata-json <json> --dry-run` before creating a session when
 you need to explain context reuse or avoid mutating persistent login state. Use
-`context status --context-id <context_id>` before reuse when the context id came
-from older notes.
+the workflow's optional `context status --context-id <context_id>` step before
+reuse whenever a specific context id came from older notes, user input, or a
+previous run.
 
 If a command fails, parse the JSON error first. For configuration or credential
 errors, stop browser work and guide the user to configure local environment

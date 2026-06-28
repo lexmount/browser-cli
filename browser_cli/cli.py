@@ -150,6 +150,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     ),
     "persistent_login_state": (
         "dry_run_context_pick",
+        "inspect_context_status",
         "create_session_with_context",
         "close_session",
     ),
@@ -523,6 +524,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "persistent_login_state": [
                 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
+                "browser-cli context status --context-id <context_id>",
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
             ],
             "form_interaction": [
@@ -952,7 +954,28 @@ def _command_catalog() -> dict[str, Any]:
                             "selection_summary.recommended_next_action",
                             "selection_summary.decision_reason",
                             "selection_summary.locked_matches",
+                            "selection_summary.reusable_matches",
+                            "selection_summary.metadata_mismatches",
+                            "selection_summary.unavailable_matches",
+                            "selection_summary.unknown_matches",
+                            "selection_summary.availability_counts",
                             "selection_summary.would_create",
+                        ],
+                    },
+                    {
+                        "id": "inspect_context_status",
+                        "command": "browser-cli context status --context-id <context_id>",
+                        "optional": True,
+                        "read": [
+                            "context_id",
+                            "status",
+                            "normalized_status",
+                            "availability",
+                            "reusable",
+                            "locked",
+                            "reuse_reason",
+                            "reuse",
+                            "context",
                         ],
                     },
                     {

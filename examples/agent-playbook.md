@@ -142,6 +142,7 @@ browser-cli session create --context-id <context_id> --context-mode read_write
 When reusing persistent login state by metadata, prefer:
 
 ```bash
+browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"login"}' --create-if-missing --dry-run
 browser-cli context pick --metadata-json '{"purpose":"login"}' --create-if-missing
 browser-cli session create --context-metadata-json '{"purpose":"login"}' --create-context-if-missing --context-mode read_write
@@ -149,7 +150,8 @@ browser-cli session create --context-metadata-json '{"purpose":"login"}' --creat
 
 Do not reuse a context whose `availability` is `locked` or `unavailable` for a
 new read/write session. Close the session that holds it, or create a new
-context.
+context. Use `context status` first when a context id comes from notes, user
+input, or a previous run.
 Use the dry-run output to read
 `selection_summary.recommended_next_action` first, then explain
 `selection_summary.decision_reason`, `selection_summary.locked_matches`,

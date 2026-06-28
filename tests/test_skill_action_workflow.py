@@ -156,6 +156,10 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
         "`context pick --metadata-json <json> --dry-run` before creating a session"
         in normalized
     )
+    assert (
+        "the workflow's optional `context status --context-id <context_id>` step"
+        in normalized
+    )
 
 
 def test_skill_uses_json_argument_errors_for_command_repairs() -> None:

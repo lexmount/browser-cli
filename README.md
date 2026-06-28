@@ -731,6 +731,7 @@ top-level `reusable`, `locked`, `reuse_reason`, `selection_summary`, and
 locked/reusable details. Treat
 `availability: "available"` as reusable, `availability: "locked"` as busy, and
 `availability: "unavailable"` as a state that needs a different context. Use
+`context status --context-id <context_id>` before reusing a known context id. Use
 `context pick --metadata-json '{"purpose":"codex-login"}' --dry-run` when you
 need to inspect or report candidates before creating a session; read
 `selection_summary.recommended_next_action`, `decision_reason`,

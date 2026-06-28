@@ -267,6 +267,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][0]
     assert (
+        "browser-cli context status --context-id <context_id>"
+        in payload["agent_entrypoints"]["persistent_login_state"]
+    )
+    assert (
         "browser-cli action form-snapshot --session-id <session_id> --selector form"
         in payload["agent_entrypoints"]["form_interaction"]
     )
@@ -370,13 +374,25 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "locked" in context_steps[0]["read"]
     assert "reuse_reason" in context_steps[0]["read"]
     assert "selection_summary.recommended_next_action" in context_steps[0]["read"]
-    assert "context_reuse.availability" in context_steps[1]["read"]
-    assert "context_reuse.reusable" in context_steps[1]["read"]
-    assert "context_reuse.locked" in context_steps[1]["read"]
-    assert "context_reuse.reuse_reason" in context_steps[1]["read"]
+    assert "selection_summary.reusable_matches" in context_steps[0]["read"]
+    assert "selection_summary.metadata_mismatches" in context_steps[0]["read"]
+    assert "selection_summary.availability_counts" in context_steps[0]["read"]
+    assert context_steps[1]["id"] == "inspect_context_status"
+    assert context_steps[1]["optional"] is True
+    assert context_steps[1]["command"] == (
+        "browser-cli context status --context-id <context_id>"
+    )
+    assert "availability" in context_steps[1]["read"]
+    assert "reusable" in context_steps[1]["read"]
+    assert "locked" in context_steps[1]["read"]
+    assert "normalized_status" in context_steps[1]["read"]
+    assert "context_reuse.availability" in context_steps[2]["read"]
+    assert "context_reuse.reusable" in context_steps[2]["read"]
+    assert "context_reuse.locked" in context_steps[2]["read"]
+    assert "context_reuse.reuse_reason" in context_steps[2]["read"]
     assert (
         "context_reuse.selection_summary.recommended_next_action"
-        in (context_steps[1]["read"])
+        in (context_steps[2]["read"])
     )
     form_steps = workflows["form_interaction"]["steps"]
     assert [step["id"] for step in form_steps] == [
@@ -558,6 +574,10 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "context_reuse.availability"
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
+    )
+    assert (
+        "normalized_status"
         in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
     )
     assert (
@@ -1030,6 +1050,14 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "validate_case_file",
         "run_case_file",
     ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "persistent_login_state"
+    ] == [
+        "dry_run_context_pick",
+        "inspect_context_status",
+        "create_session_with_context",
+        "close_session",
+    ]
     assert checks["command_catalog"]["required_workflow_steps"]["form_interaction"] == [
         "inspect_form",
         "fill_labeled_field",
@@ -1225,6 +1253,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "persistent_login_state": {
                     "steps": [
                         {"id": "dry_run_context_pick"},
+                        {"id": "inspect_context_status"},
                         {"id": "create_session_with_context"},
                         {"id": "close_session"},
                     ],

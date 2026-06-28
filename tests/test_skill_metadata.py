@@ -50,7 +50,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "page_diagnostics" in prompt
     assert "workflow read arrays" in prompt
     assert "custom JavaScript" in prompt
-    assert "dry-run" in prompt
+    assert "status-check/dry-run" in prompt
     assert "persistent contexts" in prompt
     assert "sessions/actions" in prompt
     assert "JSON output" in prompt
