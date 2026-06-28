@@ -240,14 +240,18 @@ Current CLI support:
   `scope_check.satisfied`.
 - `browser-cli auth refresh` reports local refresh state such as
   `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`, and
-  `reason`. Current behavior is inspection-only and returns
-  `refresh_available=false` until browser.lexmount.cn exposes a refresh endpoint.
+  `reason`. Without a token lifecycle base URL it remains inspection-only and
+  returns `refresh_available=false`; with `--token-base-url <url>`,
+  `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
+  `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
+  `POST /api/auth/token/refresh` and saves refreshed local metadata when the
+  response includes a usable access token.
 - `browser-cli auth logout` removes the local fallback credentials file and
   reports `deleted`, `present_before`, `present_after`, `revoke_requested`, and
   `revoke_available`.
-- `browser-cli auth logout --revoke` is accepted for forward compatibility but
-  currently reports `revoke_available=false` until browser.lexmount.cn exposes
-  remote token revoke.
+- `browser-cli auth logout --revoke` calls `POST /api/auth/token/revoke` when a
+  token lifecycle base URL is configured; without one it reports
+  `revoke_available=false` and still removes local metadata.
 - Output never includes access or refresh token values.
 - Until browser API bearer-token support lands, `runtime_auth_usable` remains
   false for device tokens and browser actions still require env API-key
@@ -281,18 +285,20 @@ browser-cli auth refresh
 
 It must mask token values.
 
-`auth refresh` currently reports local refresh eligibility. Remote refresh
-remains future behavior:
+`auth refresh` reports local refresh eligibility. Configure a token lifecycle
+base URL to attempt remote refresh:
 
 ```bash
 browser-cli auth refresh
+browser-cli auth refresh --token-base-url https://browser.lexmount.cn
 ```
 
-`auth logout` currently removes local credentials. Remote revoke remains future
-behavior:
+`auth logout` removes local credentials. Configure a token lifecycle base URL to
+attempt remote revoke:
 
 ```bash
 browser-cli auth logout --revoke
+browser-cli auth logout --revoke --token-base-url https://browser.lexmount.cn
 ```
 
 ## Doctor Integration

@@ -223,9 +223,14 @@ Default behavior:
   can distinguish directly runnable export commands from placeholder or masked
   commands.
 - `auth refresh` may report `refresh_needed`, `has_refresh_token`,
-  `refresh_available`, `refreshed`, and `reason`, but must not print token
-  values. Until the remote refresh endpoint exists, it reports
-  `refresh_available=false`.
+  `refresh_available`, `refreshed`, `reason`,
+  `token_lifecycle_base_url_source`, `refresh_endpoint`, `remote_refresh`, and
+  refreshed `credentials` metadata, but must not print token values. Without a
+  configured token lifecycle endpoint, it reports `refresh_available=false`.
+  With `--token-base-url`, `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
+  `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it may call
+  `POST /api/auth/token/refresh`; `remote_refresh` may report `attempted`,
+  `ok`, `status_code`, `error`, `message`, `endpoint`, and `saved`.
 - `reference list` and `reference get` expose packaged agent reference docs as
   JSON. `reference get --metadata-only` omits markdown content, and unknown ids
   fail as JSON with `error=unknown_reference` plus `available_references`.
@@ -280,8 +285,11 @@ Default behavior:
   `connect_from_codex` with a safe `/connect/codex` URL, `open_command`,
   requested scopes, setup blocks, and verification commands. This handoff must
   not contain API key values or direct connect URLs.
-- `auth logout` may report local credential file deletion metadata, but must
-  not print token values or unset environment variables.
+- `auth logout` may report local credential file deletion metadata,
+  `revoke_endpoint`, `remote_revoke`, and `revoked`, but must not print token
+  values or unset environment variables. With `--revoke` and a configured token
+  lifecycle endpoint, it may call `POST /api/auth/token/revoke`; without one,
+  it reports `revoke_available=false`.
 
 Explicit reveal behavior:
 

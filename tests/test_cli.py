@@ -445,12 +445,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "scope_check.missing_scopes" in token_steps[2]["read"]
     assert token_steps[3]["optional"] is True
     assert "refresh_available" in token_steps[3]["read"]
+    assert "refresh_endpoint" in token_steps[3]["read"]
+    assert "remote_refresh.attempted" in token_steps[3]["read"]
+    assert "credentials.saved" in token_steps[3]["read"]
     assert "browser-cli auth login" in token_steps[3]["fallback_commands"]
     assert token_steps[4]["command"] == "browser-cli doctor --json"
     assert "repair_plan.connect_from_codex.url" in token_steps[4]["on_failure_read"]
     assert token_steps[5]["optional"] is True
     assert token_steps[5]["user_requested_only"] is True
     assert "revoke_available" in token_steps[5]["read"]
+    assert "revoked" in token_steps[5]["read"]
+    assert "revoke_endpoint" in token_steps[5]["read"]
+    assert "remote_revoke.attempted" in token_steps[5]["read"]
     session_steps = workflows["session_recovery"]["steps"]
     assert [step["id"] for step in session_steps] == [
         "list_active_sessions",
@@ -1859,11 +1865,14 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     assert "scope_check.satisfied" in steps[2]["read"]
     assert steps[3]["optional"] is True
     assert "refresh_available" in steps[3]["read"]
+    assert "remote_refresh.status_code" in steps[3]["read"]
+    assert "credentials.saved" in steps[3]["read"]
     assert steps[4]["success_condition"] == (
         "ok=true and ready_for_browser_actions=true"
     )
     assert steps[5]["user_requested_only"] is True
     assert "revoke_available" in steps[5]["read"]
+    assert "remote_revoke.status_code" in steps[5]["read"]
     assert (
         "browser-cli auth scopes --scope browser:actions"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
@@ -3734,6 +3743,111 @@ def test_auth_refresh_reports_remote_refresh_pending_without_revealing_tokens(
     assert payload["next_steps"][0] == "Local device-token metadata is expired."
 
 
+def test_auth_refresh_calls_configured_token_endpoint_and_saves_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "api_base_url": "https://api.lexmount.cn",
+                "access_token": "old-secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-25T23:59:00Z",
+                "scopes": ["browser.sessions:create"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+    calls: list[tuple[str, dict[str, Any], float]] = []
+
+    def fake_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        calls.append((url, payload, timeout_seconds))
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {
+                "access_token": "new-secret-access-token",
+                "expires_in": 3600,
+                "token_id": "tok_456",
+            },
+        }
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_post)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "refresh",
+                "--credentials-file",
+                str(credentials_file),
+                "--token-base-url",
+                "https://browser.lexmount.cn",
+                "--http-timeout-seconds",
+                "7",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "old-secret-access-token" not in serialized
+    assert "new-secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert calls == [
+        (
+            "https://browser.lexmount.cn/api/auth/token/refresh",
+            {
+                "client_name": "browser-cli",
+                "refresh_token": "secret-refresh-token",
+                "token_id": "tok_123",
+                "project_id": "project",
+            },
+            7,
+        )
+    ]
+    assert payload["token_lifecycle_base_url"] == "https://browser.lexmount.cn"
+    assert payload["token_lifecycle_base_url_source"] == "argument"
+    assert (
+        payload["refresh_endpoint"]
+        == "https://browser.lexmount.cn/api/auth/token/refresh"
+    )
+    assert payload["refresh_available"] is True
+    assert payload["refreshed"] is True
+    assert payload["reason"] == "refreshed"
+    assert payload["remote_refresh"]["attempted"] is True
+    assert payload["remote_refresh"]["status_code"] == 200
+    assert payload["credentials"]["saved"] is True
+    assert payload["credentials"]["device_token"]["token_id"] == "tok_456"
+    assert (
+        payload["next_steps"][0]
+        == "Local device-token metadata was refreshed and saved."
+    )
+    stored = json.loads(credentials_file.read_text())
+    assert stored["access_token"] == "new-secret-access-token"
+    assert stored["refresh_token"] == "secret-refresh-token"
+    assert stored["project_id"] == "project"
+    assert stored["scopes"] == ["browser.sessions:create"]
+
+
 def test_auth_refresh_reports_not_needed_without_force(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Any,
@@ -3916,6 +4030,98 @@ def test_auth_logout_revoke_flag_reports_remote_revoke_pending(
         "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
     ]
     assert "Remote revoke is not implemented" in payload["next_steps"][-1]
+
+
+def test_auth_logout_revoke_calls_configured_token_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+                "scopes": ["browser.actions:run"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+    calls: list[tuple[str, dict[str, Any], float]] = []
+
+    def fake_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        calls.append((url, payload, timeout_seconds))
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {"revoked": True},
+        }
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_post)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "logout",
+                "--credentials-file",
+                str(credentials_file),
+                "--revoke",
+                "--token-base-url",
+                "https://browser.lexmount.cn",
+                "--http-timeout-seconds",
+                "8",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert not credentials_file.exists()
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert calls == [
+        (
+            "https://browser.lexmount.cn/api/auth/token/revoke",
+            {
+                "client_name": "browser-cli",
+                "access_token": "secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "token_id": "tok_123",
+                "project_id": "project",
+            },
+            8,
+        )
+    ]
+    assert payload["token_lifecycle_base_url"] == "https://browser.lexmount.cn"
+    assert payload["token_lifecycle_base_url_source"] == "argument"
+    assert (
+        payload["revoke_endpoint"]
+        == "https://browser.lexmount.cn/api/auth/token/revoke"
+    )
+    assert payload["revoke_available"] is True
+    assert payload["revoked"] is True
+    assert payload["remote_revoke"]["attempted"] is True
+    assert payload["remote_revoke"]["status_code"] == 200
+    assert payload["deleted"] is True
+    assert payload["next_steps"][-1] == "Remote token revoke completed."
 
 
 def test_auth_export_env_emits_safe_placeholders(
@@ -4136,6 +4342,18 @@ def test_auth_scopes_filters_unknown_scopes_and_reports_site_contract(
         "revoke_token",
         "expire_token",
     ]
+    assert (
+        contract["required_token_lifecycle"][1]["endpoint"]
+        == "POST /api/auth/token/refresh"
+    )
+    assert (
+        "LEXMOUNT_BROWSER_TOKEN_BASE_URL"
+        in contract["required_token_lifecycle"][1]["configure_with"]
+    )
+    assert (
+        contract["required_token_lifecycle"][2]["endpoint"]
+        == "POST /api/auth/token/revoke"
+    )
     assert contract["site_capability_status"]["missing_count"] == 6
     assert any(
         "permission names" in item for item in contract["browser_site_requirements"]
@@ -4207,6 +4425,14 @@ def test_auth_connect_requirements_reports_browser_site_contract(
         "revoke_token",
         "expire_token",
     ]
+    assert (
+        payload["required_token_lifecycle"][1]["endpoint"]
+        == "POST /api/auth/token/refresh"
+    )
+    assert (
+        payload["required_token_lifecycle"][2]["endpoint"]
+        == "POST /api/auth/token/revoke"
+    )
     assert (
         payload["required_api_contract"]["device_code"][0]["path"]
         == "/api/auth/device/code"

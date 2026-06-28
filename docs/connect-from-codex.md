@@ -169,12 +169,20 @@ Expected behavior after the website page exists:
   token-based flow is configured.
 - `browser-cli auth token-info` remains local and reports safe scoped-token
   metadata plus scope checks without printing token values.
-- `browser-cli auth refresh` remains local for now and reports
-  `refresh_available=false`, `refreshed=false`, and an actionable `reason` until
-  the website/API exposes token refresh.
+- `browser-cli auth refresh` remains local/pending when no token lifecycle base
+  URL is configured. With `--token-base-url <url>`,
+  `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
+  `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
+  `POST /api/auth/token/refresh` and reports `refresh_endpoint`,
+  `remote_refresh`, `refreshed`, and safe refreshed credential metadata.
+  Without a configured endpoint, it reports `refresh_available=false` and
+  `refreshed=false`.
 - `browser-cli auth logout` remains local, removes fallback device-token
-  metadata, and reports `revoke_available=false` when `--revoke` is requested
-  until the website/API exposes remote revoke.
+  metadata, and only attempts remote revoke when `--revoke` and a token
+  lifecycle base URL are configured. The remote path is
+  `POST /api/auth/token/revoke`; output reports `revoke_endpoint`,
+  `remote_revoke`, `revoke_available`, and `revoked`. Without a configured
+  endpoint, `--revoke` reports `revoke_available=false`.
 - `browser-cli auth export-env` remains local and masks secrets by default.
 - `browser-cli doctor --json` checks local env, package availability, command
   catalog compatibility, API connectivity, and optionally session creation when

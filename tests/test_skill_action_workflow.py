@@ -190,9 +190,9 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`permission_count`, `risk`, `destructive`, `unknown_scopes`" in normalized
     assert "Use `auth token-info --required-scope <scope>`" in normalized
     assert "Use `auth refresh --credentials-file <path>`" in normalized
-    assert "`refresh_available`, `refreshed`, and `reason`" in normalized
+    assert "`reason`, `refresh_endpoint`, and `remote_refresh`" in normalized
     assert "Use `auth logout --credentials-file <path>`" in normalized
-    assert "`--revoke` only reports remote revoke pending" in normalized
+    assert "when a token lifecycle base URL is configured" in normalized
     assert "For scoped token checks, refresh, or local logout" in normalized
     assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
     assert (
@@ -202,7 +202,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`device_token.valid`, `device_token.expired`" in normalized
     assert "and `scope_check`" in normalized
     assert "`refresh_needed`, `has_refresh_token`" in normalized
-    assert "`revoke_requested`, `revoke_available`, and `warnings`" in normalized
+    assert "`remote_revoke`, and `warnings`" in normalized
     assert "Do not start browser actions from a device token" in normalized
     assert "do not report API key values" in normalized
 

@@ -109,10 +109,13 @@ treating returned `commands` as directly runnable.
 `auth token-info --required-scope <scope>` to check scoped-token coverage. Use
 `auth refresh --credentials-file <path>` to
 inspect `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`,
-and `reason`; remote refresh is pending until browser.lexmount.cn exposes the
-refresh API. Use `auth logout --credentials-file <path>` to remove local
-device-token metadata without changing environment variables; `--revoke` only
-reports remote revoke pending until browser.lexmount.cn exposes the revoke API.
+`reason`, `refresh_endpoint`, and `remote_refresh`; add
+`--token-base-url <url>` or set `LEXMOUNT_BROWSER_TOKEN_BASE_URL` when
+browser.lexmount.cn exposes `POST /api/auth/token/refresh`. Use
+`auth logout --credentials-file <path>` to remove local device-token metadata
+without changing environment variables; `--revoke` calls
+`POST /api/auth/token/revoke` only when a token lifecycle base URL is
+configured, otherwise it reports remote revoke pending.
 These commands never report access or refresh token values. Until bearer-token
 runtime support lands, continue to require env API-key credentials for browser
 actions when `runtime_auth_usable` is false.
@@ -478,11 +481,12 @@ For device-token metadata in `auth status`, `auth token-info`, `auth refresh`,
 `device_token.valid`, `device_token.expired`, `device_token.refresh_needed`,
 `device_token.scopes`, and `scope_check`; do not report token values. For
 `auth refresh`, report `refresh_needed`, `has_refresh_token`,
-`refresh_available`, `refreshed`, and `reason`; it does not call a remote
-refresh endpoint yet. For `auth logout`, report `deleted`, `present_before`,
-`present_after`,
-`revoke_requested`, `revoke_available`, and `warnings`; it does not unset env
-vars. Do not start browser actions from a device token while
+`refresh_available`, `refreshed`, `reason`, `refresh_endpoint`, and
+`remote_refresh`; it calls the refresh endpoint only when a token lifecycle base
+URL is configured. For `auth logout`, report `deleted`, `present_before`,
+`present_after`, `revoke_requested`, `revoke_available`, `revoked`,
+`remote_revoke`, and `warnings`; it does not unset env vars. Do not start
+browser actions from a device token while
 `runtime_auth_usable` is false.
 For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.

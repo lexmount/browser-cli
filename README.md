@@ -194,13 +194,17 @@ isolated workspaces. Use metadata for labels such as `purpose`; do not put API
 keys, passwords, or session secrets in context metadata.
 Use `auth token-info --required-scope <scope>` to check scoped-token coverage.
 Use `auth refresh --credentials-file <path>` to inspect whether local
-device-token metadata needs refresh. It currently reports `refresh_available:
-false` and `refreshed: false` until browser.lexmount.cn exposes the refresh
-endpoint; it never prints access or refresh token values.
+device-token metadata needs refresh. Without a token lifecycle endpoint it
+reports `refresh_available: false` and `refreshed: false`; with
+`--token-base-url <url>`, `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
+`LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
+`POST /api/auth/token/refresh`, saves refreshed local metadata on success, and
+never prints access or refresh token values.
 Use `auth logout --credentials-file <path>` to remove local device-token
-metadata without changing environment variables. `auth logout --revoke`
-currently reports `revoke_available: false` and reminds you to revoke from
-browser.lexmount.cn until remote revoke is implemented.
+metadata without changing environment variables. `auth logout --revoke` calls
+`POST /api/auth/token/revoke` when a token lifecycle base URL is configured;
+without one it reports `revoke_available: false` and reminds you to revoke from
+browser.lexmount.cn.
 
 After credentials are configured, run the self-check:
 
@@ -293,9 +297,14 @@ requirements so browser.lexmount.cn can render the permission picker without
 scraping `auth login`.
 
 `auth refresh` reports local refresh state, including `refresh_needed`,
-`has_refresh_token`, `refresh_available`, `refreshed`, and `reason`. Remote
-refresh is not implemented yet, so agents should use its `next_steps` and keep
-using env API-key credentials for browser actions today.
+`has_refresh_token`, `refresh_available`, `refreshed`, `reason`,
+`refresh_endpoint`, and `remote_refresh`. Without a configured token lifecycle
+base URL it remains local/pending; with `--token-base-url <url>`,
+`LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`,
+it calls `POST /api/auth/token/refresh`, saves refreshed metadata on success,
+and keeps token values out of JSON output. Agents should still use
+`runtime_auth_usable` and `next_steps` before relying on bearer-token runtime
+auth for browser actions.
 
 `auth connect-requirements` returns the browser.lexmount.cn `/connect/codex`
 implementation contract without requiring credentials or opening a browser. It

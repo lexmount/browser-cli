@@ -72,6 +72,7 @@ AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
+TOKEN_LIFECYCLE_BASE_URL_ENV = "LEXMOUNT_BROWSER_TOKEN_BASE_URL"
 CONTEXT_REGISTRY_FILE_ENV = "LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
 COMMON_DOM_STATE_CHOICES = (
@@ -1135,6 +1136,11 @@ def _command_catalog() -> dict[str, Any]:
                             "refresh_available",
                             "refreshed",
                             "reason",
+                            "refresh_endpoint",
+                            "remote_refresh.attempted",
+                            "remote_refresh.status_code",
+                            "remote_refresh.error",
+                            "credentials.saved",
                         ],
                         "fallback_commands": [
                             "browser-cli auth login",
@@ -1164,6 +1170,11 @@ def _command_catalog() -> dict[str, Any]:
                             "present_after",
                             "revoke_requested",
                             "revoke_available",
+                            "revoked",
+                            "revoke_endpoint",
+                            "remote_revoke.attempted",
+                            "remote_revoke.status_code",
+                            "remote_revoke.error",
                             "warnings",
                         ],
                         "secret_handling": "Do not print access_token, refresh_token, or API key values.",
@@ -2928,6 +2939,22 @@ def _device_code_endpoint(base_url: str, path: str) -> str:
     return urljoin(f"{base_url.rstrip('/')}/", path.lstrip("/"))
 
 
+def _token_lifecycle_base_url(raw_url: str | None = None) -> tuple[str | None, str]:
+    if raw_url:
+        return raw_url.rstrip("/"), "argument"
+    env_url = os.environ.get(TOKEN_LIFECYCLE_BASE_URL_ENV)
+    if env_url:
+        return env_url.rstrip("/"), "env"
+    device_code_env_url = os.environ.get(DEVICE_CODE_BASE_URL_ENV)
+    if device_code_env_url:
+        return device_code_env_url.rstrip("/"), "device_code_env"
+    return None, "unset"
+
+
+def _token_lifecycle_endpoint(base_url: str, path: str) -> str:
+    return urljoin(f"{base_url.rstrip('/')}/", path.lstrip("/"))
+
+
 def _json_http_post(
     url: str,
     payload: dict[str, Any],
@@ -3055,6 +3082,36 @@ def _write_device_token_credentials(
         "path_source": path_source,
         "device_token": _local_device_token_status(str(path)),
     }
+
+
+def _read_device_token_credentials_data(
+    raw_path: str | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    path, path_source = _device_token_credentials_path(raw_path)
+    meta = {"credentials_file": str(path), "path_source": path_source}
+    try:
+        raw_data = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, {
+            **meta,
+            "error": "read_error",
+            "message": _mask_sensitive_text(str(exc)),
+        }
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError as exc:
+        return None, {
+            **meta,
+            "error": "invalid_json",
+            "message": f"Invalid credentials JSON: {exc}",
+        }
+    if not isinstance(data, dict):
+        return None, {
+            **meta,
+            "error": "invalid_credentials",
+            "message": "Credentials JSON must contain an object.",
+        }
+    return data, meta
 
 
 def _posix_file_mode(path: Path) -> tuple[str | None, bool | None]:
@@ -3316,6 +3373,18 @@ def _auth_refresh_next_steps(
             "Local device-token metadata does not currently need refresh.",
             "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
         ]
+    if reason == "refreshed":
+        return [
+            "Local device-token metadata was refreshed and saved.",
+            "Run `browser-cli auth status` to inspect the refreshed metadata.",
+            "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
+        ]
+    if reason in {"refresh_endpoint_error", "refresh_response_invalid"}:
+        return [
+            "Remote token refresh was attempted but did not complete.",
+            "Inspect `remote_refresh.status_code`, `remote_refresh.error`, and `remote_refresh.message`.",
+            "Use env API-key credentials for browser actions today.",
+        ]
     steps = [
         "Remote token refresh is not implemented in browser-cli yet.",
         "Run `browser-cli auth login` to request fresh credentials when browser.lexmount.cn supports device-code login.",
@@ -3326,7 +3395,13 @@ def _auth_refresh_next_steps(
     return steps
 
 
-def _auth_logout_next_steps(*, deleted: bool, revoke_requested: bool) -> list[str]:
+def _auth_logout_next_steps(
+    *,
+    deleted: bool,
+    revoke_requested: bool,
+    revoke_available: bool = False,
+    revoked: bool = False,
+) -> list[str]:
     steps = [
         "Run `browser-cli auth status` to verify local credential state.",
         "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support lands.",
@@ -3336,10 +3411,137 @@ def _auth_logout_next_steps(*, deleted: bool, revoke_requested: bool) -> list[st
     else:
         steps.insert(0, "No local device-token metadata file was removed.")
     if revoke_requested:
-        steps.append(
-            "Remote revoke is not implemented in browser-cli yet; revoke the token from browser.lexmount.cn if needed."
-        )
+        if revoked:
+            steps.append("Remote token revoke completed.")
+        elif revoke_available:
+            steps.append(
+                "Remote token revoke was attempted but did not complete; inspect `remote_revoke`."
+            )
+        else:
+            steps.append(
+                "Remote revoke is not implemented in browser-cli yet; revoke the token from browser.lexmount.cn if needed."
+            )
     return steps
+
+
+def _merge_refreshed_token_payload(
+    response_payload: dict[str, Any],
+    current_credentials: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(response_payload)
+    for key in (
+        "refresh_token",
+        "project_id",
+        "api_base_url",
+        "scopes",
+        "token_id",
+        "token_type",
+    ):
+        if merged.get(key) in (None, "", []):
+            merged[key] = current_credentials.get(key)
+    return merged
+
+
+def _request_remote_token_refresh(
+    *,
+    endpoint: str,
+    credentials_file: str | None,
+    requested_scopes: list[str],
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    current_credentials, read_meta = _read_device_token_credentials_data(
+        credentials_file
+    )
+    if current_credentials is None:
+        return {
+            "attempted": False,
+            "ok": False,
+            "error": read_meta.get("error"),
+            "message": read_meta.get("message"),
+            **read_meta,
+        }
+    refresh_token = current_credentials.get("refresh_token")
+    if not isinstance(refresh_token, str) or not refresh_token:
+        return {
+            "attempted": False,
+            "ok": False,
+            "error": "missing_refresh_token",
+            "message": "Local credentials do not contain a refresh token.",
+            **read_meta,
+        }
+    response = _json_http_post(
+        endpoint,
+        {
+            "client_name": "browser-cli",
+            "refresh_token": refresh_token,
+            "token_id": current_credentials.get("token_id"),
+            "project_id": current_credentials.get("project_id"),
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    response_payload = response.get("json", {})
+    result: dict[str, Any] = {
+        "attempted": True,
+        "ok": bool(response.get("ok")),
+        "endpoint": endpoint,
+        "status_code": response.get("status_code"),
+        "error": response.get("error"),
+        "message": response.get("message"),
+    }
+    if not response.get("ok") or not isinstance(response_payload, dict):
+        return result
+    token_payload = _merge_refreshed_token_payload(
+        response_payload,
+        current_credentials,
+    )
+    credentials = _write_device_token_credentials(
+        token_payload,
+        credentials_file=credentials_file,
+        requested_scopes=requested_scopes,
+    )
+    return {
+        **result,
+        "credentials": credentials,
+        "saved": bool(credentials.get("saved")),
+    }
+
+
+def _request_remote_token_revoke(
+    *,
+    endpoint: str,
+    credentials_file: str | None,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    current_credentials, read_meta = _read_device_token_credentials_data(
+        credentials_file
+    )
+    if current_credentials is None:
+        return {
+            "attempted": False,
+            "ok": False,
+            "error": read_meta.get("error"),
+            "message": read_meta.get("message"),
+            **read_meta,
+        }
+    response = _json_http_post(
+        endpoint,
+        {
+            "client_name": "browser-cli",
+            "access_token": current_credentials.get("access_token"),
+            "refresh_token": current_credentials.get("refresh_token"),
+            "token_id": current_credentials.get("token_id"),
+            "project_id": current_credentials.get("project_id"),
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    return {
+        "attempted": True,
+        "ok": bool(response.get("ok")),
+        "endpoint": endpoint,
+        "status_code": response.get("status_code"),
+        "error": response.get("error"),
+        "message": response.get("message"),
+    }
 
 
 def _dedupe_preserving_order(values: list[str] | tuple[str, ...]) -> list[str]:
@@ -3592,12 +3794,24 @@ def _connect_from_codex_required_token_lifecycle() -> list[dict[str, Any]]:
             "required": True,
             "purpose": "Refresh short-lived local access tokens without exposing token values in chat.",
             "cli_command": "browser-cli auth refresh",
+            "endpoint": "POST /api/auth/token/refresh",
+            "configure_with": [
+                "--token-base-url",
+                TOKEN_LIFECYCLE_BASE_URL_ENV,
+                DEVICE_CODE_BASE_URL_ENV,
+            ],
         },
         {
             "id": "revoke_token",
             "required": True,
             "purpose": "Revoke scoped API keys or device tokens when the user or agent requests cleanup.",
             "cli_command": "browser-cli auth logout --revoke",
+            "endpoint": "POST /api/auth/token/revoke",
+            "configure_with": [
+                "--token-base-url",
+                TOKEN_LIFECYCLE_BASE_URL_ENV,
+                DEVICE_CODE_BASE_URL_ENV,
+            ],
         },
         {
             "id": "expire_token",
@@ -14288,10 +14502,53 @@ def cmd_auth_token_info(args: argparse.Namespace) -> None:
 
 def cmd_auth_refresh(args: argparse.Namespace) -> None:
     command = "auth.refresh"
+    if args.http_timeout_seconds <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--http-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            http_timeout_seconds=args.http_timeout_seconds,
+        )
     device_token_status = _local_device_token_status(args.credentials_file)
     reason = _auth_refresh_reason(device_token_status, force=bool(args.force))
     warnings = list(device_token_status.get("warnings", []))
-    if reason == "remote_refresh_unavailable":
+    token_base_url, token_base_url_source = _token_lifecycle_base_url(
+        args.token_base_url
+    )
+    refresh_endpoint = (
+        _token_lifecycle_endpoint(token_base_url, "/api/auth/token/refresh")
+        if token_base_url
+        else None
+    )
+    refresh_available = bool(
+        refresh_endpoint and reason == "remote_refresh_unavailable"
+    )
+    refreshed = False
+    remote_refresh: dict[str, Any] = {
+        "attempted": False,
+        "endpoint": refresh_endpoint,
+    }
+    credentials: dict[str, Any] | None = None
+    if reason == "remote_refresh_unavailable" and refresh_endpoint:
+        remote_refresh = _request_remote_token_refresh(
+            endpoint=refresh_endpoint,
+            credentials_file=args.credentials_file,
+            requested_scopes=[
+                str(scope)
+                for scope in device_token_status.get("scopes", [])
+                if isinstance(scope, str)
+            ],
+            timeout_seconds=args.http_timeout_seconds,
+        )
+        credentials = remote_refresh.get("credentials")
+        refreshed = bool(remote_refresh.get("saved"))
+        reason = "refreshed" if refreshed else "refresh_endpoint_error"
+        if not refreshed:
+            warnings.append(
+                "Remote token refresh endpoint did not return usable refreshed credentials."
+            )
+    elif reason == "remote_refresh_unavailable":
         warnings.append(
             "Remote token refresh is not implemented yet; request fresh credentials from browser.lexmount.cn when device-code login is available."
         )
@@ -14300,6 +14557,9 @@ def cmd_auth_refresh(args: argparse.Namespace) -> None:
         command,
         credentials_file=device_token_status.get("path"),
         path_source=device_token_status.get("path_source"),
+        token_lifecycle_base_url=token_base_url,
+        token_lifecycle_base_url_source=token_base_url_source,
+        refresh_endpoint=refresh_endpoint,
         present=device_token_status.get("present", False),
         valid=device_token_status.get("valid", False),
         expired=device_token_status.get("expired"),
@@ -14307,12 +14567,14 @@ def cmd_auth_refresh(args: argparse.Namespace) -> None:
         has_refresh_token=device_token_status.get("has_refresh_token", False),
         force_requested=bool(args.force),
         refresh_requested=reason != "refresh_not_needed" or bool(args.force),
-        refresh_available=False,
-        refreshed=False,
+        refresh_available=refresh_available,
+        refreshed=refreshed,
         reason=reason,
         runtime_auth_usable=False,
         warnings=warnings,
         device_token=device_token_status,
+        remote_refresh=remote_refresh,
+        credentials=credentials,
         next_steps=_auth_refresh_next_steps(
             reason=reason,
             device_token_status=device_token_status,
@@ -14322,13 +14584,46 @@ def cmd_auth_refresh(args: argparse.Namespace) -> None:
 
 def cmd_auth_logout(args: argparse.Namespace) -> None:
     command = "auth.logout"
+    if args.http_timeout_seconds <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--http-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            http_timeout_seconds=args.http_timeout_seconds,
+        )
     path, path_source = _device_token_credentials_path(args.credentials_file)
     device_token_before = _local_device_token_status(args.credentials_file)
     present_before = bool(device_token_before.get("present"))
     warnings: list[str] = []
     deleted = False
+    token_base_url, token_base_url_source = _token_lifecycle_base_url(
+        args.token_base_url
+    )
+    revoke_endpoint = (
+        _token_lifecycle_endpoint(token_base_url, "/api/auth/token/revoke")
+        if token_base_url
+        else None
+    )
+    revoke_available = bool(revoke_endpoint and args.revoke and present_before)
+    revoked = False
+    remote_revoke: dict[str, Any] = {
+        "attempted": False,
+        "endpoint": revoke_endpoint,
+    }
 
-    if args.revoke:
+    if args.revoke and revoke_endpoint and present_before:
+        remote_revoke = _request_remote_token_revoke(
+            endpoint=revoke_endpoint,
+            credentials_file=args.credentials_file,
+            timeout_seconds=args.http_timeout_seconds,
+        )
+        revoked = bool(remote_revoke.get("ok"))
+        if not revoked:
+            warnings.append(
+                "Remote token revoke endpoint did not confirm revocation; local metadata will still be removed."
+            )
+    elif args.revoke:
         warnings.append(
             "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
         )
@@ -14359,17 +14654,24 @@ def cmd_auth_logout(args: argparse.Namespace) -> None:
         command,
         credentials_file=str(path),
         path_source=path_source,
+        token_lifecycle_base_url=token_base_url,
+        token_lifecycle_base_url_source=token_base_url_source,
+        revoke_endpoint=revoke_endpoint,
         present_before=present_before,
         present_after=present_after,
         deleted=deleted,
         env_unchanged=True,
         revoke_requested=bool(args.revoke),
-        revoke_available=False,
+        revoke_available=revoke_available,
+        revoked=revoked,
+        remote_revoke=remote_revoke,
         warnings=warnings,
         device_token_before=device_token_before,
         next_steps=_auth_logout_next_steps(
             deleted=deleted,
             revoke_requested=bool(args.revoke),
+            revoke_available=revoke_available,
+            revoked=revoked,
         ),
     )
 
@@ -18161,7 +18463,20 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     auth_refresh.add_argument(
         "--force",
         action="store_true",
-        help="Request refresh even when local metadata does not need it. Current implementation reports remote refresh as pending.",
+        help="Request refresh even when local metadata does not need it.",
+    )
+    auth_refresh.add_argument(
+        "--token-base-url",
+        help=(
+            "Base URL for token lifecycle endpoints. Defaults to "
+            f"{TOKEN_LIFECYCLE_BASE_URL_ENV}, then {DEVICE_CODE_BASE_URL_ENV}, when set."
+        ),
+    )
+    auth_refresh.add_argument(
+        "--http-timeout-seconds",
+        type=float,
+        default=10,
+        help="HTTP timeout for token refresh endpoint requests.",
     )
     auth_refresh.set_defaults(func=cmd_auth_refresh)
 
@@ -18179,7 +18494,20 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     auth_logout.add_argument(
         "--revoke",
         action="store_true",
-        help="Request remote revoke when available. Current implementation removes local metadata only.",
+        help="Request remote revoke when a token lifecycle endpoint is configured.",
+    )
+    auth_logout.add_argument(
+        "--token-base-url",
+        help=(
+            "Base URL for token lifecycle endpoints. Defaults to "
+            f"{TOKEN_LIFECYCLE_BASE_URL_ENV}, then {DEVICE_CODE_BASE_URL_ENV}, when set."
+        ),
+    )
+    auth_logout.add_argument(
+        "--http-timeout-seconds",
+        type=float,
+        default=10,
+        help="HTTP timeout for token revoke endpoint requests.",
     )
     auth_logout.set_defaults(func=cmd_auth_logout)
 
