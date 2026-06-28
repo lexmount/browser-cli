@@ -47,6 +47,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow setup_and_verify" in normalized
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
     assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
+    assert "browser-cli commands --workflow session_recovery" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
@@ -167,6 +168,9 @@ def test_skill_uses_json_argument_errors_for_command_repairs() -> None:
 def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     normalized = _normalized_skill_text()
 
+    assert "If an existing session is stale, inactive" in normalized
+    assert "browser-cli commands --workflow session_recovery" in normalized
+    assert "`sessions`, `session.status`, `final_status`" in normalized
     assert "For a one-off task" in normalized
     assert "browser-cli commands --workflow one_off_page_task" in normalized
     assert "Then follow the returned steps" in normalized

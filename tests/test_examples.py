@@ -26,6 +26,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow setup_and_verify" in text
     assert "browser-cli commands --workflow connect_from_codex_auth" in text
     assert "browser-cli commands --workflow scoped_token_lifecycle" in text
+    assert "browser-cli commands --workflow session_recovery" in text
     assert "browser-cli commands --workflow one_off_page_task" in text
     assert "browser-cli commands --workflow persistent_login_state" in text
     assert "browser-cli commands --workflow form_interaction" in text
@@ -46,6 +47,8 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "revoke_available" in text
     assert "handoff.connect_from_codex_url" in text
     assert "verification.doctor_command" in text
+    assert "list active sessions" in text
+    assert "close stale sessions" in text
     assert "Run doctor before the first browser action" in text
     assert "browser_target.exactly_one_of" in text
     assert "browser-cli doctor --smoke-session" in text

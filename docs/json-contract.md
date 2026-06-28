@@ -56,8 +56,8 @@ groups.
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
 `agent_workflows` describes ordered setup, Connect from Codex auth, scoped token
-lifecycle, one-off page, persistent login state, form interaction, interactive
-targeting, and page diagnostics steps with `command`, `read`,
+lifecycle, session recovery, one-off page, persistent login state, form interaction,
+interactive targeting, and page diagnostics steps with `command`, `read`,
 `success_condition`, `on_failure_read`, and `cleanup` hints.
 Command entries may expose `aliases` on canonical commands plus `alias_of` and
 `canonical_name` on alias commands, so agents can map user-facing phrasing back
@@ -68,6 +68,9 @@ the next agent decision.
 The scoped token lifecycle workflow includes token validity, scope coverage,
 refresh availability, browser readiness, and local logout/revoke-pending fields
 without exposing token values.
+The session recovery workflow includes active session listing, single-session
+inspection, keepalive status, stale-session close, and replacement session
+creation steps so agents can avoid leaking sessions or consuming quota.
 The interactive targeting workflow exposes `selection_order`,
 `preferred_commands`, and `alternative_commands` so agents can choose
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of

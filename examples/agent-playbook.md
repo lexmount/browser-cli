@@ -13,6 +13,7 @@ browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow scoped_token_lifecycle
+browser-cli commands --workflow session_recovery
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
@@ -82,6 +83,7 @@ wants to proceed.
 Use a temporary session and close it when finished:
 
 ```bash
+browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
 browser-cli session create --browser-mode light
 browser-cli action open-url --session-id <session_id> --url <url>
@@ -89,6 +91,10 @@ browser-cli action snapshot --session-id <session_id>
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli session close --session-id <session_id>
 ```
+
+When a previous session may still be active, follow `session_recovery` first:
+list active sessions, inspect the candidate session, keep it alive only if it
+is still needed, close stale sessions, then create a replacement session.
 
 For forms, read the dedicated workflow before choosing fields:
 

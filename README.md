@@ -63,6 +63,7 @@ CLI for you:
    browser-cli session list
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
 16. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约：
+   browser-cli commands --workflow session_recovery
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow persistent_login_state
    browser-cli commands --workflow form_interaction
@@ -193,6 +194,7 @@ browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow scoped_token_lifecycle
+browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
@@ -272,6 +274,7 @@ browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow scoped_token_lifecycle
+browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
@@ -528,8 +531,8 @@ local reveal flag.
 for compact command discovery and `--group action` when choosing a browser
 action. Use `--workflows-only` when you only need the structured setup,
 Connect from Codex auth, scoped token lifecycle, one-off page task, persistent
-login state, form interaction, interactive targeting, and page diagnostics
-workflows, or
+login state, session recovery, form interaction, interactive targeting, and
+page diagnostics workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,
@@ -588,6 +591,7 @@ fields; generated commands are placeholders or masked unless
 For a new browser task, agents should prefer this sequence:
 
 ```bash
+browser-cli commands --workflow session_recovery
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>

@@ -254,6 +254,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
     )
     assert (
+        "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive"
+        in payload["agent_entrypoints"]["session_recovery"]
+    )
+    assert (
         "browser-cli context pick"
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
@@ -311,6 +315,26 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert token_steps[4]["optional"] is True
     assert token_steps[4]["user_requested_only"] is True
     assert "revoke_available" in token_steps[4]["read"]
+    session_steps = workflows["session_recovery"]["steps"]
+    assert [step["id"] for step in session_steps] == [
+        "list_active_sessions",
+        "inspect_session",
+        "keepalive_session",
+        "close_stale_session",
+        "create_replacement_session",
+    ]
+    assert session_steps[0]["command"] == "browser-cli session list --status active"
+    assert "sessions" in session_steps[0]["read"]
+    assert session_steps[1]["optional"] is True
+    assert "session.status" in session_steps[1]["read"]
+    assert session_steps[2]["command"] == (
+        "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive"
+    )
+    assert "final_status" in session_steps[2]["read"]
+    assert session_steps[3]["user_requested_only"] is True
+    assert "closed" in session_steps[3]["read"]
+    assert "context_reuse.availability" in session_steps[4]["read"]
+    assert "browser-cli doctor --json" in session_steps[4]["fallback_commands"]
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
     assert "result.nodes" in one_off_steps[3]["read"]
@@ -484,7 +508,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 8
+    assert payload["workflow_count"] == 9
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -517,6 +541,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "scope_check.missing_scopes"
         in payload["agent_workflows"]["scoped_token_lifecycle"]["steps"][1]["read"]
+    )
+    assert (
+        "final_status"
+        in payload["agent_workflows"]["session_recovery"]["steps"][2]["read"]
     )
     assert (
         "result.filled"
@@ -624,6 +652,40 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     )
 
 
+def test_commands_catalog_returns_session_recovery_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "session_recovery"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "session_recovery"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "list_active_sessions",
+        "inspect_session",
+        "keepalive_session",
+        "close_stale_session",
+        "create_replacement_session",
+    ]
+    assert steps[0]["command"] == "browser-cli session list --status active"
+    assert "sessions" in steps[0]["read"]
+    assert steps[1]["optional"] is True
+    assert "session.session_id" in steps[1]["read"]
+    assert "final_status" in steps[2]["read"]
+    assert steps[3]["user_requested_only"] is True
+    assert "closed" in steps[3]["read"]
+    assert "context_reuse.availability" in steps[4]["read"]
+    assert "browser-cli doctor --json" in steps[4]["fallback_commands"][0]
+    assert (
+        "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive"
+        in payload["agent_entrypoints"]["session_recovery"]
+    )
+
+
 def test_commands_catalog_returns_interactive_targeting_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -703,6 +765,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "page_diagnostics",
         "persistent_login_state",
         "scoped_token_lifecycle",
+        "session_recovery",
         "setup_and_verify",
     ]
     assert payload["fix"] == {
@@ -857,11 +920,12 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 8
+    assert checks["command_catalog"]["workflow_count"] == 9
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
         "scoped_token_lifecycle",
+        "session_recovery",
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
@@ -885,6 +949,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "refresh_if_needed",
         "verify_browser_readiness",
         "logout_or_revoke_when_requested",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["session_recovery"] == [
+        "list_active_sessions",
+        "inspect_session",
+        "keepalive_session",
+        "close_stale_session",
+        "create_replacement_session",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "one_off_page_task"
@@ -1003,6 +1074,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "setup_and_verify",
         "connect_from_codex_auth",
         "scoped_token_lifecycle",
+        "session_recovery",
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
@@ -1057,6 +1129,15 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "refresh_if_needed"},
                         {"id": "verify_browser_readiness"},
                         {"id": "logout_or_revoke_when_requested"},
+                    ],
+                },
+                "session_recovery": {
+                    "steps": [
+                        {"id": "list_active_sessions"},
+                        {"id": "inspect_session"},
+                        {"id": "keepalive_session"},
+                        {"id": "close_stale_session"},
+                        {"id": "create_replacement_session"},
                     ],
                 },
                 "one_off_page_task": {

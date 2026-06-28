@@ -159,6 +159,8 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "scoped token lifecycle" in text
     assert "refresh availability" in text
     assert "local logout/revoke-pending fields" in text
+    assert "session recovery" in text
+    assert "replacement session" in text
     assert "form interaction" in text
     assert "interactive targeting" in text
     assert "`selection_order`" in text

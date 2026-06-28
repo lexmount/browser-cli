@@ -102,6 +102,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
     "connect_from_codex_auth",
     "scoped_token_lifecycle",
+    "session_recovery",
     "one_off_page_task",
     "persistent_login_state",
     "form_interaction",
@@ -125,6 +126,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "refresh_if_needed",
         "verify_browser_readiness",
         "logout_or_revoke_when_requested",
+    ),
+    "session_recovery": (
+        "list_active_sessions",
+        "inspect_session",
+        "keepalive_session",
+        "close_stale_session",
+        "create_replacement_session",
     ),
     "one_off_page_task": (
         "create_session",
@@ -486,6 +494,13 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
                 "browser-cli auth logout --revoke",
             ],
+            "session_recovery": [
+                "browser-cli session list --status active",
+                "browser-cli session get --session-id <session_id>",
+                "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive",
+                "browser-cli session close --session-id <session_id>",
+                "browser-cli session create",
+            ],
             "one_off_page_task": [
                 "browser-cli session create",
                 "browser-cli action open-url --session-id <session_id> --url <url>",
@@ -680,6 +695,69 @@ def _command_catalog() -> dict[str, Any]:
                             "warnings",
                         ],
                         "secret_handling": "Do not print access_token, refresh_token, or API key values.",
+                    },
+                ],
+            },
+            "session_recovery": {
+                "purpose": "Inspect active sessions, keep a needed session alive, close stale sessions, or create a replacement session.",
+                "steps": [
+                    {
+                        "id": "list_active_sessions",
+                        "command": "browser-cli session list --status active",
+                        "read": [
+                            "count",
+                            "status_filter",
+                            "sessions",
+                            "pagination",
+                        ],
+                    },
+                    {
+                        "id": "inspect_session",
+                        "command": "browser-cli session get --session-id <session_id>",
+                        "optional": True,
+                        "read": [
+                            "session.session_id",
+                            "session.status",
+                            "session.context_id",
+                            "session.created_at",
+                            "session.updated_at",
+                        ],
+                    },
+                    {
+                        "id": "keepalive_session",
+                        "command": "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive",
+                        "optional": True,
+                        "read": [
+                            "session_id",
+                            "checks",
+                            "final_status",
+                        ],
+                    },
+                    {
+                        "id": "close_stale_session",
+                        "command": "browser-cli session close --session-id <session_id>",
+                        "optional": True,
+                        "user_requested_only": True,
+                        "read": [
+                            "session_id",
+                            "closed",
+                        ],
+                    },
+                    {
+                        "id": "create_replacement_session",
+                        "command": "browser-cli session create",
+                        "optional": True,
+                        "read": [
+                            "session.session_id",
+                            "session.status",
+                            "context_reuse.selected",
+                            "context_reuse.created",
+                            "context_reuse.availability",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli doctor --json",
+                            "browser-cli commands --workflow persistent_login_state",
+                        ],
                     },
                 ],
             },
