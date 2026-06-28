@@ -28,6 +28,7 @@ browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
+browser-cli commands --workflow mouse_interaction
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow state_waits
@@ -42,6 +43,7 @@ browser-cli action guide --task link_navigation
 browser-cli action guide --task visual_capture
 browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
+browser-cli action guide --task mouse_interaction
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
@@ -125,6 +127,10 @@ browser-cli action press-key --session-id <session_id> --key Escape
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
+browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"
+browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"
+browser-cli action double-click --session-id <session_id> --selector ".row"
+browser-cli action right-click --session-id <session_id> --selector ".row"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 ```
@@ -180,7 +186,7 @@ Prefer built-in actions over writing custom JavaScript. `page-info`, `set-viewpo
 `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
 `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `select-option`, `select-label`, `select-role`, `check`,
 `uncheck`, `check-label`, `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, and `press-key`
-plus `click-text`, `click-role`, `click-index`, `fill-label`, `fill-role`, `link-snapshot`,
+plus `click-text`, `click-role`, `click-index`, `double-click`, `double-click-role`, `right-click`, `right-click-role`, `fill-label`, `fill-role`, `link-snapshot`,
 `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
 `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`,
 `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`,
@@ -193,7 +199,9 @@ Important result fields include `found`, `exists`, `count`, `checkable`,
 `set`, `removed`, `deleted`, `clearable`, `cleared`, `items`, `cleared_count`,
 `requested_count`, `state`, `matched`, `role_found`, `state_values`, `attribute_found`,
 `requested_value`, `network_idle`, `quiet_ms`, `submitted`, `hovered`,
-`pressed`, `dispatched`, `dispatched_events`, `fields`, `value_masked`,
+`pressed`, `double_clicked`, `right_clicked`, `context_menu`,
+`default_prevented`, `client_x`, `client_y`, `dispatched`,
+`dispatched_events`, `fields`, `value_masked`,
 `file_input`, `file_count`, `requested_files`, `bounding_box`, `in_viewport`,
 `index`, `attributes`, `html_truncated`, `candidate_count`, `candidates`,
 `writable`, `total_candidate_count`,
@@ -312,6 +320,11 @@ Menus and keyboard flows: run `browser-cli commands --workflow
 menu_keyboard_flow` and `browser-cli action guide --task menu_keyboard_flow`,
 then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
 `list-snapshot`, or `press-key` before custom JavaScript.
+Mouse gestures: run `browser-cli commands --workflow mouse_interaction` and
+`browser-cli action guide --task mouse_interaction`, inspect with
+`interactive-snapshot`, then prefer `double-click-role` or `right-click-role`;
+fall back to selector `double-click` or `right-click` and verify with
+`page-info`, `wait-text`, `interactive-snapshot`, or `wait-url`.
 2. Click a visible control: run `browser-cli commands --workflow
    interactive_targeting` and
    `browser-cli action guide --task interactive_targeting`, use

@@ -70,6 +70,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow visual_capture" in text
     assert "browser-cli commands --workflow semantic_waits" in text
     assert "browser-cli commands --workflow menu_keyboard_flow" in text
+    assert "browser-cli commands --workflow mouse_interaction" in text
     assert "browser-cli commands --workflow state_waits" in text
     assert "browser-cli commands --workflow page_diagnostics" in text
     assert "runtime_auth.usable" in text
@@ -86,6 +87,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action guide --task visual_capture" in text
     assert "browser-cli action guide --task semantic_waits" in text
     assert "browser-cli action guide --task menu_keyboard_flow" in text
+    assert "browser-cli action guide --task mouse_interaction" in text
     assert "browser-cli action guide --task state_waits" in text
     assert "browser-cli action guide --task page_diagnostics" in text
     assert "browser-cli reference list" in text

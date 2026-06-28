@@ -52,6 +52,7 @@ CLI for you:
    browser-cli action guide --task visual_capture
    browser-cli action guide --task semantic_waits
    browser-cli action guide --task menu_keyboard_flow
+   browser-cli action guide --task mouse_interaction
    browser-cli action guide --task state_waits
    browser-cli reference list
    browser-cli reference get --id action_playbook --metadata-only
@@ -112,6 +113,7 @@ CLI for you:
    browser-cli commands --workflow visual_capture
    browser-cli commands --workflow semantic_waits
    browser-cli commands --workflow menu_keyboard_flow
+   browser-cli commands --workflow mouse_interaction
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
    browser-cli action guide --task form_interaction
@@ -277,6 +279,7 @@ browser-cli action guide --task link_navigation
 browser-cli action guide --task visual_capture
 browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
+browser-cli action guide --task mouse_interaction
 browser-cli action guide --task state_waits
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
@@ -295,6 +298,7 @@ browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
+browser-cli commands --workflow mouse_interaction
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
 browser-cli commands --workflow file_upload
@@ -304,6 +308,7 @@ browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
+browser-cli commands --workflow mouse_interaction
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli reference list
@@ -444,6 +449,7 @@ browser-cli commands --workflow link_navigation
 browser-cli commands --workflow visual_capture
 browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
+browser-cli commands --workflow mouse_interaction
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli doctor
@@ -491,6 +497,7 @@ browser-cli action guide --task browser_state_management
 browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task menu_keyboard_flow
+browser-cli action guide --task mouse_interaction
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli action open-url --session-id <session_id> --url https://example.com
@@ -600,7 +607,7 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 `action guide` returns machine-readable task routes for `form_interaction`,
 `interactive_targeting`, `content_extraction`, `browser_state_management`,
 `file_upload`, `dialog_frame_handling`, `navigation_flow`, `link_navigation`,
-`visual_capture`, `semantic_waits`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
+`visual_capture`, `semantic_waits`, `menu_keyboard_flow`, `mouse_interaction`, `page_diagnostics`, and `state_waits`, including
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
@@ -613,6 +620,7 @@ the boundary for custom JavaScript.
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `inspect`,
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
 `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-text`, `click-role`,
+`double-click`, `double-click-role`, `right-click`, `right-click-role`,
 `click-index`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
@@ -649,7 +657,9 @@ such as `found`, `exists`, `checkable`, `checked`, `selectable`, `selected`, `cl
 `total_candidate_count`, `ready_state`, `visibility_state`,
 `viewport`, `scroll`, `body_text_length`, `html_length`, `language`,
 `referrer`, `requested_title`, `case_sensitive`, `code`, `target`,
-`target_info`, `modifiers`, `events`, `keydown_accepted`, or
+`target_info`, `modifiers`, `events`, `double_clicked`, `right_clicked`,
+`context_menu`, `default_prevented`, `client_x`, `client_y`,
+`keydown_accepted`, or
 `navigation_requested` from `result`.
 For DOM/form actions, values from fields that look like password, token,
 credential, secret, authorization, or API-key controls are masked by default.
@@ -908,6 +918,11 @@ Common agent recipes:
   and `browser-cli action guide --task menu_keyboard_flow`, then use
   `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
   `list-snapshot`, or `press-key` before custom JavaScript.
+- Mouse gestures: run `browser-cli commands --workflow mouse_interaction` and
+  `browser-cli action guide --task mouse_interaction`, then prefer
+  `double-click-role` or `right-click-role`, falling back to selector
+  `double-click` or `right-click`; verify with `page-info`, `wait-text`,
+  `interactive-snapshot`, or `wait-url`.
 - Navigation: run `browser-cli commands --workflow navigation_flow` and
   `browser-cli action guide --task navigation_flow`, then use `open-url`,
   `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`, and

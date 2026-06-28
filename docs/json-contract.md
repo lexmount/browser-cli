@@ -123,6 +123,9 @@ The interactive targeting workflow exposes `selection_order`,
 `wait-state-role`, `exists-role`, `get-text-role`, `bounding-box-role`,
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of
 writing JavaScript.
+The mouse interaction workflow exposes role/name and selector `double-click`,
+`double-click-role`, `right-click`, and `right-click-role` routes so agents can
+open editors or context menus without custom event JavaScript.
 The form interaction workflow exposes form snapshots, labeled and role/name
 fill steps, role/name value read/wait verification, labeled select/check steps,
 submit readiness, and verification fields so agents can complete forms without
@@ -237,7 +240,7 @@ Default behavior:
   `interactive_targeting`, `content_extraction`, `browser_state_management`,
   `file_upload`, `dialog_frame_handling`, `navigation_flow`,
   `link_navigation`, `visual_capture`, `semantic_waits`, `menu_keyboard_flow`,
-  `page_diagnostics`, and `state_waits`, including inspect, preferred,
+  `mouse_interaction`, `page_diagnostics`, and `state_waits`, including inspect, preferred,
   fallback, and verification commands plus the custom JavaScript boundary for
   each task. Page diagnostics can include
   `set-viewport` to stabilize responsive screenshots and layout checks.
@@ -340,6 +343,7 @@ Default behavior:
   get-attribute-role, wait-attribute-role, bounding-box, bounding-box-role,
   select-option, select-label, select-role, check, uncheck, check-label,
   check-role, uncheck-label, uncheck-role, click-text, click-role, click-index,
+  double-click, double-click-role, right-click, right-click-role,
   focus, focus-role, fill-label, fill-role, get-value, get-value-role,
   wait-value, wait-value-role,
   link-snapshot, table-snapshot, list-snapshot, text-snapshot, dialog-snapshot,

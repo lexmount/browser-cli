@@ -164,6 +164,10 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.click-text",
     "action.click-role",
     "action.click-index",
+    "action.double-click",
+    "action.double-click-role",
+    "action.right-click",
+    "action.right-click-role",
     "action.focus",
     "action.focus-role",
     "action.fill-label",
@@ -234,6 +238,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "file_upload",
     "dialog_frame_handling",
     "interactive_targeting",
+    "mouse_interaction",
     "visual_capture",
     "semantic_waits",
     "menu_keyboard_flow",
@@ -360,6 +365,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "wait_target_ready",
         "activate_target",
         "verify_after_click",
+    ),
+    "mouse_interaction": (
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "choose_mouse_action",
+        "run_mouse_action",
+        "verify_result",
     ),
     "visual_capture": (
         "inspect_action_guide",
@@ -716,6 +728,7 @@ def _agent_references() -> dict[str, Any]:
                 "file_upload",
                 "dialog_frame_handling",
                 "interactive_targeting",
+                "mouse_interaction",
                 "visual_capture",
                 "semantic_waits",
                 "menu_keyboard_flow",
@@ -776,6 +789,7 @@ def _agent_examples() -> dict[str, Any]:
                 "file_upload",
                 "dialog_frame_handling",
                 "interactive_targeting",
+                "mouse_interaction",
                 "visual_capture",
                 "semantic_waits",
                 "menu_keyboard_flow",
@@ -1039,6 +1053,15 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
                 'browser-cli action click-text --session-id <session_id> --text "Submit"',
                 'browser-cli action click-index --session-id <session_id> --selector "button" --index 0',
+            ],
+            "mouse_interaction": [
+                "browser-cli action guide --task mouse_interaction",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                'browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"',
+                'browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"',
+                'browser-cli action double-click --session-id <session_id> --selector ".row"',
+                'browser-cli action right-click --session-id <session_id> --selector ".row"',
+                'browser-cli action wait-text --session-id <session_id> --text "Context menu"',
             ],
             "visual_capture": [
                 "browser-cli action guide --task visual_capture",
@@ -1957,6 +1980,91 @@ def _command_catalog() -> dict[str, Any]:
                             'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
                             'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50",
+                        ],
+                    },
+                ],
+            },
+            "mouse_interaction": {
+                "purpose": "Trigger double-click or right-click/context-menu interactions on semantic or selector targets without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task mouse_interaction",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_interactive_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                            "result.url",
+                            "result.title",
+                        ],
+                    },
+                    {
+                        "id": "choose_mouse_action",
+                        "command": "<choose double-click-role, right-click-role, double-click, or right-click using target evidence>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "double-click-role",
+                            "right-click-role",
+                            "double-click",
+                            "right-click",
+                            "hover-role",
+                            "bounding-box-role",
+                            "inspect",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action double-click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
+                            'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action inspect --session-id <session_id> --selector "<selector>"',
+                            "browser-cli action page-info --session-id <session_id>",
+                        ],
+                    },
+                    {
+                        "id": "run_mouse_action",
+                        "command": "<run the selected mouse action>",
+                        "agent_action": True,
+                        "read": [
+                            "result.found",
+                            "result.role_found",
+                            "result.double_clicked",
+                            "result.right_clicked",
+                            "result.context_menu",
+                            "result.events",
+                            "result.default_prevented",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                    },
+                    {
+                        "id": "verify_result",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected menu or edit state>"',
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
                         ],
                     },
                 ],
@@ -7520,6 +7628,137 @@ def _click_index_expression(
     count: candidates.length,
     total_count: all.length,
     visible_count: visibleNodes.length,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _mouse_action_helpers_expression(action: str) -> str:
+    return f"""
+  const mouseAction = {_js_literal(action)};
+  const dispatchMouseAction = (element) => {{
+    const rect = element.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+    const events = [];
+    const defaultPrevented = [];
+    const dispatchMouse = (type, init) => {{
+      const event = new MouseEvent(type, {{
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY,
+        ...init
+      }});
+      const accepted = element.dispatchEvent(event);
+      events.push(type);
+      if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+    }};
+    element.focus?.();
+    if (mouseAction === "double-click") {{
+      dispatchMouse("mousedown", {{ button: 0, buttons: 1, detail: 1 }});
+      dispatchMouse("mouseup", {{ button: 0, buttons: 0, detail: 1 }});
+      dispatchMouse("click", {{ button: 0, buttons: 0, detail: 1 }});
+      dispatchMouse("mousedown", {{ button: 0, buttons: 1, detail: 2 }});
+      dispatchMouse("mouseup", {{ button: 0, buttons: 0, detail: 2 }});
+      dispatchMouse("click", {{ button: 0, buttons: 0, detail: 2 }});
+      dispatchMouse("dblclick", {{ button: 0, buttons: 0, detail: 2 }});
+    }} else {{
+      dispatchMouse("mousedown", {{ button: 2, buttons: 2, detail: 1 }});
+      dispatchMouse("mouseup", {{ button: 2, buttons: 0, detail: 1 }});
+      dispatchMouse("contextmenu", {{ button: 2, buttons: 0, detail: 1 }});
+    }}
+    return {{ events, default_prevented: defaultPrevented, client_x: clientX, client_y: clientY }};
+  }};
+""".rstrip()
+
+
+def _mouse_action_expression(
+    *,
+    selector: str,
+    action: str,
+    result_field: str,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{
+      selector,
+      found: false,
+      {result_field}: false,
+      context_menu: false,
+      events: []
+    }};
+  }}
+{_mouse_action_helpers_expression(action)}
+  const result = dispatchMouseAction(element);
+  return {{
+    selector,
+    found: true,
+    {result_field}: true,
+    context_menu: mouseAction === "right-click",
+    events: result.events,
+    default_prevented: result.default_prevented,
+    client_x: result.client_x,
+    client_y: result.client_y,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _mouse_action_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    action: str,
+    result_field: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      {result_field}: false,
+      context_menu: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates,
+      events: []
+    }};
+  }}
+{_mouse_action_helpers_expression(action)}
+  const result = dispatchMouseAction(element);
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    {result_field}: true,
+    context_menu: mouseAction === "right-click",
+    candidate_count: roleMatch.candidate_count,
+    events: result.events,
+    default_prevented: result.default_prevented,
+    client_x: result.client_x,
+    client_y: result.client_y,
     element: nodeInfo(element)
   }};
 }}
@@ -13776,6 +14015,69 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "commands cannot identify or activate the target."
             ),
         },
+        "mouse_interaction": {
+            "purpose": "Trigger double-click and right-click/context-menu interactions before custom JavaScript.",
+            "related_workflows": [
+                "mouse_interaction",
+                "interactive_targeting",
+                "menu_keyboard_flow",
+            ],
+            "when_to_use": [
+                "The task asks to double-click, right-click, open a context menu, or trigger row/card editing.",
+                "The target can be identified by role/name or a stable selector.",
+            ],
+            "selection_order": [
+                "interactive-snapshot",
+                "accessibility-snapshot",
+                "double-click-role",
+                "right-click-role",
+                "double-click",
+                "right-click",
+                "hover-role",
+                "bounding-box-role",
+                "wait-text",
+                "page-info",
+            ],
+            "inspect_commands": [
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+            ],
+            "preferred_commands": [
+                'browser-cli action double-click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
+                'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+            ],
+            "fallback_commands": [
+                'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action inspect --session-id <session_id> --selector "<selector>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "verify_commands": [
+                'browser-cli action wait-text --session-id <session_id> --text "<expected menu or edit state>"',
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.found",
+                "result.role_found",
+                "result.double_clicked",
+                "result.right_clicked",
+                "result.context_menu",
+                "result.events",
+                "result.default_prevented",
+                "result.element",
+                "result.candidate_count",
+                "result.bounding_box",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after double-click/right-click role and "
+                "selector actions plus hover, bounding-box, and wait-text cannot "
+                "express the mouse interaction."
+            ),
+        },
         "navigation_flow": {
             "purpose": "Open URLs, reload, move through browser history, and verify navigation before custom JavaScript.",
             "related_workflows": [
@@ -15768,6 +16070,60 @@ def cmd_action_click_index(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_double_click(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.double-click",
+        _mouse_action_expression(
+            selector=args.selector,
+            action="double-click",
+            result_field="double_clicked",
+        ),
+    )
+
+
+def cmd_action_double_click_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.double-click-role",
+        _mouse_action_role_expression(
+            role=args.role,
+            name=args.name,
+            action="double-click",
+            result_field="double_clicked",
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_right_click(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.right-click",
+        _mouse_action_expression(
+            selector=args.selector,
+            action="right-click",
+            result_field="right_clicked",
+        ),
+    )
+
+
+def cmd_action_right_click_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.right-click-role",
+        _mouse_action_role_expression(
+            role=args.role,
+            name=args.name,
+            action="right-click",
+            result_field="right_clicked",
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_fill_label(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -17617,11 +17973,15 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "accessibility-snapshot": tuple(),
     "click-role": ("role",),
     "click-text": ("text",),
+    "double-click": ("selector",),
+    "double-click-role": ("role",),
     "fill-label": ("label", "text"),
     "fill-role": ("role", "text"),
     "form-snapshot": tuple(),
     "get-value-role": ("role",),
     "interactive-snapshot": tuple(),
+    "right-click": ("selector",),
+    "right-click-role": ("role",),
     "wait-text": ("text",),
 }
 BROWSER_CLI_SUPPORTED_CASE_ACTIONS = frozenset(
@@ -17869,6 +18229,8 @@ def _case_action_schema() -> dict[str, Any]:
         "accessibility-snapshot": ["include_hidden", "max_nodes"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
+        "double-click": [],
+        "double-click-role": ["name", "exact", "case_sensitive"],
         "fill-label": ["exact", "case_sensitive"],
         "fill-role": ["name", "exact", "case_sensitive"],
         "form-snapshot": [
@@ -17879,6 +18241,8 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "get-value-role": ["name", "exact", "case_sensitive"],
         "interactive-snapshot": ["include_hidden", "max_nodes"],
+        "right-click": [],
+        "right-click-role": ["name", "exact", "case_sensitive"],
         "wait-text": [
             "selector",
             "state",
@@ -17900,6 +18264,17 @@ def _case_action_schema() -> dict[str, Any]:
         "accessibility-snapshot": ["nodes", "node_count", "url", "title"],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
         "click-text": ["found", "clicked", "text", "element", "url"],
+        "double-click": ["found", "double_clicked", "events", "element", "url"],
+        "double-click-role": [
+            "found",
+            "role_found",
+            "double_clicked",
+            "role",
+            "name",
+            "events",
+            "element",
+            "url",
+        ],
         "fill-label": [
             "found",
             "filled",
@@ -17930,6 +18305,25 @@ def _case_action_schema() -> dict[str, Any]:
             "url",
         ],
         "interactive-snapshot": ["nodes", "node_count", "url", "title"],
+        "right-click": [
+            "found",
+            "right_clicked",
+            "context_menu",
+            "events",
+            "element",
+            "url",
+        ],
+        "right-click-role": [
+            "found",
+            "role_found",
+            "right_clicked",
+            "context_menu",
+            "role",
+            "name",
+            "events",
+            "element",
+            "url",
+        ],
         "wait-text": ["found", "text", "selector", "waited_ms", "url"],
     }
     examples: dict[str, dict[str, Any]] = {
@@ -17962,6 +18356,12 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
+        "double-click": {"action": "double-click", "selector": ".item"},
+        "double-click-role": {
+            "action": "double-click-role",
+            "role": "button",
+            "name": "Edit",
+        },
         "fill-label": {
             "action": "fill-label",
             "label": "Email",
@@ -17980,6 +18380,12 @@ def _case_action_schema() -> dict[str, Any]:
             "name": "Email",
         },
         "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
+        "right-click": {"action": "right-click", "selector": ".item"},
+        "right-click-role": {
+            "action": "right-click-role",
+            "role": "row",
+            "name": "Invoice",
+        },
         "wait-text": {"action": "wait-text", "text": "Saved"},
     }
     return {
@@ -18262,6 +18668,27 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "double-click":
+        return _case_eval_expression(
+            page,
+            _mouse_action_expression(
+                selector=str(step["selector"]),
+                action="double-click",
+                result_field="double_clicked",
+            ),
+        )
+    if action == "double-click-role":
+        return _case_eval_expression(
+            page,
+            _mouse_action_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                action="double-click",
+                result_field="double_clicked",
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
     if action == "fill-label":
         return _case_eval_expression(
             page,
@@ -18311,6 +18738,27 @@ def _run_browser_cli_case_step(
             _interactive_snapshot_expression(
                 include_hidden=_case_step_bool(step, "include_hidden"),
                 max_nodes=_case_step_int(step, "max_nodes", default=80),
+            ),
+        )
+    if action == "right-click":
+        return _case_eval_expression(
+            page,
+            _mouse_action_expression(
+                selector=str(step["selector"]),
+                action="right-click",
+                result_field="right_clicked",
+            ),
+        )
+    if action == "right-click-role":
+        return _case_eval_expression(
+            page,
+            _mouse_action_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                action="right-click",
+                result_field="right_clicked",
+                exact=exact,
+                case_sensitive=case_sensitive,
             ),
         )
     if action == "wait-text":
@@ -19916,6 +20364,42 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Allow hidden DOM nodes to be counted and clicked.",
     )
     action_click_index.set_defaults(func=cmd_action_click_index)
+
+    action_double_click = action_subparsers.add_parser(
+        "double-click",
+        help="Dispatch a double-click mouse sequence for a selector",
+    )
+    _add_session_target_args(action_double_click)
+    action_double_click.add_argument("--selector", required=True)
+    action_double_click.set_defaults(func=cmd_action_double_click)
+
+    action_double_click_role = action_subparsers.add_parser(
+        "double-click-role",
+        help="Dispatch a double-click mouse sequence for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_double_click_role)
+    action_double_click_role.add_argument("--role", required=True)
+    action_double_click_role.add_argument("--name")
+    _add_text_match_args(action_double_click_role)
+    action_double_click_role.set_defaults(func=cmd_action_double_click_role)
+
+    action_right_click = action_subparsers.add_parser(
+        "right-click",
+        help="Dispatch a right-click/contextmenu mouse sequence for a selector",
+    )
+    _add_session_target_args(action_right_click)
+    action_right_click.add_argument("--selector", required=True)
+    action_right_click.set_defaults(func=cmd_action_right_click)
+
+    action_right_click_role = action_subparsers.add_parser(
+        "right-click-role",
+        help="Dispatch a right-click/contextmenu mouse sequence for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_right_click_role)
+    action_right_click_role.add_argument("--role", required=True)
+    action_right_click_role.add_argument("--name")
+    _add_text_match_args(action_right_click_role)
+    action_right_click_role.set_defaults(func=cmd_action_right_click_role)
 
     action_fill_label = action_subparsers.add_parser(
         "fill-label",

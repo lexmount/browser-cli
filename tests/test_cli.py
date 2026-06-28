@@ -262,6 +262,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
+    assert "mouse_interaction" in references["action_playbook"]["related_workflows"]
     assert "navigation_flow" in references["action_playbook"]["related_workflows"]
     assert "link_navigation" in references["action_playbook"]["related_workflows"]
     assert "visual_capture" in references["action_playbook"]["related_workflows"]
@@ -413,6 +414,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         'browser-cli action click-role --session-id <session_id> --role link --name "Docs"'
         in payload["agent_entrypoints"]["link_navigation"]
+    )
+    assert (
+        "browser-cli action guide --task mouse_interaction"
+        in payload["agent_entrypoints"]["mouse_interaction"]
+    )
+    assert (
+        'browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"'
+        in payload["agent_entrypoints"]["mouse_interaction"]
+    )
+    assert (
+        'browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"'
+        in payload["agent_entrypoints"]["mouse_interaction"]
     )
     assert (
         "browser-cli action guide --task visual_capture"
@@ -701,6 +714,19 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert link_steps[3]["secret_handling"].startswith("Do not copy href")
     assert "click-role" in link_steps[3]["selection_order"]
     assert "result.navigation_requested" in link_steps[4]["read"]
+    mouse_steps = workflows["mouse_interaction"]["steps"]
+    assert [step["id"] for step in mouse_steps] == [
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "choose_mouse_action",
+        "run_mouse_action",
+        "verify_result",
+    ]
+    assert mouse_steps[0]["command"] == "browser-cli action guide --task mouse_interaction"
+    assert "double-click-role" in mouse_steps[2]["selection_order"]
+    assert "right-click-role" in mouse_steps[2]["selection_order"]
+    assert "result.double_clicked" in mouse_steps[3]["read"]
+    assert "result.right_clicked" in mouse_steps[3]["read"]
     visual_steps = workflows["visual_capture"]["steps"]
     assert [step["id"] for step in visual_steps] == [
         "inspect_action_guide",
@@ -1248,6 +1274,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.bounding-box-role",
         "action.click-role",
         "action.click-index",
+        "action.double-click",
+        "action.double-click-role",
+        "action.right-click",
+        "action.right-click-role",
         "action.focus",
         "action.focus-role",
         "action.hover-role",
@@ -1390,6 +1420,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     hover_role = commands["action.hover-role"]
     assert hover_role["required_options"] == ["--role"]
     assert any("--name" in option["flags"] for option in hover_role["options"])
+    double_click = commands["action.double-click"]
+    assert double_click["required_options"] == ["--selector"]
+    double_click_role = commands["action.double-click-role"]
+    assert double_click_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in double_click_role["options"])
+    right_click = commands["action.right-click"]
+    assert right_click["required_options"] == ["--selector"]
+    right_click_role = commands["action.right-click-role"]
+    assert right_click_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in right_click_role["options"])
     press_role = commands["action.press-role"]
     assert "--role" in press_role["required_options"]
     assert "--key" in press_role["required_options"]
@@ -1436,7 +1476,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 13,
+        "task_count": 14,
         "tasks": [
             "browser_state_management",
             "content_extraction",
@@ -1446,6 +1486,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
             "interactive_targeting",
             "link_navigation",
             "menu_keyboard_flow",
+            "mouse_interaction",
             "navigation_flow",
             "page_diagnostics",
             "semantic_waits",
@@ -1479,6 +1520,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "interactive_targeting",
         "link_navigation",
         "menu_keyboard_flow",
+        "mouse_interaction",
         "navigation_flow",
         "page_diagnostics",
         "semantic_waits",
@@ -1572,6 +1614,39 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["next_commands"][0] == (
         "browser-cli commands --workflow menu_keyboard_flow"
     )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "mouse_interaction"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "mouse_interaction",
+        "interactive_targeting",
+        "menu_keyboard_flow",
+    ]
+    assert payload["guide"]["selection_order"][:4] == [
+        "interactive-snapshot",
+        "accessibility-snapshot",
+        "double-click-role",
+        "right-click-role",
+    ]
+    assert any(
+        "browser-cli action double-click-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action right-click" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert "result.double_clicked" in payload["guide"]["read_fields"]
+    assert "result.context_menu" in payload["guide"]["read_fields"]
+    assert "double-click/right-click" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"] == [
+        "browser-cli commands --workflow mouse_interaction",
+        "browser-cli commands --workflow interactive_targeting",
+        "browser-cli commands --workflow menu_keyboard_flow",
+    ]
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "navigation_flow"])
@@ -2010,9 +2085,10 @@ def test_action_guide_fails_unknown_task_as_json(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
-        "link_navigation",
-        "menu_keyboard_flow",
-        "navigation_flow",
+            "link_navigation",
+            "menu_keyboard_flow",
+            "mouse_interaction",
+            "navigation_flow",
         "page_diagnostics",
         "semantic_waits",
         "state_waits",
@@ -2034,7 +2110,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 22
+    assert payload["workflow_count"] == 23
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -2083,6 +2159,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.links[].absolute_url_masked"
         in payload["agent_workflows"]["link_navigation"]["steps"][2]["read"]
+    )
+    assert (
+        "result.double_clicked"
+        in payload["agent_workflows"]["mouse_interaction"]["steps"][3]["read"]
     )
     assert (
         "events_path"
@@ -2276,6 +2356,46 @@ def test_commands_catalog_returns_link_navigation_workflow(
     assert "browser-cli action guide --task link_navigation" in payload[
         "agent_entrypoints"
     ]["link_navigation"][0]
+
+
+def test_commands_catalog_returns_mouse_interaction_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "mouse_interaction"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "mouse_interaction"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "choose_mouse_action",
+        "run_mouse_action",
+        "verify_result",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task mouse_interaction"
+    assert "guide.custom_js_boundary" in steps[0]["read"]
+    assert "browser-cli action interactive-snapshot" in steps[1]["command"]
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"][:4] == [
+        "double-click-role",
+        "right-click-role",
+        "double-click",
+        "right-click",
+    ]
+    assert "browser-cli action double-click-role" in steps[2]["preferred_commands"][0]
+    assert "browser-cli action right-click" in steps[2]["preferred_commands"][3]
+    assert steps[3]["agent_action"] is True
+    assert "result.double_clicked" in steps[3]["read"]
+    assert "result.context_menu" in steps[3]["read"]
+    assert "browser-cli action wait-text" in steps[-1]["fallback_commands"][0]
+    assert "browser-cli action guide --task mouse_interaction" in payload[
+        "agent_entrypoints"
+    ]["mouse_interaction"][0]
 
 
 def test_commands_catalog_returns_visual_capture_workflow(
@@ -2569,6 +2689,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "click",
         "click-role",
         "click-text",
+        "double-click",
+        "double-click-role",
         "eval",
         "fill-label",
         "fill-role",
@@ -2576,6 +2698,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "get-value-role",
         "interactive-snapshot",
         "open-url",
+        "right-click",
+        "right-click-role",
         "screenshot",
         "snapshot",
         "type",
@@ -2585,6 +2709,10 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
     assert payload["required_fields"]["click-role"] == ["role"]
+    assert payload["required_fields"]["double-click"] == ["selector"]
+    assert payload["required_fields"]["double-click-role"] == ["role"]
+    assert payload["required_fields"]["right-click"] == ["selector"]
+    assert payload["required_fields"]["right-click-role"] == ["role"]
     assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
@@ -2600,6 +2728,12 @@ def test_case_schema_returns_supported_actions_and_fields(
         "selector": "input[name=q]",
         "text": "hello",
     }
+    assert "double_clicked" in payload["actions"]["double-click-role"][
+        "result_fields"
+    ]
+    assert "context_menu" in payload["actions"]["right-click-role"][
+        "result_fields"
+    ]
     assert "steps" in payload["top_level"]["required_fields"]
     assert "session.create" in payload["top_level"]["target_options"]
     assert payload["workflow"]["validate"] == (
@@ -2617,12 +2751,14 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 16,
+        "action_count": 20,
         "supported_actions": [
             "accessibility-snapshot",
             "click",
             "click-role",
             "click-text",
+            "double-click",
+            "double-click-role",
             "eval",
             "fill-label",
             "fill-role",
@@ -2630,6 +2766,8 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "get-value-role",
             "interactive-snapshot",
             "open-url",
+            "right-click",
+            "right-click-role",
             "screenshot",
             "snapshot",
             "type",
@@ -3472,6 +3610,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "interactive_targeting",
         "link_navigation",
         "menu_keyboard_flow",
+        "mouse_interaction",
         "navigation_flow",
         "one_off_page_task",
         "page_diagnostics",
@@ -3638,7 +3777,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 22
+    assert checks["command_catalog"]["workflow_count"] == 23
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -3656,6 +3795,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "file_upload",
         "dialog_frame_handling",
         "interactive_targeting",
+        "mouse_interaction",
         "visual_capture",
         "semantic_waits",
         "menu_keyboard_flow",
@@ -3803,6 +3943,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "activate_target",
         "verify_after_click",
     ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "mouse_interaction"
+    ] == [
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "choose_mouse_action",
+        "run_mouse_action",
+        "verify_result",
+    ]
     assert checks["command_catalog"]["required_workflow_steps"]["visual_capture"] == [
         "inspect_action_guide",
         "inspect_page_context",
@@ -3901,6 +4050,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.click-text",
         "action.click-role",
         "action.click-index",
+        "action.double-click",
+        "action.double-click-role",
+        "action.right-click",
+        "action.right-click-role",
         "action.focus",
         "action.focus-role",
         "action.fill-label",
@@ -4043,6 +4196,10 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.press-key" in catalog["missing_required_commands"]
     assert "action.hover-role" in catalog["missing_required_commands"]
     assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
+    assert "action.double-click" in catalog["missing_required_commands"]
+    assert "action.double-click-role" in catalog["missing_required_commands"]
+    assert "action.right-click" in catalog["missing_required_commands"]
+    assert "action.right-click-role" in catalog["missing_required_commands"]
     for command_name in (
         "action.reload",
         "action.go-back",
@@ -4140,6 +4297,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "file_upload",
         "dialog_frame_handling",
         "interactive_targeting",
+        "mouse_interaction",
         "visual_capture",
         "semantic_waits",
         "menu_keyboard_flow",
@@ -4437,6 +4595,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "verify_after_click"},
                     ],
                 },
+                "mouse_interaction": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_interactive_targets"},
+                        {"id": "choose_mouse_action"},
+                        {"id": "run_mouse_action"},
+                    ],
+                },
                 "visual_capture": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -4519,6 +4685,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
         "dialog_frame_handling": ["verify_result"],
+        "mouse_interaction": ["verify_result"],
         "visual_capture": ["verify_capture_artifact"],
         "semantic_waits": ["verify_observed_state"],
         "menu_keyboard_flow": ["verify_result"],
@@ -9122,6 +9289,144 @@ def test_action_set_file_input_missing_file_is_json(
         (
             [
                 "action",
+                "double-click",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".row",
+            ],
+            "action.double-click",
+            {
+                "selector": ".row",
+                "found": True,
+                "double_clicked": True,
+                "context_menu": False,
+                "events": [
+                    "mousedown",
+                    "mouseup",
+                    "click",
+                    "mousedown",
+                    "mouseup",
+                    "click",
+                    "dblclick",
+                ],
+            },
+            {
+                "selector": ".row",
+                "found": True,
+                "double_clicked": True,
+                "context_menu": False,
+                "events": [
+                    "mousedown",
+                    "mouseup",
+                    "click",
+                    "mousedown",
+                    "mouseup",
+                    "click",
+                    "dblclick",
+                ],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "double-click-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Edit",
+            ],
+            "action.double-click-role",
+            {
+                "role": "button",
+                "name": "Edit",
+                "found": True,
+                "role_found": True,
+                "double_clicked": True,
+                "candidate_count": 1,
+                "events": ["mousedown", "mouseup", "click", "dblclick"],
+            },
+            {
+                "role": "button",
+                "name": "Edit",
+                "found": True,
+                "role_found": True,
+                "double_clicked": True,
+                "candidate_count": 1,
+                "events": ["mousedown", "mouseup", "click", "dblclick"],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "right-click",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".row",
+            ],
+            "action.right-click",
+            {
+                "selector": ".row",
+                "found": True,
+                "right_clicked": True,
+                "context_menu": True,
+                "events": ["mousedown", "mouseup", "contextmenu"],
+            },
+            {
+                "selector": ".row",
+                "found": True,
+                "right_clicked": True,
+                "context_menu": True,
+                "events": ["mousedown", "mouseup", "contextmenu"],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "right-click-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "row",
+                "--name",
+                "Invoice 123",
+            ],
+            "action.right-click-role",
+            {
+                "role": "row",
+                "name": "Invoice 123",
+                "found": True,
+                "role_found": True,
+                "right_clicked": True,
+                "context_menu": True,
+                "candidate_count": 1,
+                "events": ["mousedown", "mouseup", "contextmenu"],
+            },
+            {
+                "role": "row",
+                "name": "Invoice 123",
+                "found": True,
+                "role_found": True,
+                "right_clicked": True,
+                "context_menu": True,
+                "candidate_count": 1,
+                "events": ["mousedown", "mouseup", "contextmenu"],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
                 "press",
                 "--session-id",
                 "s1",
@@ -9252,6 +9557,12 @@ def test_eval_backed_action_commands_emit_structured_results(
     assert observed["connect_url"] == connect_url
     assert observed["action"] == "eval"
     assert observed["expression"].startswith("() =>")
+    if command in {"action.double-click", "action.double-click-role"}:
+        assert '"double-click"' in observed["expression"]
+        assert "dblclick" in observed["expression"]
+    if command in {"action.right-click", "action.right-click-role"}:
+        assert '"right-click"' in observed["expression"]
+        assert "contextmenu" in observed["expression"]
     payload = json.loads(capsys.readouterr().out)
     assert payload == {
         "ok": True,

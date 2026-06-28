@@ -192,6 +192,9 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`go-back`" in text
     assert "`go-forward`" in text
     assert "`menu_keyboard_flow`" in text
+    assert "`mouse_interaction`" in text
+    assert "`double-click-role`" in text
+    assert "`right-click-role`" in text
     assert "`press-key`" in text
     assert "`state_waits`" in text
     assert "`wait-network`" in text

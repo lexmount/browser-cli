@@ -114,6 +114,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow visual_capture" in normalized
     assert "browser-cli commands --workflow semantic_waits" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
+    assert "browser-cli commands --workflow mouse_interaction" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task <task>" in normalized
@@ -129,6 +130,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli action guide --task visual_capture" in normalized
     assert "browser-cli action guide --task semantic_waits" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
+    assert "browser-cli action guide --task mouse_interaction" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
     assert "browser-cli commands --names-only" in normalized
@@ -310,10 +312,17 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
         "`verify_commands`, and `custom_js_boundary`" in normalized
     )
     assert "then follow workflow `read` fields for `form-snapshot`" in normalized
-    assert "For visible buttons, links, menus, and repeated controls" in normalized
+    assert (
+        "For visible buttons, links, menus, double-clicks, right-click context menus,"
+        in normalized
+    )
     assert "browser-cli commands --workflow interactive_targeting" in normalized
-    assert "Read `selection_order`" in normalized
-    assert "choose `click-role`, `click-text`, or `click-index`" in normalized
+    assert "for mouse gestures use `mouse_interaction`" in normalized
+    assert (
+        "`double-click-role`, `right-click-role`, `double-click`, or `right-click`"
+        in normalized
+    )
+    assert "choose semantic actions before selectors" in normalized
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
@@ -340,6 +349,8 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "`wait-role`" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
+    assert "browser-cli commands --workflow mouse_interaction" in normalized
+    assert "browser-cli action guide --task mouse_interaction" in normalized
     assert "deterministic state transitions" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
@@ -608,6 +619,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli commands --workflow visual_capture" in normalized
     assert "browser-cli commands --workflow semantic_waits" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
+    assert "browser-cli commands --workflow mouse_interaction" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli action guide --task form_interaction" in normalized
@@ -621,6 +633,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli action guide --task visual_capture" in normalized
     assert "browser-cli action guide --task semantic_waits" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
+    assert "browser-cli action guide --task mouse_interaction" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
     assert "Extract page content or data" in normalized
@@ -648,6 +661,12 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Menus and keyboard flows" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
+    assert "Mouse gestures" in normalized
+    assert "browser-cli commands --workflow mouse_interaction" in normalized
+    assert "browser-cli action guide --task mouse_interaction" in normalized
+    assert "`double-click-role`" in normalized
+    assert "`right-click-role`" in normalized
+    assert "`context_menu`" in normalized
     assert "Wait for deterministic state" in normalized
     assert "`wait-storage`" in normalized
     assert "run `form-snapshot` or `interactive-snapshot`" in normalized
