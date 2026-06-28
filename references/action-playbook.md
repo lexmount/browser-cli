@@ -50,7 +50,9 @@ browser-cli action wait-title --session-id <session_id> --title Dashboard --matc
 browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action get-text --session-id <session_id> --selector "main"
+browser-cli action get-text-role --session-id <session_id> --role heading --name "Welcome"
 browser-cli action exists --session-id <session_id> --selector "button"
+browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
 browser-cli action count --session-id <session_id> --selector ".item"
 browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
 browser-cli action wait-state --session-id <session_id> --selector "button" --state enabled
@@ -79,6 +81,7 @@ browser-cli action scroll --session-id <session_id> --y 600
 browser-cli action scroll-into-view --session-id <session_id> --selector "button"
 browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
 browser-cli action bounding-box --session-id <session_id> --selector "button"
+browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
 browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
@@ -142,14 +145,14 @@ browser-cli action wait-cookie --session-id <session_id> --name consent --value 
 
 Prefer built-in actions over writing custom JavaScript. `page-info`, `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-title`, `wait-load-state`,
-`wait-network-idle`, `get-text`, `exists`, `count`, `query`, `inspect`,
+`wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`, `inspect`,
 `get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`,
 `wait-role`, `focus`, `focus-role`, `get-value`, `get-value-role`, `wait-value`,
 `wait-value-role`, `blur`, `blur-role`, `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
 `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `clear`, `clear-role`,
 `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
-`scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `select-option`, `select-label`, `select-role`, `check`,
+`scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `select-option`, `select-label`, `select-role`, `check`,
 `uncheck`, `check-label`, `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, and `press-key`
 plus `click-text`, `click-role`, `click-index`, `fill-label`, `fill-role`, `link-snapshot`,
 `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
@@ -219,9 +222,11 @@ console/page error entries and the reported page URL.
    `dialog-snapshot` for modals, alert dialogs, cookie banners, and
    confirmation prompts; use `wait-frame` or `frame-snapshot` before
    frame-related JavaScript or when content appears embedded.
-2. Prefer semantic actions: `wait-role` for async roles/names, `click-role` for
-   known roles/names, `click-text` for visible text, `click-index` for a chosen
-   repeated selector match, `link-snapshot` for choosing or reporting navigation
+2. Prefer semantic actions: `wait-role` for async roles/names,
+   `exists-role`, `get-text-role`, and `bounding-box-role` for semantic
+   existence, text, or geometry checks, `click-role` for known roles/names,
+   `click-text` for visible text, `click-index` for a chosen repeated selector
+   match, `link-snapshot` for choosing or reporting navigation
    URLs, `list-snapshot` for reading list/menu item state, `fill-label` for
    labeled text fields, `fill-role` for writable role/name fields,
    `focus-role`, `blur-role`, and `clear-role` for role/name form controls,
@@ -276,7 +281,9 @@ console/page error entries and the reported page URL.
    control appears asynchronously, use `link-snapshot` when the task is to
    choose, inspect, or report navigation URLs, use `list-snapshot` before
    choosing from menus, listboxes, task lists, or search results, prefer
-   `click-role`, then `click-text`, then `scroll-into-view` and selector
+   `click-role`, then `click-text`, then `scroll-into-view`; use
+   `exists-role`, `get-text-role`, or `bounding-box-role` before activating
+   when role/name evidence needs confirmation, and selector
    `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
    selector. For repeated matches, run `query` and then `click-index --index
    <n>`.
@@ -315,7 +322,8 @@ console/page error entries and the reported page URL.
    readable text, `table-snapshot` for HTML or ARIA table/report data,
    `outline-snapshot` for headings and landmarks, `wait-attribute` for DOM
    attributes, `wait-state` for enabled/visible/checked/focused states, and
-   `get-text` for a known selector. Use `snapshot` when the page structure or
+   `get-text-role` for semantic text checks, and `get-text` for a known
+   selector. Use `snapshot` when the page structure or
    selector is unknown; use `wait-text` or `wait-role` before reading dynamic
    results, and use `wait-text --state absent` when loading, toast, or error
    text should disappear.

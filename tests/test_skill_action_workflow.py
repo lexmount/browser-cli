@@ -61,6 +61,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "For runtime errors, run `console-snapshot --install-only`" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
+    assert "`exists-role`, `get-text-role`, and `bounding-box-role`" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
     assert "`click-index` for a chosen repeated selector match" in normalized
@@ -293,8 +294,10 @@ def test_skill_lists_selector_and_input_actions() -> None:
 
     for action in (
         "`exists`",
+        "`exists-role`",
         "`page-info`",
         "`get-text`",
+        "`get-text-role`",
         "`count`",
         "`wait-count`",
         "`wait-state`",
@@ -337,6 +340,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`scroll-into-view`",
         "`scroll-into-view-role`",
         "`bounding-box`",
+        "`bounding-box-role`",
         "`select-option`",
         "`select-label`",
         "`select-role`",
@@ -558,6 +562,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert (
         "prefer `click-role`, then `click-text`, then `scroll-into-view`" in normalized
     )
+    assert "use `exists-role`, `get-text-role`, or `bounding-box-role`" in normalized
     assert "after `exists`, `inspect`, or `bounding-box`" in normalized
     assert "For repeated matches, run `query` and then" in normalized
     assert "`click-index --index <n>`" in normalized
@@ -606,6 +611,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`wait-title` for async title changes" in normalized
     assert "`wait-count` for dynamic lists" in normalized
     assert "`wait-state` for enabled/visible/checked/focused states" in normalized
+    assert "`get-text-role` for semantic text checks" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` or `wait-role` before reading dynamic results" in normalized
     assert (

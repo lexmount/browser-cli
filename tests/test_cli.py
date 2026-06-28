@@ -561,6 +561,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.truncated" in targeting_steps[2]["read"]
     assert targeting_steps[3]["agent_action"] is True
     assert targeting_steps[3]["selection_order"] == [
+        "exists-role",
+        "get-text-role",
+        "bounding-box-role",
         "click-role",
         "hover-role",
         "press-role",
@@ -569,17 +572,31 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "click-index",
     ]
     assert (
-        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][1]
+        "browser-cli action exists-role" in targeting_steps[3]["preferred_commands"][0]
     )
     assert (
-        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][2]
+        "browser-cli action get-text-role"
+        in targeting_steps[3]["preferred_commands"][1]
+    )
+    assert (
+        "browser-cli action bounding-box-role"
+        in targeting_steps[3]["preferred_commands"][2]
+    )
+    assert (
+        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][4]
+    )
+    assert (
+        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][5]
     )
     assert (
         "browser-cli action scroll-into-view-role"
-        in targeting_steps[3]["preferred_commands"][3]
+        in targeting_steps[3]["preferred_commands"][6]
     )
     assert "result.element" in targeting_steps[4]["read"]
-    assert "browser-cli action wait-text" in targeting_steps[4]["fallback_commands"][0]
+    assert (
+        "browser-cli action exists-role" in targeting_steps[4]["fallback_commands"][0]
+    )
+    assert "browser-cli action wait-text" in targeting_steps[4]["fallback_commands"][1]
     assert "result.clicked" in targeting_steps[5]["read"]
     assert "result.hovered" in targeting_steps[5]["read"]
     assert "result.pressed" in targeting_steps[5]["read"]
@@ -633,6 +650,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.page-info",
         "action.wait-title",
         "action.press-key",
+        "action.get-text-role",
+        "action.exists-role",
+        "action.bounding-box-role",
         "action.click-role",
         "action.focus-role",
         "action.hover-role",
@@ -677,6 +697,24 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert action_guide["required_options"] == []
     assert action_guide["required_one_of"] == []
     assert any("--task" in option["flags"] for option in action_guide["options"])
+    get_text_role = commands["action.get-text-role"]
+    assert get_text_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in get_text_role["options"])
+    assert any(
+        "--include-hidden" in option["flags"] for option in get_text_role["options"]
+    )
+    exists_role = commands["action.exists-role"]
+    assert exists_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in exists_role["options"])
+    assert any(
+        "--include-hidden" in option["flags"] for option in exists_role["options"]
+    )
+    bounding_box_role = commands["action.bounding-box-role"]
+    assert bounding_box_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in bounding_box_role["options"])
+    assert any(
+        "--include-hidden" in option["flags"] for option in bounding_box_role["options"]
+    )
     fill_role = commands["action.fill-role"]
     assert "--role" in fill_role["required_options"]
     assert "--text" in fill_role["required_options"]
@@ -798,8 +836,19 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "accessibility-snapshot",
         "wait-role",
     ]
+    assert guide["selection_order"][3:6] == [
+        "exists-role",
+        "get-text-role",
+        "bounding-box-role",
+    ]
     assert "browser-cli action accessibility-snapshot" in guide["inspect_commands"][1]
-    assert "browser-cli action click-role" in guide["preferred_commands"][1]
+    assert "browser-cli action exists-role" in guide["preferred_commands"][1]
+    assert "browser-cli action get-text-role" in guide["preferred_commands"][2]
+    assert "browser-cli action bounding-box-role" in guide["preferred_commands"][3]
+    assert any(
+        "browser-cli action click-role" in command
+        for command in guide["preferred_commands"]
+    )
     assert any(
         "browser-cli action hover-role" in command
         for command in guide["preferred_commands"]
@@ -818,6 +867,9 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert "browser-cli action wait-url" in guide["verify_commands"][0]
     assert "result.nodes" in guide["read_fields"]
+    assert "result.exists" in guide["read_fields"]
+    assert "result.text" in guide["read_fields"]
+    assert "result.bounding_box" in guide["read_fields"]
     assert "action eval only after" in guide["custom_js_boundary"]
     assert payload["next_commands"] == [
         "browser-cli commands --workflow interactive_targeting"
@@ -1668,6 +1720,9 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert steps[2]["optional"] is True
     assert steps[3]["agent_action"] is True
     assert steps[3]["selection_order"] == [
+        "exists-role",
+        "get-text-role",
+        "bounding-box-role",
         "click-role",
         "hover-role",
         "press-role",
@@ -1675,8 +1730,11 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
         "click-text",
         "click-index",
     ]
-    assert "browser-cli action click-role" in steps[3]["preferred_commands"][0]
-    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][1]
+    assert "browser-cli action exists-role" in steps[3]["preferred_commands"][0]
+    assert "browser-cli action get-text-role" in steps[3]["preferred_commands"][1]
+    assert "browser-cli action bounding-box-role" in steps[3]["preferred_commands"][2]
+    assert "browser-cli action click-role" in steps[3]["preferred_commands"][3]
+    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][4]
     assert "browser-cli action click-text" in steps[5]["alternative_commands"][3]
     assert steps[-1]["id"] == "verify_after_click"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
@@ -2010,7 +2068,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.scroll",
         "action.scroll-into-view-role",
         "action.get-text",
+        "action.get-text-role",
         "action.exists",
+        "action.exists-role",
+        "action.bounding-box-role",
         "action.select-option",
         "action.select-role",
         "action.check",
@@ -2136,6 +2197,9 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.hover-role" in catalog["missing_required_commands"]
     assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
+    assert "action.get-text-role" in catalog["missing_required_commands"]
+    assert "action.exists-role" in catalog["missing_required_commands"]
+    assert "action.bounding-box-role" in catalog["missing_required_commands"]
     assert "action.select-role" in catalog["missing_required_commands"]
     assert "action.check-role" in catalog["missing_required_commands"]
     assert "action.uncheck-role" in catalog["missing_required_commands"]
@@ -2863,7 +2927,7 @@ def test_doctor_skip_api_does_not_call_admin(
     assert payload["skipped_checks"] == ["api_connectivity"]
     assert payload["repair_plan"]["required"] is False
     assert payload["repair_plan"]["recommended"] is True
-    assert payload["repair_plan"]["commands"] == ["browser-cli doctor"]
+    assert "browser-cli doctor" in payload["repair_plan"]["commands"]
     assert checks["direct_url"]["status"] == "pass"
     assert checks["api_connectivity"]["status"] == "skipped"
     assert checks["api_connectivity"]["fix"] == {
@@ -5553,12 +5617,81 @@ def test_action_set_file_input_missing_file_is_json(
             },
         ),
         (
+            [
+                "action",
+                "get-text-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "heading",
+                "--name",
+                "Welcome",
+            ],
+            "action.get-text-role",
+            {
+                "role": "heading",
+                "name": "Welcome",
+                "found": True,
+                "role_found": True,
+                "include_hidden": False,
+                "text": "Welcome",
+                "text_length": 7,
+                "candidate_count": 1,
+            },
+            {
+                "role": "heading",
+                "name": "Welcome",
+                "found": True,
+                "role_found": True,
+                "include_hidden": False,
+                "text": "Welcome",
+                "text_length": 7,
+                "candidate_count": 1,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
             ["action", "exists", "--session-id", "s1", "--selector", "#missing"],
             "action.exists",
             {"selector": "#missing", "exists": False},
             {
                 "selector": "#missing",
                 "exists": False,
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "exists-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "alert",
+                "--name",
+                "Saved",
+                "--include-hidden",
+            ],
+            "action.exists-role",
+            {
+                "role": "alert",
+                "name": "Saved",
+                "exists": True,
+                "found": True,
+                "role_found": True,
+                "include_hidden": True,
+                "candidate_count": 1,
+            },
+            {
+                "role": "alert",
+                "name": "Saved",
+                "exists": True,
+                "found": True,
+                "role_found": True,
+                "include_hidden": True,
+                "candidate_count": 1,
                 "url": "https://example.test",
                 "fallback": "cdp",
             },
@@ -5712,6 +5845,63 @@ def test_action_set_file_input_missing_file_is_json(
                     "height": 40,
                 },
                 "center": {"x": 60, "y": 40},
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "bounding-box-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+            ],
+            "action.bounding-box-role",
+            {
+                "role": "button",
+                "name": "Submit",
+                "found": True,
+                "role_found": True,
+                "include_hidden": False,
+                "visible": True,
+                "in_viewport": True,
+                "bounding_box": {
+                    "x": 10,
+                    "y": 20,
+                    "top": 20,
+                    "right": 110,
+                    "bottom": 60,
+                    "left": 10,
+                    "width": 100,
+                    "height": 40,
+                },
+                "center": {"x": 60, "y": 40},
+                "candidate_count": 1,
+            },
+            {
+                "role": "button",
+                "name": "Submit",
+                "found": True,
+                "role_found": True,
+                "include_hidden": False,
+                "visible": True,
+                "in_viewport": True,
+                "bounding_box": {
+                    "x": 10,
+                    "y": 20,
+                    "top": 20,
+                    "right": 110,
+                    "bottom": 60,
+                    "left": 10,
+                    "width": 100,
+                    "height": 40,
+                },
+                "center": {"x": 60, "y": 40},
+                "candidate_count": 1,
                 "url": "https://example.test",
                 "fallback": "cdp",
             },

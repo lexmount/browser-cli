@@ -114,8 +114,9 @@ inspection, optional `case scaffold` generation, case validation, and
 and `steps` fields for repeatable smoke tests or regressions.
 The interactive targeting workflow exposes `selection_order`,
 `preferred_commands`, and `alternative_commands` so agents can choose
-`click-role`, `click-text`, or `click-index` from snapshot evidence instead of
-writing JavaScript.
+`exists-role`, `get-text-role`, `bounding-box-role`, `click-role`,
+`click-text`, or `click-index` from snapshot evidence instead of writing
+JavaScript.
 The form interaction workflow exposes form snapshots, labeled and role/name
 fill steps, role/name value read/wait verification, labeled select/check steps,
 submit readiness, and verification fields so agents can complete forms without
@@ -248,7 +249,8 @@ Default behavior:
   required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, press-role,
   hover, hover-role, scroll, scroll-into-view-role,
-  get-text, exists, select-option, select-role, check, uncheck, check-role,
+  get-text, get-text-role, exists, exists-role, bounding-box-role,
+  select-option, select-role, check, uncheck, check-role,
   uncheck-role, click-text, click-role,
   focus-role, fill-label, fill-role, get-value-role, wait-value-role,
   blur-role, clear-role,

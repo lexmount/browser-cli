@@ -94,9 +94,12 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.snapshot",
     "action.page-info",
     "action.get-text",
+    "action.get-text-role",
     "action.exists",
+    "action.exists-role",
     "action.wait-state",
     "action.scroll",
+    "action.bounding-box-role",
     "action.select-option",
     "action.select-role",
     "action.check",
@@ -777,6 +780,9 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                 "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 'browser-cli action wait-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action exists-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action get-text-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action hover-role --session-id <session_id> --role button --name "Menu"',
                 'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
@@ -1314,6 +1320,9 @@ def _command_catalog() -> dict[str, Any]:
                         "command": "<choose one preferred command using role/name/text/selector evidence from prior steps>",
                         "agent_action": True,
                         "selection_order": [
+                            "exists-role",
+                            "get-text-role",
+                            "bounding-box-role",
                             "click-role",
                             "hover-role",
                             "press-role",
@@ -1322,6 +1331,9 @@ def _command_catalog() -> dict[str, Any]:
                             "click-index",
                         ],
                         "preferred_commands": [
+                            'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
@@ -1340,6 +1352,7 @@ def _command_catalog() -> dict[str, Any]:
                             "result.candidate_count",
                         ],
                         "fallback_commands": [
+                            'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action wait-text --session-id <session_id> --text "<visible text>"',
                             'browser-cli action exists --session-id <session_id> --selector "<selector>"',
                         ],
@@ -10223,6 +10236,172 @@ def _bounding_box_expression(selector: str) -> str:
 """.strip()
 
 
+def _get_text_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      include_hidden: includeHidden,
+      text: null,
+      text_length: 0,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const text = textOf(element);
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    include_hidden: includeHidden,
+    text,
+    text_length: text.length,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _exists_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      exists: false,
+      found: false,
+      role_found: false,
+      include_hidden: includeHidden,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    exists: true,
+    found: true,
+    role_found: true,
+    include_hidden: includeHidden,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _bounding_box_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    rect_object = _rect_object_expression("rect")
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      include_hidden: includeHidden,
+      visible: false,
+      in_viewport: false,
+      bounding_box: null,
+      center: null,
+      viewport: {{
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scroll_x: window.scrollX,
+        scroll_y: window.scrollY
+      }},
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const rect = element.getBoundingClientRect();
+  const center = {{
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  }};
+  const inViewport = rect.bottom >= 0 &&
+    rect.right >= 0 &&
+    rect.top <= window.innerHeight &&
+    rect.left <= window.innerWidth;
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    include_hidden: includeHidden,
+    visible: visible(element),
+    in_viewport: inViewport,
+    bounding_box: {rect_object},
+    center,
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _scroll_into_view_expression(
     *,
     selector: str,
@@ -10432,6 +10611,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "interactive-snapshot",
                 "accessibility-snapshot",
                 "wait-role",
+                "exists-role",
+                "get-text-role",
+                "bounding-box-role",
                 "click-role",
                 "hover-role",
                 "press-role",
@@ -10446,6 +10628,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "preferred_commands": [
                 'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
@@ -10454,6 +10639,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "fallback_commands": [
                 'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+                'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
+                'browser-cli action bounding-box --session-id <session_id> --selector "<selector>"',
                 'browser-cli action hover --session-id <session_id> --selector "<selector>"',
                 'browser-cli action press --session-id <session_id> --selector "<selector>" --key Enter',
                 'browser-cli action click --session-id <session_id> --selector "<selector>"',
@@ -10466,7 +10654,14 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "read_fields": [
                 "result.nodes",
                 "result.node_count",
+                "result.found",
+                "result.role_found",
+                "result.exists",
+                "result.text",
+                "result.text_length",
                 "result.element",
+                "result.bounding_box",
+                "result.visible",
                 "result.clicked",
                 "result.hovered",
                 "result.pressed",
@@ -10555,6 +10750,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "inspect_commands": [
                 "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action exists-role --session-id <session_id> --role button --name "<name>"',
                 "browser-cli action exists --session-id <session_id> --selector <selector>",
             ],
             "preferred_commands": [
@@ -10571,6 +10767,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "verify_commands": [
                 "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action exists-role --session-id <session_id> --role button --name "<name>"',
                 'browser-cli action exists --session-id <session_id> --selector "<selector>"',
             ],
             "read_fields": [
@@ -10578,6 +10775,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "url",
                 "title",
                 "result.found",
+                "result.exists",
+                "result.role_found",
                 "result.count",
                 "result.entry",
             ],
@@ -10826,6 +11025,20 @@ def cmd_action_get_text(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_get_text_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-text-role",
+        _get_text_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
 def cmd_action_exists(args: argparse.Namespace) -> None:
     selector = _js_literal(args.selector)
     _run_eval_backed_action_command(
@@ -10837,6 +11050,20 @@ def cmd_action_exists(args: argparse.Namespace) -> None:
   return {{ selector, exists: Boolean(document.querySelector(selector)) }};
 }}
 """.strip(),
+    )
+
+
+def cmd_action_exists_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.exists-role",
+        _exists_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
+        ),
     )
 
 
@@ -11338,6 +11565,20 @@ def cmd_action_bounding_box(args: argparse.Namespace) -> None:
         args,
         "action.bounding-box",
         _bounding_box_expression(args.selector),
+    )
+
+
+def cmd_action_bounding_box_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.bounding-box-role",
+        _bounding_box_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
+        ),
     )
 
 
@@ -14202,6 +14443,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_get_text.add_argument("--selector", required=True)
     action_get_text.set_defaults(func=cmd_action_get_text)
 
+    action_get_text_role = action_subparsers.add_parser(
+        "get-text-role",
+        help="Read text from an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_get_text_role)
+    action_get_text_role.add_argument("--role", required=True)
+    action_get_text_role.add_argument("--name")
+    action_get_text_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_get_text_role)
+    action_get_text_role.set_defaults(func=cmd_action_get_text_role)
+
     action_exists = action_subparsers.add_parser(
         "exists",
         help="Check whether a selector exists",
@@ -14209,6 +14465,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_exists)
     action_exists.add_argument("--selector", required=True)
     action_exists.set_defaults(func=cmd_action_exists)
+
+    action_exists_role = action_subparsers.add_parser(
+        "exists-role",
+        help="Check whether an element matched by role and optional accessible name exists",
+    )
+    _add_session_target_args(action_exists_role)
+    action_exists_role.add_argument("--role", required=True)
+    action_exists_role.add_argument("--name")
+    action_exists_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_exists_role)
+    action_exists_role.set_defaults(func=cmd_action_exists_role)
 
     action_count = action_subparsers.add_parser(
         "count",
@@ -14813,6 +15084,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_bounding_box)
     action_bounding_box.add_argument("--selector", required=True)
     action_bounding_box.set_defaults(func=cmd_action_bounding_box)
+
+    action_bounding_box_role = action_subparsers.add_parser(
+        "bounding-box-role",
+        help="Read geometry for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_bounding_box_role)
+    action_bounding_box_role.add_argument("--role", required=True)
+    action_bounding_box_role.add_argument("--name")
+    action_bounding_box_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_bounding_box_role)
+    action_bounding_box_role.set_defaults(func=cmd_action_bounding_box_role)
 
     action_scroll_into_view = action_subparsers.add_parser(
         "scroll-into-view",

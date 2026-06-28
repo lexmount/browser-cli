@@ -250,7 +250,8 @@ Follow the guide's `inspect_commands`, `preferred_commands`,
 fields for `form-snapshot`, `fill-label`, `fill-role`, `get-value-role`,
 `wait-value-role`, `focus-role`, `blur-role`, `clear-role`, `select-label`,
 `select-role`, `check-label`, `check-role`, `uncheck-role`, `wait-role`, `click-role`,
-`hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before falling back to custom
+`exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`,
+`scroll-into-view-role`, and verification steps before falling back to custom
 JavaScript.
 
 For visible buttons, links, menus, and repeated controls, prefer the interactive
@@ -262,9 +263,10 @@ browser-cli action guide --task interactive_targeting
 ```
 
 Read the guide's `selection_order`, then read `interactive-snapshot` and
-optional `accessibility-snapshot` fields. Choose `click-role`, `click-text`, or
-`click-index` from the preferred commands and verify with `page-info`,
-`wait-url`, or `wait-text`.
+optional `accessibility-snapshot` fields. Use `exists-role`, `get-text-role`,
+or `bounding-box-role` to confirm semantic targets when needed. Choose
+`click-role`, `click-text`, or `click-index` from the preferred commands and
+verify with `page-info`, `wait-url`, or `wait-text`.
 
 For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic
 workflow before writing custom probes:
@@ -420,8 +422,8 @@ Core action rules:
 - Inspect first with `snapshot`, `interactive-snapshot`, `accessibility-snapshot`,
   `form-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
   `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
-- Prefer semantic actions such as `wait-role`, `click-role`, `click-text`,
-  `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
+- Prefer semantic actions such as `wait-role`, `exists-role`, `get-text-role`,
+  `bounding-box-role`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
   `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`,
   `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
   and `scroll-into-view-role` before raw

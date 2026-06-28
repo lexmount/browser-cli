@@ -405,7 +405,9 @@ browser-cli action wait-title --session-id <session_id> --title Dashboard --matc
 browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
 browser-cli action get-text --session-id <session_id> --selector "main"
+browser-cli action get-text-role --session-id <session_id> --role heading --name "Welcome"
 browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
+browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
 browser-cli action count --session-id <session_id> --selector ".item"
 browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
 browser-cli action wait-state --session-id <session_id> --selector "button[type=submit]" --state enabled
@@ -444,6 +446,7 @@ browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
 browser-cli action scroll-into-view --session-id <session_id> --selector "button[type=submit]"
 browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
 browser-cli action bounding-box --session-id <session_id> --selector "button[type=submit]"
+browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"
 browser-cli action inspect --session-id <session_id> --selector "button[type=submit]"
 browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
@@ -490,12 +493,12 @@ selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
 `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
-`wait-load-state`, `wait-network-idle`, `get-text`, `exists`, `count`, `query`,
+`wait-load-state`, `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`,
 `get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `focus-role`,
 `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `blur-role`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
-`dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `inspect`,
+`dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `inspect`,
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
 `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-text`, `click-role`,
 `click-index`, `fill-label`, `fill-role`,
@@ -680,8 +683,9 @@ the Codex Skill and reports
 `missing_required_commands`, `missing_required_workflows`, or
 `missing_required_workflow_steps` with upgrade guidance when the action or
 workflow surface is too old or missing critical steps such as cleanup. That
-required surface includes selector actions, press/hover/scroll, get-text/exists,
-select/check/uncheck, role/text/label actions, accessibility snapshot, and
+required surface includes selector actions, role-based text/existence/geometry
+checks, press/hover/scroll, select/check/uncheck, role/text/label actions,
+accessibility snapshot, and
 interactive-only snapshot. It masks `api_key` in direct URLs and diagnostic
 error messages by default.
 `doctor --smoke-session` creates and closes a temporary session after API
@@ -745,7 +749,8 @@ Common agent recipes:
 - Visible button/link: run `browser-cli commands --workflow interactive_targeting`,
   use `interactive-snapshot` or `accessibility-snapshot` to choose the target,
   then `wait-role` when the control appears asynchronously,
-  then `click-role`, then `click-text`; run `link-snapshot` when the task is to
+  then use `exists-role`, `get-text-role`, or `bounding-box-role` to confirm
+  semantic existence, text, or geometry before `click-role` or `click-text`; run `link-snapshot` when the task is to
   choose, inspect, or report navigation URLs, then use `scroll-into-view` and
   selector `click` after `exists`, `inspect`, or `bounding-box` confirms a
   stable selector.
@@ -817,7 +822,8 @@ Common agent recipes:
   `text-snapshot` for visible paragraphs, alerts, status messages, and bounded
   readable page text,
   `wait-attribute` for DOM attributes, `wait-state` for
-  enabled/visible/checked/focused states, `get-text` for known selectors, or
+  enabled/visible/checked/focused states, `get-text-role` for semantic text
+  checks, `get-text` for known selectors, or
   `snapshot` when the selector is unknown. Use `wait-text --state absent` when
   loading, toast, or error text should disappear.
 - Browser state: use `storage-get` to inspect local/session storage, `storage-set`

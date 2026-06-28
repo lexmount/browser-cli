@@ -109,6 +109,9 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action blur-role" in text
     assert "browser-cli action interactive-snapshot" in text
     assert "browser-cli action accessibility-snapshot" in text
+    assert "browser-cli action exists-role" in text
+    assert "browser-cli action get-text-role" in text
+    assert "browser-cli action bounding-box-role" in text
     assert "browser-cli action hover-role" in text
     assert "browser-cli action press-role" in text
     assert "browser-cli action scroll-into-view-role" in text
