@@ -302,6 +302,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli case scaffold --template form-fill --output form-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id form_fill_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli auth login --device-code"
         in payload["agent_entrypoints"]["device_code_auth"]
     )
@@ -476,7 +484,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert [step["id"] for step in case_steps] == [
         "inspect_case_commands",
         "inspect_case_schema",
+        "inspect_semantic_case_action",
+        "inspect_form_case_example",
         "scaffold_case_file",
+        "scaffold_form_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -486,20 +497,32 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "supported_actions" in case_steps[1]["read"]
     assert "required_fields" in case_steps[1]["read"]
     assert "top_level" in case_steps[1]["read"]
-    assert case_steps[2]["command"] == (
+    assert case_steps[2]["command"] == "browser-cli case schema --action fill-label"
+    assert "action_schema.result_fields" in case_steps[2]["read"]
+    assert case_steps[3]["command"] == (
+        "browser-cli example get --id form_fill_case --metadata-only"
+    )
+    assert "example.grep_patterns" in case_steps[3]["read"]
+    assert case_steps[4]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert case_steps[2]["optional"] is True
-    assert case_steps[2]["success_condition"] == "valid=true and wrote_file=true"
-    assert "next_commands" in case_steps[2]["read"]
-    assert case_steps[3]["command"] == "browser-cli case validate --file <case.yaml>"
-    assert case_steps[3]["success_condition"] == "valid=true"
-    assert "errors" in case_steps[3]["read"]
-    assert case_steps[4]["command"] == (
+    assert case_steps[4]["optional"] is True
+    assert case_steps[4]["success_condition"] == "valid=true and wrote_file=true"
+    assert "next_commands" in case_steps[4]["read"]
+    assert case_steps[5]["command"] == (
+        "browser-cli case scaffold --template form-fill --output form-case.yaml"
+    )
+    assert case_steps[5]["optional"] is True
+    assert "case.steps" in case_steps[5]["read"]
+    assert "supported_actions" in case_steps[5]["read"]
+    assert case_steps[6]["command"] == "browser-cli case validate --file <case.yaml>"
+    assert case_steps[6]["success_condition"] == "valid=true"
+    assert "errors" in case_steps[6]["read"]
+    assert case_steps[7]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "events_path" in case_steps[4]["read"]
-    assert "message" in case_steps[4]["on_failure_read"]
+    assert "events_path" in case_steps[7]["read"]
+    assert "message" in case_steps[7]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
     assert "availability" in context_steps[0]["read"]
     assert "reusable" in context_steps[0]["read"]
@@ -1147,7 +1170,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "events_path"
-        in payload["agent_workflows"]["case_file_task"]["steps"][4]["read"]
+        in payload["agent_workflows"]["case_file_task"]["steps"][7]["read"]
     )
     assert (
         "selection_summary.recommended_next_action"
@@ -1866,7 +1889,10 @@ def test_commands_catalog_returns_case_file_task_workflow(
     assert [step["id"] for step in steps] == [
         "inspect_case_commands",
         "inspect_case_schema",
+        "inspect_semantic_case_action",
+        "inspect_form_case_example",
         "scaffold_case_file",
+        "scaffold_form_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -1875,21 +1901,44 @@ def test_commands_catalog_returns_case_file_task_workflow(
     assert steps[1]["command"] == "browser-cli case schema"
     assert "supported_actions" in steps[1]["read"]
     assert "actions" in steps[1]["read"]
-    assert steps[2]["command"] == (
+    assert steps[2]["command"] == "browser-cli case schema --action fill-label"
+    assert "action_schema.example_step" in steps[2]["read"]
+    assert steps[3]["command"] == (
+        "browser-cli example get --id form_fill_case --metadata-only"
+    )
+    assert "example.content_command" in steps[3]["read"]
+    assert steps[4]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert steps[2]["optional"] is True
-    assert "next_commands" in steps[2]["read"]
-    assert steps[3]["success_condition"] == "valid=true"
-    assert "step_count" in steps[3]["read"]
-    assert steps[4]["command"] == (
+    assert steps[4]["optional"] is True
+    assert "next_commands" in steps[4]["read"]
+    assert steps[5]["command"] == (
+        "browser-cli case scaffold --template form-fill --output form-case.yaml"
+    )
+    assert steps[5]["optional"] is True
+    assert "case.steps" in steps[5]["read"]
+    assert steps[6]["success_condition"] == "valid=true"
+    assert "step_count" in steps[6]["read"]
+    assert steps[7]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "artifacts_dir" in steps[4]["read"]
-    assert "steps" in steps[4]["on_failure_read"]
+    assert "artifacts_dir" in steps[7]["read"]
+    assert "steps" in steps[7]["on_failure_read"]
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
+        "browser-cli case schema --action fill-label"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id form_fill_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template form-fill --output form-case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
@@ -2276,7 +2325,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["required_workflow_steps"]["case_file_task"] == [
         "inspect_case_commands",
         "inspect_case_schema",
+        "inspect_semantic_case_action",
+        "inspect_form_case_example",
         "scaffold_case_file",
+        "scaffold_form_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -2781,7 +2833,12 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
     assert catalog["missing_required_commands"] == []
     assert catalog["missing_required_workflows"] == []
     assert catalog["missing_required_workflow_steps"] == {
-        "one_off_page_task": ["close_session"]
+        "case_file_task": [
+            "inspect_semantic_case_action",
+            "inspect_form_case_example",
+            "scaffold_form_case_file",
+        ],
+        "one_off_page_task": ["close_session"],
     }
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands" in payload["repair_plan"]["commands"]

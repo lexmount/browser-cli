@@ -217,7 +217,10 @@ Use case files when the task is repeatable or should leave artifacts:
 ```bash
 browser-cli commands --workflow case_file_task
 browser-cli case schema
+browser-cli case schema --action fill-label
+browser-cli example get --id form_fill_case --metadata-only
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case validate --file examples/cases/page-inspection.yaml
 browser-cli case run --file examples/cases/page-inspection.yaml --close-created-session
 ```

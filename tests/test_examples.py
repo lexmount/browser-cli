@@ -53,7 +53,10 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow session_recovery" in text
     assert "browser-cli commands --workflow case_file_task" in text
     assert "browser-cli case schema" in text
+    assert "browser-cli case schema --action fill-label" in text
+    assert "browser-cli example get --id form_fill_case --metadata-only" in text
     assert "browser-cli case scaffold --template page-inspection" in text
+    assert "browser-cli case scaffold --template form-fill" in text
     assert "browser-cli commands --workflow one_off_page_task" in text
     assert "browser-cli commands --workflow persistent_login_state" in text
     assert "browser-cli commands --workflow form_interaction" in text

@@ -234,8 +234,8 @@ browser-cli commands --workflow case_file_task
 ```
 
 Run `browser-cli case schema` before hand-writing a case file. Generate a
-starter case with `browser-cli case scaffold --template page-inspection --url <url> --output case.yaml`
-when no case file exists. Validate first, then run with
+starter with `browser-cli case scaffold --template page-inspection` for page checks or
+`browser-cli case scaffold --template form-fill` for semantic form smoke tests. Validate first, then run with
 `--close-created-session`. Read `supported_actions`, `required_fields`,
 semantic case actions such as `fill-label`, `click-role`, `wait-text`, and
 `accessibility-snapshot`, plus `valid`, `errors`, `step_count`,

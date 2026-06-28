@@ -231,7 +231,10 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "case_file_task": (
         "inspect_case_commands",
         "inspect_case_schema",
+        "inspect_semantic_case_action",
+        "inspect_form_case_example",
         "scaffold_case_file",
+        "scaffold_form_case_file",
         "validate_case_file",
         "run_case_file",
     ),
@@ -790,7 +793,10 @@ def _command_catalog() -> dict[str, Any]:
             "case_file_task": [
                 "browser-cli commands --group case",
                 "browser-cli case schema",
+                "browser-cli case schema --action fill-label",
+                "browser-cli example get --id form_fill_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+                "browser-cli case scaffold --template form-fill --output form-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
@@ -1286,6 +1292,26 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_semantic_case_action",
+                        "command": "browser-cli case schema --action fill-label",
+                        "read": [
+                            "action_schema.required_fields",
+                            "action_schema.optional_fields",
+                            "action_schema.result_fields",
+                            "action_schema.example_step",
+                        ],
+                    },
+                    {
+                        "id": "inspect_form_case_example",
+                        "command": "browser-cli example get --id form_fill_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "scaffold_case_file",
                         "command": "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                         "optional": True,
@@ -1293,6 +1319,21 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "template",
                             "output",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_form_case_file",
+                        "command": "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
                             "valid",
                             "errors",
                             "step_count",
