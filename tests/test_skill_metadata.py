@@ -41,6 +41,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "doctor --json" in prompt
     assert "commands" in prompt
     assert "commands --workflow" in prompt
+    assert "scoped_token_lifecycle" in prompt
     assert "form_interaction" in prompt
     assert "interactive_targeting" in prompt
     assert "page_diagnostics" in prompt

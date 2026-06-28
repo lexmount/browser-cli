@@ -46,6 +46,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflows-only" in normalized
     assert "browser-cli commands --workflow setup_and_verify" in normalized
     assert "browser-cli commands --workflow connect_from_codex_auth" in normalized
+    assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
@@ -110,6 +111,12 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`refresh_available`, `refreshed`, and `reason`" in normalized
     assert "Use `auth logout --credentials-file <path>`" in normalized
     assert "`--revoke` only reports remote revoke pending" in normalized
+    assert "For scoped token checks, refresh, or local logout" in normalized
+    assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
+    assert (
+        "`refresh_available`, `refreshed`, `revoke_available`, and `warnings`"
+        in normalized
+    )
     assert "`device_token.valid`, `device_token.expired`" in normalized
     assert "and `scope_check`" in normalized
     assert "`refresh_needed`, `has_refresh_token`" in normalized

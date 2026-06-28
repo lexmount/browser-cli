@@ -250,6 +250,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["one_off_page_task"]
     )
     assert (
+        "browser-cli auth token-info --required-scope browser.actions:run"
+        in payload["agent_entrypoints"]["scoped_token_lifecycle"]
+    )
+    assert (
         "browser-cli context pick"
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
@@ -284,6 +288,29 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "usable" in auth_steps[2]["read"]
     assert "unusable_exports" in auth_steps[2]["read"]
     assert auth_steps[2]["local_shell_only"] is True
+    token_steps = workflows["scoped_token_lifecycle"]["steps"]
+    assert [step["id"] for step in token_steps] == [
+        "status_scoped_token",
+        "inspect_required_scopes",
+        "refresh_if_needed",
+        "verify_browser_readiness",
+        "logout_or_revoke_when_requested",
+    ]
+    assert token_steps[0]["command"] == "browser-cli auth status"
+    assert "device_token.refresh_needed" in token_steps[0]["read"]
+    assert token_steps[1]["command"] == (
+        "browser-cli auth token-info --required-scope browser.actions:run"
+    )
+    assert "scope_check.satisfied" in token_steps[1]["read"]
+    assert "scope_check.missing_scopes" in token_steps[1]["read"]
+    assert token_steps[2]["optional"] is True
+    assert "refresh_available" in token_steps[2]["read"]
+    assert "browser-cli auth login" in token_steps[2]["fallback_commands"]
+    assert token_steps[3]["command"] == "browser-cli doctor --json"
+    assert "repair_plan.connect_from_codex.url" in token_steps[3]["on_failure_read"]
+    assert token_steps[4]["optional"] is True
+    assert token_steps[4]["user_requested_only"] is True
+    assert "revoke_available" in token_steps[4]["read"]
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
     assert "result.nodes" in one_off_steps[3]["read"]
@@ -457,7 +484,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 7
+    assert payload["workflow_count"] == 8
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -486,6 +513,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "unusable_exports"
         in payload["agent_workflows"]["connect_from_codex_auth"]["steps"][2]["read"]
+    )
+    assert (
+        "scope_check.missing_scopes"
+        in payload["agent_workflows"]["scoped_token_lifecycle"]["steps"][1]["read"]
     )
     assert (
         "result.filled"
@@ -552,6 +583,44 @@ def test_commands_catalog_returns_form_interaction_workflow(
     assert (
         "browser-cli action form-snapshot"
         in payload["agent_entrypoints"]["form_interaction"][0]
+    )
+
+
+def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "scoped_token_lifecycle"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "scoped_token_lifecycle"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "status_scoped_token",
+        "inspect_required_scopes",
+        "refresh_if_needed",
+        "verify_browser_readiness",
+        "logout_or_revoke_when_requested",
+    ]
+    assert steps[0]["command"] == "browser-cli auth status"
+    assert "device_token.valid" in steps[0]["read"]
+    assert steps[1]["command"] == (
+        "browser-cli auth token-info --required-scope browser.actions:run"
+    )
+    assert "scope_check.satisfied" in steps[1]["read"]
+    assert steps[2]["optional"] is True
+    assert "refresh_available" in steps[2]["read"]
+    assert steps[3]["success_condition"] == (
+        "ok=true and ready_for_browser_actions=true"
+    )
+    assert steps[4]["user_requested_only"] is True
+    assert "revoke_available" in steps[4]["read"]
+    assert (
+        "browser-cli auth token-info --required-scope browser.actions:run"
+        in payload["agent_entrypoints"]["scoped_token_lifecycle"]
     )
 
 
@@ -633,6 +702,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "one_off_page_task",
         "page_diagnostics",
         "persistent_login_state",
+        "scoped_token_lifecycle",
         "setup_and_verify",
     ]
     assert payload["fix"] == {
@@ -787,10 +857,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 7
+    assert checks["command_catalog"]["workflow_count"] == 8
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
+        "scoped_token_lifecycle",
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
@@ -805,6 +876,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "auth_login",
         "export_env",
         "doctor",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "scoped_token_lifecycle"
+    ] == [
+        "status_scoped_token",
+        "inspect_required_scopes",
+        "refresh_if_needed",
+        "verify_browser_readiness",
+        "logout_or_revoke_when_requested",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "one_off_page_task"
@@ -922,6 +1002,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["missing_required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
+        "scoped_token_lifecycle",
         "one_off_page_task",
         "persistent_login_state",
         "form_interaction",
@@ -967,6 +1048,15 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "auth_login"},
                         {"id": "export_env"},
                         {"id": "doctor"},
+                    ],
+                },
+                "scoped_token_lifecycle": {
+                    "steps": [
+                        {"id": "status_scoped_token"},
+                        {"id": "inspect_required_scopes"},
+                        {"id": "refresh_if_needed"},
+                        {"id": "verify_browser_readiness"},
+                        {"id": "logout_or_revoke_when_requested"},
                     ],
                 },
                 "one_off_page_task": {

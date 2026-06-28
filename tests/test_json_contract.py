@@ -156,6 +156,9 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
     assert "Connect from Codex auth" in text
+    assert "scoped token lifecycle" in text
+    assert "refresh availability" in text
+    assert "local logout/revoke-pending fields" in text
     assert "form interaction" in text
     assert "interactive targeting" in text
     assert "`selection_order`" in text

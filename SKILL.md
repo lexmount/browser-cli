@@ -57,6 +57,7 @@ When setup or auth is unclear, inspect the installed workflow contract first:
 ```bash
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow scoped_token_lifecycle
 ```
 
 When `auth login` returns `handoff`, use it as the setup contract: open
@@ -92,6 +93,15 @@ reports remote revoke pending until browser.lexmount.cn exposes the revoke API.
 These commands never report access or refresh token values. Until bearer-token
 runtime support lands, continue to require env API-key credentials for browser
 actions when `runtime_auth_usable` is false.
+
+For scoped token checks, refresh, or local logout, prefer the lifecycle workflow:
+
+```bash
+browser-cli commands --workflow scoped_token_lifecycle
+```
+
+Follow its `read` fields for `device_token.valid`, `scope_check.missing_scopes`,
+`refresh_available`, `refreshed`, `revoke_available`, and `warnings`.
 
 After credentials are configured, run:
 
@@ -271,6 +281,7 @@ browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction

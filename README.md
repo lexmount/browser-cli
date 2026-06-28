@@ -37,6 +37,7 @@ CLI for you:
    browser-cli commands --workflows-only
    browser-cli commands --workflow setup_and_verify
    browser-cli commands --workflow connect_from_codex_auth
+   browser-cli commands --workflow scoped_token_lifecycle
 6. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
 7. 如果未配置，引导我运行：
@@ -191,6 +192,7 @@ browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
@@ -269,6 +271,7 @@ browser-cli commands --group action
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow connect_from_codex_auth
+browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
@@ -524,8 +527,9 @@ local reveal flag.
 `secret_policy`, `agent_entrypoints`, and `agent_workflows`. Use `--names-only`
 for compact command discovery and `--group action` when choosing a browser
 action. Use `--workflows-only` when you only need the structured setup,
-Connect from Codex auth, one-off page task, persistent login state, form
-interaction, interactive targeting, and page diagnostics workflows, or
+Connect from Codex auth, scoped token lifecycle, one-off page task, persistent
+login state, form interaction, interactive targeting, and page diagnostics
+workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,

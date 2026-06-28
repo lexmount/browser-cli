@@ -12,6 +12,7 @@ browser-cli --help
 browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
+browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
@@ -27,6 +28,11 @@ through `handoff.connect_from_codex_url`, `handoff.copyable_commands`, and
 `browser-cli commands --workflow connect_from_codex_auth` as the machine-readable
 auth setup path. Keep `LEXMOUNT_API_KEY`, revealed export output, and full
 direct browser URLs out of chat.
+
+When a local scoped token exists, use
+`browser-cli commands --workflow scoped_token_lifecycle` before manual token
+handling. Read `device_token.valid`, `scope_check.missing_scopes`,
+`refresh_available`, `refreshed`, and `revoke_available`.
 
 Run doctor before the first browser action, after credential changes, and when
 session, context, or action commands fail for unclear reasons:
