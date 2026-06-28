@@ -347,6 +347,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["interactive_targeting"]
     )
     assert (
+        "browser-cli action guide --task content_extraction"
+        in payload["agent_entrypoints"]["content_extraction"]
+    )
+    assert (
+        "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000"
+        in payload["agent_entrypoints"]["content_extraction"]
+    )
+    assert (
+        "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200"
+        in payload["agent_entrypoints"]["content_extraction"]
+    )
+    assert (
         "browser-cli action guide --task state_waits"
         in payload["agent_entrypoints"]["state_waits"]
     )
@@ -695,6 +707,47 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in targeting_steps[5]["alternative_commands"][2]
     )
     assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
+    extraction_steps = workflows["content_extraction"]["steps"]
+    assert [step["id"] for step in extraction_steps] == [
+        "inspect_action_guide",
+        "inspect_page_info",
+        "choose_extraction_surface",
+        "extract_content",
+        "verify_extraction_bounds",
+    ]
+    assert extraction_steps[0]["command"] == (
+        "browser-cli action guide --task content_extraction"
+    )
+    assert "guide.preferred_commands" in extraction_steps[0]["read"]
+    assert extraction_steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "visibility_state" in extraction_steps[1]["read"]
+    assert extraction_steps[2]["agent_action"] is True
+    assert extraction_steps[2]["selection_order"] == [
+        "outline-snapshot",
+        "text-snapshot",
+        "link-snapshot",
+        "table-snapshot",
+        "list-snapshot",
+        "accessibility-snapshot",
+        "get-text-role",
+        "get-text",
+        "snapshot",
+    ]
+    assert (
+        "browser-cli action table-snapshot"
+        in extraction_steps[2]["preferred_commands"][3]
+    )
+    assert extraction_steps[3]["agent_action"] is True
+    assert "result.tables" in extraction_steps[3]["read"]
+    assert "result.headings" in extraction_steps[3]["read"]
+    assert (
+        "browser-cli action snapshot"
+        in extraction_steps[3]["fallback_commands"][0]
+    )
+    assert extraction_steps[4]["agent_action"] is True
+    assert "result.truncated" in extraction_steps[4]["read"]
     state_steps = workflows["state_waits"]["steps"]
     assert [step["id"] for step in state_steps] == [
         "inspect_action_guide",
@@ -977,8 +1030,9 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 4,
+        "task_count": 5,
         "tasks": [
+            "content_extraction",
             "form_interaction",
             "interactive_targeting",
             "page_diagnostics",
@@ -1003,6 +1057,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["command"] == "action.guide"
     assert payload["task"] == "interactive_targeting"
     assert payload["available_tasks"] == [
+        "content_extraction",
         "form_interaction",
         "interactive_targeting",
         "page_diagnostics",
@@ -1152,6 +1207,37 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
 
     with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "content_extraction"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == ["content_extraction"]
+    assert payload["guide"]["selection_order"][:4] == [
+        "page-info",
+        "outline-snapshot",
+        "text-snapshot",
+        "link-snapshot",
+    ]
+    assert "table-snapshot" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action table-snapshot" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action snapshot" in command
+        for command in payload["guide"]["fallback_commands"]
+    )
+    assert "result.texts" in payload["guide"]["read_fields"]
+    assert "result.links" in payload["guide"]["read_fields"]
+    assert "result.tables" in payload["guide"]["read_fields"]
+    assert "result.headings" in payload["guide"]["read_fields"]
+    assert "result.truncated" in payload["guide"]["read_fields"]
+    assert "snapshots and get-text commands" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"] == [
+        "browser-cli commands --workflow content_extraction"
+    ]
+
+    with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "state_waits"])
 
     assert exc_info.value.code == 0
@@ -1201,6 +1287,7 @@ def test_action_guide_fails_unknown_task_as_json(
     assert payload["error"] == "unknown_action_guide_task"
     assert payload["task"] == "missing"
     assert payload["available_tasks"] == [
+        "content_extraction",
         "form_interaction",
         "interactive_targeting",
         "page_diagnostics",
@@ -1222,7 +1309,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 13
+    assert payload["workflow_count"] == 14
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1299,6 +1386,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.nodes"
         in payload["agent_workflows"]["interactive_targeting"]["steps"][1]["read"]
+    )
+    assert (
+        "result.texts"
+        in payload["agent_workflows"]["content_extraction"]["steps"][3]["read"]
     )
     assert (
         "result.matched"
@@ -2186,6 +2277,50 @@ def test_commands_catalog_returns_state_waits_workflow(
     assert "visibility_state" in steps[-1]["read"]
 
 
+def test_commands_catalog_returns_content_extraction_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "content_extraction"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "content_extraction"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_page_info",
+        "choose_extraction_surface",
+        "extract_content",
+        "verify_extraction_bounds",
+    ]
+    assert steps[0]["command"] == (
+        "browser-cli action guide --task content_extraction"
+    )
+    assert "guide.read_fields" in steps[0]["read"]
+    assert steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "ready_state" in steps[1]["read"]
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"][:4] == [
+        "outline-snapshot",
+        "text-snapshot",
+        "link-snapshot",
+        "table-snapshot",
+    ]
+    assert "browser-cli action text-snapshot" in steps[2]["preferred_commands"][1]
+    assert steps[3]["agent_action"] is True
+    assert "result.links" in steps[3]["read"]
+    assert "result.landmarks" in steps[3]["read"]
+    assert "browser-cli action snapshot" in steps[3]["fallback_commands"][0]
+    assert steps[-1]["id"] == "verify_extraction_bounds"
+    assert "result.truncated" in steps[-1]["read"]
+    assert "browser-cli action table-snapshot" in steps[-1]["fallback_commands"][1]
+
+
 def test_commands_catalog_returns_page_diagnostics_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2245,6 +2380,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "case_file_task",
         "connect_from_codex_auth",
         "connect_from_codex_site_requirements",
+        "content_extraction",
         "device_code_auth",
         "form_interaction",
         "interactive_targeting",
@@ -2411,7 +2547,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 13
+    assert checks["command_catalog"]["workflow_count"] == 14
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -2424,6 +2560,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "persistent_login_state",
         "form_interaction",
         "interactive_targeting",
+        "content_extraction",
         "state_waits",
         "page_diagnostics",
     ]
@@ -2520,6 +2657,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "wait_target_ready",
         "activate_target",
         "verify_after_click",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "content_extraction"
+    ] == [
+        "inspect_action_guide",
+        "inspect_page_info",
+        "choose_extraction_surface",
+        "extract_content",
+        "verify_extraction_bounds",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["state_waits"] == [
         "inspect_action_guide",
@@ -2701,6 +2847,11 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.blur-role" in catalog["missing_required_commands"]
     assert "action.clear-role" in catalog["missing_required_commands"]
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
+    assert "action.link-snapshot" in catalog["missing_required_commands"]
+    assert "action.table-snapshot" in catalog["missing_required_commands"]
+    assert "action.list-snapshot" in catalog["missing_required_commands"]
+    assert "action.text-snapshot" in catalog["missing_required_commands"]
+    assert "action.outline-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
     assert "reference.list" in catalog["missing_required_commands"]
@@ -2724,6 +2875,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "persistent_login_state",
         "form_interaction",
         "interactive_targeting",
+        "content_extraction",
         "state_waits",
         "page_diagnostics",
     ]
@@ -2974,6 +3126,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "verify_after_click"},
                     ],
                 },
+                "content_extraction": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_page_info"},
+                        {"id": "choose_extraction_surface"},
+                        {"id": "extract_content"},
+                    ],
+                },
                 "state_waits": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -3016,6 +3176,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         ],
         "one_off_page_task": ["close_session"],
         "setup_and_verify": ["smoke_session"],
+        "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],
     }
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"

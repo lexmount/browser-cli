@@ -21,11 +21,13 @@ browser-cli commands --group action
 browser-cli commands --group action --names-only
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow content_extraction
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task content_extraction
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 ```
@@ -296,29 +298,35 @@ console/page error entries and the reported page URL.
    `click` after `exists`, `inspect`, or `bounding-box` confirms a stable
    selector. For repeated matches, run `query` and then `click-index --index
    <n>`.
-3. Wait for deterministic state: run `browser-cli commands --workflow
+3. Extract page content or data: run `browser-cli commands --workflow
+   content_extraction` and `browser-cli action guide --task content_extraction`,
+   then choose `outline-snapshot`, `text-snapshot`, `link-snapshot`,
+   `table-snapshot`, `list-snapshot`, or `accessibility-snapshot` before
+   bounded `snapshot`; use custom JS only after first-class extraction commands
+   cannot express the requested read.
+4. Wait for deterministic state: run `browser-cli commands --workflow
    state_waits` and `browser-cli action guide --task state_waits`, then choose
    the narrowest `wait-*` command such as `wait-load-state`, `wait-url`,
    `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
    `wait-storage`, or `wait-cookie`; use sleeps or custom JS only after those
    predicates cannot express the state.
-4. Navigate page history or async refresh: use `reload`, `go-back`, or
+5. Navigate page history or async refresh: use `reload`, `go-back`, or
    `go-forward`, then confirm with `page-info`, `wait-url`, `wait-title`,
    `wait-load-state`, `wait-network-idle`, `performance-snapshot`, `wait-text`,
    or `snapshot`.
-5. Diagnose fetch/XHR calls: run `browser-cli commands --workflow
+6. Diagnose fetch/XHR calls: run `browser-cli commands --workflow
    page_diagnostics` and `browser-cli action guide --task page_diagnostics`,
    then run `network-snapshot --install-only`, trigger the suspected action,
    read `network-snapshot` or wait with `wait-network`, and parse `entries`,
    `method`, `status`, `ok`, `failed`, `duration_ms`, and masked URLs; use
    `--failed-only` when looking for transport failures.
-6. Capture runtime errors: run `browser-cli commands --workflow
+7. Capture runtime errors: run `browser-cli commands --workflow
    page_diagnostics` and `browser-cli action guide --task page_diagnostics`,
    then run `console-snapshot --install-only`, trigger the suspected action,
    read `console-snapshot` or wait with `wait-console`, then use
    `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
    `inspect` to correlate visible state with JS errors.
-7. Open menus or keyboard flows: use `focus-role`, `hover-role`, `press-role`,
+8. Open menus or keyboard flows: use `focus-role`, `hover-role`, `press-role`,
    or `scroll-into-view-role` when role/name is known; use `focus`, `hover`, or `press` for
    stable selector-scoped keys, `press-key` for active/global shortcuts such as
    Enter/Escape, `wait-attribute-role` for `aria-expanded` or `aria-selected`,
@@ -331,7 +339,7 @@ console/page error entries and the reported page URL.
    `wait-frame` when the frame appears asynchronously, otherwise run
    `frame-snapshot` and parse `readable`, `same_origin`, `frame_url`, and
    `read_error` before deciding whether direct DOM inspection is possible.
-8. Read page results: use `page-info` for URL/title/readyState/viewport checks,
+9. Read page results: use `page-info` for URL/title/readyState/viewport checks,
    `set-viewport` before responsive screenshots or layout-sensitive checks,
    `wait-title` for async title changes, `wait-count` for dynamic lists,
    `list-snapshot` for menu/listbox/search-result/task-list content,
@@ -345,18 +353,18 @@ console/page error entries and the reported page URL.
    selector is unknown; use `wait-text` or `wait-role` before reading dynamic
    results, and use `wait-text --state absent` when loading, toast, or error
    text should disappear.
-9. Adjust browser state: use `storage-get` for local/session storage,
+10. Adjust browser state: use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
    `storage-clear --prefix <prefix>` for targeted cleanup; use `wait-storage`
    when the page updates keys asynchronously. Use `cookie-get`, `cookie-set`,
    `cookie-delete`, or `cookie-clear` for document.cookie-visible cookies such
    as consent or non-HttpOnly flags, and `wait-cookie` when cookie changes are
    async.
-10. Debug selectors: use `count`, `query`, `inspect`, and `get-attribute` before
+11. Debug selectors: use `count`, `query`, `inspect`, and `get-attribute` before
    `eval`; use `inspect` for `state.disabled`, `state.readonly`, masked
    `value`, `attributes`, and `in_viewport`; use `wait-count`, `wait-state`, or
    `wait-attribute` for async DOM changes.
-11. Capture final evidence: use `set-viewport` when evidence needs a stable
+12. Capture final evidence: use `set-viewport` when evidence needs a stable
     browser size, `screenshot-role` for a semantic target,
     `screenshot-selector` for a known panel/control, then `screenshot` for full
     viewport/page evidence and close the session unless the user asks to keep

@@ -170,6 +170,10 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`guide.verify_commands`" in text
     assert "`guide.custom_js_boundary`" in text
     assert "`set-viewport`" in text
+    assert "`content_extraction`" in text
+    assert "`text-snapshot`" in text
+    assert "`table-snapshot`" in text
+    assert "`link-snapshot`" in text
     assert "`state_waits`" in text
     assert "`wait-network`" in text
     assert "`wait-storage`" in text

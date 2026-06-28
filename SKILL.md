@@ -264,11 +264,9 @@ browser-cli commands --workflow interactive_targeting
 browser-cli action guide --task interactive_targeting
 ```
 
-Read the guide's `selection_order`, then read `interactive-snapshot` and
-optional `accessibility-snapshot` fields. Use `exists-role`, `get-text-role`,
-or `bounding-box-role` to confirm semantic targets when needed. Choose
-`click-role`, `click-text`, or `click-index` from the preferred commands and
-verify with `page-info`, `wait-url`, or `wait-text`.
+Read `selection_order`, then `interactive-snapshot` and optional `accessibility-snapshot`; confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose `click-role`, `click-text`, or `click-index`, then verify with `page-info`, `wait-url`, or `wait-text`.
+
+For page content extraction, prefer `browser-cli commands --workflow content_extraction` and `browser-cli action guide --task content_extraction`; choose outline/text/link/table/list/accessibility snapshots before bounded `snapshot` or custom JS.
 
 For deterministic state transitions, prefer `browser-cli commands --workflow state_waits` and `browser-cli action guide --task state_waits`; choose `wait-load-state`, `wait-url`, `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or `wait-cookie` before sleeps or custom JS.
 
@@ -375,11 +373,13 @@ browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow content_extraction
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task content_extraction
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli case schema
@@ -430,7 +430,7 @@ Core action rules:
   `selection_order`, `inspect_commands`, `preferred_commands`,
   `verify_commands`, `read_fields`, and `custom_js_boundary`.
 - Inspect first with `snapshot`, `interactive-snapshot`, `accessibility-snapshot`,
-  `form-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
+  `form-snapshot`, `list-snapshot`, `link-snapshot`, `table-snapshot`, `text-snapshot`, `dialog-snapshot`,
   `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
 - Prefer semantic actions such as `wait-role`, `wait-state-role`, `get-attribute-role`,
   `wait-attribute-role`, `exists-role`, `get-text-role`,

@@ -234,10 +234,15 @@ Default behavior:
   gateway gaps from either the login handoff or the standalone requirements
   command.
 - `action guide` reports compact action routes for `form_interaction`,
-  `interactive_targeting`, `page_diagnostics`, and `state_waits`, including
+  `interactive_targeting`, `content_extraction`, `page_diagnostics`, and
+  `state_waits`, including
   inspect, preferred, fallback, and verification commands plus the custom
   JavaScript boundary for each task. Page diagnostics can include
   `set-viewport` to stabilize responsive screenshots and layout checks.
+  Content extraction should expose first-class `outline-snapshot`,
+  `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
+  `accessibility-snapshot`, and bounded `snapshot` routes so agents can avoid
+  page-specific scraping JavaScript for common read-only extraction tasks.
   State waits should expose first-class `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
   `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and
@@ -302,6 +307,7 @@ Default behavior:
   select-option, select-role, check, uncheck, check-role,
   uncheck-role, click-text, click-role,
   focus-role, fill-label, fill-role, get-value-role, wait-value-role,
+  link-snapshot, table-snapshot, list-snapshot, text-snapshot, outline-snapshot,
   blur-role, clear-role,
   accessibility snapshot, and interactive-only snapshot.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report

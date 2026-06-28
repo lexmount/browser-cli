@@ -20,11 +20,13 @@ browser-cli commands --workflow session_recovery
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
+browser-cli commands --workflow content_extraction
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
 browser-cli action guide --names-only
 browser-cli action guide --task form_interaction
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task content_extraction
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli reference list
@@ -87,6 +89,7 @@ browser-cli commands --workflows-only
 browser-cli commands --group action
 browser-cli commands --group action --names-only
 browser-cli action guide --task interactive_targeting
+browser-cli action guide --task content_extraction
 browser-cli action guide --task state_waits
 ```
 
@@ -165,6 +168,18 @@ browser-cli action hover-role --session-id <session_id> --role button --name "Me
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-text --session-id <session_id> --text "Submit"
+```
+
+For page content or data extraction, read the extraction workflow before
+writing page-specific JavaScript:
+
+```bash
+browser-cli commands --workflow content_extraction
+browser-cli action guide --task content_extraction
+browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80
+browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000
+browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80
+browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200
 ```
 
 For deterministic page or target state, read the state-wait workflow before
