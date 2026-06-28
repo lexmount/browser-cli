@@ -242,6 +242,19 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "version" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
+    references = payload["agent_references"]
+    assert references["action_playbook"]["path"] == "references/action-playbook.md"
+    assert "form_interaction" in references["action_playbook"]["related_workflows"]
+    assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
+    assert "page_diagnostics" in references["action_playbook"]["related_workflows"]
+    assert (
+        "Structured Results And Masking"
+        in references["action_playbook"]["grep_patterns"]
+    )
+    assert any(
+        "semantic actions" in item
+        for item in references["action_playbook"]["load_when"]
+    )
     assert (
         "browser-cli auth connect-requirements" in payload["agent_entrypoints"]["setup"]
     )
@@ -592,6 +605,13 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["group"] is None
     assert payload["workflow_count"] == 12
     assert "commands" not in payload
+    assert payload["agent_references"]["action_playbook"]["path"] == (
+        "references/action-playbook.md"
+    )
+    assert (
+        "page_diagnostics"
+        in payload["agent_references"]["action_playbook"]["related_workflows"]
+    )
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
     )
@@ -676,6 +696,9 @@ def test_commands_catalog_returns_single_workflow(
     assert payload["workflow_id"] == "one_off_page_task"
     assert "commands" not in payload
     assert "agent_workflows" not in payload
+    assert payload["agent_references"]["action_playbook"]["path"] == (
+        "references/action-playbook.md"
+    )
     assert payload["workflow"]["steps"][0]["id"] == "create_session"
     assert "result.nodes" in payload["workflow"]["steps"][3]["read"]
     assert payload["workflow"]["steps"][-1] == {

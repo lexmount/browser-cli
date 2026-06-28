@@ -472,6 +472,45 @@ def _catalog_leaf_commands(
     return [command]
 
 
+def _agent_references() -> dict[str, Any]:
+    return {
+        "action_playbook": {
+            "path": "references/action-playbook.md",
+            "format": "markdown",
+            "purpose": (
+                "Choose browser actions, parse structured action results, handle "
+                "action masking, and follow common page-operation recipes."
+            ),
+            "load_when": [
+                "Selecting between semantic actions, selectors, snapshots, or eval.",
+                "Filling forms, choosing visible controls, menus, dialogs, or frames.",
+                "Diagnosing fetch/XHR, console/page errors, or runtime page failures.",
+                "Inspecting storage, cookies, masked action values, or structured result fields.",
+            ],
+            "related_workflows": [
+                "one_off_page_task",
+                "form_interaction",
+                "interactive_targeting",
+                "page_diagnostics",
+            ],
+            "covers": [
+                "action command examples",
+                "structured result fields",
+                "secret and URL masking rules",
+                "action selection order",
+                "common task recipes",
+                "browser target contract",
+            ],
+            "grep_patterns": [
+                "Action Selection Order",
+                "Common Task Recipes",
+                "Structured Results And Masking",
+                "Target Contract",
+            ],
+        }
+    }
+
+
 def _command_catalog() -> dict[str, Any]:
     parser = build_parser()
     commands = _catalog_leaf_commands(parser)
@@ -495,6 +534,7 @@ def _command_catalog() -> dict[str, Any]:
                 "full direct connect URLs containing api_key",
             ],
         },
+        "agent_references": _agent_references(),
         "agent_entrypoints": {
             "setup": [
                 "browser-cli auth status",
@@ -11134,6 +11174,7 @@ def cmd_commands(args: argparse.Namespace) -> None:
             group=args.group,
             workflow_id=args.workflow,
             workflow=workflow,
+            agent_references=catalog["agent_references"],
             agent_entrypoints=catalog["agent_entrypoints"],
             json_output=catalog["json_output"],
             secret_policy=catalog["secret_policy"],
@@ -11146,6 +11187,7 @@ def cmd_commands(args: argparse.Namespace) -> None:
             group=args.group,
             workflow_count=len(catalog["agent_workflows"]),
             agent_workflows=catalog["agent_workflows"],
+            agent_references=catalog["agent_references"],
             agent_entrypoints=catalog["agent_entrypoints"],
             json_output=catalog["json_output"],
             secret_policy=catalog["secret_policy"],

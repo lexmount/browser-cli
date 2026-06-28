@@ -91,6 +91,12 @@ def test_skill_documents_agent_workflow_discovery() -> None:
         "Run `browser-cli commands --workflows-only` for a compact agent workflow map"
         in normalized
     )
-    assert "`agent_workflows` fields instead of parsing `--help` text" in normalized
-    assert "Follow each workflow step's `read` array first" in normalized
+    assert (
+        "`agent_references`, `agent_entrypoints`, and `agent_workflows`" in normalized
+    )
+    assert (
+        "Follow `agent_references` when detailed action guidance is needed"
+        in normalized
+    )
+    assert "then follow each workflow step's `read` array first" in normalized
     assert "auth availability, export usability, and context reuse fields" in normalized

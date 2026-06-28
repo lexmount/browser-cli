@@ -111,6 +111,9 @@ def test_commands_catalog_output_contract(
     assert payload["json_output"]["always_json"] is True
     assert "secret_policy" in payload
     assert "agent_entrypoints" in payload
+    assert payload["agent_references"]["action_playbook"]["path"] == (
+        "references/action-playbook.md"
+    )
     assert all(command["group"] == "action" for command in payload["commands"])
     open_url = next(
         command
@@ -155,6 +158,11 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "commands for inspecting valid groups" in normalized
     assert "`workflow_count`" in text
     assert "`agent_workflows`" in text
+    assert "`agent_references`" in text
+    assert "`references/action-playbook.md`" in text
+    assert "`load_when`" in text
+    assert "`related_workflows`" in text
+    assert "`grep_patterns`" in text
     assert "Connect from Codex site requirements" in text
     assert "`auth connect-requirements`" in text
     assert "`required_api_contract`" in text

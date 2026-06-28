@@ -553,9 +553,12 @@ local reveal flag.
 
 `browser-cli commands` returns a parser-backed command catalog with
 `schema_version`, `groups`, `command_count`, `commands`, `json_output`,
-`secret_policy`, `agent_entrypoints`, and `agent_workflows`. Use `--names-only`
-for compact command discovery and `--group action` when choosing a browser
-action. Use `--workflows-only` when you only need the structured setup,
+`secret_policy`, `agent_references`, `agent_entrypoints`, and `agent_workflows`.
+Use `--names-only` for compact command discovery and `--group action` when
+choosing a browser action. Use `agent_references` to load detailed Skill
+references such as `references/action-playbook.md` only when action selection,
+structured result parsing, masking, or browser-target details are needed. Use
+`--workflows-only` when you only need the structured setup,
 Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page
 task, persistent login state, session recovery, case file task, form interaction,
 interactive targeting, and page diagnostics workflows, or
