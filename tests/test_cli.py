@@ -623,6 +623,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.click-role",
         "action.fill-label",
         "action.fill-role",
+        "action.get-value-role",
+        "action.wait-value-role",
         "action.link-snapshot",
         "action.table-snapshot",
         "action.list-snapshot",
@@ -657,6 +659,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "--role" in fill_role["required_options"]
     assert "--text" in fill_role["required_options"]
     assert any("--name" in option["flags"] for option in fill_role["options"])
+    get_value_role = commands["action.get-value-role"]
+    assert get_value_role["required_options"] == ["--role"]
+    assert any("--name" in option["flags"] for option in get_value_role["options"])
+    wait_value_role = commands["action.wait-value-role"]
+    assert "--role" in wait_value_role["required_options"]
+    assert "--value" in wait_value_role["required_options"]
+    assert any("--exact" in option["flags"] for option in wait_value_role["options"])
     interactive = commands["action.interactive-snapshot"]
     interactive_only = commands["action.interactive-only-snapshot"]
     assert interactive["aliases"] == ["action.interactive-only-snapshot"]
@@ -753,6 +762,14 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert any(
         "browser-cli action fill-role" in command
         for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-value-role" in command
+        for command in payload["guide"]["verify_commands"]
+    )
+    assert any(
+        "browser-cli action get-value-role" in command
+        for command in payload["guide"]["verify_commands"]
     )
     assert (
         "browser-cli action dispatch-event --session-id <session_id> "
@@ -1888,6 +1905,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.click-role",
         "action.fill-label",
         "action.fill-role",
+        "action.get-value-role",
+        "action.wait-value-role",
         "action.accessibility-snapshot",
         "action.interactive-only-snapshot",
         "action.wait-dialog",
@@ -1995,6 +2014,8 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["workflow_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
+    assert "action.get-value-role" in catalog["missing_required_commands"]
+    assert "action.wait-value-role" in catalog["missing_required_commands"]
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
@@ -6153,6 +6174,23 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
         (
             [
                 "action",
+                "get-value-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Password",
+            ],
+            [
+                "publicValue(element, readFormValue(element))",
+                "role_found",
+                "value_masked",
+            ],
+        ),
+        (
+            [
+                "action",
                 "wait-value",
                 "--session-id",
                 "s1",
@@ -6162,6 +6200,25 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
                 "fake-secret",
             ],
             ["publicRequestedValue(element, requestedValue)", "requested_value_masked"],
+        ),
+        (
+            [
+                "action",
+                "wait-value-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Password",
+                "--value",
+                "fake-secret",
+            ],
+            [
+                "publicRequestedValue(element, requestedValue)",
+                "requested_value_masked",
+                "role_found",
+            ],
         ),
         (
             [
@@ -9331,6 +9388,38 @@ def test_third_batch_eval_backed_action_commands_emit_structured_results(
         (
             [
                 "action",
+                "get-value-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Search",
+            ],
+            "action.get-value-role",
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+            },
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
                 "wait-value",
                 "--session-id",
                 "s1",
@@ -9362,6 +9451,53 @@ def test_third_batch_eval_backed_action_commands_emit_structured_results(
                 "selector": "input[name=q]",
                 "found": True,
                 "selector_found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+                "requested_value": "query",
+                "match": "exact",
+                "waited_ms": 50,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-value-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "textbox",
+                "--name",
+                "Search",
+                "--value",
+                "query",
+                "--match",
+                "exact",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+                "--case-sensitive",
+            ],
+            "action.wait-value-role",
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
+                "readable": True,
+                "value": "query",
+                "value_type": "value",
+                "requested_value": "query",
+                "match": "exact",
+                "waited_ms": 50,
+            },
+            {
+                "role": "textbox",
+                "name": "Search",
+                "found": True,
+                "role_found": True,
                 "readable": True,
                 "value": "query",
                 "value_type": "value",

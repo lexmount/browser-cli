@@ -106,6 +106,8 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.click-role",
     "action.fill-label",
     "action.fill-role",
+    "action.get-value-role",
+    "action.wait-value-role",
     "action.accessibility-snapshot",
     "action.interactive-snapshot",
     "action.interactive-only-snapshot",
@@ -754,6 +756,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action form-snapshot --session-id <session_id> --selector form",
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
+                'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
             ],
             "interactive_targeting": [
@@ -8285,6 +8288,77 @@ def _get_value_expression(selector: str) -> str:
 """.strip()
 
 
+def _role_value_helpers_expression() -> str:
+    return """
+  const roleValueSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true'], [role]";
+  const findRoleValueElement = () => {
+    const candidates = [...document.querySelectorAll(roleValueSelector)].filter(visible);
+    const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+    const element = roleMatches.find((candidate) =>
+      requestedName === null ||
+      matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+    );
+    return {
+      element: element || null,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    };
+  };
+  const publicMissingRoleRequestedValue = (value) => {
+    const masked = sensitiveText(requestedName) && String(value ?? "") !== "";
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+""".rstrip()
+
+
+def _get_value_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_value_helpers_expression()}
+  const roleMatch = findRoleValueElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      readable: false,
+      value: null,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    ...publicValue(element, readFormValue(element)),
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _wait_value_expression(
     *,
     selector: str,
@@ -8404,6 +8478,159 @@ def _wait_value_expression(
         requested_value_length: outputRequestedValue.value_length,
         match: matchMode,
         waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_value_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    value: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedValue = {_js_literal(value)};
+  const matchMode = {_js_literal(match)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+{_role_value_helpers_expression()}
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const roleMatch = findRoleValueElement();
+      const outputRequestedValue = roleMatch.element
+        ? publicRequestedValue(roleMatch.element, requestedValue)
+        : publicMissingRoleRequestedValue(requestedValue);
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: false,
+        role_found: Boolean(roleMatch.element),
+        value: null,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: 0,
+        candidate_count: roleMatch.candidate_count,
+        candidates: roleMatch.candidates,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    const candidate = formValueText(currentValue);
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const roleMatch = findRoleValueElement();
+    const element = roleMatch.element;
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        const outputRequestedValue = publicMissingRoleRequestedValue(requestedValue);
+        resolve({{
+          role: requestedRole,
+          name: requestedName,
+          found: false,
+          role_found: false,
+          value: null,
+          requested_value: outputRequestedValue.value,
+          requested_value_masked: outputRequestedValue.value_masked,
+          requested_value_length: outputRequestedValue.value_length,
+          match: matchMode,
+          waited_ms: waitedMs,
+          candidate_count: roleMatch.candidate_count,
+          candidates: roleMatch.candidates
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const state = readFormValue(element);
+    const outputState = publicValue(element, state);
+    const outputRequestedValue = publicRequestedValue(element, requestedValue);
+    if (!state.readable) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: false,
+        role_found: true,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (matches(state.value)) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: true,
+        role_found: true,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: false,
+        role_found: true,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
         element: nodeInfo(element)
       }});
       return;
@@ -9644,6 +9871,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "verify_commands": [
                 'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                'browser-cli action wait-value-role --session-id <session_id> --role textbox --name "<accessible name>" --value "<expected value>"',
+                'browser-cli action get-value-role --session-id <session_id> --role textbox --name "<accessible name>"',
                 'browser-cli action get-value --session-id <session_id> --selector "<selector>"',
                 "browser-cli action page-info --session-id <session_id>",
             ],
@@ -9652,6 +9881,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.filled",
                 "result.role",
                 "result.name",
+                "result.role_found",
                 "result.selected",
                 "result.checked",
                 "result.clicked",
@@ -10243,6 +10473,19 @@ def cmd_action_get_value(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_get_value_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-value-role",
+        _get_value_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_wait_value(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -10253,6 +10496,23 @@ def cmd_action_wait_value(args: argparse.Namespace) -> None:
             match=args.match,
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_wait_value_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-value-role",
+        _wait_value_role_expression(
+            role=args.role,
+            name=args.name,
+            value=args.value,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            exact=args.exact,
             case_sensitive=args.case_sensitive,
         ),
     )
@@ -13409,6 +13669,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_get_value.add_argument("--selector", required=True)
     action_get_value.set_defaults(func=cmd_action_get_value)
 
+    action_get_value_role = action_subparsers.add_parser(
+        "get-value-role",
+        help="Read a form field value from an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_get_value_role)
+    action_get_value_role.add_argument("--role", required=True)
+    action_get_value_role.add_argument("--name")
+    _add_text_match_args(action_get_value_role)
+    action_get_value_role.set_defaults(func=cmd_action_get_value_role)
+
     action_wait_value = action_subparsers.add_parser(
         "wait-value",
         help="Wait until a form field value matches text",
@@ -13430,6 +13700,34 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Match values case-sensitively.",
     )
     action_wait_value.set_defaults(func=cmd_action_wait_value)
+
+    action_wait_value_role = action_subparsers.add_parser(
+        "wait-value-role",
+        help="Wait until a role/name form field value matches text",
+    )
+    _add_session_target_args(action_wait_value_role)
+    action_wait_value_role.add_argument("--role", required=True)
+    action_wait_value_role.add_argument("--name")
+    action_wait_value_role.add_argument("--value", required=True)
+    action_wait_value_role.add_argument(
+        "--exact",
+        action="store_true",
+        help="Match the role accessible name exactly.",
+    )
+    action_wait_value_role.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match the current value.",
+    )
+    action_wait_value_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_value_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_value_role.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_value_role.set_defaults(func=cmd_action_wait_value_role)
 
     action_blur = action_subparsers.add_parser(
         "blur",

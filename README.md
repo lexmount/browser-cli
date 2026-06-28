@@ -417,7 +417,9 @@ browser-cli action wait-text --session-id <session_id> --text "Loading" --state 
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
+browser-cli action get-value-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "hello"
+browser-cli action wait-value-role --session-id <session_id> --role textbox --name "Search" --value "hello"
 browser-cli action blur --session-id <session_id> --selector "input[name=q]"
 browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
 browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
@@ -481,7 +483,7 @@ the boundary for custom JavaScript.
 `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `exists`, `count`, `query`,
 `get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`,
-`get-value`, `wait-value`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
+`get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `set-value`, `set-file-input`,
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `bounding-box`, `inspect`,
@@ -723,7 +725,8 @@ browser-cli session close --session-id <session_id>
 Common agent recipes:
 
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,
-  `set-value`, `set-file-input`, or `clear` -> `wait-value` or `get-value` ->
+  `set-value`, `set-file-input`, or `clear` -> `wait-value-role`, `get-value-role`,
+  `wait-value`, or `get-value` ->
   `blur` if validation is focus-driven -> `select-label`, `select-option`,
   `check-label`, or `check` -> `wait-state --state enabled` or `wait-role` for
   async submit buttons -> `dispatch-event` if explicit `input`/`change` is needed ->

@@ -304,6 +304,8 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "click-role",
         "fill-label",
         "fill-role",
+        "get-value-role",
+        "wait-value-role",
         "accessibility snapshot",
         "interactive-only snapshot",
     ):

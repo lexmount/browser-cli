@@ -66,6 +66,8 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`click-index` for a chosen repeated selector match" in normalized
     assert "`fill-label` for labeled text fields" in normalized
     assert "`fill-role` for writable role/name fields" in normalized
+    assert "`get-value-role`" in normalized
+    assert "`wait-value-role`" in normalized
     assert "`select-label` for labeled native selects" in normalized
     assert "`check-label` for labeled checkbox or switch controls" in normalized
     assert (
@@ -306,7 +308,9 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`type`",
         "`focus`",
         "`get-value`",
+        "`get-value-role`",
         "`wait-value`",
+        "`wait-value-role`",
         "`blur`",
         "`storage-get`",
         "`storage-set`",
@@ -510,7 +514,10 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`set-value` for stable selectors" in normalized
     assert "`set-file-input` for upload controls" in normalized
     assert "`clear` before replacement text" in normalized
-    assert "`get-value` or `wait-value` to confirm form state" in normalized
+    assert (
+        "`get-value-role`, `wait-value-role`, `get-value`, or `wait-value` to confirm form state"
+        in normalized
+    )
     assert "use `blur` for focus-driven validation" in normalized
     assert "`select-label` for labeled selects" in normalized
     assert "`select-option` or `check`" in normalized
