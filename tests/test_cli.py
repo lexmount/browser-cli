@@ -239,11 +239,21 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "action" in payload["groups"]
     assert "auth" in payload["groups"]
     assert "doctor" in payload["groups"]
+    assert "reference" in payload["groups"]
     assert "version" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
     references = payload["agent_references"]
     assert references["action_playbook"]["path"] == "references/action-playbook.md"
+    assert references["action_playbook"]["content_command"] == (
+        "browser-cli reference get --id action_playbook"
+    )
+    assert references["action_playbook"]["metadata_command"] == (
+        "browser-cli reference list"
+    )
+    assert references["action_playbook"]["package_resource"] == (
+        "browser_cli.agent_references:action-playbook.md"
+    )
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "page_diagnostics" in references["action_playbook"]["related_workflows"]
@@ -588,6 +598,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any(
         "--workflow" in option["flags"] for option in commands["commands"]["options"]
     )
+    assert any(
+        "--metadata-only" in option["flags"]
+        for option in commands["reference.get"]["options"]
+    )
     assert "super-secret-key" not in json.dumps(payload)
 
 
@@ -710,6 +724,95 @@ def test_commands_catalog_returns_single_workflow(
         "browser-cli session create"
         in payload["agent_entrypoints"]["one_off_page_task"]
     )
+
+
+def test_reference_list_returns_packaged_agent_references(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "list"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.list"
+    assert payload["reference_count"] == 1
+    reference = payload["references"]["action_playbook"]
+    assert reference["id"] == "action_playbook"
+    assert reference["path"] == "references/action-playbook.md"
+    assert reference["content_command"] == (
+        "browser-cli reference get --id action_playbook"
+    )
+    assert reference["package_resource"] == (
+        "browser_cli.agent_references:action-playbook.md"
+    )
+    assert "Common Task Recipes" in reference["grep_patterns"]
+
+
+def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "list", "--names-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.list"
+    assert payload["reference_count"] == 1
+    assert payload["references"] == ["action_playbook"]
+
+
+def test_reference_get_returns_packaged_action_playbook(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "action_playbook"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.get"
+    assert payload["reference_id"] == "action_playbook"
+    assert payload["reference"]["id"] == "action_playbook"
+    assert payload["content_format"] == "markdown"
+    assert payload["content_included"] is True
+    assert payload["content_length"] == len(payload["content"])
+    assert "# Browser Action Playbook" in payload["content"]
+    assert "Common Task Recipes" in payload["content"]
+    assert "Target Contract" in payload["content"]
+
+
+def test_reference_get_metadata_only_omits_content(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "action_playbook", "--metadata-only"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.get"
+    assert payload["reference_id"] == "action_playbook"
+    assert payload["content_included"] is False
+    assert "content" not in payload
+    assert payload["reference"]["content_command"] == (
+        "browser-cli reference get --id action_playbook"
+    )
+
+
+def test_reference_get_fails_unknown_reference_as_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "missing"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "reference.get"
+    assert payload["error"] == "unknown_reference"
+    assert payload["reference_id"] == "missing"
+    assert payload["available_references"] == ["action_playbook"]
+    assert payload["fix"]["code"] == "inspect_available_agent_references"
 
 
 def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
@@ -1262,6 +1365,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.interactive-only-snapshot",
         "action.wait-dialog",
         "action.wait-frame",
+        "reference.list",
+        "reference.get",
         "version",
         "case.validate",
         "case.run",
@@ -1323,6 +1428,8 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.accessibility-snapshot" in catalog["missing_required_commands"]
     assert "action.wait-dialog" in catalog["missing_required_commands"]
     assert "action.wait-frame" in catalog["missing_required_commands"]
+    assert "reference.list" in catalog["missing_required_commands"]
+    assert "reference.get" in catalog["missing_required_commands"]
     assert "version" in catalog["missing_required_commands"]
     assert "auth.connect-requirements" in catalog["missing_required_commands"]
     assert catalog["missing_required_workflows"] == [

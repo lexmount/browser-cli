@@ -58,8 +58,12 @@ groups.
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
 `agent_references` describes optional Skill reference files such as
-`references/action-playbook.md`, with `load_when`, `related_workflows`, `covers`,
-and `grep_patterns` so agents can load detailed action guidance only when needed.
+`references/action-playbook.md`, with `content_command`, `package_resource`,
+`load_when`, `related_workflows`, `covers`, and `grep_patterns` so agents can
+load detailed action guidance only when needed. `browser-cli reference list`
+returns packaged reference metadata, and
+`browser-cli reference get --id action_playbook` returns the installed markdown
+content as JSON.
 `agent_workflows` describes ordered setup, Connect from Codex site requirements,
 Connect from Codex auth, device-code auth, scoped token lifecycle, session
 recovery, one-off page, case file task, persistent login state, form
@@ -177,6 +181,9 @@ Default behavior:
   `refresh_available`, `refreshed`, and `reason`, but must not print token
   values. Until the remote refresh endpoint exists, it reports
   `refresh_available=false`.
+- `reference list` and `reference get` expose packaged agent reference docs as
+  JSON. `reference get --metadata-only` omits markdown content, and unknown ids
+  fail as JSON with `error=unknown_reference` plus `available_references`.
 - `doctor --smoke-session` may report a temporary `session_id` and cleanup
   status, but must not print direct connect URLs or token values.
 - `doctor` reports `browser_cli.version_source` to show whether the browser-cli
@@ -187,10 +194,10 @@ Default behavior:
   `missing_required_workflow_steps`, `schema_version`, `command_count`, and
   `workflow_count` so agents can detect an installed CLI that is too old for
   the Skill workflow or missing critical workflow steps such as cleanup. The
-  required command set covers setup commands plus core browser actions such as
-  press, hover, scroll, get-text, exists, select-option, check, uncheck,
-  click-text, click-role, fill-label, accessibility snapshot, and
-  interactive-only snapshot.
+  required command set covers setup commands, reference discovery, and core
+  browser actions such as press, hover, scroll, get-text, exists,
+  select-option, check, uncheck, click-text, click-role, fill-label,
+  accessibility snapshot, and interactive-only snapshot.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
   `connect_from_codex` with a safe `/connect/codex` URL, `open_command`,
   requested scopes, setup blocks, and verification commands. This handoff must

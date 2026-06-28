@@ -14,6 +14,7 @@ import sys
 import webbrowser
 from collections import Counter
 from datetime import datetime, timezone
+from importlib import resources as importlib_resources
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
 from typing import Any, NoReturn
@@ -59,6 +60,8 @@ DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
 DOCTOR_REQUIRED_COMMANDS = (
     "commands",
+    "reference.list",
+    "reference.get",
     "version",
     "doctor",
     "case.validate",
@@ -476,6 +479,9 @@ def _agent_references() -> dict[str, Any]:
     return {
         "action_playbook": {
             "path": "references/action-playbook.md",
+            "content_command": "browser-cli reference get --id action_playbook",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:action-playbook.md",
             "format": "markdown",
             "purpose": (
                 "Choose browser actions, parse structured action results, handle "
@@ -509,6 +515,19 @@ def _agent_references() -> dict[str, Any]:
             ],
         }
     }
+
+
+def _read_agent_reference_content(reference_id: str) -> str:
+    reference = _agent_references().get(reference_id)
+    if reference is None:
+        raise KeyError(reference_id)
+    package_resource = str(reference["package_resource"])
+    package, resource_name = package_resource.split(":", 1)
+    return (
+        importlib_resources.files(package)
+        .joinpath(resource_name)
+        .read_text(encoding="utf-8")
+    )
 
 
 def _command_catalog() -> dict[str, Any]:
@@ -11118,6 +11137,101 @@ def cmd_direct_url(args: argparse.Namespace) -> None:
     )
 
 
+def _agent_reference_payload(
+    reference_id: str,
+    reference: dict[str, Any],
+) -> dict[str, Any]:
+    payload = {"id": reference_id}
+    payload.update(reference)
+    return payload
+
+
+def cmd_reference_list(args: argparse.Namespace) -> None:
+    command = "reference.list"
+    references = _agent_references()
+    if args.names_only:
+        _success(
+            command,
+            reference_count=len(references),
+            references=sorted(references),
+        )
+    _success(
+        command,
+        reference_count=len(references),
+        references={
+            reference_id: _agent_reference_payload(reference_id, reference)
+            for reference_id, reference in sorted(references.items())
+        },
+    )
+
+
+def cmd_reference_get(args: argparse.Namespace) -> None:
+    command = "reference.get"
+    reference_id = str(args.reference_id)
+    references = _agent_references()
+    reference = references.get(reference_id)
+    available_references = sorted(references)
+    if reference is None:
+        _failure(
+            command,
+            "unknown_reference",
+            f"Unknown agent reference: {reference_id}",
+            reference_id=reference_id,
+            available_references=available_references,
+            fix=_doctor_fix(
+                "inspect_available_agent_references",
+                commands=[
+                    "browser-cli reference list",
+                    "browser-cli reference list --names-only",
+                ],
+                guidance=[
+                    "Choose one of available_references, then rerun reference get with that --id value."
+                ],
+            ),
+        )
+
+    reference_payload = _agent_reference_payload(reference_id, reference)
+    if args.metadata_only:
+        _success(
+            command,
+            reference_id=reference_id,
+            reference=reference_payload,
+            content_included=False,
+        )
+
+    try:
+        content = _read_agent_reference_content(reference_id)
+    except Exception as exc:
+        _failure(
+            command,
+            "reference_unavailable",
+            f"Agent reference could not be loaded: {reference_id}",
+            reference_id=reference_id,
+            package_resource=reference.get("package_resource"),
+            error_class=exc.__class__.__name__,
+            fix=_doctor_fix(
+                "reinstall_browser_cli_reference_resources",
+                commands=[
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    "browser-cli reference list",
+                ],
+                guidance=[
+                    "The installed package should include packaged agent reference markdown files."
+                ],
+            ),
+        )
+
+    _success(
+        command,
+        reference_id=reference_id,
+        reference=reference_payload,
+        content_format=reference.get("format"),
+        content_length=len(content),
+        content_included=True,
+        content=content,
+    )
+
+
 def cmd_commands(args: argparse.Namespace) -> None:
     command = "commands"
     catalog = _command_catalog()
@@ -13024,6 +13138,45 @@ def _add_commands_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     commands.set_defaults(func=cmd_commands)
 
 
+def _add_reference_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    reference = subparsers.add_parser(
+        "reference",
+        help="Inspect packaged agent reference docs",
+    )
+    reference_subparsers = reference.add_subparsers(
+        dest="reference_command",
+        required=True,
+    )
+
+    reference_list = reference_subparsers.add_parser(
+        "list",
+        help="List packaged agent references",
+    )
+    reference_list.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Return only reference ids for compact agent discovery.",
+    )
+    reference_list.set_defaults(func=cmd_reference_list)
+
+    reference_get = reference_subparsers.add_parser(
+        "get",
+        help="Read one packaged agent reference",
+    )
+    reference_get.add_argument(
+        "--id",
+        dest="reference_id",
+        required=True,
+        help="Reference id from browser-cli reference list.",
+    )
+    reference_get.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Return reference metadata without markdown content.",
+    )
+    reference_get.set_defaults(func=cmd_reference_get)
+
+
 def _add_version_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     version_parser = subparsers.add_parser(
         "version",
@@ -13095,6 +13248,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_auth_commands(subparsers)
     _add_doctor_command(subparsers)
     _add_commands_command(subparsers)
+    _add_reference_commands(subparsers)
     _add_alias_commands(subparsers)
     _add_json_compatibility_flag(parser)
 

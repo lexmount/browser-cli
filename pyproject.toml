@@ -18,6 +18,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["browser_cli*"]
 
+[tool.setuptools.package-data]
+browser_cli = ["agent_references/*.md"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

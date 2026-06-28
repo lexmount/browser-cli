@@ -557,8 +557,11 @@ local reveal flag.
 Use `--names-only` for compact command discovery and `--group action` when
 choosing a browser action. Use `agent_references` to load detailed Skill
 references such as `references/action-playbook.md` only when action selection,
-structured result parsing, masking, or browser-target details are needed. Use
-`--workflows-only` when you only need the structured setup,
+structured result parsing, masking, or browser-target details are needed.
+`agent_references.action_playbook.content_command` points to
+`browser-cli reference get --id action_playbook`, which returns the packaged
+markdown content from an installed CLI. Use `--workflows-only` when you only
+need the structured setup,
 Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page
 task, persistent login state, session recovery, case file task, form interaction,
 interactive targeting, and page diagnostics workflows, or

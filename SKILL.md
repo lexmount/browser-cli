@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; validate or run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/dialogs/frames/console entries/fetch-XHR entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; read packaged agent references with reference list/get; validate or run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/dialogs/frames/console entries/fetch-XHR entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -161,9 +161,12 @@ when the installed CLI version is uncertain or before writing custom JavaScript.
 Use the catalog's `browser_target.exactly_one_of`, `required_options`,
 `required_one_of`, `json_output`, `secret_policy`, `agent_references`,
 `agent_entrypoints`, and `agent_workflows` fields instead of parsing `--help`
-text. Follow `agent_references` when detailed action guidance is needed, then
-follow each workflow step's `read` array first; it names the auth availability,
-export usability, and context reuse fields that drive the next decision.
+text. Follow `agent_references` when detailed action guidance is needed; use
+`agent_references.action_playbook.content_command` or
+`browser-cli reference get --id action_playbook` to read packaged reference
+content from an installed CLI, then follow each workflow step's `read` array
+first; it names the auth availability, export usability, and context reuse
+fields that drive the next decision.
 
 ## Workflow
 
@@ -366,6 +369,8 @@ fetch/XHR or console failures, handling forms, menus, dialogs, frames, storage,
 cookies, or deciding whether custom JavaScript is necessary. It contains action
 examples, structured `result` fields, action-specific masking rules, common
 task recipes, and the browser target contract.
+If only the installed CLI is available, read the same packaged content with
+`browser-cli reference get --id action_playbook`.
 
 Core action rules:
 

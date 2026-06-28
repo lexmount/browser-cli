@@ -7,6 +7,12 @@ SKILL_MD = Path(__file__).resolve().parents[1] / "SKILL.md"
 ACTION_PLAYBOOK = (
     Path(__file__).resolve().parents[1] / "references" / "action-playbook.md"
 )
+PACKAGED_ACTION_PLAYBOOK = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "action-playbook.md"
+)
 
 
 def _normalized_skill_text() -> str:
@@ -35,6 +41,11 @@ def test_skill_routes_action_details_to_reference() -> None:
     assert "Action command examples" in action_text
     assert "Common task recipes" in action_text
     assert "Target Contract" in ACTION_PLAYBOOK.read_text()
+    assert "browser-cli reference get --id action_playbook" in normalized
+
+
+def test_packaged_action_playbook_matches_skill_reference() -> None:
+    assert PACKAGED_ACTION_PLAYBOOK.read_text() == ACTION_PLAYBOOK.read_text()
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:
