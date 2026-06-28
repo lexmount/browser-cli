@@ -14,6 +14,7 @@ browser-cli commands --workflows-only
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow page_diagnostics
@@ -160,12 +161,14 @@ persistent login state.
 Use case files when the task is repeatable or should leave artifacts:
 
 ```bash
+browser-cli commands --workflow case_file_task
 browser-cli case validate --file examples/cases/page-inspection.yaml
 browser-cli case run --file examples/cases/page-inspection.yaml --close-created-session
 ```
 
 Case files are good for smoke tests, regression checks, and demos because they
-produce structured JSON summaries and event logs.
+produce structured JSON summaries and event logs. Read `valid`, `errors`,
+`step_count`, `events_path`, `artifacts_dir`, `session`, and `steps`.
 
 ## Action Selection
 

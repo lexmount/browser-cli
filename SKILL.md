@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/dialogs/frames/console entries/fetch-XHR entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
+description: Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/token-info/refresh/logout/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands with commands; validate or run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/form values/dialogs/frames/console entries/fetch-XHR entries, click/type/fill/select/check/hover/press/scroll, inspect/query forms/links/tables/lists/text/dialogs/frames/performance/network/console/outlines/accessibility/interactive elements, manage storage/cookies, navigate history, screenshot, evaluate JavaScript, snapshot pages, or verify credentials without custom Playwright.
 ---
 
 # browser-cli
@@ -186,6 +186,16 @@ browser-cli action wait-selector --session-id <session_id> --selector <selector>
 browser-cli session close --session-id <session_id>
 ```
 
+For repeatable smoke tests, demos, or regression checks, prefer a case file
+workflow before writing browser automation code:
+
+```bash
+browser-cli commands --workflow case_file_task
+```
+
+Validate first, then run with `--close-created-session`. Read `valid`,
+`errors`, `step_count`, `events_path`, `artifacts_dir`, `session`, and `steps`.
+
 For form tasks, prefer the more specific form workflow:
 
 ```bash
@@ -294,6 +304,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting

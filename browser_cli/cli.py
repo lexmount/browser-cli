@@ -61,6 +61,8 @@ DOCTOR_REQUIRED_COMMANDS = (
     "commands",
     "version",
     "doctor",
+    "case.validate",
+    "case.run",
     "auth.status",
     "auth.login",
     "auth.export-env",
@@ -104,6 +106,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "scoped_token_lifecycle",
     "session_recovery",
     "one_off_page_task",
+    "case_file_task",
     "persistent_login_state",
     "form_interaction",
     "interactive_targeting",
@@ -139,6 +142,11 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "open_url",
         "find_targets",
         "close_session",
+    ),
+    "case_file_task": (
+        "inspect_case_commands",
+        "validate_case_file",
+        "run_case_file",
     ),
     "persistent_login_state": (
         "dry_run_context_pick",
@@ -508,6 +516,11 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action interactive-snapshot --session-id <session_id>",
                 "browser-cli session close --session-id <session_id>",
             ],
+            "case_file_task": [
+                "browser-cli commands --group case",
+                "browser-cli case validate --file <case.yaml>",
+                "browser-cli case run --file <case.yaml> --close-created-session",
+            ],
             "persistent_login_state": [
                 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
@@ -794,6 +807,50 @@ def _command_catalog() -> dict[str, Any]:
                         "id": "close_session",
                         "command": "browser-cli session close --session-id <session_id>",
                         "cleanup": True,
+                    },
+                ],
+            },
+            "case_file_task": {
+                "purpose": "Validate and run a repeatable JSON or YAML browser case file without writing custom browser automation code.",
+                "steps": [
+                    {
+                        "id": "inspect_case_commands",
+                        "command": "browser-cli commands --group case",
+                        "read": [
+                            "command_count",
+                            "commands",
+                            "json_output",
+                        ],
+                    },
+                    {
+                        "id": "validate_case_file",
+                        "command": "browser-cli case validate --file <case.yaml>",
+                        "success_condition": "valid=true",
+                        "read": [
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "file",
+                        ],
+                    },
+                    {
+                        "id": "run_case_file",
+                        "command": "browser-cli case run --file <case.yaml> --close-created-session",
+                        "success_condition": "ok=true",
+                        "read": [
+                            "ok",
+                            "run_id",
+                            "artifacts_dir",
+                            "events_path",
+                            "session",
+                            "steps",
+                        ],
+                        "on_failure_read": [
+                            "error",
+                            "message",
+                            "steps",
+                            "events_path",
+                        ],
                     },
                 ],
             },

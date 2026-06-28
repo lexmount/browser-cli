@@ -161,6 +161,9 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "local logout/revoke-pending fields" in text
     assert "session recovery" in text
     assert "replacement session" in text
+    assert "case file task" in text
+    assert "`events_path`" in text
+    assert "`artifacts_dir`" in text
     assert "form interaction" in text
     assert "interactive targeting" in text
     assert "`selection_order`" in text

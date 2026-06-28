@@ -1,4 +1,4 @@
 interface:
   display_name: "Lexmount Browser CLI"
   short_description: "Control Lexmount browsers from Codex"
-  default_prompt: "Use $browser-cli to check version JSON, inspect workflow contracts with commands --workflow including scoped_token_lifecycle, session_recovery, form_interaction, interactive_targeting, and page_diagnostics, follow workflow read arrays, verify auth with auth status/refresh/login, run doctor --json before browser work, inspect commands before custom JavaScript, dry-run or pick persistent contexts, operate sessions/actions with JSON output, and keep secrets out of chat."
+  default_prompt: "Use $browser-cli to check version JSON, inspect workflow contracts with commands --workflow including scoped_token_lifecycle, session_recovery, case_file_task, form_interaction, interactive_targeting, and page_diagnostics, follow workflow read arrays, verify auth with auth status/refresh/login, run doctor --json before browser work, inspect commands before custom JavaScript, validate/run case files for repeatable tasks, dry-run or pick persistent contexts, operate sessions/actions with JSON output, and keep secrets out of chat."

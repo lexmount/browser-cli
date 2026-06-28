@@ -250,6 +250,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["one_off_page_task"]
     )
     assert (
+        "browser-cli case run --file <case.yaml> --close-created-session"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli auth token-info --required-scope browser.actions:run"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
     )
@@ -344,6 +348,22 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "command": "browser-cli session close --session-id <session_id>",
         "cleanup": True,
     }
+    case_steps = workflows["case_file_task"]["steps"]
+    assert [step["id"] for step in case_steps] == [
+        "inspect_case_commands",
+        "validate_case_file",
+        "run_case_file",
+    ]
+    assert case_steps[0]["command"] == "browser-cli commands --group case"
+    assert "commands" in case_steps[0]["read"]
+    assert case_steps[1]["command"] == "browser-cli case validate --file <case.yaml>"
+    assert case_steps[1]["success_condition"] == "valid=true"
+    assert "errors" in case_steps[1]["read"]
+    assert case_steps[2]["command"] == (
+        "browser-cli case run --file <case.yaml> --close-created-session"
+    )
+    assert "events_path" in case_steps[2]["read"]
+    assert "message" in case_steps[2]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
     assert "availability" in context_steps[0]["read"]
     assert "reusable" in context_steps[0]["read"]
@@ -444,6 +464,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "auth.login",
         "auth.refresh",
         "doctor",
+        "case.validate",
+        "case.run",
         "session.create",
         "context.pick",
         "action.open-url",
@@ -508,7 +530,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 9
+    assert payload["workflow_count"] == 10
     assert "commands" not in payload
     assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
         "browser-cli doctor --json"
@@ -525,6 +547,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.nodes"
         in payload["agent_workflows"]["one_off_page_task"]["steps"][3]["read"]
+    )
+    assert (
+        "events_path"
+        in payload["agent_workflows"]["case_file_task"]["steps"][2]["read"]
     )
     assert (
         "selection_summary.recommended_next_action"
@@ -652,6 +678,38 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     )
 
 
+def test_commands_catalog_returns_case_file_task_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "case_file_task"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "case_file_task"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_case_commands",
+        "validate_case_file",
+        "run_case_file",
+    ]
+    assert steps[0]["command"] == "browser-cli commands --group case"
+    assert "command_count" in steps[0]["read"]
+    assert steps[1]["success_condition"] == "valid=true"
+    assert "step_count" in steps[1]["read"]
+    assert steps[2]["command"] == (
+        "browser-cli case run --file <case.yaml> --close-created-session"
+    )
+    assert "artifacts_dir" in steps[2]["read"]
+    assert "steps" in steps[2]["on_failure_read"]
+    assert (
+        "browser-cli case validate --file <case.yaml>"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+
+
 def test_commands_catalog_returns_session_recovery_workflow(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -758,6 +816,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["error"] == "unknown_workflow"
     assert payload["workflow"] == "missing"
     assert payload["available_workflows"] == [
+        "case_file_task",
         "connect_from_codex_auth",
         "form_interaction",
         "interactive_targeting",
@@ -920,13 +979,14 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 9
+    assert checks["command_catalog"]["workflow_count"] == 10
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_auth",
         "scoped_token_lifecycle",
         "session_recovery",
         "one_off_page_task",
+        "case_file_task",
         "persistent_login_state",
         "form_interaction",
         "interactive_targeting",
@@ -964,6 +1024,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "open_url",
         "find_targets",
         "close_session",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["case_file_task"] == [
+        "inspect_case_commands",
+        "validate_case_file",
+        "run_case_file",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["form_interaction"] == [
         "inspect_form",
@@ -1011,6 +1076,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.wait-dialog",
         "action.wait-frame",
         "version",
+        "case.validate",
+        "case.run",
     ):
         assert command_name in checks["command_catalog"]["required_commands"]
     assert checks["command_catalog"]["missing_required_commands"] == []
@@ -1076,6 +1143,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "scoped_token_lifecycle",
         "session_recovery",
         "one_off_page_task",
+        "case_file_task",
         "persistent_login_state",
         "form_interaction",
         "interactive_targeting",
@@ -1145,6 +1213,13 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "create_session"},
                         {"id": "open_url"},
                         {"id": "find_targets"},
+                    ],
+                },
+                "case_file_task": {
+                    "steps": [
+                        {"id": "inspect_case_commands"},
+                        {"id": "validate_case_file"},
+                        {"id": "run_case_file"},
                     ],
                 },
                 "persistent_login_state": {

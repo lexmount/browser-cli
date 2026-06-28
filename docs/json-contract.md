@@ -56,8 +56,8 @@ groups.
 workflow ids fail as JSON with `error=unknown_workflow`, `available_workflows`,
 and a `fix` object with commands for inspecting valid workflows.
 `agent_workflows` describes ordered setup, Connect from Codex auth, scoped token
-lifecycle, session recovery, one-off page, persistent login state, form interaction,
-interactive targeting, and page diagnostics steps with `command`, `read`,
+lifecycle, session recovery, one-off page, case file task, persistent login state,
+form interaction, interactive targeting, and page diagnostics steps with `command`, `read`,
 `success_condition`, `on_failure_read`, and `cleanup` hints.
 Command entries may expose `aliases` on canonical commands plus `alias_of` and
 `canonical_name` on alias commands, so agents can map user-facing phrasing back
@@ -71,6 +71,9 @@ without exposing token values.
 The session recovery workflow includes active session listing, single-session
 inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.
+The case file task workflow includes case command discovery, case validation,
+and `--close-created-session` case runs with `events_path`, `artifacts_dir`,
+`session`, and `steps` fields for repeatable smoke tests or regressions.
 The interactive targeting workflow exposes `selection_order`,
 `preferred_commands`, and `alternative_commands` so agents can choose
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of

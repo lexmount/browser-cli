@@ -65,6 +65,7 @@ CLI for you:
 16. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约：
    browser-cli commands --workflow session_recovery
    browser-cli commands --workflow one_off_page_task
+   browser-cli commands --workflow case_file_task
    browser-cli commands --workflow persistent_login_state
    browser-cli commands --workflow form_interaction
    browser-cli commands --workflow interactive_targeting
@@ -196,6 +197,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
@@ -276,6 +278,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
@@ -481,6 +484,7 @@ Diagnostics, case files, and compatibility aliases:
 browser-cli auth status
 browser-cli auth export-env
 browser-cli commands
+browser-cli commands --workflow case_file_task
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
 browser-cli doctor
@@ -531,8 +535,8 @@ local reveal flag.
 for compact command discovery and `--group action` when choosing a browser
 action. Use `--workflows-only` when you only need the structured setup,
 Connect from Codex auth, scoped token lifecycle, one-off page task, persistent
-login state, session recovery, form interaction, interactive targeting, and
-page diagnostics workflows, or
+login state, session recovery, case file task, form interaction, interactive
+targeting, and page diagnostics workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,
@@ -592,6 +596,7 @@ For a new browser task, agents should prefer this sequence:
 
 ```bash
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow case_file_task
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
