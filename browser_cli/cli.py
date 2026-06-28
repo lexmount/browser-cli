@@ -63,6 +63,21 @@ AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
+COMMON_DOM_STATE_CHOICES = (
+    "attached",
+    "detached",
+    "visible",
+    "hidden",
+    "enabled",
+    "disabled",
+    "editable",
+    "readonly",
+    "checked",
+    "unchecked",
+    "focused",
+    "in-viewport",
+    "out-of-viewport",
+)
 DOCTOR_REQUIRED_COMMANDS = (
     "commands",
     "reference.list",
@@ -98,6 +113,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.exists",
     "action.exists-role",
     "action.wait-state",
+    "action.wait-state-role",
     "action.scroll",
     "action.bounding-box-role",
     "action.select-option",
@@ -771,6 +787,7 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"',
                 'browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled',
                 'browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
@@ -1522,11 +1539,17 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "wait_submit_ready",
-                        "command": 'browser-cli action wait-role --session-id <session_id> --role button --name "<submit text>"',
+                        "command": 'browser-cli action wait-state-role --session-id <session_id> --role button --name "<submit text>" --state enabled',
                         "read": [
                             "result.found",
+                            "result.matched",
+                            "result.state_values",
                             "result.element",
                             "result.candidate_count",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-role --session-id <session_id> --role button --name "<submit text>"',
+                            'browser-cli action wait-state --session-id <session_id> --selector "<submit selector>" --state enabled',
                         ],
                     },
                     {
@@ -7617,6 +7640,80 @@ def _wait_count_expression(
 """.strip()
 
 
+def _dom_state_helpers_expression() -> str:
+    return """
+  const ariaTrue = (element, name) => element.getAttribute(name) === "true";
+  const ariaFalse = (element, name) => element.getAttribute(name) === "false";
+  const elementState = (element) => {
+    if (!element) {
+      return {
+        found: false,
+        element: null,
+        state_values: {
+          attached: false,
+          detached: true,
+          visible: false,
+          hidden: true,
+          enabled: false,
+          disabled: null,
+          editable: false,
+          readonly: null,
+          checked: null,
+          unchecked: null,
+          focused: false,
+          in_viewport: null,
+          out_of_viewport: null
+        }
+      };
+    }
+    const rect = element.getBoundingClientRect();
+    const inViewport = rect.bottom >= 0 &&
+      rect.right >= 0 &&
+      rect.top <= window.innerHeight &&
+      rect.left <= window.innerWidth;
+    const disabled = Boolean(element.disabled) || ariaTrue(element, "aria-disabled");
+    const readonly = Boolean(element.readOnly) || ariaTrue(element, "aria-readonly");
+    let checked = null;
+    if ("checked" in element) {
+      checked = Boolean(element.checked);
+    } else if (ariaTrue(element, "aria-checked")) {
+      checked = true;
+    } else if (ariaFalse(element, "aria-checked")) {
+      checked = false;
+    }
+    const visibleState = visible(element);
+    const tag = element.tagName.toLowerCase();
+    const editable = Boolean(
+      element.isContentEditable ||
+      (["input", "textarea", "select"].includes(tag) && !disabled && !readonly)
+    );
+    return {
+      found: true,
+      element: nodeInfo(element),
+      state_values: {
+        attached: true,
+        detached: false,
+        visible: visibleState,
+        hidden: !visibleState,
+        enabled: !disabled,
+        disabled,
+        editable,
+        readonly,
+        checked,
+        unchecked: checked === null ? null : !checked,
+        focused: document.activeElement === element,
+        in_viewport: inViewport,
+        out_of_viewport: !inViewport
+      }
+    };
+  };
+  const stateMatches = (stateValues) => {
+    const normalizedState = requestedState.replace(/-/g, "_");
+    return Boolean(stateValues[normalizedState]);
+  };
+""".rstrip()
+
+
 def _wait_state_expression(
     *,
     selector: str,
@@ -7632,75 +7729,7 @@ def _wait_state_expression(
   const startedAt = Date.now();
   const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
   const pollMs = Math.max(25, {_js_literal(poll_ms)});
-  const ariaTrue = (element, name) => element.getAttribute(name) === "true";
-  const ariaFalse = (element, name) => element.getAttribute(name) === "false";
-  const elementState = (element) => {{
-    if (!element) {{
-      return {{
-        found: false,
-        element: null,
-        state_values: {{
-          attached: false,
-          detached: true,
-          visible: false,
-          hidden: true,
-          enabled: false,
-          disabled: null,
-          editable: false,
-          readonly: null,
-          checked: null,
-          unchecked: null,
-          focused: false,
-          in_viewport: null,
-          out_of_viewport: null
-        }}
-      }};
-    }}
-    const rect = element.getBoundingClientRect();
-    const inViewport = rect.bottom >= 0 &&
-      rect.right >= 0 &&
-      rect.top <= window.innerHeight &&
-      rect.left <= window.innerWidth;
-    const disabled = Boolean(element.disabled) || ariaTrue(element, "aria-disabled");
-    const readonly = Boolean(element.readOnly) || ariaTrue(element, "aria-readonly");
-    let checked = null;
-    if ("checked" in element) {{
-      checked = Boolean(element.checked);
-    }} else if (ariaTrue(element, "aria-checked")) {{
-      checked = true;
-    }} else if (ariaFalse(element, "aria-checked")) {{
-      checked = false;
-    }}
-    const visibleState = visible(element);
-    const tag = element.tagName.toLowerCase();
-    const editable = Boolean(
-      element.isContentEditable ||
-      (["input", "textarea", "select"].includes(tag) && !disabled && !readonly)
-    );
-    return {{
-      found: true,
-      element: nodeInfo(element),
-      state_values: {{
-        attached: true,
-        detached: false,
-        visible: visibleState,
-        hidden: !visibleState,
-        enabled: !disabled,
-        disabled,
-        editable,
-        readonly,
-        checked,
-        unchecked: checked === null ? null : !checked,
-        focused: document.activeElement === element,
-        in_viewport: inViewport,
-        out_of_viewport: !inViewport
-      }}
-    }};
-  }};
-  const stateMatches = (stateValues) => {{
-    const normalizedState = requestedState.replace(/-/g, "_");
-    return Boolean(stateValues[normalizedState]);
-  }};
+{_dom_state_helpers_expression()}
   const check = () => {{
     const element = document.querySelector(selector);
     const result = elementState(element);
@@ -7878,6 +7907,66 @@ def _query_expression(
     nodes
   }};
 }}
+""".strip()
+
+
+def _wait_state_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    state: str,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedState = {_js_literal(state)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+{_dom_state_helpers_expression()}
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const check = () => {{
+    const roleMatch = findRoleTargetElement();
+    const element = roleMatch.element;
+    const result = elementState(element);
+    const waitedMs = Date.now() - startedAt;
+    const matched = stateMatches(result.state_values);
+    if (matched || waitedMs >= timeoutMs) {{
+      const payload = {{
+        role: requestedRole,
+        name: requestedName,
+        state: requestedState,
+        found: result.found,
+        role_found: Boolean(element),
+        matched,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        candidate_count: roleMatch.candidate_count,
+        state_values: result.state_values,
+        element: result.element
+      }};
+      if (!element) {{
+        payload.candidates = roleMatch.candidates;
+      }}
+      resolve(payload);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
 """.strip()
 
 
@@ -10542,6 +10631,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "check-role",
                 "focus-role",
                 "blur-role",
+                "wait-state-role",
                 "click-role",
                 "wait-text",
                 "get-value",
@@ -10557,6 +10647,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
                 'browser-cli action check-label --session-id <session_id> --label "<label>"',
                 'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "<submit text>" --state enabled',
                 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
             ],
             "fallback_commands": [
@@ -10593,6 +10684,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.clicked",
                 "result.focused",
                 "result.blurred",
+                "result.matched",
+                "result.state_values",
                 "value_masked",
             ],
             "custom_js_boundary": (
@@ -10740,6 +10833,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "selection_order": [
                 "wait-load-state",
                 "wait-url",
+                "wait-state-role",
                 "wait-selector",
                 "wait-role",
                 "wait-text",
@@ -10756,6 +10850,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "preferred_commands": [
                 "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
                 'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "<name>" --state enabled',
                 'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
                 'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
                 'browser-cli action wait-text --session-id <session_id> --text "<text>"',
@@ -10777,6 +10872,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.found",
                 "result.exists",
                 "result.role_found",
+                "result.matched",
+                "result.state_values",
                 "result.count",
                 "result.entry",
             ],
@@ -11111,6 +11208,23 @@ def cmd_action_wait_state(args: argparse.Namespace) -> None:
             state=args.state,
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_state_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-state-role",
+        _wait_state_role_expression(
+            role=args.role,
+            name=args.name,
+            state=args.state,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
         ),
     )
 
@@ -14525,25 +14639,33 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_wait_state.add_argument(
         "--state",
         required=True,
-        choices=[
-            "attached",
-            "detached",
-            "visible",
-            "hidden",
-            "enabled",
-            "disabled",
-            "editable",
-            "readonly",
-            "checked",
-            "unchecked",
-            "focused",
-            "in-viewport",
-            "out-of-viewport",
-        ],
+        choices=COMMON_DOM_STATE_CHOICES,
     )
     action_wait_state.add_argument("--timeout-ms", type=float, default=30000)
     action_wait_state.add_argument("--poll-ms", type=float, default=250)
     action_wait_state.set_defaults(func=cmd_action_wait_state)
+
+    action_wait_state_role = action_subparsers.add_parser(
+        "wait-state-role",
+        help="Wait until an element matched by role/name reaches a common DOM state",
+    )
+    _add_session_target_args(action_wait_state_role)
+    action_wait_state_role.add_argument("--role", required=True)
+    action_wait_state_role.add_argument("--name")
+    action_wait_state_role.add_argument(
+        "--state",
+        required=True,
+        choices=COMMON_DOM_STATE_CHOICES,
+    )
+    action_wait_state_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_state_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_state_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_wait_state_role)
+    action_wait_state_role.set_defaults(func=cmd_action_wait_state_role)
 
     action_query = action_subparsers.add_parser(
         "query",

@@ -56,6 +56,7 @@ browser-cli action exists-role --session-id <session_id> --role button --name "S
 browser-cli action count --session-id <session_id> --selector ".item"
 browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
 browser-cli action wait-state --session-id <session_id> --selector "button" --state enabled
+browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action inspect --session-id <session_id> --selector "button"
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
@@ -146,7 +147,7 @@ browser-cli action wait-cookie --session-id <session_id> --name consent --value 
 Prefer built-in actions over writing custom JavaScript. `page-info`, `reload`,
 `go-back`, `go-forward`, `wait-url`, `wait-title`, `wait-load-state`,
 `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`, `inspect`,
-`get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`,
+`get-attribute`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-text`,
 `wait-role`, `focus`, `focus-role`, `get-value`, `get-value-role`, `wait-value`,
 `wait-value-role`, `blur`, `blur-role`, `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
@@ -269,7 +270,8 @@ console/page error entries and the reported page URL.
    `get-value-role`, `wait-value-role`, `get-value`, or `wait-value` to confirm form state, use `blur-role` or `blur` for
    focus-driven validation, use `select-label` or `select-role` for selects,
    `select-option` or `check` for stable selector controls, prefer
-   `check-label`, `check-role`, or `uncheck-role` for semantic controls, use `wait-state --state enabled` or
+   `check-label`, `check-role`, or `uncheck-role` for semantic controls, use
+   `wait-state-role --state enabled`, `wait-state --state enabled`, or
    `wait-role` for async submit buttons, use `dispatch-event --event input
    --event change` when the app needs explicit events, then use `submit`,
    `click-role --role button --name <text>` or `click-text`.
@@ -321,9 +323,9 @@ console/page error entries and the reported page URL.
    `text-snapshot` for visible paragraphs, alerts, status messages, and bounded
    readable text, `table-snapshot` for HTML or ARIA table/report data,
    `outline-snapshot` for headings and landmarks, `wait-attribute` for DOM
-   attributes, `wait-state` for enabled/visible/checked/focused states, and
-   `get-text-role` for semantic text checks, and `get-text` for a known
-   selector. Use `snapshot` when the page structure or
+   attributes, `wait-state-role` for semantic enabled/visible/checked/focused
+   states, `wait-state` for selector states, `get-text-role` for semantic text
+   checks, and `get-text` for a known selector. Use `snapshot` when the page structure or
    selector is unknown; use `wait-text` or `wait-role` before reading dynamic
    results, and use `wait-text --state absent` when loading, toast, or error
    text should disappear.

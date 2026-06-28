@@ -302,6 +302,7 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "get-text-role",
         "exists",
         "exists-role",
+        "wait-state-role",
         "bounding-box-role",
         "select-option",
         "select-role",

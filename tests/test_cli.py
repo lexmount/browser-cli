@@ -534,6 +534,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert form_steps[4]["optional"] is True
     assert "result.checked" in form_steps[4]["read"]
     assert "result.element" in form_steps[5]["read"]
+    assert "result.matched" in form_steps[5]["read"]
+    assert "result.state_values" in form_steps[5]["read"]
+    assert "browser-cli action wait-role" in form_steps[5]["fallback_commands"][0]
     assert "result.clicked" in form_steps[6]["read"]
     assert form_steps[7]["optional"] is True
     assert "found" in form_steps[7]["read"]
@@ -649,6 +652,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.open-url",
         "action.page-info",
         "action.wait-title",
+        "action.wait-state-role",
         "action.press-key",
         "action.get-text-role",
         "action.exists-role",
@@ -697,6 +701,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert action_guide["required_options"] == []
     assert action_guide["required_one_of"] == []
     assert any("--task" in option["flags"] for option in action_guide["options"])
+    wait_state_role = commands["action.wait-state-role"]
+    assert "--role" in wait_state_role["required_options"]
+    assert "--state" in wait_state_role["required_options"]
+    assert any("--name" in option["flags"] for option in wait_state_role["options"])
+    assert any(
+        "--include-hidden" in option["flags"] for option in wait_state_role["options"]
+    )
     get_text_role = commands["action.get-text-role"]
     assert get_text_role["required_options"] == ["--role"]
     assert any("--name" in option["flags"] for option in get_text_role["options"])
@@ -885,6 +896,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "select-role" in payload["guide"]["selection_order"]
     assert "check-role" in payload["guide"]["selection_order"]
     assert "blur-role" in payload["guide"]["selection_order"]
+    assert "wait-state-role" in payload["guide"]["selection_order"]
     assert any(
         "browser-cli action fill-role" in command
         for command in payload["guide"]["preferred_commands"]
@@ -895,6 +907,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action check-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-state-role" in command
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
@@ -929,6 +945,23 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli action dispatch-event --session-id <session_id> "
         '--selector "<selector>" --event input --event change'
     ) in payload["guide"]["fallback_commands"]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "state_waits"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["selection_order"][:3] == [
+        "wait-load-state",
+        "wait-url",
+        "wait-state-role",
+    ]
+    assert any(
+        "browser-cli action wait-state-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert "result.matched" in payload["guide"]["read_fields"]
+    assert "result.state_values" in payload["guide"]["read_fields"]
 
 
 def test_action_guide_fails_unknown_task_as_json(
@@ -1522,6 +1555,12 @@ def test_commands_catalog_returns_form_interaction_workflow(
         "browser-cli action fill-role"
         in payload["workflow"]["steps"][2]["alternative_commands"][0]
     )
+    assert payload["workflow"]["steps"][5]["id"] == "wait_submit_ready"
+    assert (
+        "browser-cli action wait-state-role"
+        in payload["workflow"]["steps"][5]["command"]
+    )
+    assert "result.state_values" in payload["workflow"]["steps"][5]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "verify_result"
     assert payload["workflow"]["steps"][-1]["optional"] is True
     assert (
@@ -2071,6 +2110,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.get-text-role",
         "action.exists",
         "action.exists-role",
+        "action.wait-state-role",
         "action.bounding-box-role",
         "action.select-option",
         "action.select-role",
@@ -2199,6 +2239,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
+    assert "action.wait-state-role" in catalog["missing_required_commands"]
     assert "action.bounding-box-role" in catalog["missing_required_commands"]
     assert "action.select-role" in catalog["missing_required_commands"]
     assert "action.check-role" in catalog["missing_required_commands"]
@@ -9514,6 +9555,82 @@ def test_second_batch_eval_backed_action_commands_emit_structured_results(
                 "waited_ms": 50,
                 "timeout_ms": 1000,
                 "poll_ms": 50,
+                "state_values": {
+                    "attached": True,
+                    "detached": False,
+                    "visible": True,
+                    "hidden": False,
+                    "enabled": True,
+                    "disabled": False,
+                    "editable": False,
+                    "readonly": False,
+                    "checked": None,
+                    "unchecked": None,
+                    "focused": False,
+                    "in_viewport": True,
+                    "out_of_viewport": False,
+                },
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "wait-state-role",
+                "--session-id",
+                "s1",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+                "--state",
+                "enabled",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "50",
+            ],
+            "action.wait-state-role",
+            {
+                "role": "button",
+                "name": "Submit",
+                "state": "enabled",
+                "found": True,
+                "role_found": True,
+                "matched": True,
+                "include_hidden": False,
+                "waited_ms": 50,
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+                "candidate_count": 1,
+                "state_values": {
+                    "attached": True,
+                    "detached": False,
+                    "visible": True,
+                    "hidden": False,
+                    "enabled": True,
+                    "disabled": False,
+                    "editable": False,
+                    "readonly": False,
+                    "checked": None,
+                    "unchecked": None,
+                    "focused": False,
+                    "in_viewport": True,
+                    "out_of_viewport": False,
+                },
+            },
+            {
+                "role": "button",
+                "name": "Submit",
+                "state": "enabled",
+                "found": True,
+                "role_found": True,
+                "matched": True,
+                "include_hidden": False,
+                "waited_ms": 50,
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+                "candidate_count": 1,
                 "state_values": {
                     "attached": True,
                     "detached": False,

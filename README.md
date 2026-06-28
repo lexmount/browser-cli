@@ -411,6 +411,7 @@ browser-cli action exists-role --session-id <session_id> --role button --name "S
 browser-cli action count --session-id <session_id> --selector ".item"
 browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
 browser-cli action wait-state --session-id <session_id> --selector "button[type=submit]" --state enabled
+browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
 browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
 browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
@@ -494,7 +495,7 @@ the boundary for custom JavaScript.
 
 `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`,
-`get-attribute`, `wait-count`, `wait-state`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `focus-role`,
+`get-attribute`, `wait-count`, `wait-state`, `wait-state-role`, `wait-attribute`, `wait-text`, `wait-role`, `focus`, `focus-role`,
 `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `blur-role`, `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
@@ -741,7 +742,7 @@ Common agent recipes:
   `set-value`, `set-file-input`, `clear-role`, or `clear` -> `wait-value-role`, `get-value-role`,
   `wait-value`, or `get-value` ->
   `blur-role` or `blur` if validation is focus-driven -> `select-label`, `select-role`, or `select-option`,
-  `check-label`, `check-role`, `uncheck-role`, or `check` -> `wait-state --state enabled` or `wait-role` for
+  `check-label`, `check-role`, `uncheck-role`, or `check` -> `wait-state-role --state enabled`, `wait-state --state enabled`, or `wait-role` for
   async submit buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
   `submit --selector <form-or-field>`,
   `click-role --role button --name <text>` or `click-text` -> `wait-url` or
@@ -821,8 +822,8 @@ Common agent recipes:
   `list-snapshot` for menu/listbox/search-result/task-list content,
   `text-snapshot` for visible paragraphs, alerts, status messages, and bounded
   readable page text,
-  `wait-attribute` for DOM attributes, `wait-state` for
-  enabled/visible/checked/focused states, `get-text-role` for semantic text
+  `wait-attribute` for DOM attributes, `wait-state-role` for semantic
+  enabled/visible/checked/focused states, `wait-state` for selector states, `get-text-role` for semantic text
   checks, `get-text` for known selectors, or
   `snapshot` when the selector is unknown. Use `wait-text --state absent` when
   loading, toast, or error text should disappear.

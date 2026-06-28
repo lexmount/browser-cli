@@ -61,6 +61,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "For runtime errors, run `console-snapshot --install-only`" in normalized
     assert "Prefer semantic actions" in normalized
     assert "`wait-role` for async roles/names" in normalized
+    assert "`wait-state-role`" in normalized
     assert "`exists-role`, `get-text-role`, and `bounding-box-role`" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
@@ -301,6 +302,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`count`",
         "`wait-count`",
         "`wait-state`",
+        "`wait-state-role`",
         "`query`",
         "`inspect`",
         "`get-attribute`",
@@ -542,7 +544,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "`select-option` or `check`" in normalized
     assert "prefer `check-label`, `check-role`, or `uncheck-role`" in normalized
     assert (
-        "`wait-state --state enabled` or `wait-role` for async submit buttons"
+        "`wait-state-role --state enabled`, `wait-state --state enabled`, or"
         in normalized
     )
     assert "or `wait-role` for async submit buttons" in normalized
@@ -610,7 +612,10 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `page-info` for URL/title/readyState/viewport checks" in normalized
     assert "`wait-title` for async title changes" in normalized
     assert "`wait-count` for dynamic lists" in normalized
-    assert "`wait-state` for enabled/visible/checked/focused states" in normalized
+    assert (
+        "`wait-state-role` for semantic enabled/visible/checked/focused" in normalized
+    )
+    assert "`wait-state` for selector states" in normalized
     assert "`get-text-role` for semantic text checks" in normalized
     assert "`get-text` for a known selector" in normalized
     assert "use `wait-text` or `wait-role` before reading dynamic results" in normalized
