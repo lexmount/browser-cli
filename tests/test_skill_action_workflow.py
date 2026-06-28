@@ -111,6 +111,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli commands --workflow dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow navigation_flow" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
+    assert "browser-cli commands --workflow semantic_waits" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
@@ -124,6 +125,7 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "browser-cli action guide --task navigation_flow" in normalized
     assert "browser-cli action guide --task visual_capture" in normalized
+    assert "browser-cli action guide --task semantic_waits" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
@@ -328,9 +330,13 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "For visual evidence" in normalized
     assert "`screenshot-role`" in normalized
     assert "`screenshot-selector`" in normalized
+    assert "For semantic readiness and deterministic state transitions" in normalized
+    assert "browser-cli commands --workflow semantic_waits" in normalized
+    assert "browser-cli action guide --task semantic_waits" in normalized
+    assert "`wait-role`" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
-    assert "For deterministic state transitions" in normalized
+    assert "deterministic state transitions" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "For page failures, fetch/XHR issues, or runtime errors" in normalized
@@ -595,6 +601,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli commands --workflow dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow navigation_flow" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
+    assert "browser-cli commands --workflow semantic_waits" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
@@ -606,6 +613,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli action guide --task dialog_frame_handling" in normalized
     assert "browser-cli action guide --task navigation_flow" in normalized
     assert "browser-cli action guide --task visual_capture" in normalized
+    assert "browser-cli action guide --task semantic_waits" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized
     assert "browser-cli action guide --task state_waits" in normalized
     assert "browser-cli action guide --task page_diagnostics" in normalized
@@ -625,6 +633,9 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "Capture visual evidence" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
     assert "browser-cli action guide --task visual_capture" in normalized
+    assert "Wait for semantic readiness" in normalized
+    assert "browser-cli commands --workflow semantic_waits" in normalized
+    assert "browser-cli action guide --task semantic_waits" in normalized
     assert "Menus and keyboard flows" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
     assert "browser-cli action guide --task menu_keyboard_flow" in normalized

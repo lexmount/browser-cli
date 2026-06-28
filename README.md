@@ -49,6 +49,7 @@ CLI for you:
    browser-cli action guide --task dialog_frame_handling
    browser-cli action guide --task navigation_flow
    browser-cli action guide --task visual_capture
+   browser-cli action guide --task semantic_waits
    browser-cli action guide --task menu_keyboard_flow
    browser-cli action guide --task state_waits
    browser-cli reference list
@@ -107,6 +108,7 @@ CLI for you:
    browser-cli commands --workflow dialog_frame_handling
    browser-cli commands --workflow navigation_flow
    browser-cli commands --workflow visual_capture
+   browser-cli commands --workflow semantic_waits
    browser-cli commands --workflow menu_keyboard_flow
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
@@ -118,6 +120,7 @@ CLI for you:
    browser-cli action guide --task dialog_frame_handling
    browser-cli action guide --task navigation_flow
    browser-cli action guide --task visual_capture
+   browser-cli action guide --task semantic_waits
    browser-cli action guide --task menu_keyboard_flow
    browser-cli action guide --task state_waits
    browser-cli action guide --task page_diagnostics
@@ -268,6 +271,7 @@ browser-cli action guide --task file_upload
 browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task navigation_flow
 browser-cli action guide --task visual_capture
+browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task state_waits
 browser-cli commands --workflows-only
@@ -284,6 +288,7 @@ browser-cli commands --workflow form_interaction
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow visual_capture
+browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -291,6 +296,7 @@ browser-cli commands --workflow file_upload
 browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow visual_capture
+browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow state_waits
 browser-cli commands --workflow page_diagnostics
@@ -582,7 +588,7 @@ browser-cli action interactive-only-snapshot --session-id <session_id>
 
 `action guide` returns machine-readable task routes for `form_interaction`,
 `interactive_targeting`, `content_extraction`, `browser_state_management`,
-`file_upload`, `dialog_frame_handling`, `navigation_flow`, `visual_capture`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
+`file_upload`, `dialog_frame_handling`, `navigation_flow`, `visual_capture`, `semantic_waits`, `menu_keyboard_flow`, `page_diagnostics`, and `state_waits`, including
 selection order, inspect/preferred/fallback/verify commands, read fields, and
 the boundary for custom JavaScript.
 
@@ -893,6 +899,10 @@ Common agent recipes:
   `browser-cli action guide --task visual_capture`, set viewport when needed,
   then use `screenshot-role`, `screenshot-selector`, full-page `screenshot`,
   or bounded `text-snapshot` before custom JavaScript.
+- Semantic waits: run `browser-cli commands --workflow semantic_waits` and
+  `browser-cli action guide --task semantic_waits`, then use `wait-role`,
+  `wait-text`, `wait-state-role`, `wait-attribute-role`, or `wait-count`
+  before sleeps or polling JavaScript.
 - Deterministic wait: run `browser-cli commands --workflow state_waits`, then
   choose the narrowest `wait-*` command such as `wait-load-state`, `wait-url`,
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or
@@ -943,6 +953,10 @@ Common agent recipes:
 - Visual capture: run `browser-cli commands --workflow visual_capture`; use
   `page-info`, `set-viewport`, `screenshot-role`, `screenshot-selector`,
   full-page `screenshot`, and bounded `text-snapshot` before custom JavaScript.
+- Semantic target readiness: run `browser-cli commands --workflow semantic_waits`;
+  use `wait-role`, `wait-text`, `wait-state-role`, `wait-attribute-role`,
+  `exists-role`, `get-text-role`, and `bounding-box-role` before custom
+  polling JavaScript.
 - Runtime errors: install `console-snapshot --install-only`, trigger the
   suspected action, read `console-snapshot` or wait with `wait-console`, then use
   `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or `inspect`

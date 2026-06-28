@@ -264,6 +264,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "navigation_flow" in references["action_playbook"]["related_workflows"]
     assert "visual_capture" in references["action_playbook"]["related_workflows"]
+    assert "semantic_waits" in references["action_playbook"]["related_workflows"]
     assert "page_diagnostics" in references["action_playbook"]["related_workflows"]
     assert (
         "Structured Results And Masking"
@@ -415,6 +416,22 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         'browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png'
         in payload["agent_entrypoints"]["visual_capture"]
+    )
+    assert (
+        "browser-cli action guide --task semantic_waits"
+        in payload["agent_entrypoints"]["semantic_waits"]
+    )
+    assert (
+        'browser-cli action wait-role --session-id <session_id> --role button --name "Submit" --state visible'
+        in payload["agent_entrypoints"]["semantic_waits"]
+    )
+    assert (
+        'browser-cli action wait-text --session-id <session_id> --text "Saved" --match contains'
+        in payload["agent_entrypoints"]["semantic_waits"]
+    )
+    assert (
+        'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact'
+        in payload["agent_entrypoints"]["semantic_waits"]
     )
     assert (
         "browser-cli action guide --task menu_keyboard_flow"
@@ -691,6 +708,42 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser-cli action text-snapshot" in visual_steps[5][
         "fallback_commands"
     ][1]
+    semantic_wait_steps = workflows["semantic_waits"]["steps"]
+    assert [step["id"] for step in semantic_wait_steps] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_wait_predicate",
+        "wait_for_semantic_state",
+        "verify_observed_state",
+    ]
+    assert semantic_wait_steps[0]["command"] == (
+        "browser-cli action guide --task semantic_waits"
+    )
+    assert "guide.custom_js_boundary" in semantic_wait_steps[0]["read"]
+    assert semantic_wait_steps[1]["command"] == (
+        "browser-cli action page-info --session-id <session_id>"
+    )
+    assert "visibility_state" in semantic_wait_steps[1]["read"]
+    assert semantic_wait_steps[2]["agent_action"] is True
+    assert semantic_wait_steps[2]["selection_order"][:4] == [
+        "wait-role",
+        "wait-text",
+        "wait-state-role",
+        "wait-attribute-role",
+    ]
+    assert "browser-cli action wait-role" in semantic_wait_steps[2][
+        "preferred_commands"
+    ][0]
+    assert semantic_wait_steps[3]["agent_action"] is True
+    assert "result.waited_ms" in semantic_wait_steps[3]["read"]
+    assert "result.state_values" in semantic_wait_steps[3]["read"]
+    assert "browser-cli action wait-selector" in semantic_wait_steps[3][
+        "fallback_commands"
+    ][0]
+    assert "result.exists" in semantic_wait_steps[4]["read"]
+    assert "browser-cli action get-text-role" in semantic_wait_steps[4][
+        "fallback_commands"
+    ][0]
     case_steps = workflows["case_file_task"]["steps"]
     assert [step["id"] for step in case_steps] == [
         "inspect_case_commands",
@@ -1354,7 +1407,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "ok": True,
         "command": "action.guide",
         "schema_version": 1,
-        "task_count": 11,
+        "task_count": 12,
         "tasks": [
             "browser_state_management",
             "content_extraction",
@@ -1365,6 +1418,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
             "menu_keyboard_flow",
             "navigation_flow",
             "page_diagnostics",
+            "semantic_waits",
             "state_waits",
             "visual_capture",
         ],
@@ -1396,6 +1450,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "menu_keyboard_flow",
         "navigation_flow",
         "page_diagnostics",
+        "semantic_waits",
         "state_waits",
         "visual_capture",
     ]
@@ -1557,6 +1612,41 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["next_commands"] == [
         "browser-cli commands --workflow visual_capture",
         "browser-cli commands --workflow page_diagnostics",
+        "browser-cli commands --workflow interactive_targeting",
+    ]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "guide", "--task", "semantic_waits"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["guide"]["related_workflows"] == [
+        "semantic_waits",
+        "state_waits",
+        "interactive_targeting",
+    ]
+    assert payload["guide"]["selection_order"][:5] == [
+        "wait-role",
+        "wait-text",
+        "wait-state-role",
+        "wait-attribute-role",
+        "wait-count",
+    ]
+    assert any(
+        "browser-cli action wait-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action wait-attribute-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert "result.waited_ms" in payload["guide"]["read_fields"]
+    assert "result.state_values" in payload["guide"]["read_fields"]
+    assert "result.attribute_found" in payload["guide"]["read_fields"]
+    assert "semantic waits" in payload["guide"]["custom_js_boundary"]
+    assert payload["next_commands"] == [
+        "browser-cli commands --workflow semantic_waits",
+        "browser-cli commands --workflow state_waits",
         "browser-cli commands --workflow interactive_targeting",
     ]
 
@@ -1852,6 +1942,7 @@ def test_action_guide_fails_unknown_task_as_json(
         "menu_keyboard_flow",
         "navigation_flow",
         "page_diagnostics",
+        "semantic_waits",
         "state_waits",
         "visual_capture",
     ]
@@ -1871,7 +1962,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 20
+    assert payload["workflow_count"] == 21
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -1968,6 +2059,10 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "result.screenshot"
         in payload["agent_workflows"]["visual_capture"]["steps"][4]["read"]
+    )
+    assert (
+        "result.waited_ms"
+        in payload["agent_workflows"]["semantic_waits"]["steps"][3]["read"]
     )
     assert (
         "result.keydown_accepted"
@@ -2108,6 +2203,45 @@ def test_commands_catalog_returns_visual_capture_workflow(
     assert "browser-cli action guide --task visual_capture" in payload[
         "agent_entrypoints"
     ]["visual_capture"][0]
+
+
+def test_commands_catalog_returns_semantic_waits_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "semantic_waits"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["workflow_id"] == "semantic_waits"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_wait_predicate",
+        "wait_for_semantic_state",
+        "verify_observed_state",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --task semantic_waits"
+    assert "guide.custom_js_boundary" in steps[0]["read"]
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"][:4] == [
+        "wait-role",
+        "wait-text",
+        "wait-state-role",
+        "wait-attribute-role",
+    ]
+    assert "browser-cli action wait-role" in steps[2]["preferred_commands"][0]
+    assert steps[3]["agent_action"] is True
+    assert "result.waited_ms" in steps[3]["read"]
+    assert "result.attribute_found" in steps[3]["read"]
+    assert "browser-cli action wait-selector" in steps[3]["fallback_commands"][0]
+    assert "result.exists" in steps[-1]["read"]
+    assert "browser-cli action guide --task semantic_waits" in payload[
+        "agent_entrypoints"
+    ]["semantic_waits"][0]
 
 
 def test_reference_list_returns_packaged_agent_references(
@@ -3226,6 +3360,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "page_diagnostics",
         "persistent_login_state",
         "scoped_token_lifecycle",
+        "semantic_waits",
         "session_recovery",
         "setup_and_verify",
         "state_waits",
@@ -3386,7 +3521,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 20
+    assert checks["command_catalog"]["workflow_count"] == 21
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -3404,6 +3539,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "dialog_frame_handling",
         "interactive_targeting",
         "visual_capture",
+        "semantic_waits",
         "menu_keyboard_flow",
         "content_extraction",
         "state_waits",
@@ -3546,6 +3682,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "choose_capture_target",
         "capture_visual_evidence",
         "verify_capture_artifact",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"]["semantic_waits"] == [
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_wait_predicate",
+        "wait_for_semantic_state",
+        "verify_observed_state",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "menu_keyboard_flow"
@@ -3869,6 +4012,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "dialog_frame_handling",
         "interactive_targeting",
         "visual_capture",
+        "semantic_waits",
         "menu_keyboard_flow",
         "content_extraction",
         "state_waits",
@@ -4164,6 +4308,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "capture_visual_evidence"},
                     ],
                 },
+                "semantic_waits": {
+                    "steps": [
+                        {"id": "inspect_action_guide"},
+                        {"id": "inspect_current_page"},
+                        {"id": "choose_wait_predicate"},
+                        {"id": "wait_for_semantic_state"},
+                    ],
+                },
                 "menu_keyboard_flow": {
                     "steps": [
                         {"id": "inspect_action_guide"},
@@ -4229,6 +4381,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "file_upload": ["submit_if_requested"],
         "dialog_frame_handling": ["verify_result"],
         "visual_capture": ["verify_capture_artifact"],
+        "semantic_waits": ["verify_observed_state"],
         "menu_keyboard_flow": ["verify_result"],
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],

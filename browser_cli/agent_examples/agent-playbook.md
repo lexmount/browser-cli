@@ -24,6 +24,7 @@ browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow visual_capture
+browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -36,6 +37,7 @@ browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task navigation_flow
 browser-cli action guide --task visual_capture
+browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -255,6 +257,18 @@ browser-cli action guide --task state_waits
 browser-cli action wait-load-state --session-id <session_id> --state networkidle
 browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
 browser-cli action wait-network --session-id <session_id> --url /api/search --url-match contains
+```
+
+For semantic target readiness, read semantic wait workflow contracts before
+writing polling JavaScript:
+
+```bash
+browser-cli commands --workflow semantic_waits
+browser-cli action guide --task semantic_waits
+browser-cli action wait-role --session-id <session_id> --role button --name "Submit" --state visible
+browser-cli action wait-text --session-id <session_id> --text "Saved" --match contains
+browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
+browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
 ```
 
 For page navigation, refresh, or browser history, read navigation workflow

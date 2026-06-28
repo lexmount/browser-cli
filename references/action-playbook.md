@@ -25,6 +25,7 @@ browser-cli commands --workflow dialog_frame_handling
 browser-cli commands --workflow interactive_targeting
 browser-cli commands --workflow navigation_flow
 browser-cli commands --workflow visual_capture
+browser-cli commands --workflow semantic_waits
 browser-cli commands --workflow menu_keyboard_flow
 browser-cli commands --workflow content_extraction
 browser-cli commands --workflow browser_state_management
@@ -37,6 +38,7 @@ browser-cli action guide --task dialog_frame_handling
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task navigation_flow
 browser-cli action guide --task visual_capture
+browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task content_extraction
 browser-cli action guide --task browser_state_management
@@ -344,19 +346,24 @@ then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
    `page-info` and `set-viewport`, then prefer `screenshot-role`,
    `screenshot-selector`, full-page `screenshot`, or bounded `text-snapshot`
    before custom JavaScript.
-7. Diagnose fetch/XHR calls: run `browser-cli commands --workflow
+7. Wait for semantic readiness: run `browser-cli commands --workflow
+   semantic_waits` and `browser-cli action guide --task semantic_waits`; use
+   `wait-role`, `wait-text`, `wait-state-role`, `wait-attribute-role`, or
+   `wait-count`, then verify with `exists-role`, `get-text-role`, or
+   `bounding-box-role` before polling JavaScript.
+8. Diagnose fetch/XHR calls: run `browser-cli commands --workflow
    page_diagnostics` and `browser-cli action guide --task page_diagnostics`,
    then run `network-snapshot --install-only`, trigger the suspected action,
    read `network-snapshot` or wait with `wait-network`, and parse `entries`,
    `method`, `status`, `ok`, `failed`, `duration_ms`, and masked URLs; use
    `--failed-only` when looking for transport failures.
-8. Capture runtime errors: run `browser-cli commands --workflow
+9. Capture runtime errors: run `browser-cli commands --workflow
    page_diagnostics` and `browser-cli action guide --task page_diagnostics`,
    then run `console-snapshot --install-only`, trigger the suspected action,
    read `console-snapshot` or wait with `wait-console`, then use
    `text-snapshot`, `wait-dialog`, `dialog-snapshot`, `wait-frame`, or
    `inspect` to correlate visible state with JS errors.
-9. Open menus or keyboard flows: run `browser-cli commands --workflow
+10. Open menus or keyboard flows: run `browser-cli commands --workflow
    menu_keyboard_flow` and `browser-cli action guide --task
    menu_keyboard_flow`, then use `focus-role`, `hover-role`, `press-role`,
    or `scroll-into-view-role` when role/name is known; use `focus`, `hover`, or `press` for
@@ -372,7 +379,7 @@ then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
    `wait-frame` when the frame appears asynchronously, otherwise run
    `frame-snapshot` and parse `readable`, `same_origin`, `frame_url`, and
    `read_error` before deciding whether direct DOM inspection is possible.
-10. Read page results: use `page-info` for URL/title/readyState/viewport checks,
+11. Read page results: use `page-info` for URL/title/readyState/viewport checks,
    `set-viewport` before responsive screenshots or layout-sensitive checks,
    `wait-title` for async title changes, `wait-count` for dynamic lists,
    `list-snapshot` for menu/listbox/search-result/task-list content,
@@ -386,7 +393,7 @@ then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
    selector is unknown; use `wait-text` or `wait-role` before reading dynamic
    results, and use `wait-text --state absent` when loading, toast, or error
    text should disappear.
-11. Manage browser state: run `browser-cli commands --workflow
+12. Manage browser state: run `browser-cli commands --workflow
    browser_state_management` and `browser-cli action guide --task
    browser_state_management`, then use `storage-get` for local/session storage,
    `storage-set` for feature flags or onboarding state, and `storage-remove` or
@@ -395,11 +402,11 @@ then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
    `cookie-delete`, or `cookie-clear` for document.cookie-visible cookies such
    as consent or non-HttpOnly flags, and `wait-cookie` when cookie changes are
    async.
-12. Debug selectors: use `count`, `query`, `inspect`, and `get-attribute` before
+13. Debug selectors: use `count`, `query`, `inspect`, and `get-attribute` before
    `eval`; use `inspect` for `state.disabled`, `state.readonly`, masked
    `value`, `attributes`, and `in_viewport`; use `wait-count`, `wait-state`, or
    `wait-attribute` for async DOM changes.
-13. Capture final evidence: use `set-viewport` when evidence needs a stable
+14. Capture final evidence: use `set-viewport` when evidence needs a stable
     browser size, `screenshot-role` for a semantic target,
     `screenshot-selector` for a known panel/control, then `screenshot` for full
     viewport/page evidence and close the session unless the user asks to keep

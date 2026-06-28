@@ -97,6 +97,7 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow dialog_frame_handling" in normalized
     assert "browser-cli commands --workflow navigation_flow" in normalized
     assert "browser-cli commands --workflow visual_capture" in normalized
+    assert "browser-cli commands --workflow semantic_waits" in normalized
     assert "browser-cli commands --workflow menu_keyboard_flow" in normalized
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
