@@ -279,6 +279,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert references["action_playbook"]["package_resource"] == (
         "browser_cli.agent_references:action-playbook.md"
     )
+    assert references["usable_status"]["path"] == "references/usable-status.md"
+    assert references["usable_status"]["content_command"] == (
+        "browser-cli reference get --id usable_status"
+    )
+    assert references["usable_status"]["package_resource"] == (
+        "browser_cli.agent_references:usable-status.md"
+    )
+    assert "setup_and_verify" in references["usable_status"]["related_workflows"]
+    assert "doctor readiness checks" in references["usable_status"]["covers"]
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "mouse_interaction" in references["action_playbook"]["related_workflows"]
@@ -2633,7 +2642,7 @@ def test_reference_list_returns_packaged_agent_references(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 1
+    assert payload["reference_count"] == 2
     reference = payload["references"]["action_playbook"]
     assert reference["id"] == "action_playbook"
     assert reference["path"] == "references/action-playbook.md"
@@ -2644,6 +2653,14 @@ def test_reference_list_returns_packaged_agent_references(
         "browser_cli.agent_references:action-playbook.md"
     )
     assert "Common Task Recipes" in reference["grep_patterns"]
+    usable = payload["references"]["usable_status"]
+    assert usable["id"] == "usable_status"
+    assert usable["path"] == "references/usable-status.md"
+    assert usable["content_command"] == "browser-cli reference get --id usable_status"
+    assert usable["package_resource"] == (
+        "browser_cli.agent_references:usable-status.md"
+    )
+    assert "browser_smoke_session.status=pass" in usable["grep_patterns"]
 
 
 def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
@@ -2654,8 +2671,8 @@ def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 1
-    assert payload["references"] == ["action_playbook"]
+    assert payload["reference_count"] == 2
+    assert payload["references"] == ["action_playbook", "usable_status"]
 
 
 def test_reference_get_returns_packaged_action_playbook(
@@ -2676,6 +2693,26 @@ def test_reference_get_returns_packaged_action_playbook(
     assert "# Browser Action Playbook" in payload["content"]
     assert "Common Task Recipes" in payload["content"]
     assert "Target Contract" in payload["content"]
+
+
+def test_reference_get_returns_packaged_usable_status(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "usable_status"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.get"
+    assert payload["reference_id"] == "usable_status"
+    assert payload["reference"]["id"] == "usable_status"
+    assert payload["content_format"] == "markdown"
+    assert payload["content_included"] is True
+    assert payload["content_length"] == len(payload["content"])
+    assert "# Browser CLI Usable Status" in payload["content"]
+    assert "Readiness Checks" in payload["content"]
+    assert "browser.lexmount.cn Work Needed" in payload["content"]
 
 
 def test_reference_get_metadata_only_omits_content(
@@ -2708,7 +2745,7 @@ def test_reference_get_fails_unknown_reference_as_json(
     assert payload["command"] == "reference.get"
     assert payload["error"] == "unknown_reference"
     assert payload["reference_id"] == "missing"
-    assert payload["available_references"] == ["action_playbook"]
+    assert payload["available_references"] == ["action_playbook", "usable_status"]
     assert payload["fix"]["code"] == "inspect_available_agent_references"
 
 
@@ -5455,11 +5492,18 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["agent_prompt"]["missing_patterns"] == []
     assert checks["agent_prompt"]["mismatched_fields"] == []
     assert checks["agent_references"]["status"] == "pass"
-    assert checks["agent_references"]["reference_count"] == 1
-    assert checks["agent_references"]["required_references"] == ["action_playbook"]
+    assert checks["agent_references"]["reference_count"] == 2
+    assert checks["agent_references"]["required_references"] == [
+        "action_playbook",
+        "usable_status",
+    ]
     assert checks["agent_references"]["missing_required_references"] == []
     assert checks["agent_references"]["invalid_references"] == []
-    checked_reference = checks["agent_references"]["checked_references"][0]
+    checked_references = {
+        reference["id"]: reference
+        for reference in checks["agent_references"]["checked_references"]
+    }
+    checked_reference = checked_references["action_playbook"]
     assert checked_reference["id"] == "action_playbook"
     assert checked_reference["status"] == "pass"
     assert checked_reference["content_command"] == (
@@ -5470,6 +5514,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert checked_reference["content_length"] > 1000
     assert checked_reference["missing_patterns"] == []
+    usable_reference = checked_references["usable_status"]
+    assert usable_reference["status"] == "pass"
+    assert usable_reference["content_command"] == (
+        "browser-cli reference get --id usable_status"
+    )
+    assert usable_reference["package_resource"] == (
+        "browser_cli.agent_references:usable-status.md"
+    )
+    assert usable_reference["content_length"] > 1000
+    assert usable_reference["missing_patterns"] == []
     assert checks["agent_examples"]["status"] == "pass"
     assert checks["agent_examples"]["example_count"] == 3
     assert checks["agent_examples"]["required_examples"] == [
@@ -5976,8 +6030,15 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     )
 
     def fail_read(reference_id: str) -> str:
-        assert reference_id == "action_playbook"
-        raise FileNotFoundError("missing packaged reference")
+        if reference_id == "action_playbook":
+            raise FileNotFoundError("missing packaged reference")
+        assert reference_id == "usable_status"
+        return (
+            "Current Baseline\n"
+            "Readiness Checks\n"
+            "browser_smoke_session.status=pass\n"
+            "browser.lexmount.cn Work Needed\n"
+        )
 
     monkeypatch.setattr("browser_cli.cli._read_agent_reference_content", fail_read)
 
@@ -5992,7 +6053,7 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     checks = _checks_by_name(payload)
     references = checks["agent_references"]
     assert references["status"] == "warn"
-    assert references["required_references"] == ["action_playbook"]
+    assert references["required_references"] == ["action_playbook", "usable_status"]
     assert references["missing_required_references"] == []
     assert references["invalid_references"] == [
         {
@@ -6007,6 +6068,10 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     assert references["fix"]["code"] == "repair_packaged_agent_references"
     assert (
         "browser-cli reference get --id action_playbook"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli reference get --id usable_status"
         in payload["repair_plan"]["commands"]
     )
     assert (

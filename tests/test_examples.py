@@ -91,6 +91,8 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action guide --task state_waits" in text
     assert "browser-cli action guide --task page_diagnostics" in text
     assert "browser-cli reference list" in text
+    assert "browser-cli reference get --id usable_status --metadata-only" in text
+    assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli example list" in text
     assert "browser-cli example get --id page_inspection_case --metadata-only" in text
     assert "browser-cli commands --group action" in text

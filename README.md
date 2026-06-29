@@ -64,6 +64,8 @@ CLI for you:
    browser-cli action guide --task mouse_interaction
    browser-cli action guide --task state_waits
    browser-cli reference list
+   browser-cli reference get --id usable_status --metadata-only
+   browser-cli reference get --id usable_status
    browser-cli reference get --id action_playbook --metadata-only
    browser-cli reference get --id action_playbook
 7. 读取 packaged examples；如果要做可重复任务或 case file，优先参考这些示例：
@@ -789,9 +791,13 @@ local reveal flag.
 Use `--names-only` for compact command discovery and `--group action` when
 choosing a browser action. Use `browser-cli action guide --task <task>` for
 compact task-specific action selection before reading larger references. Use
-`agent_references` to load detailed Skill
-references such as `references/action-playbook.md` only when action selection,
-structured result parsing, masking, or browser-target details are needed.
+`agent_references` to load detailed Skill references such as
+`references/usable-status.md` when checking the current usable baseline, and
+`references/action-playbook.md` when action selection, structured result
+parsing, masking, or browser-target details are needed.
+`agent_references.usable_status.content_command` points to
+`browser-cli reference get --id usable_status`, which returns the installed
+setup/readiness boundary reference.
 `agent_references.action_playbook.content_command` points to
 `browser-cli reference get --id action_playbook`, which returns the packaged
 markdown content from an installed CLI. `agent_examples` points to packaged
@@ -834,7 +840,7 @@ direct URL, API connectivity, and optional browser smoke-session checks. The
 reports `version_source` so agents can distinguish installed package metadata
 from the package fallback version.
 The `agent_references` check verifies packaged Skill reference docs such as
-`action_playbook` are readable from the installed CLI and reports
+`usable_status` and `action_playbook` are readable from the installed CLI and reports
 `missing_required_references`, `invalid_references`, and `checked_references`
 with `content_command`/`package_resource` metadata. The `agent_examples` check
 verifies packaged playbooks and case examples are readable, validates YAML case

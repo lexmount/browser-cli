@@ -13,6 +13,15 @@ PACKAGED_ACTION_PLAYBOOK = (
     / "agent_references"
     / "action-playbook.md"
 )
+USABLE_STATUS = (
+    Path(__file__).resolve().parents[1] / "references" / "usable-status.md"
+)
+PACKAGED_USABLE_STATUS = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "usable-status.md"
+)
 
 
 def _normalized_skill_text() -> str:
@@ -46,6 +55,10 @@ def test_skill_routes_action_details_to_reference() -> None:
 
 def test_packaged_action_playbook_matches_skill_reference() -> None:
     assert PACKAGED_ACTION_PLAYBOOK.read_text() == ACTION_PLAYBOOK.read_text()
+
+
+def test_packaged_usable_status_matches_skill_reference() -> None:
+    assert PACKAGED_USABLE_STATUS.read_text() == USABLE_STATUS.read_text()
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:

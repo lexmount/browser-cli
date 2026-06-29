@@ -364,7 +364,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "wait-value",
     "wait-value-role",
 )
-DOCTOR_REQUIRED_REFERENCES = ("action_playbook",)
+DOCTOR_REQUIRED_REFERENCES = ("action_playbook", "usable_status")
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "page_inspection_case",
@@ -1072,7 +1072,46 @@ def _agent_references() -> dict[str, Any]:
                 "Structured Results And Masking",
                 "Target Contract",
             ],
-        }
+        },
+        "usable_status": {
+            "path": "references/usable-status.md",
+            "content_command": "browser-cli reference get --id usable_status",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:usable-status.md",
+            "format": "markdown",
+            "purpose": (
+                "Check the current mainline usable baseline, readiness gates, "
+                "current limits, and browser.lexmount.cn integration boundary."
+            ),
+            "load_when": [
+                "Starting from a fresh browser-cli install.",
+                "Deciding whether doctor output proves browser actions are ready.",
+                "Explaining what works now versus what still needs browser.lexmount.cn.",
+                "Writing setup guidance for Codex or another agent.",
+            ],
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_auth",
+                "connect_from_codex_site_requirements",
+                "device_code_auth",
+                "scoped_token_lifecycle",
+                "session_recovery",
+                "one_off_page_task",
+            ],
+            "covers": [
+                "mainline install baseline",
+                "doctor readiness checks",
+                "smoke-session success fields",
+                "current manual-env credential path",
+                "browser.lexmount.cn implementation boundary",
+            ],
+            "grep_patterns": [
+                "Current Baseline",
+                "Readiness Checks",
+                "browser_smoke_session.status=pass",
+                "browser.lexmount.cn Work Needed",
+            ],
+        },
     }
 
 
@@ -4704,11 +4743,13 @@ def _doctor_agent_references_check() -> dict[str, Any]:
                     "browser-cli reference list",
                     "browser-cli reference get --id action_playbook --metadata-only",
                     "browser-cli reference get --id action_playbook",
+                    "browser-cli reference get --id usable_status --metadata-only",
+                    "browser-cli reference get --id usable_status",
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
                     "Packaged references should be readable from an installed CLI.",
-                    "Reinstall browser-cli if reference get cannot load action_playbook.",
+                    "Reinstall browser-cli if reference get cannot load required references.",
                 ],
             ),
         )
