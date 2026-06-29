@@ -153,6 +153,8 @@ what to do:
 - `command_catalog` with `status: "warn"`: inspect
   `missing_required_commands` and follow its `fix` guidance before relying on
   the full Skill workflow.
+- `case_schema` with `status: "warn"`: inspect `missing_required_case_actions`,
+  `missing_action_schemas`, `invalid_action_schemas`; reinstall if needed.
 - `agent_references` with `status: "warn"`: run
   `browser-cli reference get --id action_playbook` or follow its `fix` commands
   before relying on detailed action guidance.
@@ -491,9 +493,7 @@ browser actions from a device token while `runtime_auth.usable` is false.
 For `auth export-env`, use placeholders or masked commands unless the user
 explicitly asked to reveal secrets locally.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
-`warning_checks`, `skipped_checks`, and `repair_plan` first. Report failed or
-warning check names without revealing API keys. If `browser_smoke_session`
-exists, report whether it created and closed the temporary session and follow
-its manual close command when cleanup failed. Prefer `repair_plan.commands`,
-`repair_plan.env`, and `repair_plan.guidance`; fall back to per-check `fix`
-objects only when needed.
+`warning_checks`, `skipped_checks`, and `repair_plan` first. Report warning
+check names without revealing API keys. If `browser_smoke_session` exists,
+report create/close status. If `case_schema` warns, report missing or invalid
+case actions. Prefer `repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance`; fall back to per-check `fix` objects only when needed.

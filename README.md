@@ -789,8 +789,9 @@ parsing stderr.
 `ready_for_browser_actions`, check-name arrays, and a `repair_plan` that
 aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
 `fail`, or `skipped` statuses for Python/runtime, install path, version,
-command catalog, packaged references/examples, environment, direct URL, API
-connectivity, and optional browser smoke-session checks. The `browser_cli` check
+command catalog, case schema, packaged references/examples, environment,
+direct URL, API connectivity, and optional browser smoke-session checks. The
+`browser_cli` check
 reports `version_source` so agents can distinguish installed package metadata
 from the package fallback version.
 The `agent_references` check verifies packaged Skill reference docs such as
@@ -807,9 +808,14 @@ the Codex Skill and reports
 workflow surface is too old or missing critical steps such as cleanup. That
 required surface includes selector actions, role-based text/existence/geometry
 checks, press/hover/scroll, select/check/uncheck, role/text/label actions,
-accessibility snapshot, and
-interactive-only snapshot. It masks `api_key` in direct URLs and diagnostic
-error messages by default.
+accessibility snapshot, interactive-only snapshot, and diagnostic commands. The
+`case_schema` check verifies that repeatable case files can use the Skill's
+expected semantic, state, content, storage/cookie, and diagnostic actions; it
+reports `required_case_actions`,
+`missing_required_case_actions`, `missing_supported_actions`,
+`missing_action_schemas`, and `invalid_action_schemas` with upgrade guidance
+when the installed CLI is too old for case-based smoke tests.
+It masks `api_key` in direct URLs and diagnostic error messages by default.
 `doctor --smoke-session` creates and closes a temporary session after API
 connectivity passes, then reports the `browser_smoke_session` check with
 `created`, `closed`, `session_id`, and actionable close guidance if cleanup

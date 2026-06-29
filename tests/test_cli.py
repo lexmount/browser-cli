@@ -5157,6 +5157,24 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ):
         assert command_name in checks["command_catalog"]["required_commands"]
     assert checks["command_catalog"]["missing_required_commands"] == []
+    assert checks["case_schema"]["status"] == "pass"
+    assert checks["case_schema"]["schema_version"] == 1
+    assert checks["case_schema"]["action_count"] == 98
+    assert checks["case_schema"]["supported_action_count"] == 98
+    for case_action in (
+        "fill-label",
+        "click-role",
+        "interactive-only-snapshot",
+        "network-snapshot",
+        "wait-network",
+        "console-snapshot",
+        "wait-console",
+    ):
+        assert case_action in checks["case_schema"]["required_case_actions"]
+    assert checks["case_schema"]["missing_required_case_actions"] == []
+    assert checks["case_schema"]["missing_supported_actions"] == []
+    assert checks["case_schema"]["missing_action_schemas"] == []
+    assert checks["case_schema"]["invalid_action_schemas"] == []
     assert checks["agent_references"]["status"] == "pass"
     assert checks["agent_references"]["reference_count"] == 1
     assert checks["agent_references"]["required_references"] == ["action_playbook"]
@@ -5366,6 +5384,70 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_case_schema_misses_skill_actions(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.BROWSER_CLI_SUPPORTED_CASE_ACTIONS",
+        frozenset({"open-url"}),
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._case_action_schema",
+        lambda: {
+            "open-url": {
+                "required_fields": ["url"],
+                "required_one_of": [],
+                "optional_fields": ["timeout_ms"],
+                "result_fields": ["url", "title", "status"],
+                "example_step": {"action": "open-url", "url": "https://example.com"},
+            }
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "case_schema" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    case_schema = checks["case_schema"]
+    assert case_schema["status"] == "warn"
+    assert case_schema["action_count"] == 1
+    assert case_schema["supported_action_count"] == 1
+    assert case_schema["missing_supported_actions"][:3] == [
+        "accessibility-snapshot",
+        "blur",
+        "blur-role",
+    ]
+    assert "fill-label" in case_schema["missing_required_case_actions"]
+    assert "network-snapshot" in case_schema["missing_required_case_actions"]
+    assert "wait-console" in case_schema["missing_required_case_actions"]
+    assert case_schema["missing_action_schemas"][:3] == [
+        "accessibility-snapshot",
+        "blur",
+        "blur-role",
+    ]
+    assert case_schema["invalid_action_schemas"] == []
+    assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
+    assert "browser-cli case schema --names-only" in payload["repair_plan"]["commands"]
+    assert (
+        "browser-cli case schema --action network-snapshot"
+        in payload["repair_plan"]["commands"]
+    )
     assert "api_connectivity" in payload["skipped_checks"]
 
 
