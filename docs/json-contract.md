@@ -93,6 +93,11 @@ The setup workflow includes `auth status`, `doctor --json`, and optional
 `browser_smoke_session.status`, `browser_smoke_session.created`, and
 `browser_smoke_session.closed` so agents can verify a temporary session can be
 created and cleaned up.
+`doctor --json` also includes an `agent_prompt` check for the packaged
+`browser_cli.agent_metadata:openai.yaml` prompt metadata. It reports
+`display_name`, `short_description`, whether `default_prompt` is present,
+`required_pattern_count`, `missing_patterns`, and `mismatched_fields`;
+warnings use `fix.code=repair_packaged_agent_prompt`.
 The scoped token lifecycle workflow includes token validity, scope coverage,
 scope catalog lookup, refresh availability, browser readiness, and local logout/revoke-pending fields
 without exposing token values.

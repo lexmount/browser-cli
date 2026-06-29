@@ -23,6 +23,7 @@ browser_cli = [
     "agent_references/*.md",
     "agent_examples/*.md",
     "agent_examples/cases/*.yaml",
+    "agent_metadata/*.yaml",
 ]
 
 [dependency-groups]
