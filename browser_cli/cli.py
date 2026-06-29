@@ -3714,6 +3714,183 @@ def _doctor_case_schema_check() -> dict[str, Any]:
     )
 
 
+def _nearest_existing_parent(path: Path) -> Path | None:
+    current = path.parent
+    while not current.exists() and current != current.parent:
+        current = current.parent
+    return current if current.exists() else None
+
+
+def _doctor_context_registry_fix() -> dict[str, Any]:
+    return _doctor_fix(
+        "repair_context_registry",
+        env=[CONTEXT_REGISTRY_FILE_ENV],
+        commands=[
+            "browser-cli doctor --json",
+            "browser-cli commands --workflow persistent_login_state",
+            "browser-cli context pick --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --create-if-missing --dry-run",
+        ],
+        guidance=[
+            "Set LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE to a writable JSON file for isolated agent workspaces.",
+            "Delete or repair the local context registry if it contains invalid JSON.",
+            "Use context pick --dry-run before creating a session that relies on persistent login state.",
+        ],
+    )
+
+
+def _doctor_context_registry_check() -> dict[str, Any]:
+    path, path_source = _context_registry_path()
+    nearest_parent = _nearest_existing_parent(path)
+    parent = path.parent
+    parent_exists = parent.exists()
+    parent_creatable = bool(
+        nearest_parent and os.access(nearest_parent, os.W_OK | os.X_OK)
+    )
+    path_exists = path.exists()
+    path_is_file = path.is_file() if path_exists else None
+    file_readable = os.access(path, os.R_OK) if path_exists else None
+    file_writable = os.access(path, os.W_OK) if path_exists else None
+    writable = bool(file_writable if path_exists else parent_creatable)
+    scope = _context_registry_scope()
+    common_details: dict[str, Any] = {
+        "path": str(path),
+        "path_source": path_source,
+        "env_var": CONTEXT_REGISTRY_FILE_ENV,
+        "exists": path_exists,
+        "parent": str(parent),
+        "parent_exists": parent_exists,
+        "nearest_existing_parent": str(nearest_parent) if nearest_parent else None,
+        "parent_creatable": parent_creatable,
+        "readable": file_readable,
+        "writable": writable,
+        "project_id_present": bool(scope["project_id"]),
+        "base_url": scope["base_url"],
+        "stores_metadata_values": True,
+        "metadata_values_redacted": True,
+    }
+
+    if not path_exists:
+        if writable:
+            return _doctor_check(
+                "context_registry",
+                "pass",
+                "Context registry does not exist yet and can be created when persistent context metadata is recorded.",
+                schema_version=1,
+                context_count=0,
+                scoped_context_count=0,
+                metadata_context_count=0,
+                **common_details,
+            )
+        return _doctor_check(
+            "context_registry",
+            "warn",
+            "Context registry does not exist and its parent path is not writable.",
+            error="registry_parent_not_writable",
+            schema_version=1,
+            context_count=0,
+            scoped_context_count=0,
+            metadata_context_count=0,
+            fix=_doctor_context_registry_fix(),
+            **common_details,
+        )
+
+    if not path_is_file:
+        return _doctor_check(
+            "context_registry",
+            "warn",
+            "Context registry path exists but is not a file.",
+            error="registry_path_not_file",
+            fix=_doctor_context_registry_fix(),
+            **common_details,
+        )
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return _doctor_check(
+            "context_registry",
+            "warn",
+            "Context registry contains invalid JSON.",
+            error="registry_invalid_json",
+            line=exc.lineno,
+            column=exc.colno,
+            fix=_doctor_context_registry_fix(),
+            **common_details,
+        )
+    except OSError as exc:
+        return _doctor_check(
+            "context_registry",
+            "warn",
+            "Context registry could not be read.",
+            error=exc.__class__.__name__,
+            fix=_doctor_context_registry_fix(),
+            **common_details,
+        )
+
+    if not isinstance(data, dict):
+        return _doctor_check(
+            "context_registry",
+            "warn",
+            "Context registry JSON must be an object.",
+            error="registry_not_object",
+            fix=_doctor_context_registry_fix(),
+            **common_details,
+        )
+
+    contexts = data.get("contexts")
+    if contexts is None:
+        contexts = {}
+    if not isinstance(contexts, dict):
+        return _doctor_check(
+            "context_registry",
+            "warn",
+            "Context registry contexts field must be an object.",
+            error="registry_contexts_not_object",
+            schema_version=data.get("version"),
+            fix=_doctor_context_registry_fix(),
+            **common_details,
+        )
+
+    scoped_context_count = 0
+    metadata_context_count = 0
+    for entry in contexts.values():
+        if not isinstance(entry, dict):
+            continue
+        metadata = entry.get("metadata")
+        if isinstance(metadata, dict) and metadata:
+            metadata_context_count += 1
+        if (
+            entry.get("project_id") == scope["project_id"]
+            and entry.get("base_url") == scope["base_url"]
+        ):
+            scoped_context_count += 1
+
+    if not writable:
+        return _doctor_check(
+            "context_registry",
+            "warn",
+            "Context registry is readable but not writable.",
+            error="registry_not_writable",
+            schema_version=data.get("version"),
+            context_count=len(contexts),
+            scoped_context_count=scoped_context_count,
+            metadata_context_count=metadata_context_count,
+            fix=_doctor_context_registry_fix(),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "context_registry",
+        "pass",
+        "Context registry is readable and writable for persistent context metadata.",
+        schema_version=data.get("version"),
+        context_count=len(contexts),
+        scoped_context_count=scoped_context_count,
+        metadata_context_count=metadata_context_count,
+        **common_details,
+    )
+
+
 def _doctor_agent_references_check() -> dict[str, Any]:
     try:
         references = _agent_references()
@@ -16864,6 +17041,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     checks.append(_doctor_case_schema_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())
+    checks.append(_doctor_context_registry_check())
 
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")

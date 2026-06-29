@@ -154,6 +154,13 @@ context-registry entry and report `metadata_source=local_registry`.
 also expose top-level `availability`, `reusable`, `locked`, `normalized_status`,
 and `reuse_reason` fields so agents can classify a selected persistent context
 without digging into nested `reuse`.
+`doctor --json` includes a `context_registry` check for the local persistent
+context metadata cache. The check reports `path`, `path_source`, `exists`,
+`parent_creatable`, `readable`, `writable`, `context_count`,
+`scoped_context_count`, `metadata_context_count`, `project_id_present`, and
+`metadata_values_redacted=true`. A missing registry is healthy when it can be
+created; invalid JSON, a non-file path, or an unwritable registry produce a
+warning with `fix.code=repair_context_registry`.
 
 ## Exit Codes
 
