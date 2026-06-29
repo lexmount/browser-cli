@@ -1404,6 +1404,7 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action exists-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action get-text-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action click-label --session-id <session_id> --label "Remember me"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action hover-role --session-id <session_id> --role button --name "Menu"',
                 'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
@@ -2237,7 +2238,7 @@ def _command_catalog() -> dict[str, Any]:
                 ],
             },
             "interactive_targeting": {
-                "purpose": "Find and activate visible controls with snapshot, role, text, or indexed click commands without custom JavaScript.",
+                "purpose": "Find and activate visible controls with snapshot, role, label, text, or indexed click commands without custom JavaScript.",
                 "steps": [
                     {
                         "id": "inspect_action_guide",
@@ -2279,6 +2280,7 @@ def _command_catalog() -> dict[str, Any]:
                             "exists-role",
                             "get-text-role",
                             "bounding-box-role",
+                            "click-label",
                             "click-role",
                             "hover-role",
                             "press-role",
@@ -2290,6 +2292,7 @@ def _command_catalog() -> dict[str, Any]:
                             'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action click-label --session-id <session_id> --label "<label>"',
                             'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
@@ -2324,10 +2327,13 @@ def _command_catalog() -> dict[str, Any]:
                             "result.scrolled",
                             "result.in_viewport",
                             "result.element",
+                            "result.label",
+                            "result.click_target",
                             "result.candidate_count",
                             "result.candidates",
                         ],
                         "alternative_commands": [
+                            'browser-cli action click-label --session-id <session_id> --label "<label>"',
                             'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
                             'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
@@ -15541,6 +15547,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "exists-role",
                 "get-text-role",
                 "bounding-box-role",
+                "click-label",
                 "click-role",
                 "hover-role",
                 "press-role",
@@ -15558,6 +15565,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action click-label --session-id <session_id> --label "<label>"',
                 'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
@@ -15588,6 +15596,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.text_length",
                 "result.element",
                 "result.bounding_box",
+                "result.label",
+                "result.click_target",
                 "result.visible",
                 "result.clicked",
                 "result.hovered",
@@ -15597,7 +15607,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.url",
             ],
             "custom_js_boundary": (
-                "Use action eval only after snapshots plus role/text/index/selector "
+                "Use action eval only after snapshots plus role/label/text/index/selector "
                 "commands cannot identify or activate the target."
             ),
         },

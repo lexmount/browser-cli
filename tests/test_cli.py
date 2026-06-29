@@ -407,6 +407,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["interactive_targeting"]
     )
     assert (
+        'browser-cli action click-label --session-id <session_id> --label "Remember me"'
+        in payload["agent_entrypoints"]["interactive_targeting"]
+    )
+    assert (
         "browser-cli action guide --task navigation_flow"
         in payload["agent_entrypoints"]["navigation_flow"]
     )
@@ -1078,6 +1082,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "exists-role",
         "get-text-role",
         "bounding-box-role",
+        "click-label",
         "click-role",
         "hover-role",
         "press-role",
@@ -1097,14 +1102,17 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in targeting_steps[3]["preferred_commands"][2]
     )
     assert (
-        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][4]
+        "browser-cli action click-label" in targeting_steps[3]["preferred_commands"][3]
     )
     assert (
-        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][5]
+        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][5]
+    )
+    assert (
+        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][6]
     )
     assert (
         "browser-cli action scroll-into-view-role"
-        in targeting_steps[3]["preferred_commands"][6]
+        in targeting_steps[3]["preferred_commands"][7]
     )
     assert "result.element" in targeting_steps[4]["read"]
     assert (
@@ -1112,12 +1120,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "browser-cli action wait-text" in targeting_steps[4]["fallback_commands"][1]
     assert "result.clicked" in targeting_steps[5]["read"]
+    assert "result.label" in targeting_steps[5]["read"]
+    assert "result.click_target" in targeting_steps[5]["read"]
     assert "result.hovered" in targeting_steps[5]["read"]
     assert "result.pressed" in targeting_steps[5]["read"]
     assert "result.scrolled" in targeting_steps[5]["read"]
     assert (
         "browser-cli action scroll-into-view-role"
-        in targeting_steps[5]["alternative_commands"][2]
+        in targeting_steps[5]["alternative_commands"][3]
     )
     assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
     menu_steps = workflows["menu_keyboard_flow"]["steps"]
@@ -1591,6 +1601,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "browser-cli action exists-role" in guide["preferred_commands"][1]
     assert "browser-cli action get-text-role" in guide["preferred_commands"][2]
     assert "browser-cli action bounding-box-role" in guide["preferred_commands"][3]
+    assert any(
+        "browser-cli action click-label" in command
+        for command in guide["preferred_commands"]
+    )
     assert any(
         "browser-cli action click-role" in command
         for command in guide["preferred_commands"]
@@ -4460,6 +4474,7 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
         "exists-role",
         "get-text-role",
         "bounding-box-role",
+        "click-label",
         "click-role",
         "hover-role",
         "press-role",
@@ -4470,9 +4485,11 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert "browser-cli action exists-role" in steps[3]["preferred_commands"][0]
     assert "browser-cli action get-text-role" in steps[3]["preferred_commands"][1]
     assert "browser-cli action bounding-box-role" in steps[3]["preferred_commands"][2]
-    assert "browser-cli action click-role" in steps[3]["preferred_commands"][3]
-    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][4]
-    assert "browser-cli action click-text" in steps[5]["alternative_commands"][3]
+    assert "browser-cli action click-label" in steps[3]["preferred_commands"][3]
+    assert "browser-cli action click-role" in steps[3]["preferred_commands"][4]
+    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][5]
+    assert "browser-cli action click-label" in steps[5]["alternative_commands"][0]
+    assert "browser-cli action click-text" in steps[5]["alternative_commands"][4]
     assert steps[-1]["id"] == "verify_after_click"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
