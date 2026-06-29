@@ -300,8 +300,7 @@ report that a busy context was skipped. Inspect `selection_summary` for
 adjust filters. Inspect candidate `metadata_diagnostics` keys to explain
 metadata mismatches; values are redacted. If `metadata_source` is
 `local_registry`, browser-cli matched metadata recorded locally when it created
-the context. Never put API keys, passwords, or session secrets in context
-metadata. Use
+the context. Never put API keys, passwords, or session secrets in context metadata. Use `context list --metadata-json <json> --selection newest --include-reuse-state` for a read-only candidate pool with `reuse_candidates`, `recommended_context_id`, and `selection_summary`. Use
 `context pick --metadata-json <json> --selection newest --dry-run` before creating a session when
 you need to explain context reuse or avoid mutating persistent login state. Use
 the workflow's optional `context status --context-id <context_id>` step before
@@ -406,7 +405,7 @@ Context lifecycle:
 
 ```bash
 browser-cli context create
-browser-cli context list
+browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}'

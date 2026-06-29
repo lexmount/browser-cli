@@ -758,6 +758,7 @@ def _runtime_failure_fix(command: str, code: str) -> dict[str, Any]:
         ]
     elif command.startswith("context."):
         commands = [
+            "browser-cli context list --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --include-reuse-state",
             "browser-cli context pick --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --dry-run",
             "browser-cli context status --context-id <context_id>",
             AGENT_DOCTOR_COMMAND,
@@ -1352,6 +1353,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
             "persistent_login_state": [
+                'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
                 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                 "browser-cli context status --context-id <context_id>",
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
@@ -2877,6 +2879,22 @@ def _command_catalog() -> dict[str, Any]:
             "persistent_login_state": {
                 "purpose": "Reuse or create a persistent context for login state, cookies, and storage.",
                 "steps": [
+                    {
+                        "id": "list_reuse_candidates",
+                        "command": 'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
+                        "optional": True,
+                        "read": [
+                            "reuse_state_included",
+                            "recommended_context_id",
+                            "reuse_candidates",
+                            "selection_strategy",
+                            "selection_summary.recommended_next_action",
+                            "selection_summary.reusable_matches",
+                            "selection_summary.locked_matches",
+                            "selection_summary.availability_counts",
+                            "metadata_values_redacted",
+                        ],
+                    },
                     {
                         "id": "dry_run_context_pick",
                         "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
@@ -7348,7 +7366,46 @@ def cmd_context_list(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, **_model_payload(result))
+    payload = _model_payload(result)
+    include_reuse_state = bool(
+        getattr(args, "include_reuse_state", False)
+        or getattr(args, "metadata_filter", None) is not None
+    )
+    payload["reuse_state_included"] = include_reuse_state
+    if include_reuse_state:
+        contexts = payload.get("contexts", [])
+        if not isinstance(contexts, list):
+            contexts = []
+        metadata_filter = args.metadata_filter or {}
+        registry = _read_context_registry()
+        candidates = [
+            _context_pick_candidate(context, metadata_filter, registry)
+            for context in contexts
+            if isinstance(context, dict)
+        ]
+        selected_context = _select_reusable_context(
+            [context for context in contexts if isinstance(context, dict)],
+            candidates,
+            selection_strategy=args.selection,
+        )
+        selected_context_id = (
+            selected_context.get("context_id")
+            if isinstance(selected_context, dict)
+            else None
+        )
+        payload.update(
+            metadata_filter=metadata_filter,
+            metadata_values_redacted=True,
+            selection_strategy=args.selection,
+            recommended_context_id=selected_context_id,
+            reuse_candidates=candidates,
+            selection_summary=_context_selection_summary(
+                candidates,
+                selected_context_id=selected_context_id,
+                dry_run=True,
+            ),
+        )
+    _success(command, **payload)
 
 
 def cmd_context_get(args: argparse.Namespace) -> None:
@@ -23311,6 +23368,26 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_list = context_subparsers.add_parser("list", help="List contexts")
     context_list.add_argument("--status", help="Optional status filter")
     context_list.add_argument("--limit", type=int, default=20)
+    context_list.add_argument(
+        "--include-reuse-state",
+        action="store_true",
+        help="Include reusable/locked availability diagnostics for each listed context.",
+    )
+    context_list.add_argument(
+        "--metadata-json",
+        dest="metadata_filter",
+        type=_parse_filter_metadata_json,
+        help=(
+            "JSON object used to mark reuse candidate metadata matches. "
+            "Also enables --include-reuse-state."
+        ),
+    )
+    context_list.add_argument(
+        "--selection",
+        choices=CONTEXT_SELECTION_STRATEGIES,
+        default="first",
+        help="Selection strategy for recommended_context_id when reuse state is included.",
+    )
     context_list.set_defaults(func=cmd_context_list)
 
     context_get = context_subparsers.add_parser("get", help="Get one context")

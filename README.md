@@ -498,7 +498,7 @@ Context management:
 ```bash
 browser-cli context create
 browser-cli context create --metadata-json '{"purpose":"codex"}'
-browser-cli context list --limit 20
+browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
@@ -1111,6 +1111,9 @@ top-level `reusable`, `locked`, `reuse_reason`, `selection_strategy`,
 `selection_summary`, and locked/reusable details. Treat
 `availability: "available"` as reusable, `availability: "locked"` as busy, and
 `availability: "unavailable"` as a state that needs a different context. Use
+`context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state`
+to inspect reusable, locked, and metadata-mismatched candidates without mutation; read
+`reuse_candidates`, `recommended_context_id`, and `selection_summary`. Use
 `context status --context-id <context_id>` before reusing a known context id. Use
 `context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --dry-run`
 when you need to inspect or report candidates before creating a session; read

@@ -145,7 +145,10 @@ The form interaction, interactive targeting, and page diagnostics workflows
 start with an `inspect_action_guide` step so agents read the compact task guide
 before selecting first-class actions or considering custom JavaScript.
 
-`context pick` and session context reuse return `selection_summary` with stable
+`context list --include-reuse-state` returns `reuse_candidates`,
+`recommended_context_id`, `metadata_values_redacted=true`, and
+`selection_summary` without mutating persistent contexts. `context pick` and
+session context reuse also return `selection_summary` with stable
 counts such as `checked`, `metadata_matches`, `metadata_mismatches`,
 `reusable_matches`, `locked_matches`, `unavailable_matches`, `unknown_matches`,
 `recommended_next_action`, `decision_reason`, and `would_create`. Agents should

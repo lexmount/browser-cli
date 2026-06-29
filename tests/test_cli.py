@@ -354,10 +354,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["session_recovery"]
     )
     assert (
-        "browser-cli context pick"
+        "browser-cli context list"
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
-    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][0]
+    assert "--include-reuse-state" in payload["agent_entrypoints"]["persistent_login_state"][0]
+    assert (
+        "browser-cli context pick"
+        in payload["agent_entrypoints"]["persistent_login_state"][1]
+    )
+    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][1]
     assert (
         "browser-cli context status --context-id <context_id>"
         in payload["agent_entrypoints"]["persistent_login_state"]
@@ -895,32 +900,39 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "events_path" in case_steps[7]["read"]
     assert "message" in case_steps[7]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
-    assert "availability" in context_steps[0]["read"]
-    assert "reusable" in context_steps[0]["read"]
-    assert "locked" in context_steps[0]["read"]
-    assert "reuse_reason" in context_steps[0]["read"]
-    assert "selection_strategy" in context_steps[0]["read"]
-    assert "selection_summary.recommended_next_action" in context_steps[0]["read"]
-    assert "selection_summary.reusable_matches" in context_steps[0]["read"]
-    assert "selection_summary.metadata_mismatches" in context_steps[0]["read"]
+    assert context_steps[0]["id"] == "list_reuse_candidates"
+    assert context_steps[0]["optional"] is True
+    assert "reuse_state_included" in context_steps[0]["read"]
+    assert "recommended_context_id" in context_steps[0]["read"]
+    assert "reuse_candidates" in context_steps[0]["read"]
+    assert "metadata_values_redacted" in context_steps[0]["read"]
     assert "selection_summary.availability_counts" in context_steps[0]["read"]
-    assert context_steps[1]["id"] == "inspect_context_status"
-    assert context_steps[1]["optional"] is True
-    assert context_steps[1]["command"] == (
-        "browser-cli context status --context-id <context_id>"
-    )
     assert "availability" in context_steps[1]["read"]
     assert "reusable" in context_steps[1]["read"]
     assert "locked" in context_steps[1]["read"]
-    assert "normalized_status" in context_steps[1]["read"]
-    assert "context_reuse.availability" in context_steps[2]["read"]
-    assert "context_reuse.reusable" in context_steps[2]["read"]
-    assert "context_reuse.locked" in context_steps[2]["read"]
-    assert "context_reuse.reuse_reason" in context_steps[2]["read"]
-    assert "context_reuse.selection_strategy" in context_steps[2]["read"]
+    assert "reuse_reason" in context_steps[1]["read"]
+    assert "selection_strategy" in context_steps[1]["read"]
+    assert "selection_summary.recommended_next_action" in context_steps[1]["read"]
+    assert "selection_summary.reusable_matches" in context_steps[1]["read"]
+    assert "selection_summary.metadata_mismatches" in context_steps[1]["read"]
+    assert "selection_summary.availability_counts" in context_steps[1]["read"]
+    assert context_steps[2]["id"] == "inspect_context_status"
+    assert context_steps[2]["optional"] is True
+    assert context_steps[2]["command"] == (
+        "browser-cli context status --context-id <context_id>"
+    )
+    assert "availability" in context_steps[2]["read"]
+    assert "reusable" in context_steps[2]["read"]
+    assert "locked" in context_steps[2]["read"]
+    assert "normalized_status" in context_steps[2]["read"]
+    assert "context_reuse.availability" in context_steps[3]["read"]
+    assert "context_reuse.reusable" in context_steps[3]["read"]
+    assert "context_reuse.locked" in context_steps[3]["read"]
+    assert "context_reuse.reuse_reason" in context_steps[3]["read"]
+    assert "context_reuse.selection_strategy" in context_steps[3]["read"]
     assert (
         "context_reuse.selection_summary.recommended_next_action"
-        in (context_steps[2]["read"])
+        in (context_steps[3]["read"])
     )
     state_management_steps = workflows["browser_state_management"]["steps"]
     assert [step["id"] for step in state_management_steps] == [
@@ -2265,11 +2277,15 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "selection_summary.recommended_next_action"
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
+    )
+    assert (
+        "reuse_candidates"
         in payload["agent_workflows"]["persistent_login_state"]["steps"][0]["read"]
     )
     assert (
         "context_reuse.availability"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][3]["read"]
     )
     assert (
         "result.document_cookie_scope"
@@ -2277,7 +2293,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "normalized_status"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
     )
     assert (
         "unusable_exports"
@@ -9824,6 +9840,7 @@ def test_context_commands_emit_json(
     listed = json.loads(capsys.readouterr().out)
     assert listed["count"] == 1
     assert listed["limit"] == 5
+    assert listed["reuse_state_included"] is False
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["context", "get", "--context-id", "ctx1"])
@@ -9873,6 +9890,119 @@ def test_context_status_reports_reusable_and_locked_state(
         "locked": True,
         "reason": "status_locked",
     }
+
+
+def test_context_list_can_include_reuse_state_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    registry_file = tmp_path / "context-registry.json"
+    registry_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "contexts": {
+                    "ctx-local": {
+                        "context_id": "ctx-local",
+                        "metadata": {"purpose": "codex"},
+                        "project_id": "project",
+                        "base_url": cli_module.DEFAULT_LEXMOUNT_BASE_URL,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE", str(registry_file))
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    observed: dict[str, Any] = {}
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            observed.update({"status": status, "limit": limit})
+            return DummyModel(
+                {
+                    "count": 3,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-old",
+                            "status": "available",
+                            "metadata": {"purpose": "codex"},
+                            "updated_at": "2026-01-01T00:00:00Z",
+                        },
+                        {
+                            "context_id": "ctx-local",
+                            "status": "available",
+                            "metadata": {},
+                            "updated_at": "2026-01-02T00:00:00Z",
+                        },
+                        {
+                            "context_id": "ctx-locked",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex"},
+                            "updated_at": "2026-01-03T00:00:00Z",
+                        },
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "list",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+                "--selection",
+                "newest",
+                "--limit",
+                "10",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed == {"status": None, "limit": 10}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "context.list"
+    assert payload["reuse_state_included"] is True
+    assert payload["metadata_filter"] == {"purpose": "codex"}
+    assert payload["metadata_values_redacted"] is True
+    assert payload["selection_strategy"] == "newest"
+    assert payload["recommended_context_id"] == "ctx-local"
+    assert payload["selection_summary"] == {
+        "checked": 3,
+        "selected_context_id": "ctx-local",
+        "recommended_next_action": "use_selected_context",
+        "decision_reason": "reusable_context_selected",
+        "metadata_matches": 3,
+        "metadata_mismatches": 0,
+        "reusable_matches": 2,
+        "locked_matches": 1,
+        "unavailable_matches": 0,
+        "unknown_matches": 0,
+        "availability_counts": {"available": 2, "locked": 1},
+        "reason_counts": {"status_locked": 1, "status_reusable": 2},
+        "create_if_missing": False,
+        "dry_run": True,
+        "would_create": False,
+    }
+    assert payload["reuse_candidates"][1]["context_id"] == "ctx-local"
+    assert (
+        payload["reuse_candidates"][1]["metadata_diagnostics"]["metadata_source"]
+        == "local_registry"
+    )
+    assert payload["reuse_candidates"][1]["reusable"] is True
+    assert payload["reuse_candidates"][2]["locked"] is True
 
 
 def test_context_pick_missing_credentials_points_to_auth_setup(
