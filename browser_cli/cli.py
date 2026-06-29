@@ -444,6 +444,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "connect_from_codex_site_requirements": (
         "inspect_scope_catalog",
         "inspect_site_requirements",
+        "inspect_implementation_checklist",
         "verify_manual_handoff",
         "verify_device_code_handoff",
         "doctor_after_credentials",
@@ -760,8 +761,8 @@ def _runtime_failure_fix(command: str, code: str) -> dict[str, Any]:
         ]
     elif command.startswith("context."):
         commands = [
-            "browser-cli context list --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --include-reuse-state",
-            "browser-cli context pick --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --dry-run",
+            'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
+            'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --dry-run',
             "browser-cli context status --context-id <context_id>",
             AGENT_DOCTOR_COMMAND,
         ]
@@ -781,9 +782,7 @@ def _runtime_failure_fix(command: str, code: str) -> dict[str, Any]:
 def _missing_lexmount_env_from_error(message: Any) -> list[str]:
     text = str(message or "")
     missing = [
-        name
-        for name in ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
-        if name in text
+        name for name in ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID") if name in text
     ]
     if missing:
         return missing
@@ -1279,6 +1278,7 @@ def _command_catalog() -> dict[str, Any]:
             "connect_from_codex_site_requirements": [
                 "browser-cli auth scopes --include-site-contract",
                 "browser-cli auth connect-requirements",
+                "browser-cli auth connect-requirements --checklist",
                 "browser-cli auth connect-requirements --project-id <project_id>",
                 "browser-cli auth login",
                 "browser-cli auth login --device-code",
@@ -1643,6 +1643,21 @@ def _command_catalog() -> dict[str, Any]:
                             "setup_blocks",
                             "verification.doctor_command",
                             "browser_site_acceptance_tests",
+                        ],
+                    },
+                    {
+                        "id": "inspect_implementation_checklist",
+                        "command": "browser-cli auth connect-requirements --checklist",
+                        "read": [
+                            "implementation_checklist.phases",
+                            "implementation_checklist.phases[].status.pending",
+                            "implementation_checklist.phases[].browser_site_actions",
+                            "implementation_checklist.phases[].acceptance_tests",
+                            "implementation_checklist.blocked_until.browser_site_capabilities",
+                            "implementation_checklist.blocked_until.runtime_auth",
+                            "implementation_checklist.blocked_until.token_lifecycle",
+                            "implementation_checklist.blocked_until.api_contract",
+                            "implementation_checklist.safe_copy_rules",
                         ],
                     },
                     {
@@ -4180,9 +4195,7 @@ def _doctor_connect_from_codex_contract_check() -> dict[str, Any]:
             "Connect from Codex contract could not be built.",
             error=exc.__class__.__name__,
             required_capabilities=list(DOCTOR_REQUIRED_CONNECT_CAPABILITIES),
-            required_acceptance_tests=list(
-                DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS
-            ),
+            required_acceptance_tests=list(DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS),
             fix=_doctor_fix(
                 "repair_connect_from_codex_contract",
                 commands=[
@@ -4346,7 +4359,7 @@ def _doctor_context_registry_fix() -> dict[str, Any]:
         commands=[
             "browser-cli doctor --json",
             "browser-cli commands --workflow persistent_login_state",
-            "browser-cli context pick --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --create-if-missing --dry-run",
+            'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
         ],
         guidance=[
             "Set LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE to a writable JSON file for isolated agent workspaces.",
@@ -6657,6 +6670,202 @@ def _connect_from_codex_browser_site_acceptance_tests() -> list[dict[str, Any]]:
             "expected": "The page can start device-code approval and return verification_uri_complete plus pollable token results.",
         },
     ]
+
+
+def _connect_from_codex_implementation_checklist(
+    *,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    scope_details: list[dict[str, Any]],
+    expires_in: str,
+    connect_url: str,
+    device_connect_url: str,
+    setup_blocks: list[dict[str, Any]],
+    site_capabilities: list[dict[str, Any]],
+    browser_site_acceptance_tests: list[dict[str, Any]],
+    required_api_contract: dict[str, Any],
+    required_token_lifecycle: list[dict[str, Any]],
+    required_runtime_auth: list[dict[str, Any]],
+) -> dict[str, Any]:
+    capability_by_id = {
+        str(capability["id"]): capability for capability in site_capabilities
+    }
+    setup_block_by_id = {str(block["id"]): block for block in setup_blocks}
+    token_lifecycle_by_id = {str(item["id"]): item for item in required_token_lifecycle}
+
+    def capability_status(capability_ids: list[str]) -> dict[str, Any]:
+        missing = [
+            capability_id
+            for capability_id in capability_ids
+            if not capability_by_id.get(capability_id, {}).get("available")
+        ]
+        return {
+            "available": not missing,
+            "missing": missing,
+            "pending": missing,
+        }
+
+    def capability_actions(capability_ids: list[str]) -> list[str]:
+        actions: list[str] = []
+        for capability_id in capability_ids:
+            action = capability_by_id.get(capability_id, {}).get("browser_site_action")
+            if action:
+                actions.append(str(action))
+        return actions
+
+    def acceptance_tests(capability_ids: list[str]) -> list[dict[str, Any]]:
+        wanted = set(capability_ids)
+        return [
+            test
+            for test in browser_site_acceptance_tests
+            if test.get("capability") in wanted
+        ]
+
+    def setup_blocks_for(block_ids: list[str]) -> list[dict[str, Any]]:
+        return [setup_block_by_id[block_id] for block_id in block_ids]
+
+    def token_lifecycle_for(item_ids: list[str]) -> list[dict[str, Any]]:
+        return [token_lifecycle_by_id[item_id] for item_id in item_ids]
+
+    phases = [
+        {
+            "id": "route_and_project_identity",
+            "label": "Route and project identity",
+            "capabilities": ["project_id_display"],
+            "status": capability_status(["project_id_display"]),
+            "browser_site_actions": capability_actions(["project_id_display"]),
+            "acceptance_tests": acceptance_tests(["project_id_display"]),
+            "required_inputs": [
+                "project_id query parameter",
+                "source=browser-cli",
+                "intent=agent-browser-control",
+            ],
+            "connect_url": connect_url,
+        },
+        {
+            "id": "scoped_agent_credential",
+            "label": "Scoped agent credential",
+            "capabilities": ["scoped_api_key"],
+            "status": capability_status(["scoped_api_key"]),
+            "browser_site_actions": capability_actions(["scoped_api_key"]),
+            "acceptance_tests": acceptance_tests(["scoped_api_key"]),
+            "requested_scopes": scopes,
+            "requested_scope_details": scope_details,
+            "requested_expires_in": expires_in,
+            "required_token_lifecycle": token_lifecycle_for(["issue_scoped_key"]),
+        },
+        {
+            "id": "copy_install_and_local_env",
+            "label": "Copy install and local env",
+            "capabilities": ["copy_install_and_env"],
+            "status": capability_status(["copy_install_and_env"]),
+            "browser_site_actions": capability_actions(["copy_install_and_env"]),
+            "acceptance_tests": acceptance_tests(["copy_install_and_env"]),
+            "setup_blocks": setup_blocks_for(["install", "open_connect", "local_env"]),
+            "copy_safety": {
+                "local_env_safe_to_paste_in_chat": False,
+                "local_env_local_shell_only": True,
+                "secret_env": ["LEXMOUNT_API_KEY"],
+            },
+        },
+        {
+            "id": "doctor_verification",
+            "label": "Doctor verification",
+            "capabilities": ["doctor_verification"],
+            "status": capability_status(["doctor_verification"]),
+            "browser_site_actions": capability_actions(["doctor_verification"]),
+            "acceptance_tests": acceptance_tests(["doctor_verification"]),
+            "setup_blocks": setup_blocks_for(["verify"]),
+            "success_condition": (
+                "doctor ok=true, failed=0, and ready_for_browser_actions=true "
+                "after credentials and live API checks pass"
+            ),
+        },
+        {
+            "id": "credential_lifecycle",
+            "label": "Credential lifecycle",
+            "capabilities": ["scoped_key_lifecycle"],
+            "status": capability_status(["scoped_key_lifecycle"]),
+            "browser_site_actions": capability_actions(["scoped_key_lifecycle"]),
+            "acceptance_tests": acceptance_tests(["scoped_key_lifecycle"]),
+            "required_token_lifecycle": required_token_lifecycle,
+            "must_show": [
+                "masked credential preview",
+                "expires_at",
+                "last_used_at",
+                "status",
+                "revoke or rotate controls",
+            ],
+        },
+        {
+            "id": "device_code_oauth",
+            "label": "Device-code or OAuth authorization",
+            "capabilities": ["device_code_oauth"],
+            "status": capability_status(["device_code_oauth"]),
+            "browser_site_actions": capability_actions(["device_code_oauth"]),
+            "acceptance_tests": acceptance_tests(["device_code_oauth"]),
+            "device_code_url": device_connect_url,
+            "required_device_code_endpoints": _device_code_required_endpoints(),
+            "required_api_contract": required_api_contract["device_code"],
+        },
+        {
+            "id": "runtime_bearer_auth",
+            "label": "Runtime bearer-token support",
+            "capabilities": ["device_code_oauth"],
+            "status": {
+                "available": False,
+                "missing": [str(item["id"]) for item in required_runtime_auth],
+                "pending": [str(item["id"]) for item in required_runtime_auth],
+            },
+            "required_runtime_auth": required_runtime_auth,
+        },
+    ]
+
+    return {
+        "version": 1,
+        "audience": "browser.lexmount.cn implementers",
+        "goal": (
+            "Make Connect from Codex usable without users pasting API keys, "
+            "Project IDs, or token values into chat."
+        ),
+        "project": {
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+        },
+        "connect_urls": {
+            "manual_env": connect_url,
+            "device_code": device_connect_url,
+        },
+        "requested_credential": {
+            "scopes": scopes,
+            "scope_details": scope_details,
+            "expires_in": expires_in,
+        },
+        "phases": phases,
+        "acceptance_tests": browser_site_acceptance_tests,
+        "blocked_until": {
+            "browser_site_capabilities": [
+                str(capability["id"])
+                for capability in site_capabilities
+                if not capability.get("available")
+            ],
+            "runtime_auth": required_runtime_auth,
+            "token_lifecycle": required_token_lifecycle,
+            "api_contract": required_api_contract,
+        },
+        "verification_commands": [
+            "browser-cli auth status",
+            AGENT_DOCTOR_COMMAND,
+            "browser-cli doctor --smoke-session",
+        ],
+        "safe_copy_rules": [
+            "Secret values are local-shell only and never safe to paste into chat.",
+            "Project ID is not a secret, but the user should not need to paste it into chat.",
+            "Show full API keys or tokens only once, immediately after creation.",
+            "Mask stored credentials after first reveal and expose revoke or rotate controls.",
+        ],
+    }
 
 
 def _connect_from_codex_required_token_lifecycle() -> list[dict[str, Any]]:
@@ -19272,9 +19481,56 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
     site_capability_status = _connect_from_codex_site_capability_status(
         site_capabilities
     )
-    browser_site_acceptance_tests = (
-        _connect_from_codex_browser_site_acceptance_tests()
+    browser_site_acceptance_tests = _connect_from_codex_browser_site_acceptance_tests()
+    required_api_contract = _connect_from_codex_required_api_contract()
+    required_token_lifecycle = _connect_from_codex_required_token_lifecycle()
+    required_runtime_auth = _connect_from_codex_required_runtime_auth()
+    implementation_checklist = _connect_from_codex_implementation_checklist(
+        project_id=project_id,
+        project_id_source=project_id_source,
+        scopes=scopes,
+        scope_details=scope_details,
+        expires_in=args.expires_in,
+        connect_url=connect_url,
+        device_connect_url=device_connect_url,
+        setup_blocks=setup_blocks,
+        site_capabilities=site_capabilities,
+        browser_site_acceptance_tests=browser_site_acceptance_tests,
+        required_api_contract=required_api_contract,
+        required_token_lifecycle=required_token_lifecycle,
+        required_runtime_auth=required_runtime_auth,
     )
+    if args.checklist:
+        _success(
+            command,
+            checklist_view=True,
+            available=False,
+            reason="browser_site_contract_pending",
+            project_id=project_id,
+            project_id_source=project_id_source,
+            requested_scopes=scopes,
+            requested_scope_details=scope_details,
+            requested_expires_in=args.expires_in,
+            connect_from_codex_url=connect_url,
+            device_code_url=device_connect_url,
+            site_capability_status=site_capability_status,
+            implementation_checklist=implementation_checklist,
+            browser_site_acceptance_tests=browser_site_acceptance_tests,
+            secret_policy={
+                "contains_secret_values": False,
+                "do_not_paste_in_chat": [
+                    "LEXMOUNT_API_KEY",
+                    "access_token",
+                    "refresh_token",
+                    "full direct connect URLs containing api_key",
+                ],
+            },
+            next_steps=[
+                "Implement implementation_checklist.phases in order.",
+                "Treat implementation_checklist.blocked_until.runtime_auth as the device-code runtime launch gate.",
+                "Use browser_site_acceptance_tests before marking Connect from Codex available.",
+            ],
+        )
     _success(
         command,
         available=False,
@@ -19317,17 +19573,19 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
             "browser_site_acceptance_tests": browser_site_acceptance_tests,
-            "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+            "required_runtime_auth": required_runtime_auth,
             "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
+            "implementation_checklist": implementation_checklist,
         },
         setup_blocks=setup_blocks,
         required_browser_site_support=_connect_from_codex_browser_site_requirements(),
         browser_site_acceptance_tests=browser_site_acceptance_tests,
         required_device_code_endpoints=_device_code_required_endpoints(),
         required_device_code_support=_device_code_required_browser_site_support(),
-        required_api_contract=_connect_from_codex_required_api_contract(),
-        required_token_lifecycle=_connect_from_codex_required_token_lifecycle(),
-        required_runtime_auth=_connect_from_codex_required_runtime_auth(),
+        required_api_contract=required_api_contract,
+        required_token_lifecycle=required_token_lifecycle,
+        required_runtime_auth=required_runtime_auth,
+        implementation_checklist=implementation_checklist,
         verification={
             "status_command": "browser-cli auth status",
             "login_command": "browser-cli auth login",
@@ -19413,9 +19671,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
     site_capability_status = _connect_from_codex_site_capability_status(
         site_capabilities
     )
-    browser_site_acceptance_tests = (
-        _connect_from_codex_browser_site_acceptance_tests()
-    )
+    browser_site_acceptance_tests = _connect_from_codex_browser_site_acceptance_tests()
     scope_details = _scope_details(scopes)
     setup_blocks = handoff["setup_blocks"]
     device_code_base_url, _device_code_base_url_source = _device_code_base_url(
@@ -25674,6 +25930,14 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--expires-in",
         default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
         help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
+    )
+    auth_connect_requirements.add_argument(
+        "--checklist",
+        action="store_true",
+        help=(
+            "Print a focused browser.lexmount.cn implementation checklist view "
+            "derived from the Connect from Codex contract."
+        ),
     )
     auth_connect_requirements.set_defaults(func=cmd_auth_connect_requirements)
 

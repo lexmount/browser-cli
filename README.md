@@ -77,6 +77,7 @@ CLI for you:
 9. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先读取权限目录和站点契约：
    browser-cli auth scopes --include-site-contract
    browser-cli auth connect-requirements
+   browser-cli auth connect-requirements --checklist
    读取 browser_site_contract.required_runtime_auth、required_runtime_auth、required_token_lifecycle 和 setup_blocks；如果 scoped token/device-code 相关 runtime auth 仍缺 SDK/API/gateway 支持，不要把它当作可用登录方式。
 10. 如果未配置，引导我运行：
    browser-cli auth login
@@ -407,6 +408,11 @@ includes `connect_from_codex.url`, `connect_from_codex.device_code_url`,
 `browser_site_acceptance_tests`, and verification commands for `browser-cli auth
 status`, `browser-cli auth login`, device-code fallback, and
 `browser-cli doctor --json`.
+Use `browser-cli auth connect-requirements --checklist` when coordinating
+browser.lexmount.cn implementation work; it returns an
+`implementation_checklist` grouped by Project ID display, scoped credential
+creation, safe local env copy, doctor verification, credential lifecycle,
+device-code/OAuth, and runtime bearer-token launch gates.
 
 `auth login` returns top-level `flow`, `selected_flow`, `available`,
 `manual_env_available`, and `device_code_available`, plus the currently

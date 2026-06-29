@@ -173,6 +173,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "browser-cli auth refresh" in normalized
     assert "browser-cli auth logout" in normalized
     assert "browser-cli auth connect-requirements" in normalized
+    assert "browser-cli auth connect-requirements --checklist" in normalized
     assert "browser-cli auth login" in normalized
     assert "browser-cli auth export-env" in normalized
     assert "browser-cli auth login --device-code" in normalized
@@ -328,7 +329,10 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
         "For visible labeled controls, buttons, links, menus, double-clicks,"
         in normalized
     )
-    assert "choose semantic actions such as `click-label`, `click-role`, and `click-text`" in normalized
+    assert (
+        "choose semantic actions such as `click-label`, `click-role`, and `click-text`"
+        in normalized
+    )
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "for mouse gestures use `mouse_interaction`" in normalized
     expected_mouse_actions = (

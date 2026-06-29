@@ -13,6 +13,7 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "browser-cli auth scopes" in text
     assert "browser-cli auth scopes --include-site-contract" in text
     assert "browser-cli auth connect-requirements" in text
+    assert "browser-cli auth connect-requirements --checklist" in text
     assert "browser-cli auth login" in text
     assert "browser-cli auth login --open" in text
     assert "browser-cli auth login --device-code" in text
@@ -32,6 +33,9 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "browser_site_acceptance_tests" in text
     assert "connect_from_codex_contract" in text
     assert "setup_blocks" in text
+    assert "implementation_checklist" in text
+    assert "implementation_checklist.phases[].status.pending" in text
+    assert "implementation_checklist.blocked_until.runtime_auth" in text
     assert "required_device_code_endpoints" in text
     assert "required_api_contract" in text
     assert "required_token_lifecycle" in text
