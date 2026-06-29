@@ -325,7 +325,12 @@ Default behavior:
   With `--token-base-url`, `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
   `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it may call
   `POST /api/auth/token/refresh`; `remote_refresh` may report `attempted`,
-  `ok`, `status_code`, `error`, `message`, `endpoint`, and `saved`.
+  `ok`, `status_code`, `error`, `message`, `endpoint`,
+  `response_payload_source`, `response_summary`, and `saved`. The CLI sends
+  `grant_type=refresh_token`, `credential_kind`, `project_id`, `token_id`, and
+  `requested_scopes`; refresh responses may return token fields at the top level
+  or under `token`, `device_token`, `credential`, or `credentials`, with
+  camelCase token keys normalized before saving.
 - `reference list` and `reference get` expose packaged agent reference docs as
   JSON. `reference get --metadata-only` omits markdown content, and unknown ids
   fail as JSON with `error=unknown_reference` plus `available_references`.
@@ -408,7 +413,9 @@ Default behavior:
   `revoke_endpoint`, `remote_revoke`, and `revoked`, but must not print token
   values or unset environment variables. With `--revoke` and a configured token
   lifecycle endpoint, it may call `POST /api/auth/token/revoke`; without one,
-  it reports `revoke_available=false`.
+  it reports `revoke_available=false`. `remote_revoke` may report
+  `token_type_hint` and endpoint `revoked` confirmation; explicit
+  `revoked=false` must not be treated as a successful remote revoke.
 
 Explicit reveal behavior:
 

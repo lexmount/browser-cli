@@ -40,7 +40,6 @@ Do not ask the user to paste secrets into chat. Direct the user to
 `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
 
 Use local auth helpers instead of handling secrets in chat:
-
 ```bash
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
@@ -105,15 +104,17 @@ before choosing a credential source. When env credentials are incomplete, read
 `permission_count`, `risk`, `destructive`, `unknown_scopes`, and the optional
 `browser_site_contract` before explaining requested permissions. Use
 `auth token-info --required-scope <scope>` to check scoped-token coverage. Use
-`auth refresh --credentials-file <path>` to
-inspect `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`,
-`reason`, `refresh_endpoint`, and `remote_refresh`; add
-`--token-base-url <url>` or set `LEXMOUNT_BROWSER_TOKEN_BASE_URL` when
-browser.lexmount.cn exposes `POST /api/auth/token/refresh`. Use
+`auth refresh --credentials-file <path>` to inspect `refresh_needed`,
+`has_refresh_token`, `refresh_available`, `refreshed`, `reason`,
+`refresh_endpoint`, and `remote_refresh`; add `--token-base-url <url>` or set
+`LEXMOUNT_BROWSER_TOKEN_BASE_URL` when browser.lexmount.cn exposes
+`POST /api/auth/token/refresh`. `remote_refresh` reports safe metadata such as
+`response_payload_source` and `response_summary`; token data may be top-level or
+under `token`, `device_token`, `credential`, or `credentials`. Use
 `auth logout --credentials-file <path>` to remove local device-token metadata
 without changing environment variables; `--revoke` calls
 `POST /api/auth/token/revoke` only when a token lifecycle base URL is
-configured, otherwise it reports remote revoke pending.
+configured. Treat explicit `remote_revoke.revoked=false` as not confirmed.
 These commands never report access or refresh token values. Until bearer-token
 runtime support lands, require env API-key credentials for browser actions when
 `runtime_auth.usable` is false.
@@ -483,11 +484,13 @@ For device-token metadata in `auth status`, `auth token-info`, `auth refresh`,
 `device_token.scopes`, and `scope_check`; do not report token values. For
 `auth refresh`, report `refresh_needed`, `has_refresh_token`,
 `refresh_available`, `refreshed`, `reason`, `refresh_endpoint`, and
-`remote_refresh`; it calls the refresh endpoint only when a token lifecycle base
-URL is configured. For `auth logout`, report `deleted`, `present_before`,
+`remote_refresh.response_payload_source`, and `remote_refresh.response_summary`;
+it calls the refresh endpoint only when a token lifecycle base URL is
+configured. For `auth logout`, report `deleted`, `present_before`,
 `present_after`, `revoke_requested`, `revoke_available`, `revoked`,
-`remote_revoke`, and `warnings`; it does not unset env vars. Do not start
-browser actions from a device token while `runtime_auth.usable` is false.
+`remote_revoke`, and `warnings`; inspect `remote_revoke.token_type_hint` and
+`remote_revoke.revoked`; it does not unset env vars. Do not start browser
+actions from a device token while `runtime_auth.usable` is false.
 For `auth export-env`, use placeholders or masked commands unless the user explicitly asked to reveal secrets locally. If `doctor` reports `auth_export_env_contract`, use that check to decide whether export-env safety metadata is trustworthy before copying commands.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
 `warning_checks`, `skipped_checks`, and `repair_plan` first. Report warning

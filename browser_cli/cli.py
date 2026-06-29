@@ -1817,6 +1817,8 @@ def _command_catalog() -> dict[str, Any]:
                             "remote_refresh.attempted",
                             "remote_refresh.status_code",
                             "remote_refresh.error",
+                            "remote_refresh.response_payload_source",
+                            "remote_refresh.response_summary",
                             "credentials.saved",
                         ],
                         "fallback_commands": [
@@ -1852,6 +1854,8 @@ def _command_catalog() -> dict[str, Any]:
                             "remote_revoke.attempted",
                             "remote_revoke.status_code",
                             "remote_revoke.error",
+                            "remote_revoke.token_type_hint",
+                            "remote_revoke.revoked",
                             "warnings",
                         ],
                         "secret_handling": "Do not print access_token, refresh_token, or API key values.",
@@ -5580,6 +5584,89 @@ def _json_http_post(
     }
 
 
+_TOKEN_PAYLOAD_CONTAINER_KEYS = ("token", "device_token", "credential", "credentials")
+_TOKEN_PAYLOAD_KEY_ALIASES = {
+    "accessToken": "access_token",
+    "refreshToken": "refresh_token",
+    "expiresAt": "expires_at",
+    "expiresIn": "expires_in",
+    "projectId": "project_id",
+    "apiBaseUrl": "api_base_url",
+    "tokenId": "token_id",
+    "tokenType": "token_type",
+}
+
+
+def _scope_list(value: Any) -> list[str] | None:
+    if isinstance(value, list):
+        return [str(scope) for scope in value]
+    if isinstance(value, str):
+        return [scope for scope in re.split(r"[\s,]+", value.strip()) if scope]
+    return None
+
+
+def _normalize_device_token_payload(token_payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(token_payload)
+    for source_key, target_key in _TOKEN_PAYLOAD_KEY_ALIASES.items():
+        if normalized.get(target_key) in (None, "", []) and source_key in normalized:
+            normalized[target_key] = normalized.get(source_key)
+
+    scopes = _scope_list(normalized.get("scopes"))
+    if scopes is None:
+        scopes = _scope_list(normalized.get("scope"))
+    if scopes is not None:
+        normalized["scopes"] = scopes
+    return normalized
+
+
+def _extract_token_response_payload(
+    response_payload: dict[str, Any],
+) -> tuple[dict[str, Any], str, list[str]]:
+    inspected_sources = ["json"]
+    if isinstance(response_payload.get("access_token"), str) or isinstance(
+        response_payload.get("accessToken"), str
+    ):
+        return (
+            _normalize_device_token_payload(response_payload),
+            "json",
+            inspected_sources,
+        )
+
+    for key in _TOKEN_PAYLOAD_CONTAINER_KEYS:
+        nested = response_payload.get(key)
+        inspected_sources.append(f"json.{key}")
+        if not isinstance(nested, dict):
+            continue
+        if isinstance(nested.get("access_token"), str) or isinstance(
+            nested.get("accessToken"), str
+        ):
+            return (
+                _normalize_device_token_payload(nested),
+                f"json.{key}",
+                inspected_sources,
+            )
+    return {}, "missing", inspected_sources
+
+
+def _token_response_summary(token_payload: dict[str, Any]) -> dict[str, Any]:
+    scopes = _scope_list(token_payload.get("scopes")) or []
+    return {
+        "has_access_token": isinstance(token_payload.get("access_token"), str)
+        and bool(token_payload.get("access_token")),
+        "has_refresh_token": isinstance(token_payload.get("refresh_token"), str)
+        and bool(token_payload.get("refresh_token")),
+        "has_expires_at": isinstance(token_payload.get("expires_at"), str)
+        and bool(token_payload.get("expires_at")),
+        "has_expires_in": token_payload.get("expires_in") not in (None, ""),
+        "has_project_id": isinstance(token_payload.get("project_id"), str)
+        and bool(token_payload.get("project_id")),
+        "has_api_base_url": isinstance(token_payload.get("api_base_url"), str)
+        and bool(token_payload.get("api_base_url")),
+        "has_token_id": token_payload.get("token_id") not in (None, ""),
+        "scope_count": len(scopes),
+    }
+
+
 def _device_token_expires_at(token_payload: dict[str, Any]) -> str | None:
     expires_at = token_payload.get("expires_at")
     if isinstance(expires_at, str) and expires_at:
@@ -6040,8 +6127,8 @@ def _auth_refresh_next_steps(
             "Use env API-key credentials for browser actions today.",
         ]
     steps = [
-        "Remote token refresh is not implemented in browser-cli yet.",
-        "Run `browser-cli auth login` to request fresh credentials when browser.lexmount.cn supports device-code login.",
+        "Token lifecycle refresh endpoint is not configured for this CLI run.",
+        "Pass `--token-base-url` or set LEXMOUNT_BROWSER_TOKEN_BASE_URL when browser.lexmount.cn exposes token lifecycle endpoints.",
         "Use env API-key credentials for browser actions today.",
     ]
     if device_token_status.get("expired"):
@@ -6073,7 +6160,7 @@ def _auth_logout_next_steps(
             )
         else:
             steps.append(
-                "Remote revoke is not implemented in browser-cli yet; revoke the token from browser.lexmount.cn if needed."
+                "Token lifecycle revoke endpoint is not configured; revoke the token from browser.lexmount.cn if needed."
             )
     return steps
 
@@ -6127,9 +6214,12 @@ def _request_remote_token_refresh(
         endpoint,
         {
             "client_name": "browser-cli",
+            "grant_type": "refresh_token",
+            "credential_kind": current_credentials.get("kind") or "device_token",
             "refresh_token": refresh_token,
             "token_id": current_credentials.get("token_id"),
             "project_id": current_credentials.get("project_id"),
+            "requested_scopes": requested_scopes,
         },
         timeout_seconds=timeout_seconds,
     )
@@ -6144,8 +6234,26 @@ def _request_remote_token_refresh(
     }
     if not response.get("ok") or not isinstance(response_payload, dict):
         return result
+    token_payload, payload_source, inspected_sources = _extract_token_response_payload(
+        response_payload
+    )
+    result.update(
+        {
+            "response_payload_source": payload_source,
+            "inspected_response_sources": inspected_sources,
+            "response_summary": _token_response_summary(token_payload),
+        }
+    )
+    if not token_payload.get("access_token"):
+        return {
+            **result,
+            "ok": False,
+            "error": "refresh_response_invalid",
+            "message": "Refresh response did not contain a usable access token payload.",
+            "saved": False,
+        }
     token_payload = _merge_refreshed_token_payload(
-        response_payload,
+        token_payload,
         current_credentials,
     )
     credentials = _write_device_token_credentials(
@@ -6177,24 +6285,47 @@ def _request_remote_token_revoke(
             "message": read_meta.get("message"),
             **read_meta,
         }
+    scopes = _scope_list(current_credentials.get("scopes")) or []
+    token_type_hint = (
+        "refresh_token"
+        if isinstance(current_credentials.get("refresh_token"), str)
+        and bool(current_credentials.get("refresh_token"))
+        else "access_token"
+    )
     response = _json_http_post(
         endpoint,
         {
             "client_name": "browser-cli",
+            "credential_kind": current_credentials.get("kind") or "device_token",
+            "token_type_hint": token_type_hint,
             "access_token": current_credentials.get("access_token"),
             "refresh_token": current_credentials.get("refresh_token"),
             "token_id": current_credentials.get("token_id"),
             "project_id": current_credentials.get("project_id"),
+            "scopes": scopes,
         },
         timeout_seconds=timeout_seconds,
     )
+    response_payload = response.get("json", {})
+    revoked_field = (
+        response_payload.get("revoked") if isinstance(response_payload, dict) else None
+    )
+    revoked_confirmed = bool(revoked_field) if revoked_field is not None else None
+    ok = bool(response.get("ok")) and revoked_confirmed is not False
     return {
         "attempted": True,
-        "ok": bool(response.get("ok")),
+        "ok": ok,
         "endpoint": endpoint,
         "status_code": response.get("status_code"),
-        "error": response.get("error"),
-        "message": response.get("message"),
+        "error": response.get("error") or ("revoke_not_confirmed" if not ok else None),
+        "message": response.get("message")
+        or (
+            "Revoke response explicitly reported revoked=false."
+            if revoked_confirmed is False
+            else None
+        ),
+        "token_type_hint": token_type_hint,
+        "revoked": revoked_confirmed,
     }
 
 
@@ -18490,14 +18621,22 @@ def cmd_auth_refresh(args: argparse.Namespace) -> None:
         )
         credentials = remote_refresh.get("credentials")
         refreshed = bool(remote_refresh.get("saved"))
-        reason = "refreshed" if refreshed else "refresh_endpoint_error"
+        reason = (
+            "refreshed"
+            if refreshed
+            else (
+                "refresh_response_invalid"
+                if remote_refresh.get("error") == "refresh_response_invalid"
+                else "refresh_endpoint_error"
+            )
+        )
         if not refreshed:
             warnings.append(
                 "Remote token refresh endpoint did not return usable refreshed credentials."
             )
     elif reason == "remote_refresh_unavailable":
         warnings.append(
-            "Remote token refresh is not implemented yet; request fresh credentials from browser.lexmount.cn when device-code login is available."
+            "Token lifecycle refresh endpoint is not configured; pass --token-base-url or set LEXMOUNT_BROWSER_TOKEN_BASE_URL when browser.lexmount.cn exposes it."
         )
 
     _success(
@@ -18572,7 +18711,7 @@ def cmd_auth_logout(args: argparse.Namespace) -> None:
             )
     elif args.revoke:
         warnings.append(
-            "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
+            "Token lifecycle revoke endpoint is not configured; remove local metadata and revoke from browser.lexmount.cn if needed."
         )
 
     if path.exists():

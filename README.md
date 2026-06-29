@@ -245,12 +245,19 @@ reports `refresh_available: false` and `refreshed: false`; with
 `--token-base-url <url>`, `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
 `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
 `POST /api/auth/token/refresh`, saves refreshed local metadata on success, and
-never prints access or refresh token values.
+never prints access or refresh token values. The refresh request includes
+`grant_type=refresh_token`, `credential_kind`, `project_id`, `token_id`, and
+`requested_scopes`; the response may return a token payload at the top level or
+under `token`, `device_token`, `credential`, or `credentials`. camelCase fields
+such as `accessToken`, `refreshToken`, `expiresIn`, `projectId`, and `tokenId`
+are normalized before saving. `remote_refresh` reports only safe response
+metadata such as `response_payload_source` and `response_summary`.
 Use `auth logout --credentials-file <path>` to remove local device-token
 metadata without changing environment variables. `auth logout --revoke` calls
 `POST /api/auth/token/revoke` when a token lifecycle base URL is configured;
-without one it reports `revoke_available: false` and reminds you to revoke from
-browser.lexmount.cn.
+the revoke response may omit `revoked`, but explicit `revoked:false` is treated
+as not confirmed. Without a token lifecycle base URL it reports
+`revoke_available: false` and reminds you to revoke from browser.lexmount.cn.
 
 After credentials are configured, run the self-check:
 

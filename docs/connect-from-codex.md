@@ -189,15 +189,24 @@ Expected behavior after the website page exists:
   `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
   `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
   `POST /api/auth/token/refresh` and reports `refresh_endpoint`,
-  `remote_refresh`, `refreshed`, and safe refreshed credential metadata.
+  `remote_refresh`, `refreshed`, and safe refreshed credential metadata. The
+  request includes `grant_type=refresh_token`, `credential_kind`, `project_id`,
+  `token_id`, and `requested_scopes`; the response may return token fields at
+  the top level or under `token`, `device_token`, `credential`, or
+  `credentials`. camelCase fields such as `accessToken`, `refreshToken`,
+  `expiresIn`, `projectId`, and `tokenId` are accepted. `remote_refresh`
+  reports response shape metadata, not token values.
   Without a configured endpoint, it reports `refresh_available=false` and
   `refreshed=false`.
 - `browser-cli auth logout` remains local, removes fallback device-token
   metadata, and only attempts remote revoke when `--revoke` and a token
   lifecycle base URL are configured. The remote path is
   `POST /api/auth/token/revoke`; output reports `revoke_endpoint`,
-  `remote_revoke`, `revoke_available`, and `revoked`. Without a configured
-  endpoint, `--revoke` reports `revoke_available=false`.
+  `remote_revoke`, `revoke_available`, and `revoked`. The request includes
+  `token_type_hint`, `credential_kind`, `project_id`, `token_id`, and scopes
+  alongside token values. A response may omit `revoked`, but explicit
+  `revoked=false` is treated as not confirmed. Without a configured endpoint,
+  `--revoke` reports `revoke_available=false`.
 - `browser-cli auth export-env` remains local and masks secrets by default.
 - `browser-cli doctor --json` checks local env, package availability, command
   catalog compatibility, API connectivity, and optionally session creation when
