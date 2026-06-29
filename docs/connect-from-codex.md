@@ -197,7 +197,9 @@ Expected behavior after the website page exists:
 - `browser-cli auth export-env` remains local and masks secrets by default.
 - `browser-cli doctor --json` checks local env, package availability, command
   catalog compatibility, API connectivity, and optionally session creation when
-  the user opts in.
+  the user opts in. It also reports a `connect_from_codex_contract` check so
+  missing capabilities, `browser_site_acceptance_tests`, token lifecycle,
+  runtime auth, or device-code API contract fields become actionable warnings.
 - `browser-cli doctor --json` reports `runtime_auth.bearer_runtime.required_support`
   when a local device token exists but cannot yet drive browser actions. The
   required support spans lexmount-python-sdk bearer-token construction,

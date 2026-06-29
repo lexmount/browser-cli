@@ -825,6 +825,9 @@ reports `required_case_actions`,
 `missing_required_case_actions`, `missing_supported_actions`,
 `missing_action_schemas`, and `invalid_action_schemas` with upgrade guidance
 when the installed CLI is too old for case-based smoke tests.
+The `connect_from_codex_contract` check verifies that browser.lexmount.cn
+handoff fields such as capabilities, `browser_site_acceptance_tests`, token
+lifecycle, runtime auth, and device-code API contracts are still present.
 It masks `api_key` in direct URLs and diagnostic error messages by default.
 `doctor --smoke-session` creates and closes a temporary session after API
 connectivity passes, then reports the `browser_smoke_session` check with

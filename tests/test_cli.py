@@ -5232,6 +5232,32 @@ def test_doctor_checks_install_env_direct_url_and_api(
             "auth status reports configured=true and doctor reports ok=true"
         ),
     }
+    assert checks["connect_from_codex_contract"]["status"] == "pass"
+    assert checks["connect_from_codex_contract"]["capability_ids"] == [
+        "project_id_display",
+        "scoped_api_key",
+        "copy_install_and_env",
+        "doctor_verification",
+        "scoped_key_lifecycle",
+        "device_code_oauth",
+    ]
+    assert checks["connect_from_codex_contract"]["acceptance_test_ids"] == [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert checks["connect_from_codex_contract"]["missing_capabilities"] == []
+    assert checks["connect_from_codex_contract"]["missing_acceptance_tests"] == []
+    assert checks["connect_from_codex_contract"][
+        "missing_acceptance_capabilities"
+    ] == []
+    assert checks["connect_from_codex_contract"]["invalid_acceptance_tests"] == []
+    assert checks["connect_from_codex_contract"]["missing_token_lifecycle"] == []
+    assert checks["connect_from_codex_contract"]["missing_runtime_auth"] == []
+    assert checks["connect_from_codex_contract"]["invalid_api_contract"] == []
     assert checks["agent_prompt"]["status"] == "pass"
     assert checks["agent_prompt"]["metadata_id"] == "openai"
     assert checks["agent_prompt"]["package_resource"] == (
@@ -5635,6 +5661,73 @@ def test_doctor_warns_when_auth_export_env_contract_is_incomplete(
     assert "browser-cli auth export-env --from-current" in payload["repair_plan"][
         "commands"
     ]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_connect_from_codex_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._connect_from_codex_browser_site_acceptance_tests",
+        lambda: [
+            {
+                "id": "project_identity_visible",
+                "capability": "unknown_capability",
+                "source_fields": [],
+                "expected": "",
+            }
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "connect_from_codex_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["connect_from_codex_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_acceptance_tests"] == [
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert "project_id_display" in contract["missing_acceptance_capabilities"]
+    assert contract["invalid_acceptance_tests"] == [
+        {
+            "id": "project_identity_visible",
+            "capability": "unknown_capability",
+            "problems": [
+                "unknown_capability",
+                "missing_source_fields",
+                "missing_expected",
+            ],
+        }
+    ]
+    assert contract["fix"]["code"] == "repair_connect_from_codex_contract"
+    assert "browser-cli auth connect-requirements" in payload["repair_plan"][
+        "commands"
+    ]
+    assert (
+        "browser-cli commands --workflow connect_from_codex_site_requirements"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "connect_from_codex" in payload["repair_plan"]
     assert "api_connectivity" in payload["skipped_checks"]
 
 

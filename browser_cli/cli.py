@@ -81,6 +81,33 @@ DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
     "setup_block",
     "verification",
 )
+DOCTOR_REQUIRED_CONNECT_CAPABILITIES = (
+    "project_id_display",
+    "scoped_api_key",
+    "copy_install_and_env",
+    "doctor_verification",
+    "scoped_key_lifecycle",
+    "device_code_oauth",
+)
+DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS = (
+    "project_identity_visible",
+    "scope_review",
+    "copy_local_env_safely",
+    "doctor_verification",
+    "credential_lifecycle_controls",
+    "device_code_contract",
+)
+DOCTOR_REQUIRED_CONNECT_TOKEN_LIFECYCLE = (
+    "issue_scoped_key",
+    "refresh_token",
+    "revoke_token",
+    "expire_token",
+)
+DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH = (
+    "sdk_accepts_bearer_token",
+    "api_accepts_bearer_token",
+    "browser_gateway_accepts_bearer_token",
+)
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
@@ -4060,6 +4087,173 @@ def _doctor_auth_export_env_contract_check() -> dict[str, Any]:
         "auth_export_env_contract",
         "pass",
         "auth export-env exposes safe local-shell metadata for agents.",
+        **common_details,
+    )
+
+
+def _doctor_connect_from_codex_contract_check() -> dict[str, Any]:
+    try:
+        capabilities = _connect_from_codex_site_capabilities()
+        capability_status = _connect_from_codex_site_capability_status(capabilities)
+        acceptance_tests = _connect_from_codex_browser_site_acceptance_tests()
+        token_lifecycle = _connect_from_codex_required_token_lifecycle()
+        runtime_auth = _connect_from_codex_required_runtime_auth()
+        api_contract = _connect_from_codex_required_api_contract()
+    except Exception as exc:
+        return _doctor_check(
+            "connect_from_codex_contract",
+            "warn",
+            "Connect from Codex contract could not be built.",
+            error=exc.__class__.__name__,
+            required_capabilities=list(DOCTOR_REQUIRED_CONNECT_CAPABILITIES),
+            required_acceptance_tests=list(
+                DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS
+            ),
+            fix=_doctor_fix(
+                "repair_connect_from_codex_contract",
+                commands=[
+                    "browser-cli auth connect-requirements",
+                    "browser-cli auth scopes --include-site-contract",
+                    "browser-cli commands --workflow connect_from_codex_site_requirements",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Connect from Codex browser-site handoff must be machine-readable for agents and browser.lexmount.cn implementers.",
+                    "Upgrade or reinstall browser-cli if connect-requirements cannot produce JSON.",
+                ],
+            ),
+        )
+
+    capability_ids = [
+        str(item.get("id")) for item in capabilities if isinstance(item, dict)
+    ]
+    acceptance_ids = [
+        str(item.get("id")) for item in acceptance_tests if isinstance(item, dict)
+    ]
+    acceptance_capabilities = [
+        str(item.get("capability"))
+        for item in acceptance_tests
+        if isinstance(item, dict) and item.get("capability")
+    ]
+    token_lifecycle_ids = [
+        str(item.get("id")) for item in token_lifecycle if isinstance(item, dict)
+    ]
+    runtime_auth_ids = [
+        str(item.get("id")) for item in runtime_auth if isinstance(item, dict)
+    ]
+
+    missing_capabilities = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_CAPABILITIES
+        if item not in capability_ids
+    ]
+    missing_acceptance_tests = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS
+        if item not in acceptance_ids
+    ]
+    missing_acceptance_capabilities = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_CAPABILITIES
+        if item not in acceptance_capabilities
+    ]
+    missing_token_lifecycle = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_TOKEN_LIFECYCLE
+        if item not in token_lifecycle_ids
+    ]
+    missing_runtime_auth = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH
+        if item not in runtime_auth_ids
+    ]
+    invalid_acceptance_tests: list[dict[str, Any]] = []
+    for item in acceptance_tests:
+        if not isinstance(item, dict):
+            invalid_acceptance_tests.append(
+                {"id": None, "problems": ["acceptance_test_not_object"]}
+            )
+            continue
+        problems: list[str] = []
+        if item.get("id") not in DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS:
+            problems.append("unknown_id")
+        if item.get("capability") not in DOCTOR_REQUIRED_CONNECT_CAPABILITIES:
+            problems.append("unknown_capability")
+        if not isinstance(item.get("source_fields"), list) or not item.get(
+            "source_fields"
+        ):
+            problems.append("missing_source_fields")
+        if not isinstance(item.get("expected"), str) or not item.get("expected"):
+            problems.append("missing_expected")
+        if problems:
+            invalid_acceptance_tests.append(
+                {
+                    "id": item.get("id"),
+                    "capability": item.get("capability"),
+                    "problems": problems,
+                }
+            )
+
+    api_device_code = api_contract.get("device_code")
+    api_token_lifecycle = api_contract.get("token_lifecycle")
+    invalid_api_contract: list[str] = []
+    if not isinstance(api_device_code, list) or not api_device_code:
+        invalid_api_contract.append("device_code")
+    if not isinstance(api_token_lifecycle, list) or not api_token_lifecycle:
+        invalid_api_contract.append("token_lifecycle")
+
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "capability_ids": capability_ids,
+        "required_capabilities": list(DOCTOR_REQUIRED_CONNECT_CAPABILITIES),
+        "missing_capabilities": missing_capabilities,
+        "site_capability_status": capability_status,
+        "acceptance_test_ids": acceptance_ids,
+        "required_acceptance_tests": list(DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS),
+        "missing_acceptance_tests": missing_acceptance_tests,
+        "missing_acceptance_capabilities": missing_acceptance_capabilities,
+        "invalid_acceptance_tests": invalid_acceptance_tests,
+        "token_lifecycle_ids": token_lifecycle_ids,
+        "missing_token_lifecycle": missing_token_lifecycle,
+        "runtime_auth_ids": runtime_auth_ids,
+        "missing_runtime_auth": missing_runtime_auth,
+        "invalid_api_contract": invalid_api_contract,
+    }
+
+    if (
+        missing_capabilities
+        or missing_acceptance_tests
+        or missing_acceptance_capabilities
+        or invalid_acceptance_tests
+        or missing_token_lifecycle
+        or missing_runtime_auth
+        or invalid_api_contract
+    ):
+        return _doctor_check(
+            "connect_from_codex_contract",
+            "warn",
+            "Connect from Codex browser-site contract is missing required fields.",
+            fix=_doctor_fix(
+                "repair_connect_from_codex_contract",
+                commands=[
+                    "browser-cli auth connect-requirements",
+                    "browser-cli auth scopes --include-site-contract",
+                    "browser-cli commands --workflow connect_from_codex_site_requirements",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Keep auth connect-requirements, auth scopes --include-site-contract, docs/connect-from-codex.md, and docs/json-contract.md in sync.",
+                    "browser.lexmount.cn should implement every browser_site_acceptance_tests item before marking Connect from Codex available.",
+                ],
+                connect_from_codex=_doctor_connect_from_codex_fix(),
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "connect_from_codex_contract",
+        "pass",
+        "Connect from Codex browser-site contract includes the expected capabilities and acceptance tests.",
         **common_details,
     )
 
@@ -17547,6 +17741,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     checks.append(_doctor_command_catalog_check())
     checks.append(_doctor_case_schema_check())
     checks.append(_doctor_auth_export_env_contract_check())
+    checks.append(_doctor_connect_from_codex_contract_check())
     checks.append(_doctor_agent_prompt_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())

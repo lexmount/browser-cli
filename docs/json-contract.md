@@ -312,6 +312,10 @@ Default behavior:
 - `doctor` includes an `auth_export_env_contract` check so missing or invalid
   `auth export-env` safety metadata becomes an actionable warning instead of an
   agent-side guess.
+- `doctor` includes a `connect_from_codex_contract` check so missing
+  browser-site capabilities, `browser_site_acceptance_tests`, token lifecycle,
+  runtime auth, or device-code API contract fields become actionable warnings
+  before browser.lexmount.cn implementers rely on stale setup guidance.
 - `auth refresh` may report `refresh_needed`, `has_refresh_token`,
   `refresh_available`, `refreshed`, `reason`,
   `token_lifecycle_base_url_source`, `refresh_endpoint`, `remote_refresh`, and
