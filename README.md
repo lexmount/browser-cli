@@ -826,7 +826,9 @@ connectivity passes, then reports the `browser_smoke_session` check with
 fails. Failed, warning, or skipped checks may include a `fix` object with a
 stable `code`, recommended `commands`, relevant `env` names, and concise
 `guidance`; agents should prefer `repair_plan` when telling the user how to
-repair setup. Credential fixes also include
+repair setup. It also verifies packaged agent prompt metadata with an
+`agent_prompt` check so install-time Codex guidance stays aligned with doctor,
+workflow discovery, examples, and secret-handling rules. Credential fixes also include
 `repair_plan.connect_from_codex.required_runtime_auth`,
 `required_token_lifecycle`, and `site_capability_status`, so agents can explain
 browser.lexmount.cn, SDK, API, and gateway blockers from doctor output.

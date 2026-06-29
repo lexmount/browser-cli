@@ -323,6 +323,37 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "page_inspection_case",
     "form_fill_case",
 )
+DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
+    "$browser-cli",
+    "version JSON",
+    "commands --workflow",
+    "connect_from_codex_site_requirements",
+    "device_code_auth",
+    "scoped_token_lifecycle",
+    "session_recovery",
+    "case_file_task",
+    "form_interaction",
+    "interactive_targeting",
+    "content_extraction",
+    "browser_state_management",
+    "page_diagnostics",
+    "workflow read arrays",
+    "required_runtime_auth",
+    "reference get",
+    "example get",
+    "action guide",
+    "custom JavaScript",
+    "case schema",
+    "scaffold/validate/run case files",
+    "auth status",
+    "connect-requirements",
+    "device-code --wait only after approval instructions are visible",
+    "doctor --json",
+    "persistent contexts",
+    "local_registry metadata diagnostics",
+    "JSON output",
+    "secrets out of chat",
+)
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
     "connect_from_codex_site_requirements",
@@ -1010,6 +1041,44 @@ def _read_agent_example_content(example_id: str) -> str:
         .joinpath(resource_name)
         .read_text(encoding="utf-8")
     )
+
+
+def _agent_prompt_metadata() -> dict[str, Any]:
+    return {
+        "openai": {
+            "path": "agents/openai.yaml",
+            "package_resource": "browser_cli.agent_metadata:openai.yaml",
+            "format": "yaml",
+            "expected_display_name": "Lexmount Browser CLI",
+            "expected_short_description": "Control Lexmount browsers from Codex",
+            "grep_patterns": list(DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS),
+        }
+    }
+
+
+def _read_agent_prompt_metadata_content(metadata_id: str = "openai") -> str:
+    metadata = _agent_prompt_metadata().get(metadata_id)
+    if metadata is None:
+        raise KeyError(metadata_id)
+    package_resource = str(metadata["package_resource"])
+    package, resource_name = package_resource.split(":", 1)
+    return (
+        importlib_resources.files(package)
+        .joinpath(resource_name)
+        .read_text(encoding="utf-8")
+    )
+
+
+def _quoted_yaml_field(text: str, key: str) -> str | None:
+    prefix = f"  {key}: "
+    for line in text.splitlines():
+        if not line.startswith(prefix):
+            continue
+        value = line.removeprefix(prefix)
+        if len(value) < 2 or not (value.startswith('"') and value.endswith('"')):
+            return None
+        return value[1:-1]
+    return None
 
 
 def _command_catalog() -> dict[str, Any]:
@@ -3913,6 +3982,99 @@ def _doctor_context_registry_check() -> dict[str, Any]:
         context_count=len(contexts),
         scoped_context_count=scoped_context_count,
         metadata_context_count=metadata_context_count,
+        **common_details,
+    )
+
+
+def _doctor_agent_prompt_check() -> dict[str, Any]:
+    metadata = _agent_prompt_metadata().get("openai", {})
+    package_resource = metadata.get("package_resource")
+    try:
+        content = _read_agent_prompt_metadata_content("openai")
+    except Exception as exc:
+        return _doctor_check(
+            "agent_prompt",
+            "warn",
+            "Packaged agent prompt metadata could not be read.",
+            error=exc.__class__.__name__,
+            package_resource=package_resource,
+            fix=_doctor_fix(
+                "repair_packaged_agent_prompt",
+                commands=[
+                    "browser-cli doctor --json",
+                    "browser-cli commands --workflows-only",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on packaged agent prompt metadata for install-time defaults.",
+                    "Reinstall browser-cli if packaged agent metadata is unavailable.",
+                ],
+            ),
+        )
+
+    display_name = _quoted_yaml_field(content, "display_name")
+    short_description = _quoted_yaml_field(content, "short_description")
+    default_prompt = _quoted_yaml_field(content, "default_prompt")
+    missing_fields = [
+        field
+        for field, value in (
+            ("display_name", display_name),
+            ("short_description", short_description),
+            ("default_prompt", default_prompt),
+        )
+        if not value
+    ]
+    missing_patterns = [
+        str(pattern)
+        for pattern in metadata.get("grep_patterns", [])
+        if not default_prompt or str(pattern) not in default_prompt
+    ]
+    mismatched_fields = []
+    if display_name != metadata.get("expected_display_name"):
+        mismatched_fields.append("display_name")
+    if short_description != metadata.get("expected_short_description"):
+        mismatched_fields.append("short_description")
+
+    common_details: dict[str, Any] = {
+        "metadata_id": "openai",
+        "path": metadata.get("path"),
+        "package_resource": package_resource,
+        "format": metadata.get("format"),
+        "content_length": len(content),
+        "display_name": display_name,
+        "short_description": short_description,
+        "default_prompt_present": bool(default_prompt),
+        "required_pattern_count": len(metadata.get("grep_patterns", [])),
+        "missing_fields": missing_fields,
+        "missing_patterns": missing_patterns,
+        "mismatched_fields": mismatched_fields,
+    }
+
+    if missing_fields or missing_patterns or mismatched_fields:
+        return _doctor_check(
+            "agent_prompt",
+            "warn",
+            "Packaged agent prompt metadata is missing required fields or prompt guidance.",
+            fix=_doctor_fix(
+                "repair_packaged_agent_prompt",
+                commands=[
+                    "browser-cli doctor --json",
+                    "browser-cli commands --workflows-only",
+                    "browser-cli commands --workflow setup_and_verify",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agent prompt metadata should point Codex to doctor, workflow discovery, packaged examples, and safe credential handling.",
+                    "Keep agents/openai.yaml and the packaged browser_cli.agent_metadata copy in sync.",
+                ],
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "agent_prompt",
+        "pass",
+        "Packaged agent prompt metadata includes the expected Codex setup guidance.",
         **common_details,
     )
 
@@ -17065,6 +17227,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
 
     checks.append(_doctor_command_catalog_check())
     checks.append(_doctor_case_schema_check())
+    checks.append(_doctor_agent_prompt_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())
     checks.append(_doctor_context_registry_check())

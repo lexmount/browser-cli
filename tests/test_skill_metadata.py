@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import resources as importlib_resources
 from pathlib import Path
 
 
@@ -87,3 +88,13 @@ def test_openai_yaml_stays_aligned_with_skill_name() -> None:
 
     assert "name: browser-cli" in skill_text
     assert "$browser-cli" in prompt
+
+
+def test_packaged_openai_yaml_matches_repo_metadata() -> None:
+    packaged = (
+        importlib_resources.files("browser_cli.agent_metadata")
+        .joinpath("openai.yaml")
+        .read_text(encoding="utf-8")
+    )
+
+    assert packaged == OPENAI_YAML.read_text()

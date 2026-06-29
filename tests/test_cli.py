@@ -5194,6 +5194,21 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["case_schema"]["missing_supported_actions"] == []
     assert checks["case_schema"]["missing_action_schemas"] == []
     assert checks["case_schema"]["invalid_action_schemas"] == []
+    assert checks["agent_prompt"]["status"] == "pass"
+    assert checks["agent_prompt"]["metadata_id"] == "openai"
+    assert checks["agent_prompt"]["package_resource"] == (
+        "browser_cli.agent_metadata:openai.yaml"
+    )
+    assert checks["agent_prompt"]["display_name"] == "Lexmount Browser CLI"
+    assert (
+        checks["agent_prompt"]["short_description"]
+        == "Control Lexmount browsers from Codex"
+    )
+    assert checks["agent_prompt"]["default_prompt_present"] is True
+    assert checks["agent_prompt"]["required_pattern_count"] > 20
+    assert checks["agent_prompt"]["missing_fields"] == []
+    assert checks["agent_prompt"]["missing_patterns"] == []
+    assert checks["agent_prompt"]["mismatched_fields"] == []
     assert checks["agent_references"]["status"] == "pass"
     assert checks["agent_references"]["reference_count"] == 1
     assert checks["agent_references"]["required_references"] == ["action_playbook"]
@@ -5523,6 +5538,53 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
     assert "browser-cli case schema --names-only" in payload["repair_plan"]["commands"]
     assert (
         "browser-cli case schema --action network-snapshot"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_agent_prompt_metadata_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._read_agent_prompt_metadata_content",
+        lambda metadata_id="openai": "\n".join(
+            [
+                "interface:",
+                '  display_name: "Wrong"',
+                '  short_description: "Control Lexmount browsers from Codex"',
+                '  default_prompt: "Use $browser-cli."',
+            ]
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "agent_prompt" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    agent_prompt = checks["agent_prompt"]
+    assert agent_prompt["status"] == "warn"
+    assert agent_prompt["display_name"] == "Wrong"
+    assert agent_prompt["mismatched_fields"] == ["display_name"]
+    assert agent_prompt["missing_fields"] == []
+    assert "doctor --json" in agent_prompt["missing_patterns"]
+    assert "commands --workflow" in agent_prompt["missing_patterns"]
+    assert agent_prompt["fix"]["code"] == "repair_packaged_agent_prompt"
+    assert (
+        "browser-cli commands --workflow setup_and_verify"
         in payload["repair_plan"]["commands"]
     )
     assert "api_connectivity" in payload["skipped_checks"]
