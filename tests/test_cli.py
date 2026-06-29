@@ -354,10 +354,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["session_recovery"]
     )
     assert (
-        "browser-cli context pick"
+        "browser-cli context list"
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
-    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][0]
+    assert "--include-reuse-state" in payload["agent_entrypoints"]["persistent_login_state"][0]
+    assert (
+        "browser-cli context pick"
+        in payload["agent_entrypoints"]["persistent_login_state"][1]
+    )
+    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][1]
     assert (
         "browser-cli context status --context-id <context_id>"
         in payload["agent_entrypoints"]["persistent_login_state"]
@@ -407,6 +412,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["interactive_targeting"]
     )
     assert (
+        'browser-cli action click-label --session-id <session_id> --label "Remember me"'
+        in payload["agent_entrypoints"]["interactive_targeting"]
+    )
+    assert (
         "browser-cli action guide --task navigation_flow"
         in payload["agent_entrypoints"]["navigation_flow"]
     )
@@ -444,6 +453,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert (
         'browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"'
+        in payload["agent_entrypoints"]["mouse_interaction"]
+    )
+    assert (
+        'browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"'
         in payload["agent_entrypoints"]["mouse_interaction"]
     )
     assert (
@@ -563,15 +576,25 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli auth scopes --include-site-contract"
     )
     assert "browser_site_contract.scope_ui_fields" in site_steps[0]["read"]
+    assert "browser_site_contract.browser_site_acceptance_tests" in site_steps[0][
+        "read"
+    ]
     assert site_steps[1]["command"] == "browser-cli auth connect-requirements"
     assert "connect_from_codex.device_code_url" in site_steps[1]["read"]
     assert "required_device_code_endpoints" in site_steps[1]["read"]
     assert "required_token_lifecycle" in site_steps[1]["read"]
     assert "required_runtime_auth" in site_steps[1]["read"]
+    assert "browser_site_acceptance_tests" in site_steps[1]["read"]
     assert site_steps[2]["optional"] is True
     assert "connect_from_codex.required_runtime_auth" in site_steps[2]["read"]
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[2][
+        "read"
+    ]
     assert site_steps[3]["command"] == "browser-cli auth login --device-code"
     assert "connect_from_codex.required_runtime_auth" in site_steps[3]["read"]
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[3][
+        "read"
+    ]
     assert site_steps[4]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[0]["command"] == "browser-cli auth status"
@@ -587,6 +610,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "connect_from_codex.required_runtime_auth" in auth_steps[2]["read"]
     assert "usable" in auth_steps[3]["read"]
     assert "unusable_exports" in auth_steps[3]["read"]
+    assert "safe_to_paste_in_chat" in auth_steps[3]["read"]
+    assert "local_shell_only" in auth_steps[3]["read"]
+    assert "contains_secret_values" in auth_steps[3]["read"]
+    assert "contains_secret_placeholders" in auth_steps[3]["read"]
+    assert "safety" in auth_steps[3]["read"]
+    assert "setup_block" in auth_steps[3]["read"]
+    assert "verification.doctor_command" in auth_steps[3]["read"]
     assert auth_steps[3]["local_shell_only"] is True
     device_steps = workflows["device_code_auth"]["steps"]
     assert [step["id"] for step in device_steps] == [
@@ -641,6 +671,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "refresh_available" in token_steps[3]["read"]
     assert "refresh_endpoint" in token_steps[3]["read"]
     assert "remote_refresh.attempted" in token_steps[3]["read"]
+    assert "remote_refresh.response_payload_source" in token_steps[3]["read"]
+    assert "remote_refresh.response_summary" in token_steps[3]["read"]
     assert "credentials.saved" in token_steps[3]["read"]
     assert "browser-cli auth login" in token_steps[3]["fallback_commands"]
     assert token_steps[4]["command"] == "browser-cli doctor --json"
@@ -651,6 +683,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "revoked" in token_steps[5]["read"]
     assert "revoke_endpoint" in token_steps[5]["read"]
     assert "remote_revoke.attempted" in token_steps[5]["read"]
+    assert "remote_revoke.token_type_hint" in token_steps[5]["read"]
+    assert "remote_revoke.revoked" in token_steps[5]["read"]
     session_steps = workflows["session_recovery"]["steps"]
     assert [step["id"] for step in session_steps] == [
         "list_active_sessions",
@@ -745,8 +779,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "double-click-role" in mouse_steps[2]["selection_order"]
     assert "right-click-role" in mouse_steps[2]["selection_order"]
+    assert "drag-role-to-role" in mouse_steps[2]["selection_order"]
+    assert "drag-to" in mouse_steps[2]["selection_order"]
     assert "result.double_clicked" in mouse_steps[3]["read"]
     assert "result.right_clicked" in mouse_steps[3]["read"]
+    assert "result.dragged" in mouse_steps[3]["read"]
     visual_steps = workflows["visual_capture"]["steps"]
     assert [step["id"] for step in visual_steps] == [
         "inspect_action_guide",
@@ -864,32 +901,39 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "events_path" in case_steps[7]["read"]
     assert "message" in case_steps[7]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
-    assert "availability" in context_steps[0]["read"]
-    assert "reusable" in context_steps[0]["read"]
-    assert "locked" in context_steps[0]["read"]
-    assert "reuse_reason" in context_steps[0]["read"]
-    assert "selection_strategy" in context_steps[0]["read"]
-    assert "selection_summary.recommended_next_action" in context_steps[0]["read"]
-    assert "selection_summary.reusable_matches" in context_steps[0]["read"]
-    assert "selection_summary.metadata_mismatches" in context_steps[0]["read"]
+    assert context_steps[0]["id"] == "list_reuse_candidates"
+    assert context_steps[0]["optional"] is True
+    assert "reuse_state_included" in context_steps[0]["read"]
+    assert "recommended_context_id" in context_steps[0]["read"]
+    assert "reuse_candidates" in context_steps[0]["read"]
+    assert "metadata_values_redacted" in context_steps[0]["read"]
     assert "selection_summary.availability_counts" in context_steps[0]["read"]
-    assert context_steps[1]["id"] == "inspect_context_status"
-    assert context_steps[1]["optional"] is True
-    assert context_steps[1]["command"] == (
-        "browser-cli context status --context-id <context_id>"
-    )
     assert "availability" in context_steps[1]["read"]
     assert "reusable" in context_steps[1]["read"]
     assert "locked" in context_steps[1]["read"]
-    assert "normalized_status" in context_steps[1]["read"]
-    assert "context_reuse.availability" in context_steps[2]["read"]
-    assert "context_reuse.reusable" in context_steps[2]["read"]
-    assert "context_reuse.locked" in context_steps[2]["read"]
-    assert "context_reuse.reuse_reason" in context_steps[2]["read"]
-    assert "context_reuse.selection_strategy" in context_steps[2]["read"]
+    assert "reuse_reason" in context_steps[1]["read"]
+    assert "selection_strategy" in context_steps[1]["read"]
+    assert "selection_summary.recommended_next_action" in context_steps[1]["read"]
+    assert "selection_summary.reusable_matches" in context_steps[1]["read"]
+    assert "selection_summary.metadata_mismatches" in context_steps[1]["read"]
+    assert "selection_summary.availability_counts" in context_steps[1]["read"]
+    assert context_steps[2]["id"] == "inspect_context_status"
+    assert context_steps[2]["optional"] is True
+    assert context_steps[2]["command"] == (
+        "browser-cli context status --context-id <context_id>"
+    )
+    assert "availability" in context_steps[2]["read"]
+    assert "reusable" in context_steps[2]["read"]
+    assert "locked" in context_steps[2]["read"]
+    assert "normalized_status" in context_steps[2]["read"]
+    assert "context_reuse.availability" in context_steps[3]["read"]
+    assert "context_reuse.reusable" in context_steps[3]["read"]
+    assert "context_reuse.locked" in context_steps[3]["read"]
+    assert "context_reuse.reuse_reason" in context_steps[3]["read"]
+    assert "context_reuse.selection_strategy" in context_steps[3]["read"]
     assert (
         "context_reuse.selection_summary.recommended_next_action"
-        in (context_steps[2]["read"])
+        in (context_steps[3]["read"])
     )
     state_management_steps = workflows["browser_state_management"]["steps"]
     assert [step["id"] for step in state_management_steps] == [
@@ -935,6 +979,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "fill_labeled_field",
         "choose_labeled_option",
         "check_labeled_control",
+        "click_labeled_control",
         "wait_submit_ready",
         "submit_form",
         "verify_result",
@@ -950,18 +995,24 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.field_count" in form_steps[1]["read"]
     assert "result.filled" in form_steps[2]["read"]
     assert "browser-cli action fill-role" in form_steps[2]["alternative_commands"][0]
+    assert (
+        "browser-cli action fill --session-id"
+        in form_steps[2]["alternative_commands"][1]
+    )
     assert form_steps[3]["optional"] is True
     assert "result.option_found" in form_steps[3]["read"]
     assert form_steps[4]["optional"] is True
     assert "result.checked" in form_steps[4]["read"]
+    assert form_steps[5]["optional"] is True
+    assert "result.clicked" in form_steps[5]["read"]
     assert "result.element" in form_steps[5]["read"]
-    assert "result.matched" in form_steps[5]["read"]
-    assert "result.state_values" in form_steps[5]["read"]
-    assert "browser-cli action wait-role" in form_steps[5]["fallback_commands"][0]
-    assert "result.clicked" in form_steps[6]["read"]
-    assert form_steps[7]["optional"] is True
-    assert "found" in form_steps[7]["read"]
-    assert "browser-cli action wait-text" in form_steps[7]["fallback_commands"][0]
+    assert "result.matched" in form_steps[6]["read"]
+    assert "result.state_values" in form_steps[6]["read"]
+    assert "browser-cli action wait-role" in form_steps[6]["fallback_commands"][0]
+    assert "result.clicked" in form_steps[7]["read"]
+    assert form_steps[8]["optional"] is True
+    assert "found" in form_steps[8]["read"]
+    assert "browser-cli action wait-text" in form_steps[8]["fallback_commands"][0]
     upload_steps = workflows["file_upload"]["steps"]
     assert [step["id"] for step in upload_steps] == [
         "inspect_action_guide",
@@ -1058,6 +1109,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "exists-role",
         "get-text-role",
         "bounding-box-role",
+        "click-label",
         "click-role",
         "hover-role",
         "press-role",
@@ -1077,14 +1129,17 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in targeting_steps[3]["preferred_commands"][2]
     )
     assert (
-        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][4]
+        "browser-cli action click-label" in targeting_steps[3]["preferred_commands"][3]
     )
     assert (
-        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][5]
+        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][5]
+    )
+    assert (
+        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][6]
     )
     assert (
         "browser-cli action scroll-into-view-role"
-        in targeting_steps[3]["preferred_commands"][6]
+        in targeting_steps[3]["preferred_commands"][7]
     )
     assert "result.element" in targeting_steps[4]["read"]
     assert (
@@ -1092,12 +1147,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "browser-cli action wait-text" in targeting_steps[4]["fallback_commands"][1]
     assert "result.clicked" in targeting_steps[5]["read"]
+    assert "result.label" in targeting_steps[5]["read"]
+    assert "result.click_target" in targeting_steps[5]["read"]
     assert "result.hovered" in targeting_steps[5]["read"]
     assert "result.pressed" in targeting_steps[5]["read"]
     assert "result.scrolled" in targeting_steps[5]["read"]
     assert (
         "browser-cli action scroll-into-view-role"
-        in targeting_steps[5]["alternative_commands"][2]
+        in targeting_steps[5]["alternative_commands"][3]
     )
     assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
     menu_steps = workflows["menu_keyboard_flow"]["steps"]
@@ -1292,10 +1349,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.exists-role",
         "action.bounding-box",
         "action.bounding-box-role",
+        "action.click-label",
         "action.click-role",
         "action.click-index",
         "action.double-click",
         "action.double-click-role",
+        "action.drag-role-to-role",
+        "action.drag-to",
         "action.right-click",
         "action.right-click-role",
         "action.focus",
@@ -1310,6 +1370,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.check-role",
         "action.uncheck-label",
         "action.uncheck-role",
+        "action.fill",
         "action.fill-label",
         "action.fill-role",
         "action.get-value",
@@ -1414,6 +1475,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "--role" in fill_role["required_options"]
     assert "--text" in fill_role["required_options"]
     assert any("--name" in option["flags"] for option in fill_role["options"])
+    fill = commands["action.fill"]
+    assert fill["required_options"] == ["--selector", "--text"]
+    assert fill["browser_target"] == open_url["browser_target"]
     get_value_role = commands["action.get-value-role"]
     assert get_value_role["required_options"] == ["--role"]
     assert any("--name" in option["flags"] for option in get_value_role["options"])
@@ -1451,6 +1515,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     double_click_role = commands["action.double-click-role"]
     assert double_click_role["required_options"] == ["--role"]
     assert any("--name" in option["flags"] for option in double_click_role["options"])
+    drag_to = commands["action.drag-to"]
+    assert drag_to["required_options"] == ["--selector", "--target-selector"]
+    assert drag_to["browser_target"] == open_url["browser_target"]
+    drag_role = commands["action.drag-role-to-role"]
+    assert drag_role["required_options"] == ["--source-role", "--target-role"]
+    assert drag_role["browser_target"] == open_url["browser_target"]
+    assert any("--source-name" in option["flags"] for option in drag_role["options"])
+    assert any("--target-name" in option["flags"] for option in drag_role["options"])
     right_click = commands["action.right-click"]
     assert right_click["required_options"] == ["--selector"]
     right_click_role = commands["action.right-click-role"]
@@ -1571,6 +1643,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "browser-cli action get-text-role" in guide["preferred_commands"][2]
     assert "browser-cli action bounding-box-role" in guide["preferred_commands"][3]
     assert any(
+        "browser-cli action click-label" in command
+        for command in guide["preferred_commands"]
+    )
+    assert any(
         "browser-cli action click-role" in command
         for command in guide["preferred_commands"]
     )
@@ -1651,11 +1727,12 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "interactive_targeting",
         "menu_keyboard_flow",
     ]
-    assert payload["guide"]["selection_order"][:4] == [
+    assert payload["guide"]["selection_order"][:5] == [
         "interactive-snapshot",
         "accessibility-snapshot",
         "double-click-role",
         "right-click-role",
+        "drag-role-to-role",
     ]
     assert any(
         "browser-cli action double-click-role" in command
@@ -1665,9 +1742,20 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli action right-click" in command
         for command in payload["guide"]["preferred_commands"]
     )
+    assert any(
+        "browser-cli action drag-to" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action drag-role-to-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
     assert "result.double_clicked" in payload["guide"]["read_fields"]
+    assert "result.dragged" in payload["guide"]["read_fields"]
+    assert "result.target_found" in payload["guide"]["read_fields"]
+    assert "result.target_role_found" in payload["guide"]["read_fields"]
     assert "result.context_menu" in payload["guide"]["read_fields"]
-    assert "double-click/right-click" in payload["guide"]["custom_js_boundary"]
+    assert "drag/drop" in payload["guide"]["custom_js_boundary"]
     assert payload["next_commands"] == [
         "browser-cli commands --workflow mouse_interaction",
         "browser-cli commands --workflow interactive_targeting",
@@ -1828,6 +1916,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert "fill-role" in payload["guide"]["selection_order"]
+    assert "fill" in payload["guide"]["selection_order"]
     assert "clear-role" in payload["guide"]["selection_order"]
     assert "select-role" in payload["guide"]["selection_order"]
     assert "check-role" in payload["guide"]["selection_order"]
@@ -1835,6 +1924,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "wait-state-role" in payload["guide"]["selection_order"]
     assert any(
         "browser-cli action fill-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action fill --session-id" in command
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
@@ -2197,11 +2290,15 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "selection_summary.recommended_next_action"
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
+    )
+    assert (
+        "reuse_candidates"
         in payload["agent_workflows"]["persistent_login_state"]["steps"][0]["read"]
     )
     assert (
         "context_reuse.availability"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][3]["read"]
     )
     assert (
         "result.document_cookie_scope"
@@ -2209,7 +2306,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "normalized_status"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
     )
     assert (
         "unusable_exports"
@@ -2410,16 +2507,23 @@ def test_commands_catalog_returns_mouse_interaction_workflow(
     assert "guide.custom_js_boundary" in steps[0]["read"]
     assert "browser-cli action interactive-snapshot" in steps[1]["command"]
     assert steps[2]["agent_action"] is True
-    assert steps[2]["selection_order"][:4] == [
+    assert steps[2]["selection_order"][:5] == [
         "double-click-role",
         "right-click-role",
+        "drag-role-to-role",
         "double-click",
         "right-click",
     ]
+    assert "drag-to" in steps[2]["selection_order"]
     assert "browser-cli action double-click-role" in steps[2]["preferred_commands"][0]
-    assert "browser-cli action right-click" in steps[2]["preferred_commands"][3]
+    assert "browser-cli action drag-role-to-role" in steps[2]["preferred_commands"][2]
+    assert "browser-cli action right-click" in steps[2]["preferred_commands"][4]
+    assert "browser-cli action drag-to" in steps[2]["preferred_commands"][5]
     assert steps[3]["agent_action"] is True
     assert "result.double_clicked" in steps[3]["read"]
+    assert "result.dragged" in steps[3]["read"]
+    assert "result.target_found" in steps[3]["read"]
+    assert "result.target_role_found" in steps[3]["read"]
     assert "result.context_menu" in steps[3]["read"]
     assert "browser-cli action wait-text" in steps[-1]["fallback_commands"][0]
     assert (
@@ -2729,6 +2833,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "clear-role",
         "click",
         "click-index",
+        "click-label",
         "click-role",
         "click-text",
         "console-snapshot",
@@ -2741,9 +2846,12 @@ def test_case_schema_returns_supported_actions_and_fields(
         "dispatch-event",
         "double-click",
         "double-click-role",
+        "drag-role-to-role",
+        "drag-to",
         "eval",
         "exists",
         "exists-role",
+        "fill",
         "fill-label",
         "fill-role",
         "focus",
@@ -2817,11 +2925,18 @@ def test_case_schema_returns_supported_actions_and_fields(
         "wait-value-role",
     ]
     assert payload["required_fields"]["type"] == ["selector", "text"]
+    assert payload["required_fields"]["fill"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
-    assert payload["required_fields"]["click-role"] == ["role"]
     assert payload["required_fields"]["click-index"] == ["selector", "index"]
+    assert payload["required_fields"]["click-label"] == ["label"]
+    assert payload["required_fields"]["click-role"] == ["role"]
     assert payload["required_fields"]["double-click"] == ["selector"]
     assert payload["required_fields"]["double-click-role"] == ["role"]
+    assert payload["required_fields"]["drag-role-to-role"] == [
+        "source_role",
+        "target_role",
+    ]
+    assert payload["required_fields"]["drag-to"] == ["selector", "target_selector"]
     assert payload["required_fields"]["right-click"] == ["selector"]
     assert payload["required_fields"]["right-click-role"] == ["role"]
     assert payload["required_fields"]["select-label"] == ["label"]
@@ -2869,6 +2984,11 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
     assert "wait_until" in payload["actions"]["open-url"]["optional_fields"]
+    assert payload["actions"]["fill"]["example_step"] == {
+        "action": "fill",
+        "selector": "input[name=email]",
+        "text": "me@example.com",
+    }
     assert payload["actions"]["fill-label"]["example_step"] == {
         "action": "fill-label",
         "label": "Email",
@@ -2881,6 +3001,16 @@ def test_case_schema_returns_supported_actions_and_fields(
         "text": "hello",
     }
     assert "double_clicked" in payload["actions"]["double-click-role"]["result_fields"]
+    assert "target_role_found" in payload["actions"]["drag-role-to-role"]["result_fields"]
+    assert payload["actions"]["drag-role-to-role"]["example_step"] == {
+        "action": "drag-role-to-role",
+        "source_role": "listitem",
+        "source_name": "Todo",
+        "target_role": "list",
+        "target_name": "Done",
+    }
+    assert "dropped" in payload["actions"]["drag-to"]["result_fields"]
+    assert "target_found" in payload["actions"]["drag-to"]["result_fields"]
     assert "context_menu" in payload["actions"]["right-click-role"]["result_fields"]
     assert "ready_state" in payload["actions"]["page-info"]["result_fields"]
     assert "requested_url" in payload["actions"]["wait-url"]["result_fields"]
@@ -2890,6 +3020,8 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "attribute_found" in payload["actions"]["wait-attribute"]["result_fields"]
     assert "requested_count" in payload["actions"]["wait-count"]["result_fields"]
     assert "value_masked" in payload["actions"]["get-value"]["result_fields"]
+    assert "filled" in payload["actions"]["fill"]["result_fields"]
+    assert "text_masked" in payload["actions"]["fill"]["result_fields"]
     assert "attributes" in payload["actions"]["inspect"]["result_fields"]
     assert "bounding_box" in payload["actions"]["bounding-box"]["result_fields"]
     assert "set" in payload["actions"]["set-value"]["result_fields"]
@@ -2947,7 +3079,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 98,
+        "action_count": 102,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -2961,6 +3093,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "clear-role",
             "click",
             "click-index",
+            "click-label",
             "click-role",
             "click-text",
             "console-snapshot",
@@ -2973,9 +3106,12 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "dispatch-event",
             "double-click",
             "double-click-role",
+            "drag-role-to-role",
+            "drag-to",
             "eval",
             "exists",
             "exists-role",
+            "fill",
             "fill-label",
             "fill-role",
             "focus",
@@ -3559,6 +3695,7 @@ def test_extended_case_step_uses_navigation_status_expressions(
             {"action": "exists-role", "role": "alert", "name": "Saved"},
             "exists: true",
         ),
+        ({"action": "fill", "selector": "input", "text": "hello"}, "filled"),
         ({"action": "get-text", "selector": ".status"}, "innerText"),
         (
             {"action": "get-text-role", "role": "alert", "name": "Saved"},
@@ -3726,6 +3863,24 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
         (
             {"action": "click-index", "selector": ".item", "index": 1},
             "candidates[index]",
+        ),
+        (
+            {
+                "action": "drag-to",
+                "selector": ".card",
+                "target_selector": ".dropzone",
+            },
+            "targetSelector",
+        ),
+        (
+            {
+                "action": "drag-role-to-role",
+                "source_role": "listitem",
+                "source_name": "Todo",
+                "target_role": "list",
+                "target_name": "Done",
+            },
+            "sourceRole",
         ),
         (
             {"action": "set-value", "selector": "input", "value": "hello"},
@@ -4108,12 +4263,20 @@ def test_commands_catalog_returns_form_interaction_workflow(
         "browser-cli action fill-role"
         in payload["workflow"]["steps"][2]["alternative_commands"][0]
     )
-    assert payload["workflow"]["steps"][5]["id"] == "wait_submit_ready"
+    assert (
+        "browser-cli action fill --session-id"
+        in payload["workflow"]["steps"][2]["alternative_commands"][1]
+    )
+    assert payload["workflow"]["steps"][5]["id"] == "click_labeled_control"
+    assert "browser-cli action click-label" in payload["workflow"]["steps"][5][
+        "command"
+    ]
+    assert payload["workflow"]["steps"][6]["id"] == "wait_submit_ready"
     assert (
         "browser-cli action wait-state-role"
-        in payload["workflow"]["steps"][5]["command"]
+        in payload["workflow"]["steps"][6]["command"]
     )
-    assert "result.state_values" in payload["workflow"]["steps"][5]["read"]
+    assert "result.state_values" in payload["workflow"]["steps"][6]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "verify_result"
     assert payload["workflow"]["steps"][-1]["optional"] is True
     assert (
@@ -4273,6 +4436,7 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     assert steps[3]["optional"] is True
     assert "refresh_available" in steps[3]["read"]
     assert "remote_refresh.status_code" in steps[3]["read"]
+    assert "remote_refresh.response_payload_source" in steps[3]["read"]
     assert "credentials.saved" in steps[3]["read"]
     assert steps[4]["success_condition"] == (
         "ok=true and ready_for_browser_actions=true"
@@ -4280,6 +4444,7 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
     assert steps[5]["user_requested_only"] is True
     assert "revoke_available" in steps[5]["read"]
     assert "remote_revoke.status_code" in steps[5]["read"]
+    assert "remote_revoke.revoked" in steps[5]["read"]
     assert (
         "browser-cli auth scopes --scope browser:actions"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
@@ -4432,6 +4597,7 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
         "exists-role",
         "get-text-role",
         "bounding-box-role",
+        "click-label",
         "click-role",
         "hover-role",
         "press-role",
@@ -4442,9 +4608,11 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert "browser-cli action exists-role" in steps[3]["preferred_commands"][0]
     assert "browser-cli action get-text-role" in steps[3]["preferred_commands"][1]
     assert "browser-cli action bounding-box-role" in steps[3]["preferred_commands"][2]
-    assert "browser-cli action click-role" in steps[3]["preferred_commands"][3]
-    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][4]
-    assert "browser-cli action click-text" in steps[5]["alternative_commands"][3]
+    assert "browser-cli action click-label" in steps[3]["preferred_commands"][3]
+    assert "browser-cli action click-role" in steps[3]["preferred_commands"][4]
+    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][5]
+    assert "browser-cli action click-label" in steps[5]["alternative_commands"][0]
+    assert "browser-cli action click-text" in steps[5]["alternative_commands"][4]
     assert steps[-1]["id"] == "verify_after_click"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
@@ -4836,7 +5004,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "guidance": [],
         "fixes": [],
     }
-    assert "secret" not in json.dumps(payload)
+    assert '"secret"' not in json.dumps(payload)
 
     checks = _checks_by_name(payload)
     assert checks["python_runtime"]["status"] == "pass"
@@ -4983,6 +5151,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "fill_labeled_field",
         "choose_labeled_option",
         "check_labeled_control",
+        "click_labeled_control",
         "wait_submit_ready",
         "submit_form",
         "verify_result",
@@ -5126,10 +5295,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.click-index",
         "action.double-click",
         "action.double-click-role",
+        "action.drag-role-to-role",
+        "action.drag-to",
         "action.right-click",
         "action.right-click-role",
         "action.focus",
         "action.focus-role",
+        "action.fill",
         "action.fill-label",
         "action.fill-role",
         "action.get-value",
@@ -5164,6 +5336,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.frame-snapshot",
         "action.wait-frame",
         "action.performance-snapshot",
+        "action.click-label",
         "reference.list",
         "reference.get",
         "example.list",
@@ -5178,11 +5351,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 98
-    assert checks["case_schema"]["supported_action_count"] == 98
+    assert checks["case_schema"]["action_count"] == 102
+    assert checks["case_schema"]["supported_action_count"] == 102
     for case_action in (
         "fill-label",
+        "click-label",
         "click-role",
+        "drag-role-to-role",
         "interactive-only-snapshot",
         "network-snapshot",
         "wait-network",
@@ -5194,6 +5369,59 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["case_schema"]["missing_supported_actions"] == []
     assert checks["case_schema"]["missing_action_schemas"] == []
     assert checks["case_schema"]["invalid_action_schemas"] == []
+    assert checks["auth_export_env_contract"]["status"] == "pass"
+    assert checks["auth_export_env_contract"]["required_fields"] == [
+        "usable",
+        "unusable_exports",
+        "contains_secret_values",
+        "contains_secret_placeholders",
+        "safe_to_paste_in_chat",
+        "local_shell_only",
+        "secret_env",
+        "safety",
+        "setup_block",
+        "verification",
+    ]
+    assert checks["auth_export_env_contract"]["missing_fields"] == []
+    assert checks["auth_export_env_contract"]["invalid_fields"] == []
+    assert checks["auth_export_env_contract"]["safe_to_paste_in_chat"] is False
+    assert checks["auth_export_env_contract"]["local_shell_only"] is True
+    assert checks["auth_export_env_contract"]["contains_secret_values"] is False
+    assert checks["auth_export_env_contract"]["contains_secret_placeholders"] is True
+    assert checks["auth_export_env_contract"]["secret_env"] == ["LEXMOUNT_API_KEY"]
+    assert checks["auth_export_env_contract"]["verification"] == {
+        "status_command": "browser-cli auth status",
+        "doctor_command": "browser-cli doctor --json",
+        "success_condition": (
+            "auth status reports configured=true and doctor reports ok=true"
+        ),
+    }
+    assert checks["connect_from_codex_contract"]["status"] == "pass"
+    assert checks["connect_from_codex_contract"]["capability_ids"] == [
+        "project_id_display",
+        "scoped_api_key",
+        "copy_install_and_env",
+        "doctor_verification",
+        "scoped_key_lifecycle",
+        "device_code_oauth",
+    ]
+    assert checks["connect_from_codex_contract"]["acceptance_test_ids"] == [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert checks["connect_from_codex_contract"]["missing_capabilities"] == []
+    assert checks["connect_from_codex_contract"]["missing_acceptance_tests"] == []
+    assert checks["connect_from_codex_contract"][
+        "missing_acceptance_capabilities"
+    ] == []
+    assert checks["connect_from_codex_contract"]["invalid_acceptance_tests"] == []
+    assert checks["connect_from_codex_contract"]["missing_token_lifecycle"] == []
+    assert checks["connect_from_codex_contract"]["missing_runtime_auth"] == []
+    assert checks["connect_from_codex_contract"]["invalid_api_contract"] == []
     assert checks["agent_prompt"]["status"] == "pass"
     assert checks["agent_prompt"]["metadata_id"] == "openai"
     assert checks["agent_prompt"]["package_resource"] == (
@@ -5294,7 +5522,7 @@ def test_doctor_warns_when_context_registry_json_is_invalid(
     assert payload["status"] == "warning"
     assert payload["failed_checks"] == []
     assert "context_registry" in payload["warning_checks"]
-    assert "secret" not in json.dumps(payload)
+    assert '"secret"' not in json.dumps(payload)
 
     checks = _checks_by_name(payload)
     registry = checks["context_registry"]
@@ -5363,6 +5591,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.scroll-into-view-role" in catalog["missing_required_commands"]
     assert "action.double-click" in catalog["missing_required_commands"]
     assert "action.double-click-role" in catalog["missing_required_commands"]
+    assert "action.drag-to" in catalog["missing_required_commands"]
     assert "action.right-click" in catalog["missing_required_commands"]
     assert "action.right-click-role" in catalog["missing_required_commands"]
     for command_name in (
@@ -5380,12 +5609,14 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "action.select-label",
         "action.check-label",
         "action.uncheck-label",
+        "action.click-label",
         "action.click-index",
         "action.focus",
         "action.get-value",
         "action.wait-value",
         "action.blur",
         "action.clear",
+        "action.fill",
         "action.set-value",
         "action.dispatch-event",
         "action.submit",
@@ -5525,6 +5756,7 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
         "blur",
         "blur-role",
     ]
+    assert "fill" in case_schema["missing_required_case_actions"]
     assert "fill-label" in case_schema["missing_required_case_actions"]
     assert "network-snapshot" in case_schema["missing_required_case_actions"]
     assert "wait-console" in case_schema["missing_required_case_actions"]
@@ -5540,6 +5772,130 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
         "browser-cli case schema --action network-snapshot"
         in payload["repair_plan"]["commands"]
     )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_auth_export_env_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._auth_export_env_payload",
+        lambda args: {
+            "usable": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "secret_env": [],
+            "safety": {},
+            "setup_block": {"id": "wrong", "commands": []},
+            "verification": {"doctor_command": "browser-cli doctor"},
+            "commands": ["export LEXMOUNT_API_KEY='<api-key>'"],
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "auth_export_env_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["auth_export_env_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_fields"] == ["unusable_exports"]
+    assert "safe_to_paste_in_chat" in contract["invalid_fields"]
+    assert "local_shell_only" in contract["invalid_fields"]
+    assert "contains_secret_placeholders" in contract["invalid_fields"]
+    assert "secret_env" in contract["invalid_fields"]
+    assert "safety.secret_env" in contract["invalid_fields"]
+    assert "setup_block.id" in contract["invalid_fields"]
+    assert "verification.doctor_command" in contract["invalid_fields"]
+    assert "verification.status_command" in contract["invalid_fields"]
+    assert contract["fix"]["code"] == "repair_auth_export_env_contract"
+    assert "browser-cli auth export-env" in payload["repair_plan"]["commands"]
+    assert "browser-cli auth export-env --from-current" in payload["repair_plan"][
+        "commands"
+    ]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_connect_from_codex_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._connect_from_codex_browser_site_acceptance_tests",
+        lambda: [
+            {
+                "id": "project_identity_visible",
+                "capability": "unknown_capability",
+                "source_fields": [],
+                "expected": "",
+            }
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "connect_from_codex_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["connect_from_codex_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_acceptance_tests"] == [
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert "project_id_display" in contract["missing_acceptance_capabilities"]
+    assert contract["invalid_acceptance_tests"] == [
+        {
+            "id": "project_identity_visible",
+            "capability": "unknown_capability",
+            "problems": [
+                "unknown_capability",
+                "missing_source_fields",
+                "missing_expected",
+            ],
+        }
+    ]
+    assert contract["fix"]["code"] == "repair_connect_from_codex_contract"
+    assert "browser-cli auth connect-requirements" in payload["repair_plan"][
+        "commands"
+    ]
+    assert (
+        "browser-cli commands --workflow connect_from_codex_site_requirements"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "connect_from_codex" in payload["repair_plan"]
     assert "api_connectivity" in payload["skipped_checks"]
 
 
@@ -5582,6 +5938,7 @@ def test_doctor_warns_when_agent_prompt_metadata_is_incomplete(
     assert agent_prompt["missing_fields"] == []
     assert "doctor --json" in agent_prompt["missing_patterns"]
     assert "commands --workflow" in agent_prompt["missing_patterns"]
+    assert "click-label" in agent_prompt["missing_patterns"]
     assert agent_prompt["fix"]["code"] == "repair_packaged_agent_prompt"
     assert (
         "browser-cli commands --workflow setup_and_verify"
@@ -5840,6 +6197,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "fill_labeled_field"},
                         {"id": "choose_labeled_option"},
                         {"id": "check_labeled_control"},
+                        {"id": "click_labeled_control"},
                         {"id": "wait_submit_ready"},
                         {"id": "submit_form"},
                         {"id": "verify_result"},
@@ -6999,7 +7357,7 @@ def test_auth_refresh_reports_remote_refresh_pending_without_revealing_tokens(
     assert payload["reason"] == "remote_refresh_unavailable"
     assert payload["runtime_auth_usable"] is False
     assert "Device token is expired." in payload["warnings"]
-    assert "Remote token refresh is not implemented yet" in payload["warnings"][-1]
+    assert "Token lifecycle refresh endpoint is not configured" in payload["warnings"][-1]
     assert payload["device_token"]["token_id"] == "tok_123"
     assert payload["next_steps"][0] == "Local device-token metadata is expired."
 
@@ -7078,9 +7436,12 @@ def test_auth_refresh_calls_configured_token_endpoint_and_saves_credentials(
             "https://browser.lexmount.cn/api/auth/token/refresh",
             {
                 "client_name": "browser-cli",
+                "grant_type": "refresh_token",
+                "credential_kind": "device_token",
                 "refresh_token": "secret-refresh-token",
                 "token_id": "tok_123",
                 "project_id": "project",
+                "requested_scopes": ["browser.sessions:create"],
             },
             7,
         )
@@ -7096,6 +7457,9 @@ def test_auth_refresh_calls_configured_token_endpoint_and_saves_credentials(
     assert payload["reason"] == "refreshed"
     assert payload["remote_refresh"]["attempted"] is True
     assert payload["remote_refresh"]["status_code"] == 200
+    assert payload["remote_refresh"]["response_payload_source"] == "json"
+    assert payload["remote_refresh"]["response_summary"]["has_access_token"] is True
+    assert payload["remote_refresh"]["response_summary"]["scope_count"] == 0
     assert payload["credentials"]["saved"] is True
     assert payload["credentials"]["device_token"]["token_id"] == "tok_456"
     assert (
@@ -7107,6 +7471,169 @@ def test_auth_refresh_calls_configured_token_endpoint_and_saves_credentials(
     assert stored["refresh_token"] == "secret-refresh-token"
     assert stored["project_id"] == "project"
     assert stored["scopes"] == ["browser.sessions:create"]
+
+
+def test_auth_refresh_accepts_nested_camel_case_token_payload(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "old-secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-25T23:59:00Z",
+                "scopes": ["browser.sessions:create"],
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    def fake_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        assert url == "https://browser.lexmount.cn/api/auth/token/refresh"
+        assert payload["requested_scopes"] == ["browser.sessions:create"]
+        assert timeout_seconds == 10
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {
+                "credential": {
+                    "accessToken": "new-secret-access-token",
+                    "refreshToken": "new-secret-refresh-token",
+                    "expiresIn": "7200",
+                    "projectId": "project-2",
+                    "apiBaseUrl": "https://api2.lexmount.cn",
+                    "scope": "browser.actions:run browser.sessions:create",
+                    "tokenId": "tok_999",
+                    "tokenType": "Bearer",
+                }
+            },
+        }
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_post)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "refresh",
+                "--credentials-file",
+                str(credentials_file),
+                "--token-base-url",
+                "https://browser.lexmount.cn",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "old-secret-access-token" not in serialized
+    assert "new-secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert "new-secret-refresh-token" not in serialized
+    assert payload["reason"] == "refreshed"
+    assert payload["remote_refresh"]["response_payload_source"] == "json.credential"
+    assert payload["remote_refresh"]["response_summary"] == {
+        "has_access_token": True,
+        "has_refresh_token": True,
+        "has_expires_at": False,
+        "has_expires_in": True,
+        "has_project_id": True,
+        "has_api_base_url": True,
+        "has_token_id": True,
+        "scope_count": 2,
+    }
+    stored = json.loads(credentials_file.read_text())
+    assert stored["access_token"] == "new-secret-access-token"
+    assert stored["refresh_token"] == "new-secret-refresh-token"
+    assert stored["project_id"] == "project-2"
+    assert stored["api_base_url"] == "https://api2.lexmount.cn"
+    assert stored["scopes"] == ["browser.actions:run", "browser.sessions:create"]
+    assert stored["token_id"] == "tok_999"
+
+
+def test_auth_refresh_reports_invalid_success_response_schema(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli_module,
+        "_now_utc",
+        lambda: datetime(2026, 6, 26, 0, 0, tzinfo=timezone.utc),
+    )
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "old-secret-access-token",
+                "refresh_token": "secret-refresh-token",
+                "expires_at": "2026-06-25T23:59:00Z",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    def fake_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {"token": {"expires_in": 3600}},
+        }
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_post)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "refresh",
+                "--credentials-file",
+                str(credentials_file),
+                "--token-base-url",
+                "https://browser.lexmount.cn",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "old-secret-access-token" not in serialized
+    assert "secret-refresh-token" not in serialized
+    assert payload["refreshed"] is False
+    assert payload["reason"] == "refresh_response_invalid"
+    assert payload["remote_refresh"]["ok"] is False
+    assert payload["remote_refresh"]["error"] == "refresh_response_invalid"
+    assert payload["remote_refresh"]["saved"] is False
+    assert payload["remote_refresh"]["response_payload_source"] == "missing"
+    assert "json.token" in payload["remote_refresh"]["inspected_response_sources"]
+    assert "Remote token refresh endpoint did not return usable" in payload["warnings"][-1]
 
 
 def test_auth_refresh_reports_not_needed_without_force(
@@ -7288,9 +7815,9 @@ def test_auth_logout_revoke_flag_reports_remote_revoke_pending(
     assert payload["revoke_requested"] is True
     assert payload["revoke_available"] is False
     assert payload["warnings"] == [
-        "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
+        "Token lifecycle revoke endpoint is not configured; remove local metadata and revoke from browser.lexmount.cn if needed."
     ]
-    assert "Remote revoke is not implemented" in payload["next_steps"][-1]
+    assert "Token lifecycle revoke endpoint is not configured" in payload["next_steps"][-1]
 
 
 def test_auth_logout_revoke_calls_configured_token_endpoint(
@@ -7363,10 +7890,13 @@ def test_auth_logout_revoke_calls_configured_token_endpoint(
             "https://browser.lexmount.cn/api/auth/token/revoke",
             {
                 "client_name": "browser-cli",
+                "credential_kind": "device_token",
+                "token_type_hint": "refresh_token",
                 "access_token": "secret-access-token",
                 "refresh_token": "secret-refresh-token",
                 "token_id": "tok_123",
                 "project_id": "project",
+                "scopes": ["browser.actions:run"],
             },
             8,
         )
@@ -7381,8 +7911,75 @@ def test_auth_logout_revoke_calls_configured_token_endpoint(
     assert payload["revoked"] is True
     assert payload["remote_revoke"]["attempted"] is True
     assert payload["remote_revoke"]["status_code"] == 200
+    assert payload["remote_revoke"]["token_type_hint"] == "refresh_token"
+    assert payload["remote_revoke"]["revoked"] is True
     assert payload["deleted"] is True
     assert payload["next_steps"][-1] == "Remote token revoke completed."
+
+
+def test_auth_logout_revoke_false_is_not_confirmed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "device_token",
+                "project_id": "project",
+                "access_token": "secret-access-token",
+                "expires_at": "2026-06-26T01:00:00Z",
+                "token_id": "tok_123",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    def fake_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        assert payload["token_type_hint"] == "access_token"
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {"revoked": False},
+        }
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_post)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "logout",
+                "--credentials-file",
+                str(credentials_file),
+                "--revoke",
+                "--token-base-url",
+                "https://browser.lexmount.cn",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert not credentials_file.exists()
+    payload = json.loads(capsys.readouterr().out)
+    serialized = json.dumps(payload)
+    assert "secret-access-token" not in serialized
+    assert payload["revoked"] is False
+    assert payload["remote_revoke"]["ok"] is False
+    assert payload["remote_revoke"]["error"] == "revoke_not_confirmed"
+    assert payload["remote_revoke"]["revoked"] is False
+    assert (
+        "Remote token revoke endpoint did not confirm revocation"
+        in payload["warnings"][0]
+    )
+    assert "attempted but did not complete" in payload["next_steps"][-1]
 
 
 def test_auth_export_env_emits_safe_placeholders(
@@ -7401,6 +7998,38 @@ def test_auth_export_env_emits_safe_placeholders(
         "LEXMOUNT_API_KEY",
         "LEXMOUNT_PROJECT_ID",
     ]
+    assert payload["contains_secret_values"] is False
+    assert payload["contains_secret_placeholders"] is True
+    assert payload["safe_to_paste_in_chat"] is False
+    assert payload["local_shell_only"] is True
+    assert payload["secret_env"] == ["LEXMOUNT_API_KEY"]
+    assert payload["safety"] == {
+        "contains_secret_values": False,
+        "contains_secret_placeholders": True,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+        "secret_env": ["LEXMOUNT_API_KEY"],
+    }
+    assert payload["setup_block"] == {
+        "id": "local_env",
+        "label": "Configure local shell",
+        "commands": [
+            "export LEXMOUNT_API_KEY='<api-key>'",
+            "export LEXMOUNT_PROJECT_ID='<project-id>'",
+        ],
+        "contains_secret_values": False,
+        "contains_secret_placeholders": True,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+        "secret_env": ["LEXMOUNT_API_KEY"],
+    }
+    assert payload["verification"] == {
+        "status_command": "browser-cli auth status",
+        "doctor_command": "browser-cli doctor --json",
+        "success_condition": (
+            "auth status reports configured=true and doctor reports ok=true"
+        ),
+    }
     assert payload["warnings"] == []
     assert payload["commands"] == [
         "export LEXMOUNT_API_KEY='<api-key>'",
@@ -7447,6 +8076,12 @@ def test_auth_export_env_from_current_masks_api_key_by_default(
     assert payload["warnings"]
     assert payload["usable"] is False
     assert payload["unusable_exports"] == ["LEXMOUNT_API_KEY"]
+    assert payload["contains_secret_values"] is False
+    assert payload["contains_secret_placeholders"] is True
+    assert payload["safe_to_paste_in_chat"] is False
+    assert payload["local_shell_only"] is True
+    assert payload["safety"]["secret_env"] == ["LEXMOUNT_API_KEY"]
+    assert payload["setup_block"]["commands"] == payload["commands"]
     assert "Replace placeholder or redacted export values" in payload["next_steps"][0]
     assert payload["exports"][0]["source"] == "env"
     assert payload["exports"][0]["usable"] is False
@@ -7469,6 +8104,13 @@ def test_auth_export_env_can_reveal_current_secret_explicitly(
     assert payload["secrets_revealed"] is True
     assert payload["usable"] is True
     assert payload["unusable_exports"] == []
+    assert payload["contains_secret_values"] is True
+    assert payload["contains_secret_placeholders"] is False
+    assert payload["safe_to_paste_in_chat"] is False
+    assert payload["local_shell_only"] is True
+    assert payload["safety"]["contains_secret_values"] is True
+    assert payload["safety"]["contains_secret_placeholders"] is False
+    assert payload["setup_block"]["commands"] == payload["commands"]
     assert payload["next_steps"][0] == "Run the export commands in the local shell."
     assert payload["warnings"] == []
     assert "local-secret" in payload["script"]
@@ -7620,6 +8262,18 @@ def test_auth_scopes_filters_unknown_scopes_and_reports_site_contract(
         "api_accepts_bearer_token",
         "browser_gateway_accepts_bearer_token",
     ]
+    assert [item["id"] for item in contract["browser_site_acceptance_tests"]] == [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert (
+        contract["browser_site_acceptance_tests"][0]["capability"]
+        == "project_id_display"
+    )
     assert contract["required_runtime_auth"][0]["required"] is True
     assert contract["site_capability_status"]["missing_count"] == 6
     assert any(
@@ -7714,6 +8368,23 @@ def test_auth_connect_requirements_reports_browser_site_contract(
         "access_token",
         "refresh_token",
     ]
+    acceptance_ids = [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert [item["id"] for item in payload["browser_site_acceptance_tests"]] == (
+        acceptance_ids
+    )
+    assert payload["browser_site_acceptance_tests"][2]["capability"] == (
+        "copy_install_and_env"
+    )
+    assert "setup_blocks.local_env.local_shell_only" in payload[
+        "browser_site_acceptance_tests"
+    ][2]["source_fields"]
     assert payload["verification"]["workflow_command"] == (
         "browser-cli commands --workflow connect_from_codex_site_requirements"
     )
@@ -7730,6 +8401,9 @@ def test_auth_connect_requirements_reports_browser_site_contract(
     assert connect["requested_scopes"] == ["browser:actions"]
     assert connect["setup_blocks"] == payload["setup_blocks"]
     assert connect["required_runtime_auth"] == payload["required_runtime_auth"]
+    assert connect["browser_site_acceptance_tests"] == payload[
+        "browser_site_acceptance_tests"
+    ]
     assert connect["supported_response_modes"] == ["env", "device_code"]
     assert "response=env|device_code" in connect["required_query_parameters"]
     capability_ids = [
@@ -7880,6 +8554,17 @@ def test_auth_login_guides_manual_browser_flow(
     }
     assert [item["id"] for item in connect["site_capabilities"]] == capability_ids
     assert all(item["available"] is False for item in connect["site_capabilities"])
+    assert [item["id"] for item in connect["browser_site_acceptance_tests"]] == [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert connect["browser_site_acceptance_tests"][3]["capability"] == (
+        "doctor_verification"
+    )
     lifecycle = next(
         item
         for item in connect["site_capabilities"]
@@ -9197,6 +9882,7 @@ def test_context_commands_emit_json(
     listed = json.loads(capsys.readouterr().out)
     assert listed["count"] == 1
     assert listed["limit"] == 5
+    assert listed["reuse_state_included"] is False
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["context", "get", "--context-id", "ctx1"])
@@ -9246,6 +9932,119 @@ def test_context_status_reports_reusable_and_locked_state(
         "locked": True,
         "reason": "status_locked",
     }
+
+
+def test_context_list_can_include_reuse_state_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    registry_file = tmp_path / "context-registry.json"
+    registry_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "contexts": {
+                    "ctx-local": {
+                        "context_id": "ctx-local",
+                        "metadata": {"purpose": "codex"},
+                        "project_id": "project",
+                        "base_url": cli_module.DEFAULT_LEXMOUNT_BASE_URL,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE", str(registry_file))
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+
+    observed: dict[str, Any] = {}
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            observed.update({"status": status, "limit": limit})
+            return DummyModel(
+                {
+                    "count": 3,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-old",
+                            "status": "available",
+                            "metadata": {"purpose": "codex"},
+                            "updated_at": "2026-01-01T00:00:00Z",
+                        },
+                        {
+                            "context_id": "ctx-local",
+                            "status": "available",
+                            "metadata": {},
+                            "updated_at": "2026-01-02T00:00:00Z",
+                        },
+                        {
+                            "context_id": "ctx-locked",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex"},
+                            "updated_at": "2026-01-03T00:00:00Z",
+                        },
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "list",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+                "--selection",
+                "newest",
+                "--limit",
+                "10",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed == {"status": None, "limit": 10}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "context.list"
+    assert payload["reuse_state_included"] is True
+    assert payload["metadata_filter"] == {"purpose": "codex"}
+    assert payload["metadata_values_redacted"] is True
+    assert payload["selection_strategy"] == "newest"
+    assert payload["recommended_context_id"] == "ctx-local"
+    assert payload["selection_summary"] == {
+        "checked": 3,
+        "selected_context_id": "ctx-local",
+        "recommended_next_action": "use_selected_context",
+        "decision_reason": "reusable_context_selected",
+        "metadata_matches": 3,
+        "metadata_mismatches": 0,
+        "reusable_matches": 2,
+        "locked_matches": 1,
+        "unavailable_matches": 0,
+        "unknown_matches": 0,
+        "availability_counts": {"available": 2, "locked": 1},
+        "reason_counts": {"status_locked": 1, "status_reusable": 2},
+        "create_if_missing": False,
+        "dry_run": True,
+        "would_create": False,
+    }
+    assert payload["reuse_candidates"][1]["context_id"] == "ctx-local"
+    assert (
+        payload["reuse_candidates"][1]["metadata_diagnostics"]["metadata_source"]
+        == "local_registry"
+    )
+    assert payload["reuse_candidates"][1]["reusable"] is True
+    assert payload["reuse_candidates"][2]["locked"] is True
 
 
 def test_context_pick_missing_credentials_points_to_auth_setup(
@@ -10842,6 +11641,124 @@ def test_action_set_file_input_missing_file_is_json(
         (
             [
                 "action",
+                "drag-to",
+                "--session-id",
+                "s1",
+                "--selector",
+                ".card",
+                "--target-selector",
+                ".dropzone",
+            ],
+            "action.drag-to",
+            {
+                "selector": ".card",
+                "target_selector": ".dropzone",
+                "found": True,
+                "target_found": True,
+                "dragged": True,
+                "dropped": True,
+                "events": [
+                    "mousedown",
+                    "dragstart",
+                    "mousemove",
+                    "dragenter",
+                    "dragover",
+                    "drop",
+                    "dragend",
+                    "mouseup",
+                ],
+            },
+            {
+                "selector": ".card",
+                "target_selector": ".dropzone",
+                "found": True,
+                "target_found": True,
+                "dragged": True,
+                "dropped": True,
+                "events": [
+                    "mousedown",
+                    "dragstart",
+                    "mousemove",
+                    "dragenter",
+                    "dragover",
+                    "drop",
+                    "dragend",
+                    "mouseup",
+                ],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
+                "drag-role-to-role",
+                "--session-id",
+                "s1",
+                "--source-role",
+                "listitem",
+                "--source-name",
+                "Todo",
+                "--target-role",
+                "list",
+                "--target-name",
+                "Done",
+            ],
+            "action.drag-role-to-role",
+            {
+                "source_role": "listitem",
+                "source_name": "Todo",
+                "target_role": "list",
+                "target_name": "Done",
+                "found": True,
+                "role_found": True,
+                "target_found": True,
+                "target_role_found": True,
+                "dragged": True,
+                "dropped": True,
+                "source_candidate_count": 1,
+                "target_candidate_count": 1,
+                "events": [
+                    "mousedown",
+                    "dragstart",
+                    "mousemove",
+                    "dragenter",
+                    "dragover",
+                    "drop",
+                    "dragend",
+                    "mouseup",
+                ],
+            },
+            {
+                "source_role": "listitem",
+                "source_name": "Todo",
+                "target_role": "list",
+                "target_name": "Done",
+                "found": True,
+                "role_found": True,
+                "target_found": True,
+                "target_role_found": True,
+                "dragged": True,
+                "dropped": True,
+                "source_candidate_count": 1,
+                "target_candidate_count": 1,
+                "events": [
+                    "mousedown",
+                    "dragstart",
+                    "mousemove",
+                    "dragenter",
+                    "dragover",
+                    "drop",
+                    "dragend",
+                    "mouseup",
+                ],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
                 "right-click",
                 "--session-id",
                 "s1",
@@ -11037,9 +11954,22 @@ def test_eval_backed_action_commands_emit_structured_results(
     if command in {"action.double-click", "action.double-click-role"}:
         assert '"double-click"' in observed["expression"]
         assert "dblclick" in observed["expression"]
+    if command == "action.drag-to":
+        assert "targetSelector" in observed["expression"]
+        assert "dragstart" in observed["expression"]
+        assert "drop" in observed["expression"]
+    if command == "action.drag-role-to-role":
+        assert 'const sourceRole = "listitem"' in observed["expression"]
+        assert 'const targetRole = "list"' in observed["expression"]
+        assert 'if (tag === "li") return "listitem";' in observed["expression"]
+        assert "dragstart" in observed["expression"]
+        assert "drop" in observed["expression"]
     if command in {"action.right-click", "action.right-click-role"}:
         assert '"right-click"' in observed["expression"]
         assert "contextmenu" in observed["expression"]
+    if command == "action.click-label":
+        assert 'const requestedLabel = "Remember me"' in observed["expression"]
+        assert "findFieldByLabel" in observed["expression"]
     payload = json.loads(capsys.readouterr().out)
     assert payload == {
         "ok": True,
@@ -11573,6 +12503,19 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
                 "Password",
             ],
             ["previous_value_masked", "value_masked", "role_found"],
+        ),
+        (
+            [
+                "action",
+                "fill",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=password]",
+                "--text",
+                "fake-secret",
+            ],
+            ["text_masked", "previous_value_masked", "value_masked"],
         ),
         (
             [
@@ -12627,6 +13570,30 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
         (
             [
                 "action",
+                "click-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Remember me",
+            ],
+            "action.click-label",
+            {
+                "found": True,
+                "clicked": True,
+                "label": "Remember me",
+                "click_target": "control",
+            },
+            {
+                "found": True,
+                "clicked": True,
+                "label": "Remember me",
+                "click_target": "control",
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
                 "click-role",
                 "--session-id",
                 "s1",
@@ -12750,6 +13717,36 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "behavior": "auto",
                 "in_viewport": True,
                 "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "fill",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=email]",
+                "--text",
+                "user@example.test",
+            ],
+            "action.fill",
+            {
+                "selector": "input[name=email]",
+                "found": True,
+                "filled": True,
+                "writable": True,
+                "value": "user@example.test",
+                "value_masked": False,
+            },
+            {
+                "selector": "input[name=email]",
+                "found": True,
+                "filled": True,
+                "writable": True,
+                "value": "user@example.test",
+                "value_masked": False,
                 "url": "https://example.test",
             },
         ),
@@ -14293,6 +15290,79 @@ def test_second_batch_eval_backed_action_commands_emit_structured_results(
         "connect_url_masked": True,
         "result": expected_result,
     }
+
+
+def test_action_fill_expression_sets_selector_value_with_masking(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://api.lexmount.cn/connection?project_id=project&api_key=secret",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["connect_url"] = connect_url
+        observed["action"] = action
+        observed["expression"] = request.expression
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test",
+                "value": {
+                    "selector": "input[name=password]",
+                    "found": True,
+                    "filled": True,
+                    "writable": True,
+                    "text": "***",
+                    "text_masked": True,
+                    "text_length": 6,
+                    "value": "***",
+                    "value_masked": True,
+                    "value_length": 6,
+                },
+            }
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "fill",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=password]",
+                "--text",
+                "secret",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed["action"] == "eval"
+    expression = observed["expression"]
+    assert 'const selector = "input[name=password]"' in expression
+    assert 'const text = "secret"' in expression
+    assert "selectorSuggestsSensitive" in expression
+    assert "element.focus?.()" in expression
+    assert 'new Event("input", { bubbles: true })' in expression
+    assert 'new Event("change", { bubbles: true })' in expression
+    assert 'error: "not_writable"' in expression
+    assert "text_masked" in expression
+    assert "value_masked" in expression
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"]["text"] == "***"
+    assert payload["result"]["text_masked"] is True
+    assert payload["result"]["value_masked"] is True
 
 
 @pytest.mark.parametrize(

@@ -8,6 +8,13 @@ ergonomics. Browser lifecycle and page action behavior stay in
 `lex-browser-runtime`, so this project does not maintain a second copy of the
 runtime implementation.
 
+## Quickstart
+
+If you need a usable version now, start with
+[docs/quickstart.md](docs/quickstart.md). It covers branch install,
+local credential setup, `doctor` verification, the first browser task,
+persistent context reuse, and the agent command discovery flow.
+
 ## Codex Install Prompt
 
 Copy this prompt into Codex when you want Codex to install and configure the
@@ -211,7 +218,11 @@ browser-cli auth export-env --from-current
 `--from-current`, it reuses current environment values but still masks
 `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly passed in a trusted
 local terminal. Read top-level `usable` and `unusable_exports` before treating
-the returned `commands` as directly runnable.
+the returned `commands` as directly runnable. Also read
+`safe_to_paste_in_chat`, `local_shell_only`, `contains_secret_values`,
+`contains_secret_placeholders`, `safety`, `setup_block`, and `verification` so
+agents know whether the output belongs only in a local shell and which
+`auth status`/`doctor` commands prove the setup worked.
 `auth status` and `auth token-info` report local device-token metadata from
 `~/.config/lexmount/browser-cli/credentials.json`,
 `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or `--credentials-file` without printing
@@ -241,12 +252,19 @@ reports `refresh_available: false` and `refreshed: false`; with
 `--token-base-url <url>`, `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
 `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
 `POST /api/auth/token/refresh`, saves refreshed local metadata on success, and
-never prints access or refresh token values.
+never prints access or refresh token values. The refresh request includes
+`grant_type=refresh_token`, `credential_kind`, `project_id`, `token_id`, and
+`requested_scopes`; the response may return a token payload at the top level or
+under `token`, `device_token`, `credential`, or `credentials`. camelCase fields
+such as `accessToken`, `refreshToken`, `expiresIn`, `projectId`, and `tokenId`
+are normalized before saving. `remote_refresh` reports only safe response
+metadata such as `response_payload_source` and `response_summary`.
 Use `auth logout --credentials-file <path>` to remove local device-token
 metadata without changing environment variables. `auth logout --revoke` calls
 `POST /api/auth/token/revoke` when a token lifecycle base URL is configured;
-without one it reports `revoke_available: false` and reminds you to revoke from
-browser.lexmount.cn.
+the revoke response may omit `revoked`, but explicit `revoked:false` is treated
+as not confirmed. Without a token lifecycle base URL it reports
+`revoke_available: false` and reminds you to revoke from browser.lexmount.cn.
 
 After credentials are configured, run the self-check:
 
@@ -385,8 +403,9 @@ implementation contract without requiring credentials or opening a browser. It
 includes `connect_from_codex.url`, `connect_from_codex.device_code_url`,
 `site_capabilities`/`site_capability_status`, `setup_blocks`,
 `required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, `required_runtime_auth`, and verification commands for
-`browser-cli auth status`, `browser-cli auth login`, device-code fallback, and
+`required_token_lifecycle`, `required_runtime_auth`,
+`browser_site_acceptance_tests`, and verification commands for `browser-cli auth
+status`, `browser-cli auth login`, device-code fallback, and
 `browser-cli doctor --json`.
 
 `auth login` returns top-level `flow`, `selected_flow`, `available`,
@@ -398,8 +417,13 @@ verification command. `connect_from_codex` includes the planned
 `https://browser.lexmount.cn/connect/codex` URL, optional `project_id`,
 repeated `scope` query parameters, requested `expires_in`,
 expected outputs, structured `setup_blocks`, `requested_scope_details`,
-`site_capabilities`/`site_capability_status`, and the browser site requirements
-needed before device-code or scoped-token login can be marked available.
+`site_capabilities`/`site_capability_status`, `browser_site_acceptance_tests`,
+and the browser site requirements needed before device-code or scoped-token
+login can be marked available.
+The Connect from Codex site workflow also reads
+`connect_from_codex.browser_site_acceptance_tests` from manual and device-code
+handoff responses so agents can use the same browser.lexmount.cn acceptance
+checklist on either auth path.
 `setup_blocks` groups install, Connect, local env, and verification commands
 with secret placeholder and chat-safety metadata so browser.lexmount.cn can
 render copy buttons without guessing which commands are local-shell-only.
@@ -481,7 +505,7 @@ Context management:
 ```bash
 browser-cli context create
 browser-cli context create --metadata-json '{"purpose":"codex"}'
-browser-cli context list --limit 20
+browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
@@ -583,9 +607,12 @@ browser-cli action hover-role --session-id <session_id> --role button --name "Me
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
+browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
+browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
+browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
@@ -623,9 +650,9 @@ the boundary for custom JavaScript.
 `cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `inspect`,
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
-`check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-text`, `click-role`,
-`double-click`, `double-click-role`, `right-click`, `right-click-role`,
-`click-index`, `fill-label`, `fill-role`,
+`check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-label`, `click-text`, `click-role`,
+`double-click`, `double-click-role`, `drag-role-to-role`, `drag-to`, `right-click`, `right-click-role`,
+`click-index`, `fill`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -819,6 +846,9 @@ reports `required_case_actions`,
 `missing_required_case_actions`, `missing_supported_actions`,
 `missing_action_schemas`, and `invalid_action_schemas` with upgrade guidance
 when the installed CLI is too old for case-based smoke tests.
+The `connect_from_codex_contract` check verifies that browser.lexmount.cn
+handoff fields such as capabilities, `browser_site_acceptance_tests`, token
+lifecycle, runtime auth, and device-code API contracts are still present.
 It masks `api_key` in direct URLs and diagnostic error messages by default.
 `doctor --smoke-session` creates and closes a temporary session after API
 connectivity passes, then reports the `browser_smoke_session` check with
@@ -877,7 +907,7 @@ browser-cli session close --session-id <session_id>
 ```
 
 `case schema` supports repeatable semantic form and targeting steps such as
-`fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
+`fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `form-snapshot`,
@@ -917,20 +947,20 @@ instead of merely being reported. For example:
 
 Common agent recipes:
 
-- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,
+- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`, `fill-role`, or `fill`,
   `set-value`, `set-file-input`, `clear-role`, or `clear` -> `wait-value-role`, `get-value-role`,
   `wait-value`, or `get-value` ->
   `blur-role` or `blur` if validation is focus-driven -> `select-label`, `select-role`, or `select-option`,
   `check-label`, `check-role`, `uncheck-role`, or `check` -> `wait-state-role --state enabled`, `wait-state --state enabled`, or `wait-role` for
   async submit buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
   `submit --selector <form-or-field>`,
-  `click-role --role button --name <text>` or `click-text` -> `wait-url` or
+  `click-label --label <label>`, `click-role --role button --name <text>`, or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: run `browser-cli commands --workflow interactive_targeting`,
   use `interactive-snapshot` or `accessibility-snapshot` to choose the target,
   then `wait-role` when the control appears asynchronously,
   then use `exists-role`, `get-text-role`, or `bounding-box-role` to confirm
-  semantic existence, text, or geometry before `click-role` or `click-text`; run `link-snapshot` when the task is to
+  semantic existence, text, or geometry before `click-label`, `click-role`, or `click-text`; run `link-snapshot` when the task is to
   choose, inspect, or report navigation URLs, then use `scroll-into-view` and
   selector `click` after `exists`, `inspect`, or `bounding-box` confirms a
   stable selector.
@@ -965,8 +995,8 @@ Common agent recipes:
   `list-snapshot`, or `press-key` before custom JavaScript.
 - Mouse gestures: run `browser-cli commands --workflow mouse_interaction` and
   `browser-cli action guide --task mouse_interaction`, then prefer
-  `double-click-role` or `right-click-role`, falling back to selector
-  `double-click` or `right-click`; verify with `page-info`, `wait-text`,
+  `double-click-role`, `right-click-role`, or `drag-role-to-role`, then fall
+  back to selector `drag-to`, `double-click`, or `right-click`; verify with `page-info`, `wait-text`,
   `interactive-snapshot`, or `wait-url`.
 - Navigation: run `browser-cli commands --workflow navigation_flow` and
   `browser-cli action guide --task navigation_flow`, then use `open-url`,
@@ -993,7 +1023,7 @@ Common agent recipes:
   first; use `wait-dialog --text <text> --modal-only` when
   the prompt appears asynchronously, otherwise `dialog-snapshot`; read
   `dialogs`, `title`, `description`, `text`, `controls`, `control_count`, and
-  link masks; then use `click-role`, `click-text`, or `click-index` for the
+  link masks; then use `click-label`, `click-role`, `click-text`, or `click-index` for the
   chosen control.
 - Embedded frame: run `browser-cli action guide --task dialog_frame_handling`,
   then `frame-snapshot` -> read `frames`, `src`, `readable`,
@@ -1089,6 +1119,9 @@ top-level `reusable`, `locked`, `reuse_reason`, `selection_strategy`,
 `selection_summary`, and locked/reusable details. Treat
 `availability: "available"` as reusable, `availability: "locked"` as busy, and
 `availability: "unavailable"` as a state that needs a different context. Use
+`context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state`
+to inspect reusable, locked, and metadata-mismatched candidates without mutation; read
+`reuse_candidates`, `recommended_context_id`, and `selection_summary`. Use
 `context status --context-id <context_id>` before reusing a known context id. Use
 `context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --dry-run`
 when you need to inspect or report candidates before creating a session; read

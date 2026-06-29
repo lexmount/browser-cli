@@ -40,7 +40,6 @@ Do not ask the user to paste secrets into chat. Direct the user to
 `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
 
 Use local auth helpers instead of handling secrets in chat:
-
 ```bash
 browser-cli auth status
 browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
@@ -70,7 +69,8 @@ When the task is to inspect or explain what browser.lexmount.cn must implement,
 run `browser-cli auth scopes --include-site-contract`,
 `browser-cli auth connect-requirements`, or
 `browser-cli commands --workflow connect_from_codex_site_requirements` first.
-Read `browser_site_contract.scope_ui_fields`, `known_scopes`,
+Read `browser_site_contract.scope_ui_fields`,
+`browser_site_contract.browser_site_acceptance_tests`, `known_scopes`,
 `default_scopes`, `connect_from_codex.site_capability_status.missing`,
 `required_device_code_endpoints`, `required_api_contract`, `required_token_lifecycle`,
 `required_runtime_auth`, `setup_blocks`, and `verification.doctor_command`.
@@ -93,10 +93,7 @@ raw device-code values. Prefer
 `browser-cli commands --workflow device_code_auth` when the task is to inspect
 or explain the device-code authorization path.
 
-`auth export-env` prints placeholders by default. With `--from-current`, it
-still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
-a trusted local terminal. Check top-level `usable` and `unusable_exports` before
-treating returned `commands` as directly runnable.
+`auth export-env` prints placeholders by default. With `--from-current`, it still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in a trusted local terminal. Check top-level `usable` and `unusable_exports`, plus `safe_to_paste_in_chat`, `local_shell_only`, `contains_secret_values`, `contains_secret_placeholders`, `safety`, `setup_block`, and `verification.doctor_command` before treating returned `commands` as runnable; only run local-shell setup blocks in the user's local terminal, never in chat.
 
 `auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`, and
 safe `device_token` metadata. Read `runtime_auth.usable`,
@@ -107,15 +104,17 @@ before choosing a credential source. When env credentials are incomplete, read
 `permission_count`, `risk`, `destructive`, `unknown_scopes`, and the optional
 `browser_site_contract` before explaining requested permissions. Use
 `auth token-info --required-scope <scope>` to check scoped-token coverage. Use
-`auth refresh --credentials-file <path>` to
-inspect `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`,
-`reason`, `refresh_endpoint`, and `remote_refresh`; add
-`--token-base-url <url>` or set `LEXMOUNT_BROWSER_TOKEN_BASE_URL` when
-browser.lexmount.cn exposes `POST /api/auth/token/refresh`. Use
+`auth refresh --credentials-file <path>` to inspect `refresh_needed`,
+`has_refresh_token`, `refresh_available`, `refreshed`, `reason`,
+`refresh_endpoint`, and `remote_refresh`; add `--token-base-url <url>` or set
+`LEXMOUNT_BROWSER_TOKEN_BASE_URL` when browser.lexmount.cn exposes
+`POST /api/auth/token/refresh`. `remote_refresh` reports safe metadata such as
+`response_payload_source` and `response_summary`; token data may be top-level or
+under `token`, `device_token`, `credential`, or `credentials`. Use
 `auth logout --credentials-file <path>` to remove local device-token metadata
 without changing environment variables; `--revoke` calls
 `POST /api/auth/token/revoke` only when a token lifecycle base URL is
-configured, otherwise it reports remote revoke pending.
+configured. Treat explicit `remote_revoke.revoked=false` as not confirmed.
 These commands never report access or refresh token values. Until bearer-token
 runtime support lands, require env API-key credentials for browser actions when
 `runtime_auth.usable` is false.
@@ -240,7 +239,7 @@ browser-cli commands --workflow case_file_task
 Run `browser-cli case schema` before hand-writing a case file. Generate starters with
 `browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template form-fill`,
 validate, then run with `--close-created-session`. Read `supported_actions`, `required_fields`, `step_options.expect`,
-semantic/navigation/state actions such as `fill-label`, `click-role`,
+semantic/navigation/state actions such as `fill-label`, `fill`, `click-label`, `click-role`,
 `select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-network`, `wait-console`, `wait-role`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,
 `events_path`, `artifacts_dir`, `session`, and `steps`.
 
@@ -250,9 +249,9 @@ For form tasks, prefer the more specific form workflow:
 browser-cli commands --workflow form_interaction
 browser-cli action guide --task form_interaction
 ```
-Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`, and `custom_js_boundary`, then follow workflow `read` fields for `form-snapshot`, semantic fill/select/check commands, `wait-role`, `wait-state-role`, `click-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before custom JavaScript.
+Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`, and `custom_js_boundary`, then follow workflow `read` fields for `form-snapshot`, semantic fill/select/check/click commands, `click-label`, `wait-role`, `wait-state-role`, `click-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before custom JavaScript.
 
-For visible buttons, links, menus, double-clicks, right-click context menus, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, `double-click`, or `right-click`; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
+For visible labeled controls, buttons, links, menus, double-clicks, right-click context menus, drag/drop, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, `drag-role-to-role`, `drag-to`, `double-click`, or `right-click`; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions such as `click-label`, `click-role`, and `click-text` before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
 For page content extraction, prefer `browser-cli commands --workflow content_extraction` and `browser-cli action guide --task content_extraction`; choose outline/text/link/table/list/accessibility snapshots before bounded `snapshot` or custom JS.
 For browser state setup or cleanup, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands for local/session storage and document.cookie-visible cookies before custom JS.
 For file uploads, prefer `browser-cli commands --workflow file_upload` and `browser-cli action guide --task file_upload`; inspect controls, then use `set-file-input` before custom JS or OS file picker workarounds.
@@ -301,8 +300,7 @@ report that a busy context was skipped. Inspect `selection_summary` for
 adjust filters. Inspect candidate `metadata_diagnostics` keys to explain
 metadata mismatches; values are redacted. If `metadata_source` is
 `local_registry`, browser-cli matched metadata recorded locally when it created
-the context. Never put API keys, passwords, or session secrets in context
-metadata. Use
+the context. Never put API keys, passwords, or session secrets in context metadata. Use `context list --metadata-json <json> --selection newest --include-reuse-state` for a read-only candidate pool with `reuse_candidates`, `recommended_context_id`, and `selection_summary`. Use
 `context pick --metadata-json <json> --selection newest --dry-run` before creating a session when
 you need to explain context reuse or avoid mutating persistent login state. Use
 the workflow's optional `context status --context-id <context_id>` step before
@@ -407,7 +405,7 @@ Context lifecycle:
 
 ```bash
 browser-cli context create
-browser-cli context list
+browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
@@ -436,14 +434,14 @@ Core action rules:
   `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
 - Prefer semantic actions such as `wait-role`, `wait-state-role`, `get-attribute-role`,
   `wait-attribute-role`, `exists-role`, `get-text-role`,
-  `bounding-box-role`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
+  `bounding-box-role`, `click-label`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
   `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`,
   `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
   and `scroll-into-view-role` before raw
   selectors when the page provides visible labels or accessibility names.
 - Use selector actions such as `exists`, `count`, `wait-state`, `query`,
   `inspect`, `get-attribute`, `wait-text`, `get-text`, `click`, `type`,
-  `set-value`, `select-option`, `check`, and `uncheck` only when a stable
+  `fill`, `set-value`, `select-option`, `check`, and `uncheck` only when a stable
   selector is known.
 - For page failures, run `browser-cli commands --workflow page_diagnostics`;
   install console/network capture before reproducing the issue; use
@@ -485,13 +483,14 @@ For device-token metadata in `auth status`, `auth token-info`, `auth refresh`,
 `device_token.scopes`, and `scope_check`; do not report token values. For
 `auth refresh`, report `refresh_needed`, `has_refresh_token`,
 `refresh_available`, `refreshed`, `reason`, `refresh_endpoint`, and
-`remote_refresh`; it calls the refresh endpoint only when a token lifecycle base
-URL is configured. For `auth logout`, report `deleted`, `present_before`,
+`remote_refresh.response_payload_source`, and `remote_refresh.response_summary`;
+it calls the refresh endpoint only when a token lifecycle base URL is
+configured. For `auth logout`, report `deleted`, `present_before`,
 `present_after`, `revoke_requested`, `revoke_available`, `revoked`,
-`remote_revoke`, and `warnings`; it does not unset env vars. Do not start
-browser actions from a device token while `runtime_auth.usable` is false.
-For `auth export-env`, use placeholders or masked commands unless the user
-explicitly asked to reveal secrets locally.
+`remote_revoke`, and `warnings`; inspect `remote_revoke.token_type_hint` and
+`remote_revoke.revoked`; it does not unset env vars. Do not start browser
+actions from a device token while `runtime_auth.usable` is false.
+For `auth export-env`, use placeholders or masked commands unless the user explicitly asked to reveal secrets locally. If `doctor` reports `auth_export_env_contract`, use that check to decide whether export-env safety metadata is trustworthy before copying commands.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
 `warning_checks`, `skipped_checks`, and `repair_plan` first. Report warning
 check names without revealing API keys. If `browser_smoke_session` exists,

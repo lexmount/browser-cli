@@ -65,6 +65,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`get-attribute-role`" in normalized
     assert "`wait-attribute-role`" in normalized
     assert "`exists-role`, `get-text-role`, and `bounding-box-role`" in normalized
+    assert "`click-label` for labeled controls" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
     assert "`click-index` for a chosen repeated selector match" in normalized
@@ -185,6 +186,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`required_token_lifecycle`" in normalized
     assert "`required_runtime_auth`" in normalized
     assert "`browser_site_contract.scope_ui_fields`" in normalized
+    assert "`browser_site_contract.browser_site_acceptance_tests`" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"
         in normalized
@@ -206,6 +208,11 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "manual env fallback" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "Check top-level `usable` and `unusable_exports`" in normalized
+    assert "`safe_to_paste_in_chat`, `local_shell_only`" in normalized
+    assert "`contains_secret_values`" in normalized
+    assert "`contains_secret_placeholders`" in normalized
+    assert "`verification.doctor_command`" in normalized
+    assert "`auth_export_env_contract`" in normalized
     assert (
         "`auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`"
         in normalized
@@ -318,16 +325,18 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     )
     assert "then follow workflow `read` fields for `form-snapshot`" in normalized
     assert (
-        "For visible buttons, links, menus, double-clicks, right-click context menus,"
+        "For visible labeled controls, buttons, links, menus, double-clicks,"
         in normalized
     )
+    assert "choose semantic actions such as `click-label`, `click-role`, and `click-text`" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "for mouse gestures use `mouse_interaction`" in normalized
-    assert (
-        "`double-click-role`, `right-click-role`, `double-click`, or `right-click`"
-        in normalized
+    expected_mouse_actions = (
+        "`double-click-role`, `right-click-role`, `drag-role-to-role`, "
+        "`drag-to`, `double-click`, or `right-click`"
     )
-    assert "choose semantic actions before selectors" in normalized
+    assert expected_mouse_actions in normalized
+    assert "and `click-text` before selectors" in normalized
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
@@ -464,6 +473,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
+        "`fill`",
         "`fill-role`",
     ):
         assert action in normalized
@@ -671,6 +681,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli action guide --task mouse_interaction" in normalized
     assert "`double-click-role`" in normalized
     assert "`right-click-role`" in normalized
+    assert "`drag-role-to-role`" in normalized
     assert "`context_menu`" in normalized
     assert "Wait for deterministic state" in normalized
     assert "`wait-storage`" in normalized
@@ -678,7 +689,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `outline-snapshot` for page structure" in normalized
     assert "`fill-label` for labeled fields" in normalized
     assert "`fill-role` for accessible role/name textboxes" in normalized
-    assert "`set-value` for stable selectors" in normalized
+    assert "`fill` or `set-value` for stable selectors" in normalized
     assert "`set-file-input` for upload controls" in normalized
     assert "`clear-role` or `clear` before replacement text" in normalized
     assert (

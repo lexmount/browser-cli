@@ -69,6 +69,45 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
+DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
+    "usable",
+    "unusable_exports",
+    "contains_secret_values",
+    "contains_secret_placeholders",
+    "safe_to_paste_in_chat",
+    "local_shell_only",
+    "secret_env",
+    "safety",
+    "setup_block",
+    "verification",
+)
+DOCTOR_REQUIRED_CONNECT_CAPABILITIES = (
+    "project_id_display",
+    "scoped_api_key",
+    "copy_install_and_env",
+    "doctor_verification",
+    "scoped_key_lifecycle",
+    "device_code_oauth",
+)
+DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS = (
+    "project_identity_visible",
+    "scope_review",
+    "copy_local_env_safely",
+    "doctor_verification",
+    "credential_lifecycle_controls",
+    "device_code_contract",
+)
+DOCTOR_REQUIRED_CONNECT_TOKEN_LIFECYCLE = (
+    "issue_scoped_key",
+    "refresh_token",
+    "revoke_token",
+    "expire_token",
+)
+DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH = (
+    "sdk_accepts_bearer_token",
+    "api_accepts_bearer_token",
+    "browser_gateway_accepts_bearer_token",
+)
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
@@ -163,15 +202,19 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.press",
     "action.press-role",
     "action.press-key",
+    "action.click-label",
     "action.click-text",
     "action.click-role",
     "action.click-index",
     "action.double-click",
     "action.double-click-role",
+    "action.drag-to",
+    "action.drag-role-to-role",
     "action.right-click",
     "action.right-click-role",
     "action.focus",
     "action.focus-role",
+    "action.fill",
     "action.fill-label",
     "action.fill-role",
     "action.get-value",
@@ -230,6 +273,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "clear-role",
     "click",
     "click-index",
+    "click-label",
     "click-role",
     "click-text",
     "console-snapshot",
@@ -242,9 +286,12 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "dispatch-event",
     "double-click",
     "double-click-role",
+    "drag-to",
+    "drag-role-to-role",
     "eval",
     "exists",
     "exists-role",
+    "fill",
     "fill-label",
     "fill-role",
     "focus",
@@ -342,6 +389,8 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "reference get",
     "example get",
     "action guide",
+    "click-label",
+    "fill before custom JavaScript",
     "custom JavaScript",
     "case schema",
     "scaffold/validate/run case files",
@@ -471,6 +520,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "fill_labeled_field",
         "choose_labeled_option",
         "check_labeled_control",
+        "click_labeled_control",
         "wait_submit_ready",
         "submit_form",
         "verify_result",
@@ -710,6 +760,7 @@ def _runtime_failure_fix(command: str, code: str) -> dict[str, Any]:
         ]
     elif command.startswith("context."):
         commands = [
+            "browser-cli context list --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --include-reuse-state",
             "browser-cli context pick --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --dry-run",
             "browser-cli context status --context-id <context_id>",
             AGENT_DOCTOR_COMMAND,
@@ -1304,6 +1355,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
             "persistent_login_state": [
+                'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
                 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                 "browser-cli context status --context-id <context_id>",
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
@@ -1327,8 +1379,10 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
                 'browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
+                'browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"',
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"',
                 'browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"',
+                'browser-cli action click-label --session-id <session_id> --label "Remember me"',
                 'browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled',
                 'browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
@@ -1360,6 +1414,7 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action exists-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action get-text-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action click-label --session-id <session_id> --label "Remember me"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action hover-role --session-id <session_id> --role button --name "Menu"',
                 'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
@@ -1373,6 +1428,8 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"',
                 'browser-cli action double-click --session-id <session_id> --selector ".row"',
                 'browser-cli action right-click --session-id <session_id> --selector ".row"',
+                'browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"',
+                'browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"',
                 'browser-cli action wait-text --session-id <session_id> --text "Context menu"',
             ],
             "visual_capture": [
@@ -1533,6 +1590,13 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "usable",
                             "unusable_exports",
+                            "safe_to_paste_in_chat",
+                            "local_shell_only",
+                            "contains_secret_values",
+                            "contains_secret_placeholders",
+                            "safety",
+                            "setup_block",
+                            "verification.doctor_command",
                         ],
                         "secret_handling": "Do not paste revealed API keys into chat, logs, docs, or commits.",
                     },
@@ -1561,6 +1625,7 @@ def _command_catalog() -> dict[str, Any]:
                             "browser_site_contract.required_query_parameters",
                             "browser_site_contract.scope_ui_fields",
                             "browser_site_contract.site_capability_status.missing",
+                            "browser_site_contract.browser_site_acceptance_tests",
                         ],
                     },
                     {
@@ -1577,6 +1642,7 @@ def _command_catalog() -> dict[str, Any]:
                             "required_runtime_auth",
                             "setup_blocks",
                             "verification.doctor_command",
+                            "browser_site_acceptance_tests",
                         ],
                     },
                     {
@@ -1589,6 +1655,7 @@ def _command_catalog() -> dict[str, Any]:
                             "connect_from_codex.url",
                             "connect_from_codex.site_capability_status.missing",
                             "connect_from_codex.required_runtime_auth",
+                            "connect_from_codex.browser_site_acceptance_tests",
                             "handoff.setup_blocks",
                         ],
                     },
@@ -1605,6 +1672,7 @@ def _command_catalog() -> dict[str, Any]:
                             "device_code.required_browser_site_support",
                             "fallback_handoff.setup_blocks",
                             "connect_from_codex.required_runtime_auth",
+                            "connect_from_codex.browser_site_acceptance_tests",
                         ],
                     },
                     {
@@ -1757,6 +1825,8 @@ def _command_catalog() -> dict[str, Any]:
                             "remote_refresh.attempted",
                             "remote_refresh.status_code",
                             "remote_refresh.error",
+                            "remote_refresh.response_payload_source",
+                            "remote_refresh.response_summary",
                             "credentials.saved",
                         ],
                         "fallback_commands": [
@@ -1792,6 +1862,8 @@ def _command_catalog() -> dict[str, Any]:
                             "remote_revoke.attempted",
                             "remote_revoke.status_code",
                             "remote_revoke.error",
+                            "remote_revoke.token_type_hint",
+                            "remote_revoke.revoked",
                             "warnings",
                         ],
                         "secret_handling": "Do not print access_token, refresh_token, or API key values.",
@@ -2182,7 +2254,7 @@ def _command_catalog() -> dict[str, Any]:
                 ],
             },
             "interactive_targeting": {
-                "purpose": "Find and activate visible controls with snapshot, role, text, or indexed click commands without custom JavaScript.",
+                "purpose": "Find and activate visible controls with snapshot, role, label, text, or indexed click commands without custom JavaScript.",
                 "steps": [
                     {
                         "id": "inspect_action_guide",
@@ -2224,6 +2296,7 @@ def _command_catalog() -> dict[str, Any]:
                             "exists-role",
                             "get-text-role",
                             "bounding-box-role",
+                            "click-label",
                             "click-role",
                             "hover-role",
                             "press-role",
@@ -2235,6 +2308,7 @@ def _command_catalog() -> dict[str, Any]:
                             'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action click-label --session-id <session_id> --label "<label>"',
                             'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
@@ -2269,10 +2343,13 @@ def _command_catalog() -> dict[str, Any]:
                             "result.scrolled",
                             "result.in_viewport",
                             "result.element",
+                            "result.label",
+                            "result.click_target",
                             "result.candidate_count",
                             "result.candidates",
                         ],
                         "alternative_commands": [
+                            'browser-cli action click-label --session-id <session_id> --label "<label>"',
                             'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
                             'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
@@ -2297,7 +2374,7 @@ def _command_catalog() -> dict[str, Any]:
                 ],
             },
             "mouse_interaction": {
-                "purpose": "Trigger double-click or right-click/context-menu interactions on semantic or selector targets without custom JavaScript.",
+                "purpose": "Trigger double-click, right-click/context-menu, or selector drag/drop interactions without custom JavaScript.",
                 "steps": [
                     {
                         "id": "inspect_action_guide",
@@ -2325,13 +2402,15 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "choose_mouse_action",
-                        "command": "<choose double-click-role, right-click-role, double-click, or right-click using target evidence>",
+                        "command": "<choose double-click-role, right-click-role, drag-role-to-role, double-click, right-click, or drag-to using target evidence>",
                         "agent_action": True,
                         "selection_order": [
                             "double-click-role",
                             "right-click-role",
+                            "drag-role-to-role",
                             "double-click",
                             "right-click",
+                            "drag-to",
                             "hover-role",
                             "bounding-box-role",
                             "inspect",
@@ -2339,8 +2418,10 @@ def _command_catalog() -> dict[str, Any]:
                         "preferred_commands": [
                             'browser-cli action double-click-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action drag-role-to-role --session-id <session_id> --source-role <role> --source-name "<name>" --target-role <role> --target-name "<target name>"',
                             'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
                             'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+                            'browser-cli action drag-to --session-id <session_id> --selector "<source selector>" --target-selector "<target selector>"',
                         ],
                         "fallback_commands": [
                             'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
@@ -2358,11 +2439,18 @@ def _command_catalog() -> dict[str, Any]:
                             "result.role_found",
                             "result.double_clicked",
                             "result.right_clicked",
+                            "result.dragged",
+                            "result.dropped",
+                            "result.target_found",
+                            "result.target_role_found",
                             "result.context_menu",
                             "result.events",
                             "result.default_prevented",
                             "result.element",
+                            "result.target_element",
                             "result.candidate_count",
+                            "result.source_candidate_count",
+                            "result.target_candidate_count",
                         ],
                     },
                     {
@@ -2800,6 +2888,22 @@ def _command_catalog() -> dict[str, Any]:
                 "purpose": "Reuse or create a persistent context for login state, cookies, and storage.",
                 "steps": [
                     {
+                        "id": "list_reuse_candidates",
+                        "command": 'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
+                        "optional": True,
+                        "read": [
+                            "reuse_state_included",
+                            "recommended_context_id",
+                            "reuse_candidates",
+                            "selection_strategy",
+                            "selection_summary.recommended_next_action",
+                            "selection_summary.reusable_matches",
+                            "selection_summary.locked_matches",
+                            "selection_summary.availability_counts",
+                            "metadata_values_redacted",
+                        ],
+                    },
+                    {
                         "id": "dry_run_context_pick",
                         "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                         "read": [
@@ -3010,6 +3114,7 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                         "alternative_commands": [
                             'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
+                            'browser-cli action fill --session-id <session_id> --selector "<selector>" --text "<text>"',
                         ],
                     },
                     {
@@ -3040,6 +3145,23 @@ def _command_catalog() -> dict[str, Any]:
                         "alternative_commands": [
                             'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
                             'browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                        ],
+                    },
+                    {
+                        "id": "click_labeled_control",
+                        "command": 'browser-cli action click-label --session-id <session_id> --label "<label>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                            "result.label",
+                            "result.click_target",
+                            "result.element",
+                            "result.label_element",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action click-role --session-id <session_id> --role button --name "<accessible name>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
                         ],
                     },
                     {
@@ -3914,6 +4036,299 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         missing_supported_actions=[],
         missing_action_schemas=[],
         invalid_action_schemas=[],
+    )
+
+
+def _doctor_auth_export_env_contract_check() -> dict[str, Any]:
+    try:
+        payload = _auth_export_env_payload(
+            argparse.Namespace(
+                shell="posix",
+                from_current=False,
+                reveal_secrets=False,
+                include_base_url=False,
+                include_region=False,
+            )
+        )
+    except Exception as exc:
+        return _doctor_check(
+            "auth_export_env_contract",
+            "warn",
+            "auth export-env contract could not be built.",
+            error=exc.__class__.__name__,
+            required_fields=list(DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS),
+            fix=_doctor_fix(
+                "repair_auth_export_env_contract",
+                commands=[
+                    "browser-cli auth export-env",
+                    "browser-cli doctor --json",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents rely on auth export-env safety metadata before copying shell commands.",
+                    "Upgrade or reinstall browser-cli if auth export-env cannot produce JSON.",
+                ],
+            ),
+        )
+
+    missing_fields = [
+        field
+        for field in DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS
+        if field not in payload
+    ]
+    invalid_fields: list[str] = []
+
+    safety = payload.get("safety")
+    setup_block = payload.get("setup_block")
+    verification = payload.get("verification")
+    if not isinstance(safety, dict):
+        invalid_fields.append("safety")
+        safety = {}
+    if not isinstance(setup_block, dict):
+        invalid_fields.append("setup_block")
+        setup_block = {}
+    if not isinstance(verification, dict):
+        invalid_fields.append("verification")
+        verification = {}
+
+    expected_values = {
+        "usable": False,
+        "contains_secret_values": False,
+        "contains_secret_placeholders": True,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+    }
+    for field, expected in expected_values.items():
+        if payload.get(field) is not expected:
+            invalid_fields.append(field)
+        if safety.get(field) is not expected and field in {
+            "contains_secret_values",
+            "contains_secret_placeholders",
+            "safe_to_paste_in_chat",
+            "local_shell_only",
+        }:
+            invalid_fields.append(f"safety.{field}")
+
+    if "LEXMOUNT_API_KEY" not in payload.get("secret_env", []):
+        invalid_fields.append("secret_env")
+    if safety.get("secret_env") != payload.get("secret_env"):
+        invalid_fields.append("safety.secret_env")
+    if setup_block.get("id") != "local_env":
+        invalid_fields.append("setup_block.id")
+    if setup_block.get("commands") != payload.get("commands"):
+        invalid_fields.append("setup_block.commands")
+    if verification.get("doctor_command") != AGENT_DOCTOR_COMMAND:
+        invalid_fields.append("verification.doctor_command")
+    if verification.get("status_command") != "browser-cli auth status":
+        invalid_fields.append("verification.status_command")
+
+    invalid_fields = _dedupe_preserving_order(invalid_fields)
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "required_fields": list(DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS),
+        "missing_fields": missing_fields,
+        "invalid_fields": invalid_fields,
+        "safe_to_paste_in_chat": payload.get("safe_to_paste_in_chat"),
+        "local_shell_only": payload.get("local_shell_only"),
+        "contains_secret_values": payload.get("contains_secret_values"),
+        "contains_secret_placeholders": payload.get("contains_secret_placeholders"),
+        "secret_env": payload.get("secret_env"),
+        "verification": verification,
+    }
+
+    if missing_fields or invalid_fields:
+        return _doctor_check(
+            "auth_export_env_contract",
+            "warn",
+            "auth export-env safety metadata is missing or invalid.",
+            fix=_doctor_fix(
+                "repair_auth_export_env_contract",
+                commands=[
+                    "browser-cli auth export-env",
+                    "browser-cli auth export-env --from-current",
+                    "browser-cli doctor --json",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents should read safe_to_paste_in_chat, local_shell_only, safety, setup_block, and verification before using export commands.",
+                    "Keep auth export-env output, README, and docs/json-contract.md in sync.",
+                ],
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "auth_export_env_contract",
+        "pass",
+        "auth export-env exposes safe local-shell metadata for agents.",
+        **common_details,
+    )
+
+
+def _doctor_connect_from_codex_contract_check() -> dict[str, Any]:
+    try:
+        capabilities = _connect_from_codex_site_capabilities()
+        capability_status = _connect_from_codex_site_capability_status(capabilities)
+        acceptance_tests = _connect_from_codex_browser_site_acceptance_tests()
+        token_lifecycle = _connect_from_codex_required_token_lifecycle()
+        runtime_auth = _connect_from_codex_required_runtime_auth()
+        api_contract = _connect_from_codex_required_api_contract()
+    except Exception as exc:
+        return _doctor_check(
+            "connect_from_codex_contract",
+            "warn",
+            "Connect from Codex contract could not be built.",
+            error=exc.__class__.__name__,
+            required_capabilities=list(DOCTOR_REQUIRED_CONNECT_CAPABILITIES),
+            required_acceptance_tests=list(
+                DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS
+            ),
+            fix=_doctor_fix(
+                "repair_connect_from_codex_contract",
+                commands=[
+                    "browser-cli auth connect-requirements",
+                    "browser-cli auth scopes --include-site-contract",
+                    "browser-cli commands --workflow connect_from_codex_site_requirements",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Connect from Codex browser-site handoff must be machine-readable for agents and browser.lexmount.cn implementers.",
+                    "Upgrade or reinstall browser-cli if connect-requirements cannot produce JSON.",
+                ],
+            ),
+        )
+
+    capability_ids = [
+        str(item.get("id")) for item in capabilities if isinstance(item, dict)
+    ]
+    acceptance_ids = [
+        str(item.get("id")) for item in acceptance_tests if isinstance(item, dict)
+    ]
+    acceptance_capabilities = [
+        str(item.get("capability"))
+        for item in acceptance_tests
+        if isinstance(item, dict) and item.get("capability")
+    ]
+    token_lifecycle_ids = [
+        str(item.get("id")) for item in token_lifecycle if isinstance(item, dict)
+    ]
+    runtime_auth_ids = [
+        str(item.get("id")) for item in runtime_auth if isinstance(item, dict)
+    ]
+
+    missing_capabilities = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_CAPABILITIES
+        if item not in capability_ids
+    ]
+    missing_acceptance_tests = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS
+        if item not in acceptance_ids
+    ]
+    missing_acceptance_capabilities = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_CAPABILITIES
+        if item not in acceptance_capabilities
+    ]
+    missing_token_lifecycle = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_TOKEN_LIFECYCLE
+        if item not in token_lifecycle_ids
+    ]
+    missing_runtime_auth = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH
+        if item not in runtime_auth_ids
+    ]
+    invalid_acceptance_tests: list[dict[str, Any]] = []
+    for item in acceptance_tests:
+        if not isinstance(item, dict):
+            invalid_acceptance_tests.append(
+                {"id": None, "problems": ["acceptance_test_not_object"]}
+            )
+            continue
+        problems: list[str] = []
+        if item.get("id") not in DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS:
+            problems.append("unknown_id")
+        if item.get("capability") not in DOCTOR_REQUIRED_CONNECT_CAPABILITIES:
+            problems.append("unknown_capability")
+        if not isinstance(item.get("source_fields"), list) or not item.get(
+            "source_fields"
+        ):
+            problems.append("missing_source_fields")
+        if not isinstance(item.get("expected"), str) or not item.get("expected"):
+            problems.append("missing_expected")
+        if problems:
+            invalid_acceptance_tests.append(
+                {
+                    "id": item.get("id"),
+                    "capability": item.get("capability"),
+                    "problems": problems,
+                }
+            )
+
+    api_device_code = api_contract.get("device_code")
+    api_token_lifecycle = api_contract.get("token_lifecycle")
+    invalid_api_contract: list[str] = []
+    if not isinstance(api_device_code, list) or not api_device_code:
+        invalid_api_contract.append("device_code")
+    if not isinstance(api_token_lifecycle, list) or not api_token_lifecycle:
+        invalid_api_contract.append("token_lifecycle")
+
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "capability_ids": capability_ids,
+        "required_capabilities": list(DOCTOR_REQUIRED_CONNECT_CAPABILITIES),
+        "missing_capabilities": missing_capabilities,
+        "site_capability_status": capability_status,
+        "acceptance_test_ids": acceptance_ids,
+        "required_acceptance_tests": list(DOCTOR_REQUIRED_CONNECT_ACCEPTANCE_TESTS),
+        "missing_acceptance_tests": missing_acceptance_tests,
+        "missing_acceptance_capabilities": missing_acceptance_capabilities,
+        "invalid_acceptance_tests": invalid_acceptance_tests,
+        "token_lifecycle_ids": token_lifecycle_ids,
+        "missing_token_lifecycle": missing_token_lifecycle,
+        "runtime_auth_ids": runtime_auth_ids,
+        "missing_runtime_auth": missing_runtime_auth,
+        "invalid_api_contract": invalid_api_contract,
+    }
+
+    if (
+        missing_capabilities
+        or missing_acceptance_tests
+        or missing_acceptance_capabilities
+        or invalid_acceptance_tests
+        or missing_token_lifecycle
+        or missing_runtime_auth
+        or invalid_api_contract
+    ):
+        return _doctor_check(
+            "connect_from_codex_contract",
+            "warn",
+            "Connect from Codex browser-site contract is missing required fields.",
+            fix=_doctor_fix(
+                "repair_connect_from_codex_contract",
+                commands=[
+                    "browser-cli auth connect-requirements",
+                    "browser-cli auth scopes --include-site-contract",
+                    "browser-cli commands --workflow connect_from_codex_site_requirements",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Keep auth connect-requirements, auth scopes --include-site-contract, docs/connect-from-codex.md, and docs/json-contract.md in sync.",
+                    "browser.lexmount.cn should implement every browser_site_acceptance_tests item before marking Connect from Codex available.",
+                ],
+                connect_from_codex=_doctor_connect_from_codex_fix(),
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "connect_from_codex_contract",
+        "pass",
+        "Connect from Codex browser-site contract includes the expected capabilities and acceptance tests.",
+        **common_details,
     )
 
 
@@ -5204,6 +5619,89 @@ def _json_http_post(
     }
 
 
+_TOKEN_PAYLOAD_CONTAINER_KEYS = ("token", "device_token", "credential", "credentials")
+_TOKEN_PAYLOAD_KEY_ALIASES = {
+    "accessToken": "access_token",
+    "refreshToken": "refresh_token",
+    "expiresAt": "expires_at",
+    "expiresIn": "expires_in",
+    "projectId": "project_id",
+    "apiBaseUrl": "api_base_url",
+    "tokenId": "token_id",
+    "tokenType": "token_type",
+}
+
+
+def _scope_list(value: Any) -> list[str] | None:
+    if isinstance(value, list):
+        return [str(scope) for scope in value]
+    if isinstance(value, str):
+        return [scope for scope in re.split(r"[\s,]+", value.strip()) if scope]
+    return None
+
+
+def _normalize_device_token_payload(token_payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(token_payload)
+    for source_key, target_key in _TOKEN_PAYLOAD_KEY_ALIASES.items():
+        if normalized.get(target_key) in (None, "", []) and source_key in normalized:
+            normalized[target_key] = normalized.get(source_key)
+
+    scopes = _scope_list(normalized.get("scopes"))
+    if scopes is None:
+        scopes = _scope_list(normalized.get("scope"))
+    if scopes is not None:
+        normalized["scopes"] = scopes
+    return normalized
+
+
+def _extract_token_response_payload(
+    response_payload: dict[str, Any],
+) -> tuple[dict[str, Any], str, list[str]]:
+    inspected_sources = ["json"]
+    if isinstance(response_payload.get("access_token"), str) or isinstance(
+        response_payload.get("accessToken"), str
+    ):
+        return (
+            _normalize_device_token_payload(response_payload),
+            "json",
+            inspected_sources,
+        )
+
+    for key in _TOKEN_PAYLOAD_CONTAINER_KEYS:
+        nested = response_payload.get(key)
+        inspected_sources.append(f"json.{key}")
+        if not isinstance(nested, dict):
+            continue
+        if isinstance(nested.get("access_token"), str) or isinstance(
+            nested.get("accessToken"), str
+        ):
+            return (
+                _normalize_device_token_payload(nested),
+                f"json.{key}",
+                inspected_sources,
+            )
+    return {}, "missing", inspected_sources
+
+
+def _token_response_summary(token_payload: dict[str, Any]) -> dict[str, Any]:
+    scopes = _scope_list(token_payload.get("scopes")) or []
+    return {
+        "has_access_token": isinstance(token_payload.get("access_token"), str)
+        and bool(token_payload.get("access_token")),
+        "has_refresh_token": isinstance(token_payload.get("refresh_token"), str)
+        and bool(token_payload.get("refresh_token")),
+        "has_expires_at": isinstance(token_payload.get("expires_at"), str)
+        and bool(token_payload.get("expires_at")),
+        "has_expires_in": token_payload.get("expires_in") not in (None, ""),
+        "has_project_id": isinstance(token_payload.get("project_id"), str)
+        and bool(token_payload.get("project_id")),
+        "has_api_base_url": isinstance(token_payload.get("api_base_url"), str)
+        and bool(token_payload.get("api_base_url")),
+        "has_token_id": token_payload.get("token_id") not in (None, ""),
+        "scope_count": len(scopes),
+    }
+
+
 def _device_token_expires_at(token_payload: dict[str, Any]) -> str | None:
     expires_at = token_payload.get("expires_at")
     if isinstance(expires_at, str) and expires_at:
@@ -5664,8 +6162,8 @@ def _auth_refresh_next_steps(
             "Use env API-key credentials for browser actions today.",
         ]
     steps = [
-        "Remote token refresh is not implemented in browser-cli yet.",
-        "Run `browser-cli auth login` to request fresh credentials when browser.lexmount.cn supports device-code login.",
+        "Token lifecycle refresh endpoint is not configured for this CLI run.",
+        "Pass `--token-base-url` or set LEXMOUNT_BROWSER_TOKEN_BASE_URL when browser.lexmount.cn exposes token lifecycle endpoints.",
         "Use env API-key credentials for browser actions today.",
     ]
     if device_token_status.get("expired"):
@@ -5697,7 +6195,7 @@ def _auth_logout_next_steps(
             )
         else:
             steps.append(
-                "Remote revoke is not implemented in browser-cli yet; revoke the token from browser.lexmount.cn if needed."
+                "Token lifecycle revoke endpoint is not configured; revoke the token from browser.lexmount.cn if needed."
             )
     return steps
 
@@ -5751,9 +6249,12 @@ def _request_remote_token_refresh(
         endpoint,
         {
             "client_name": "browser-cli",
+            "grant_type": "refresh_token",
+            "credential_kind": current_credentials.get("kind") or "device_token",
             "refresh_token": refresh_token,
             "token_id": current_credentials.get("token_id"),
             "project_id": current_credentials.get("project_id"),
+            "requested_scopes": requested_scopes,
         },
         timeout_seconds=timeout_seconds,
     )
@@ -5768,8 +6269,26 @@ def _request_remote_token_refresh(
     }
     if not response.get("ok") or not isinstance(response_payload, dict):
         return result
+    token_payload, payload_source, inspected_sources = _extract_token_response_payload(
+        response_payload
+    )
+    result.update(
+        {
+            "response_payload_source": payload_source,
+            "inspected_response_sources": inspected_sources,
+            "response_summary": _token_response_summary(token_payload),
+        }
+    )
+    if not token_payload.get("access_token"):
+        return {
+            **result,
+            "ok": False,
+            "error": "refresh_response_invalid",
+            "message": "Refresh response did not contain a usable access token payload.",
+            "saved": False,
+        }
     token_payload = _merge_refreshed_token_payload(
-        response_payload,
+        token_payload,
         current_credentials,
     )
     credentials = _write_device_token_credentials(
@@ -5801,24 +6320,47 @@ def _request_remote_token_revoke(
             "message": read_meta.get("message"),
             **read_meta,
         }
+    scopes = _scope_list(current_credentials.get("scopes")) or []
+    token_type_hint = (
+        "refresh_token"
+        if isinstance(current_credentials.get("refresh_token"), str)
+        and bool(current_credentials.get("refresh_token"))
+        else "access_token"
+    )
     response = _json_http_post(
         endpoint,
         {
             "client_name": "browser-cli",
+            "credential_kind": current_credentials.get("kind") or "device_token",
+            "token_type_hint": token_type_hint,
             "access_token": current_credentials.get("access_token"),
             "refresh_token": current_credentials.get("refresh_token"),
             "token_id": current_credentials.get("token_id"),
             "project_id": current_credentials.get("project_id"),
+            "scopes": scopes,
         },
         timeout_seconds=timeout_seconds,
     )
+    response_payload = response.get("json", {})
+    revoked_field = (
+        response_payload.get("revoked") if isinstance(response_payload, dict) else None
+    )
+    revoked_confirmed = bool(revoked_field) if revoked_field is not None else None
+    ok = bool(response.get("ok")) and revoked_confirmed is not False
     return {
         "attempted": True,
-        "ok": bool(response.get("ok")),
+        "ok": ok,
         "endpoint": endpoint,
         "status_code": response.get("status_code"),
-        "error": response.get("error"),
-        "message": response.get("message"),
+        "error": response.get("error") or ("revoke_not_confirmed" if not ok else None),
+        "message": response.get("message")
+        or (
+            "Revoke response explicitly reported revoked=false."
+            if revoked_confirmed is False
+            else None
+        ),
+        "token_type_hint": token_type_hint,
+        "revoked": revoked_confirmed,
     }
 
 
@@ -6051,6 +6593,69 @@ def _connect_from_codex_browser_site_requirements() -> list[str]:
         "Offer copyable install, local env, auth export-env, and doctor verification commands without exposing secrets in chat.",
         "Display requested scopes with labels, permission names, risk levels, destructive markers, expiration, masked preview, revoke, and rotation controls.",
         "Support device-code or OAuth approval for project-bound, scoped, time-limited local tokens.",
+    ]
+
+
+def _connect_from_codex_browser_site_acceptance_tests() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "project_identity_visible",
+            "capability": "project_id_display",
+            "source_fields": [
+                "project_id",
+                "project_id_source",
+                "connect_from_codex.url",
+            ],
+            "expected": "The page shows the selected Project ID before issuing credentials.",
+        },
+        {
+            "id": "scope_review",
+            "capability": "scoped_api_key",
+            "source_fields": [
+                "requested_scopes",
+                "requested_scope_details",
+                "scope_ui_fields",
+            ],
+            "expected": "The page renders scope labels, permissions, risk, and destructive markers for every requested scope.",
+        },
+        {
+            "id": "copy_local_env_safely",
+            "capability": "copy_install_and_env",
+            "source_fields": [
+                "setup_blocks",
+                "setup_blocks.local_env.safe_to_paste_in_chat",
+                "setup_blocks.local_env.local_shell_only",
+            ],
+            "expected": "Local env commands are copyable only as local-shell commands and never shown as safe chat text.",
+        },
+        {
+            "id": "doctor_verification",
+            "capability": "doctor_verification",
+            "source_fields": [
+                "verification.doctor_command",
+                "setup_blocks.verify.commands",
+            ],
+            "expected": "The page shows browser-cli doctor --json as the post-setup verification command.",
+        },
+        {
+            "id": "credential_lifecycle_controls",
+            "capability": "scoped_key_lifecycle",
+            "source_fields": [
+                "required_token_lifecycle",
+                "site_capabilities.scoped_key_lifecycle",
+            ],
+            "expected": "The page exposes expiration, masked preview, revoke, and rotation controls for agent credentials.",
+        },
+        {
+            "id": "device_code_contract",
+            "capability": "device_code_oauth",
+            "source_fields": [
+                "device_code_url",
+                "required_device_code_endpoints",
+                "required_api_contract.device_code",
+            ],
+            "expected": "The page can start device-code approval and return verification_uri_complete plus pollable token results.",
+        },
     ]
 
 
@@ -6592,6 +7197,7 @@ def _doctor_connect_from_codex_fix() -> dict[str, Any]:
         "requested_expires_in": expires_in,
         "site_capability_status": site_capability_status,
         "site_capabilities": site_capabilities,
+        "browser_site_acceptance_tests": _connect_from_codex_browser_site_acceptance_tests(),
         "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
         "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
         "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
@@ -6768,7 +7374,46 @@ def cmd_context_list(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, **_model_payload(result))
+    payload = _model_payload(result)
+    include_reuse_state = bool(
+        getattr(args, "include_reuse_state", False)
+        or getattr(args, "metadata_filter", None) is not None
+    )
+    payload["reuse_state_included"] = include_reuse_state
+    if include_reuse_state:
+        contexts = payload.get("contexts", [])
+        if not isinstance(contexts, list):
+            contexts = []
+        metadata_filter = args.metadata_filter or {}
+        registry = _read_context_registry()
+        candidates = [
+            _context_pick_candidate(context, metadata_filter, registry)
+            for context in contexts
+            if isinstance(context, dict)
+        ]
+        selected_context = _select_reusable_context(
+            [context for context in contexts if isinstance(context, dict)],
+            candidates,
+            selection_strategy=args.selection,
+        )
+        selected_context_id = (
+            selected_context.get("context_id")
+            if isinstance(selected_context, dict)
+            else None
+        )
+        payload.update(
+            metadata_filter=metadata_filter,
+            metadata_values_redacted=True,
+            selection_strategy=args.selection,
+            recommended_context_id=selected_context_id,
+            reuse_candidates=candidates,
+            selection_summary=_context_selection_summary(
+                candidates,
+                selected_context_id=selected_context_id,
+                dry_run=True,
+            ),
+        )
+    _success(command, **payload)
 
 
 def cmd_context_get(args: argparse.Namespace) -> None:
@@ -7954,6 +8599,8 @@ def _dom_helpers_expression(
     if (tag === "select") return "combobox";
     if (tag === "textarea") return "textbox";
     if (tag === "img") return "img";
+    if (tag === "ul" || tag === "ol") return "list";
+    if (tag === "li") return "listitem";
     if (tag === "summary") return "button";
     if (tag === "input") {{
       if (["button", "submit", "reset"].includes(type)) return "button";
@@ -8123,6 +8770,69 @@ def _click_role_expression(
 """.strip()
 
 
+def _click_label_expression(
+    *,
+    label: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_label_control_helpers_expression()}
+  const requestedLabel = {_js_literal(label)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const fieldSelector = [
+    "button",
+    "input:not([type=hidden])",
+    "textarea",
+    "select",
+    "[contenteditable='true']",
+    "a[href]",
+    "[role]"
+  ].join(",");
+  const match = findFieldByLabel(requestedLabel, exact, caseSensitive, fieldSelector);
+  const element = match.element;
+  const labelElement = match.label_element;
+  const elementVisible = element ? visible(element) : false;
+  const labelVisible = labelElement ? visible(labelElement) : false;
+  const clickTarget = elementVisible ? element : (labelVisible ? labelElement : element);
+  const clickTargetKind = clickTarget === element ? "control" : "label";
+  if (!element) {{
+    return {{
+      found: false,
+      clicked: false,
+      label: requestedLabel
+    }};
+  }}
+  if (!clickTarget || (!elementVisible && !labelVisible)) {{
+    return {{
+      found: true,
+      clicked: false,
+      visible: false,
+      label: requestedLabel,
+      element: nodeInfo(element),
+      label_element: labelElement ? nodeInfo(labelElement) : null,
+      error: "not_visible",
+      message: "Matched label/control is not visible."
+    }};
+  }}
+  clickTarget.focus?.();
+  clickTarget.click();
+  return {{
+    found: true,
+    clicked: true,
+    visible: true,
+    label: requestedLabel,
+    click_target: clickTargetKind,
+    element: nodeInfo(element),
+    label_element: labelElement ? nodeInfo(labelElement) : null
+  }};
+}}
+""".strip()
+
+
 def _fill_label_expression(
     *,
     label: str,
@@ -8282,6 +8992,71 @@ def _fill_role_expression(
       ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
       : null,
     candidate_count: roleMatches.length,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _fill_expression(*, selector: str, text: str) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const text = {_js_literal(text)};
+  const selectorSuggestsSensitive = sensitiveText(selector);
+  const selectorSafeText = selectorSuggestsSensitive && text !== "" ? "***" : text;
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{
+      selector,
+      found: false,
+      filled: false,
+      text: selectorSafeText,
+      text_masked: selectorSafeText !== text,
+      text_length: selectorSafeText !== text ? String(text ?? "").length : null
+    }};
+  }}
+  const writable = element.isContentEditable || "value" in element;
+  if (!writable) {{
+    return {{
+      selector,
+      found: true,
+      filled: false,
+      writable: false,
+      text: maskValue(element, text),
+      text_masked: shouldMaskValue(element, text),
+      text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+      element: nodeInfo(element),
+      error: "not_writable",
+      message: "Matched element does not expose a writable value or contenteditable surface."
+    }};
+  }}
+  const previousValue = element.isContentEditable ? element.textContent : element.value;
+  element.focus?.();
+  if (element.isContentEditable) {{
+    element.textContent = text;
+  }} else {{
+    element.value = text;
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const value = element.isContentEditable ? element.textContent : element.value;
+  return {{
+    selector,
+    found: true,
+    filled: value === text,
+    writable: true,
+    text: maskValue(element, text),
+    text_masked: shouldMaskValue(element, text),
+    text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, value),
+    value_masked: shouldMaskValue(element, value),
+    value_length: shouldMaskValue(element, value)
+      ? String(value ?? "").length
+      : null,
     element: nodeInfo(element)
   }};
 }}
@@ -8825,6 +9600,237 @@ def _mouse_action_role_expression(
     client_x: result.client_x,
     client_y: result.client_y,
     element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _drag_to_expression(*, selector: str, target_selector: str) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const targetSelector = {_js_literal(target_selector)};
+  const source = document.querySelector(selector);
+  const target = document.querySelector(targetSelector);
+  if (!source || !target) {{
+    return {{
+      selector,
+      target_selector: targetSelector,
+      found: Boolean(source),
+      target_found: Boolean(target),
+      dragged: false,
+      dropped: false,
+      events: []
+    }};
+  }}
+  const sourceRect = source.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const sourcePoint = {{
+    x: sourceRect.left + sourceRect.width / 2,
+    y: sourceRect.top + sourceRect.height / 2
+  }};
+  const targetPoint = {{
+    x: targetRect.left + targetRect.width / 2,
+    y: targetRect.top + targetRect.height / 2
+  }};
+  let dataTransfer = null;
+  try {{
+    dataTransfer = new DataTransfer();
+  }} catch (error) {{
+    dataTransfer = null;
+  }}
+  const events = [];
+  const defaultPrevented = [];
+  const dispatchMouse = (element, type, point, init = {{}}) => {{
+    const event = new MouseEvent(type, {{
+      view: window,
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      ...init
+    }});
+    const accepted = element.dispatchEvent(event);
+    events.push(type);
+    if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+  }};
+  const dispatchDrag = (element, type, point) => {{
+    const EventCtor = typeof DragEvent === "function" ? DragEvent : MouseEvent;
+    const event = new EventCtor(type, {{
+      view: window,
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      dataTransfer
+    }});
+    const accepted = element.dispatchEvent(event);
+    events.push(type);
+    if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+  }};
+  source.focus?.();
+  dispatchMouse(source, "mousedown", sourcePoint, {{ button: 0, buttons: 1 }});
+  dispatchDrag(source, "dragstart", sourcePoint);
+  dispatchMouse(target, "mousemove", targetPoint, {{ button: 0, buttons: 1 }});
+  dispatchDrag(target, "dragenter", targetPoint);
+  dispatchDrag(target, "dragover", targetPoint);
+  dispatchDrag(target, "drop", targetPoint);
+  dispatchDrag(source, "dragend", targetPoint);
+  dispatchMouse(target, "mouseup", targetPoint, {{ button: 0, buttons: 0 }});
+  return {{
+    selector,
+    target_selector: targetSelector,
+    found: true,
+    target_found: true,
+    dragged: true,
+    dropped: true,
+    events,
+    default_prevented: defaultPrevented,
+    data_transfer: Boolean(dataTransfer),
+    source_client_x: sourcePoint.x,
+    source_client_y: sourcePoint.y,
+    target_client_x: targetPoint.x,
+    target_client_y: targetPoint.y,
+    element: nodeInfo(source),
+    target_element: nodeInfo(target)
+  }};
+}}
+""".strip()
+
+
+def _drag_role_to_role_expression(
+    *,
+    source_role: str,
+    source_name: str | None,
+    target_role: str,
+    target_name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    source_name_source = "null" if source_name is None else _js_literal(source_name)
+    target_name_source = "null" if target_name is None else _js_literal(target_name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const sourceRole = {_js_literal(source_role)};
+  const sourceName = {source_name_source};
+  const targetRole = {_js_literal(target_role)};
+  const targetName = {target_name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const findRoleTarget = (requestedRole, requestedName) => {{
+    const candidates = [...document.querySelectorAll(interactiveSelector)].filter(visible);
+    const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+    const element = roleMatches.find((candidate) =>
+      requestedName === null ||
+      matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+    );
+    return {{
+      element: element || null,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    }};
+  }};
+  const sourceMatch = findRoleTarget(sourceRole, sourceName);
+  const targetMatch = findRoleTarget(targetRole, targetName);
+  const source = sourceMatch.element;
+  const target = targetMatch.element;
+  if (!source || !target) {{
+    return {{
+      source_role: sourceRole,
+      source_name: sourceName,
+      target_role: targetRole,
+      target_name: targetName,
+      found: Boolean(source),
+      role_found: Boolean(source),
+      target_found: Boolean(target),
+      target_role_found: Boolean(target),
+      dragged: false,
+      dropped: false,
+      source_candidate_count: sourceMatch.candidate_count,
+      target_candidate_count: targetMatch.candidate_count,
+      source_candidates: sourceMatch.candidates,
+      target_candidates: targetMatch.candidates,
+      events: []
+    }};
+  }}
+  const sourceRect = source.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const sourcePoint = {{
+    x: sourceRect.left + sourceRect.width / 2,
+    y: sourceRect.top + sourceRect.height / 2
+  }};
+  const targetPoint = {{
+    x: targetRect.left + targetRect.width / 2,
+    y: targetRect.top + targetRect.height / 2
+  }};
+  let dataTransfer = null;
+  try {{
+    dataTransfer = new DataTransfer();
+  }} catch (error) {{
+    dataTransfer = null;
+  }}
+  const events = [];
+  const defaultPrevented = [];
+  const dispatchMouse = (element, type, point, init = {{}}) => {{
+    const event = new MouseEvent(type, {{
+      view: window,
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      ...init
+    }});
+    const accepted = element.dispatchEvent(event);
+    events.push(type);
+    if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+  }};
+  const dispatchDrag = (element, type, point) => {{
+    const EventCtor = typeof DragEvent === "function" ? DragEvent : MouseEvent;
+    const event = new EventCtor(type, {{
+      view: window,
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      dataTransfer
+    }});
+    const accepted = element.dispatchEvent(event);
+    events.push(type);
+    if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+  }};
+  source.focus?.();
+  dispatchMouse(source, "mousedown", sourcePoint, {{ button: 0, buttons: 1 }});
+  dispatchDrag(source, "dragstart", sourcePoint);
+  dispatchMouse(target, "mousemove", targetPoint, {{ button: 0, buttons: 1 }});
+  dispatchDrag(target, "dragenter", targetPoint);
+  dispatchDrag(target, "dragover", targetPoint);
+  dispatchDrag(target, "drop", targetPoint);
+  dispatchDrag(source, "dragend", targetPoint);
+  dispatchMouse(target, "mouseup", targetPoint, {{ button: 0, buttons: 0 }});
+  return {{
+    source_role: sourceRole,
+    source_name: sourceName,
+    target_role: targetRole,
+    target_name: targetName,
+    found: true,
+    role_found: true,
+    target_found: true,
+    target_role_found: true,
+    dragged: true,
+    dropped: true,
+    source_candidate_count: sourceMatch.candidate_count,
+    target_candidate_count: targetMatch.candidate_count,
+    events,
+    default_prevented: defaultPrevented,
+    data_transfer: Boolean(dataTransfer),
+    source_client_x: sourcePoint.x,
+    source_client_y: sourcePoint.y,
+    target_client_x: targetPoint.x,
+    target_client_y: targetPoint.y,
+    element: nodeInfo(source),
+    target_element: nodeInfo(target)
   }};
 }}
 """.strip()
@@ -14821,11 +15827,13 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "form-snapshot",
                 "fill-label",
                 "fill-role",
+                "fill",
                 "clear-role",
                 "select-label",
                 "select-role",
                 "check-label",
                 "check-role",
+                "click-label",
                 "focus-role",
                 "blur-role",
                 "wait-state-role",
@@ -14840,10 +15848,12 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "preferred_commands": [
                 'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
+                'browser-cli action fill --session-id <session_id> --selector "<selector>" --text "<text>"',
                 'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
                 'browser-cli action check-label --session-id <session_id> --label "<label>"',
                 'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                'browser-cli action click-label --session-id <session_id> --label "<label>"',
                 'browser-cli action wait-state-role --session-id <session_id> --role button --name "<submit text>" --state enabled',
                 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
             ],
@@ -14868,6 +15878,10 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "read_fields": [
                 "result.fields",
                 "result.filled",
+                "result.selector",
+                "result.writable",
+                "result.text_masked",
+                "result.value_masked",
                 "result.role",
                 "result.name",
                 "result.role_found",
@@ -14879,6 +15893,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.checkable",
                 "result.checked",
                 "result.clicked",
+                "result.click_target",
                 "result.focused",
                 "result.blurred",
                 "result.matched",
@@ -15046,6 +16061,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "exists-role",
                 "get-text-role",
                 "bounding-box-role",
+                "click-label",
                 "click-role",
                 "hover-role",
                 "press-role",
@@ -15063,6 +16079,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action click-label --session-id <session_id> --label "<label>"',
                 'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
@@ -15093,6 +16110,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.text_length",
                 "result.element",
                 "result.bounding_box",
+                "result.label",
+                "result.click_target",
                 "result.visible",
                 "result.clicked",
                 "result.hovered",
@@ -15102,28 +16121,30 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.url",
             ],
             "custom_js_boundary": (
-                "Use action eval only after snapshots plus role/text/index/selector "
+                "Use action eval only after snapshots plus role/label/text/index/selector "
                 "commands cannot identify or activate the target."
             ),
         },
         "mouse_interaction": {
-            "purpose": "Trigger double-click and right-click/context-menu interactions before custom JavaScript.",
+            "purpose": "Trigger double-click, right-click/context-menu, and role or selector drag/drop interactions before custom JavaScript.",
             "related_workflows": [
                 "mouse_interaction",
                 "interactive_targeting",
                 "menu_keyboard_flow",
             ],
             "when_to_use": [
-                "The task asks to double-click, right-click, open a context menu, or trigger row/card editing.",
-                "The target can be identified by role/name or a stable selector.",
+                "The task asks to double-click, right-click, open a context menu, drag an item, drop onto a target, or trigger row/card editing.",
+                "The source and target can be identified by role/name or stable selectors.",
             ],
             "selection_order": [
                 "interactive-snapshot",
                 "accessibility-snapshot",
                 "double-click-role",
                 "right-click-role",
+                "drag-role-to-role",
                 "double-click",
                 "right-click",
+                "drag-to",
                 "hover-role",
                 "bounding-box-role",
                 "wait-text",
@@ -15137,8 +16158,10 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "preferred_commands": [
                 'browser-cli action double-click-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action drag-role-to-role --session-id <session_id> --source-role <role> --source-name "<name>" --target-role <role> --target-name "<target name>"',
                 'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
                 'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+                'browser-cli action drag-to --session-id <session_id> --selector "<source selector>" --target-selector "<target selector>"',
             ],
             "fallback_commands": [
                 'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
@@ -15156,17 +16179,24 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.role_found",
                 "result.double_clicked",
                 "result.right_clicked",
+                "result.dragged",
+                "result.dropped",
+                "result.target_found",
+                "result.target_role_found",
                 "result.context_menu",
                 "result.events",
                 "result.default_prevented",
                 "result.element",
+                "result.target_element",
                 "result.candidate_count",
+                "result.source_candidate_count",
+                "result.target_candidate_count",
                 "result.bounding_box",
             ],
             "custom_js_boundary": (
-                "Use action eval only after double-click/right-click role and "
-                "selector actions plus hover, bounding-box, and wait-text cannot "
-                "express the mouse interaction."
+                "Use action eval only after double-click/right-click role, "
+                "role drag/drop, selector drag/drop, hover, bounding-box, and wait-text "
+                "cannot express the mouse interaction."
             ),
         },
         "navigation_flow": {
@@ -16551,6 +17581,14 @@ def cmd_action_set_value(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_fill(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.fill",
+        _fill_expression(selector=args.selector, text=args.text),
+    )
+
+
 def cmd_action_set_file_input(args: argparse.Namespace) -> None:
     command = "action.set-file-input"
     files = _read_file_input_payloads(
@@ -16913,6 +17951,18 @@ def cmd_action_press_key(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_click_label(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-label",
+        _click_label_expression(
+            label=args.label,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_click_text(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -16972,6 +18022,32 @@ def cmd_action_double_click_role(args: argparse.Namespace) -> None:
             name=args.name,
             action="double-click",
             result_field="double_clicked",
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_drag_to(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.drag-to",
+        _drag_to_expression(
+            selector=args.selector,
+            target_selector=args.target_selector,
+        ),
+    )
+
+
+def cmd_action_drag_role_to_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.drag-role-to-role",
+        _drag_role_to_role_expression(
+            source_role=args.source_role,
+            source_name=args.source_name,
+            target_role=args.target_role,
+            target_name=args.target_name,
             exact=args.exact,
             case_sensitive=args.case_sensitive,
         ),
@@ -17335,6 +18411,8 @@ def cmd_doctor(args: argparse.Namespace) -> None:
 
     checks.append(_doctor_command_catalog_check())
     checks.append(_doctor_case_schema_check())
+    checks.append(_doctor_auth_export_env_contract_check())
+    checks.append(_doctor_connect_from_codex_contract_check())
     checks.append(_doctor_agent_prompt_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())
@@ -17763,6 +18841,7 @@ def cmd_auth_scopes(args: argparse.Namespace) -> None:
             ],
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "browser_site_acceptance_tests": _connect_from_codex_browser_site_acceptance_tests(),
             "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
             "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
@@ -17886,14 +18965,22 @@ def cmd_auth_refresh(args: argparse.Namespace) -> None:
         )
         credentials = remote_refresh.get("credentials")
         refreshed = bool(remote_refresh.get("saved"))
-        reason = "refreshed" if refreshed else "refresh_endpoint_error"
+        reason = (
+            "refreshed"
+            if refreshed
+            else (
+                "refresh_response_invalid"
+                if remote_refresh.get("error") == "refresh_response_invalid"
+                else "refresh_endpoint_error"
+            )
+        )
         if not refreshed:
             warnings.append(
                 "Remote token refresh endpoint did not return usable refreshed credentials."
             )
     elif reason == "remote_refresh_unavailable":
         warnings.append(
-            "Remote token refresh is not implemented yet; request fresh credentials from browser.lexmount.cn when device-code login is available."
+            "Token lifecycle refresh endpoint is not configured; pass --token-base-url or set LEXMOUNT_BROWSER_TOKEN_BASE_URL when browser.lexmount.cn exposes it."
         )
 
     _success(
@@ -17968,7 +19055,7 @@ def cmd_auth_logout(args: argparse.Namespace) -> None:
             )
     elif args.revoke:
         warnings.append(
-            "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
+            "Token lifecycle revoke endpoint is not configured; remove local metadata and revoke from browser.lexmount.cn if needed."
         )
 
     if path.exists():
@@ -18019,8 +19106,7 @@ def cmd_auth_logout(args: argparse.Namespace) -> None:
     )
 
 
-def cmd_auth_export_env(args: argparse.Namespace) -> None:
-    command = "auth.export-env"
+def _auth_export_env_payload(args: argparse.Namespace) -> dict[str, Any]:
     warnings: list[str] = []
 
     api_key = "<api-key>"
@@ -18102,28 +19188,67 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
         and api_key_source == "env"
         and api_key not in {"<api-key>", "<redacted-api-key>"}
     )
+    contains_secret_placeholders = any(
+        bool(entry.get("secret"))
+        and str(entry.get("value")) in {"<api-key>", "<redacted-api-key>"}
+        for entry in entries
+    )
     unusable_exports = [
         str(entry["name"]) for entry in entries if not bool(entry.get("usable"))
     ]
+    local_shell_safety = {
+        "contains_secret_values": secrets_revealed,
+        "contains_secret_placeholders": contains_secret_placeholders,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+        "secret_env": [
+            str(entry["name"]) for entry in entries if bool(entry.get("secret"))
+        ],
+    }
+    verification = {
+        "status_command": "browser-cli auth status",
+        "doctor_command": AGENT_DOCTOR_COMMAND,
+        "success_condition": (
+            "auth status reports configured=true and doctor reports ok=true"
+        ),
+    }
     next_steps = [
         "Run the export commands in the local shell."
         if not unusable_exports
         else "Replace placeholder or redacted export values before running the commands in the local shell.",
         f"Run `{AGENT_DOCTOR_COMMAND}` to verify credentials.",
     ]
-    _success(
-        command,
-        shell=args.shell,
-        from_current=args.from_current,
-        secrets_revealed=secrets_revealed,
-        usable=not unusable_exports,
-        unusable_exports=unusable_exports,
-        warnings=warnings,
-        exports=entries,
-        commands=commands,
-        script="\n".join(commands),
-        next_steps=next_steps,
-    )
+    return {
+        "shell": args.shell,
+        "from_current": args.from_current,
+        "secrets_revealed": secrets_revealed,
+        "usable": not unusable_exports,
+        "unusable_exports": unusable_exports,
+        "contains_secret_values": local_shell_safety["contains_secret_values"],
+        "contains_secret_placeholders": local_shell_safety[
+            "contains_secret_placeholders"
+        ],
+        "safe_to_paste_in_chat": local_shell_safety["safe_to_paste_in_chat"],
+        "local_shell_only": local_shell_safety["local_shell_only"],
+        "secret_env": local_shell_safety["secret_env"],
+        "safety": local_shell_safety,
+        "setup_block": {
+            "id": "local_env",
+            "label": "Configure local shell",
+            "commands": commands,
+            **local_shell_safety,
+        },
+        "verification": verification,
+        "warnings": warnings,
+        "exports": entries,
+        "commands": commands,
+        "script": "\n".join(commands),
+        "next_steps": next_steps,
+    }
+
+
+def cmd_auth_export_env(args: argparse.Namespace) -> None:
+    _success("auth.export-env", **_auth_export_env_payload(args))
 
 
 def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
@@ -18146,6 +19271,9 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
     site_capabilities = _connect_from_codex_site_capabilities()
     site_capability_status = _connect_from_codex_site_capability_status(
         site_capabilities
+    )
+    browser_site_acceptance_tests = (
+        _connect_from_codex_browser_site_acceptance_tests()
     )
     _success(
         command,
@@ -18188,11 +19316,13 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
             "setup_blocks": setup_blocks,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "browser_site_acceptance_tests": browser_site_acceptance_tests,
             "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
         },
         setup_blocks=setup_blocks,
         required_browser_site_support=_connect_from_codex_browser_site_requirements(),
+        browser_site_acceptance_tests=browser_site_acceptance_tests,
         required_device_code_endpoints=_device_code_required_endpoints(),
         required_device_code_support=_device_code_required_browser_site_support(),
         required_api_contract=_connect_from_codex_required_api_contract(),
@@ -18282,6 +19412,9 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
     site_capabilities = _connect_from_codex_site_capabilities()
     site_capability_status = _connect_from_codex_site_capability_status(
         site_capabilities
+    )
+    browser_site_acceptance_tests = (
+        _connect_from_codex_browser_site_acceptance_tests()
     )
     scope_details = _scope_details(scopes)
     setup_blocks = handoff["setup_blocks"]
@@ -18378,6 +19511,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                     "requested_scope_details": scope_details,
                     "site_capability_status": site_capability_status,
                     "site_capabilities": site_capabilities,
+                    "browser_site_acceptance_tests": browser_site_acceptance_tests,
                     "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
                     "verification_uri": device_code.get("verification_uri"),
                     "verification_uri_complete": device_code.get(
@@ -18440,6 +19574,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "setup_blocks": setup_blocks,
                 "site_capability_status": site_capability_status,
                 "site_capabilities": site_capabilities,
+                "browser_site_acceptance_tests": browser_site_acceptance_tests,
                 "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
                 "fallback": "Use the manual_env steps until browser.lexmount.cn supports device-code login.",
             },
@@ -18491,6 +19626,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "setup_blocks": setup_blocks,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "browser_site_acceptance_tests": browser_site_acceptance_tests,
             "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "expected_outputs": [
                 "Project ID for the selected project",
@@ -18865,6 +20001,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "clear": ("selector",),
     "clear-role": ("role",),
     "click-index": ("selector", "index"),
+    "click-label": ("label",),
     "click-role": ("role",),
     "click-text": ("text",),
     "console-snapshot": tuple(),
@@ -18877,8 +20014,11 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "dispatch-event": ("selector", "event"),
     "double-click": ("selector",),
     "double-click-role": ("role",),
+    "drag-to": ("selector", "target_selector"),
+    "drag-role-to-role": ("source_role", "target_role"),
     "exists": ("selector",),
     "exists-role": ("role",),
+    "fill": ("selector", "text"),
     "fill-label": ("label", "text"),
     "fill-role": ("role", "text"),
     "focus": ("selector",),
@@ -19272,6 +20412,7 @@ def _case_action_schema() -> dict[str, Any]:
         "clear": [],
         "clear-role": ["name", "exact", "case_sensitive"],
         "click-index": ["include_hidden"],
+        "click-label": ["exact", "case_sensitive"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
         "console-snapshot": ["max_entries", "clear", "install_only"],
@@ -19290,6 +20431,13 @@ def _case_action_schema() -> dict[str, Any]:
         "dispatch-event": ["no_bubbles", "cancelable"],
         "double-click": [],
         "double-click-role": ["name", "exact", "case_sensitive"],
+        "drag-to": [],
+        "drag-role-to-role": [
+            "source_name",
+            "target_name",
+            "exact",
+            "case_sensitive",
+        ],
         "exists": [],
         "exists-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "fill-label": ["exact", "case_sensitive"],
@@ -19610,6 +20758,15 @@ def _case_action_schema() -> dict[str, Any]:
             "candidates",
             "url",
         ],
+        "click-label": [
+            "found",
+            "clicked",
+            "label",
+            "click_target",
+            "element",
+            "label_element",
+            "url",
+        ],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
         "click-text": ["found", "clicked", "text", "element", "url"],
         "console-snapshot": [
@@ -19701,6 +20858,40 @@ def _case_action_schema() -> dict[str, Any]:
             "element",
             "url",
         ],
+        "drag-to": [
+            "selector",
+            "target_selector",
+            "found",
+            "target_found",
+            "dragged",
+            "dropped",
+            "events",
+            "default_prevented",
+            "data_transfer",
+            "element",
+            "target_element",
+            "url",
+        ],
+        "drag-role-to-role": [
+            "source_role",
+            "source_name",
+            "target_role",
+            "target_name",
+            "found",
+            "role_found",
+            "target_found",
+            "target_role_found",
+            "dragged",
+            "dropped",
+            "source_candidate_count",
+            "target_candidate_count",
+            "events",
+            "default_prevented",
+            "data_transfer",
+            "element",
+            "target_element",
+            "url",
+        ],
         "exists": ["selector", "exists", "url"],
         "exists-role": [
             "found",
@@ -19708,6 +20899,20 @@ def _case_action_schema() -> dict[str, Any]:
             "role_found",
             "role",
             "name",
+            "url",
+        ],
+        "fill": [
+            "selector",
+            "found",
+            "filled",
+            "writable",
+            "text",
+            "text_masked",
+            "value",
+            "value_masked",
+            "previous_value",
+            "previous_value_masked",
+            "element",
             "url",
         ],
         "fill-label": [
@@ -20381,6 +21586,7 @@ def _case_action_schema() -> dict[str, Any]:
             "selector": ".result button",
             "index": 0,
         },
+        "click-label": {"action": "click-label", "label": "Remember me"},
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
         "console-snapshot": {"action": "console-snapshot", "max_entries": 50},
@@ -20396,6 +21602,18 @@ def _case_action_schema() -> dict[str, Any]:
             "event": ["input", "change"],
         },
         "double-click": {"action": "double-click", "selector": ".item"},
+        "drag-to": {
+            "action": "drag-to",
+            "selector": ".card",
+            "target_selector": ".dropzone",
+        },
+        "drag-role-to-role": {
+            "action": "drag-role-to-role",
+            "source_role": "listitem",
+            "source_name": "Todo",
+            "target_role": "list",
+            "target_name": "Done",
+        },
         "double-click-role": {
             "action": "double-click-role",
             "role": "button",
@@ -20403,6 +21621,11 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "exists": {"action": "exists", "selector": ".toast"},
         "exists-role": {"action": "exists-role", "role": "alert", "name": "Saved"},
+        "fill": {
+            "action": "fill",
+            "selector": "input[name=email]",
+            "text": "me@example.com",
+        },
         "fill-label": {
             "action": "fill-label",
             "label": "Email",
@@ -21003,6 +22226,15 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "click-label":
+        return _case_eval_expression(
+            page,
+            _click_label_expression(
+                label=str(step["label"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
     if action == "clear":
         return _case_eval_expression(page, _clear_expression(str(step["selector"])))
     if action == "clear-role":
@@ -21169,6 +22401,34 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "drag-to":
+        return _case_eval_expression(
+            page,
+            _drag_to_expression(
+                selector=str(step["selector"]),
+                target_selector=str(step["target_selector"]),
+            ),
+        )
+    if action == "drag-role-to-role":
+        return _case_eval_expression(
+            page,
+            _drag_role_to_role_expression(
+                source_role=str(step["source_role"]),
+                source_name=(
+                    str(step["source_name"])
+                    if step.get("source_name") is not None
+                    else None
+                ),
+                target_role=str(step["target_role"]),
+                target_name=(
+                    str(step["target_name"])
+                    if step.get("target_name") is not None
+                    else None
+                ),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
     if action == "exists":
         return _case_eval_expression(page, _exists_expression(str(step["selector"])))
     if action == "exists-role":
@@ -21180,6 +22440,14 @@ def _run_browser_cli_case_step(
                 exact=exact,
                 case_sensitive=case_sensitive,
                 include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "fill":
+        return _case_eval_expression(
+            page,
+            _fill_expression(
+                selector=str(step["selector"]),
+                text=str(step["text"]),
             ),
         )
     if action == "fill-label":
@@ -22321,6 +23589,26 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_list = context_subparsers.add_parser("list", help="List contexts")
     context_list.add_argument("--status", help="Optional status filter")
     context_list.add_argument("--limit", type=int, default=20)
+    context_list.add_argument(
+        "--include-reuse-state",
+        action="store_true",
+        help="Include reusable/locked availability diagnostics for each listed context.",
+    )
+    context_list.add_argument(
+        "--metadata-json",
+        dest="metadata_filter",
+        type=_parse_filter_metadata_json,
+        help=(
+            "JSON object used to mark reuse candidate metadata matches. "
+            "Also enables --include-reuse-state."
+        ),
+    )
+    context_list.add_argument(
+        "--selection",
+        choices=CONTEXT_SELECTION_STRATEGIES,
+        default="first",
+        help="Selection strategy for recommended_context_id when reuse state is included.",
+    )
     context_list.set_defaults(func=cmd_context_list)
 
     context_get = context_subparsers.add_parser("get", help="Get one context")
@@ -23208,6 +24496,15 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_text_match_args(action_clear_role)
     action_clear_role.set_defaults(func=cmd_action_clear_role)
 
+    action_fill = action_subparsers.add_parser(
+        "fill",
+        help="Fill a form field or editable element matched by selector",
+    )
+    _add_session_target_args(action_fill)
+    action_fill.add_argument("--selector", required=True)
+    action_fill.add_argument("--text", required=True)
+    action_fill.set_defaults(func=cmd_action_fill)
+
     action_set_value = action_subparsers.add_parser(
         "set-value",
         help="Set a form field or editable element value and dispatch input/change",
@@ -23517,6 +24814,15 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_press_key.add_argument("--shift-key", action="store_true")
     action_press_key.set_defaults(func=cmd_action_press_key)
 
+    action_click_label = action_subparsers.add_parser(
+        "click-label",
+        help="Click a visible form control matched by label, aria-label, or placeholder",
+    )
+    _add_session_target_args(action_click_label)
+    action_click_label.add_argument("--label", required=True)
+    _add_text_match_args(action_click_label)
+    action_click_label.set_defaults(func=cmd_action_click_label)
+
     action_click_text = action_subparsers.add_parser(
         "click-text",
         help="Click the first visible interactive element matching text",
@@ -23571,6 +24877,27 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_double_click_role.add_argument("--name")
     _add_text_match_args(action_double_click_role)
     action_double_click_role.set_defaults(func=cmd_action_double_click_role)
+
+    action_drag_to = action_subparsers.add_parser(
+        "drag-to",
+        help="Dispatch drag/drop events from one selector to another selector",
+    )
+    _add_session_target_args(action_drag_to)
+    action_drag_to.add_argument("--selector", required=True)
+    action_drag_to.add_argument("--target-selector", required=True)
+    action_drag_to.set_defaults(func=cmd_action_drag_to)
+
+    action_drag_role_to_role = action_subparsers.add_parser(
+        "drag-role-to-role",
+        help="Dispatch drag/drop events from one role/name target to another role/name target",
+    )
+    _add_session_target_args(action_drag_role_to_role)
+    action_drag_role_to_role.add_argument("--source-role", required=True)
+    action_drag_role_to_role.add_argument("--source-name")
+    action_drag_role_to_role.add_argument("--target-role", required=True)
+    action_drag_role_to_role.add_argument("--target-name")
+    _add_text_match_args(action_drag_role_to_role)
+    action_drag_role_to_role.set_defaults(func=cmd_action_drag_role_to_role)
 
     action_right_click = action_subparsers.add_parser(
         "right-click",

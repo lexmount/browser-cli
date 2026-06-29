@@ -255,13 +255,20 @@ Current CLI support:
   `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
   `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
   `POST /api/auth/token/refresh` and saves refreshed local metadata when the
-  response includes a usable access token.
+  response includes a usable access token. The endpoint may return token fields
+  at the top level or under `token`, `device_token`, `credential`, or
+  `credentials`; camelCase token keys such as `accessToken`, `refreshToken`,
+  `expiresIn`, and `projectId` are normalized before saving. CLI output reports
+  only safe metadata such as `remote_refresh.response_payload_source` and
+  `remote_refresh.response_summary`.
 - `browser-cli auth logout` removes the local fallback credentials file and
   reports `deleted`, `present_before`, `present_after`, `revoke_requested`, and
   `revoke_available`.
 - `browser-cli auth logout --revoke` calls `POST /api/auth/token/revoke` when a
   token lifecycle base URL is configured; without one it reports
-  `revoke_available=false` and still removes local metadata.
+  `revoke_available=false` and still removes local metadata. An endpoint
+  response may omit `revoked`, but explicit `revoked=false` is treated as not
+  confirmed and reported in `remote_revoke`.
 - Output never includes access or refresh token values.
 - Until browser API bearer-token support lands, `runtime_auth_usable` remains
   false for device tokens and browser actions still require env API-key

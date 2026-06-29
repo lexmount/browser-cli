@@ -105,6 +105,11 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli auth login" in text
     assert "browser-cli auth connect-requirements" in text
     assert "browser-cli auth export-env" in text
+    assert "safe_to_paste_in_chat" in text
+    assert "local_shell_only" in text
+    assert "contains_secret_values" in text
+    assert "contains_secret_placeholders" in text
+    assert "setup_block" in text
     assert "scope_check.missing_scopes" in text
     assert "refresh_available" in text
     assert "revoke_available" in text
@@ -146,6 +151,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action form-snapshot" in text
     assert "browser-cli action fill-label" in text
     assert "browser-cli action fill-role" in text
+    assert "browser-cli action fill --session-id" in text
     assert "browser-cli action clear-role" in text
     assert "browser-cli action wait-state-role" in text
     assert "browser-cli action set-viewport" in text
@@ -165,11 +171,13 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action hover-role" in text
     assert "browser-cli action press-role" in text
     assert "browser-cli action scroll-into-view-role" in text
+    assert "browser-cli action drag-role-to-role" in text
     assert "browser-cli action console-snapshot" in text
     assert "browser-cli action network-snapshot" in text
     assert "runtime errors" in text
     assert "fetch/XHR issues" in text
     assert "wait-role" in text
+    assert "click-label" in text
     assert "click-role" in text
     assert "click-text" in text
     assert "page-info" in text

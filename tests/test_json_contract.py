@@ -195,6 +195,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`mouse_interaction`" in text
     assert "`double-click-role`" in text
     assert "`right-click-role`" in text
+    assert "`drag-role-to-role`" in text
     assert "`press-key`" in text
     assert "`state_waits`" in text
     assert "`wait-network`" in text
@@ -321,6 +322,8 @@ def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     assert "`auth scopes`" in text
     assert "`known_scopes`" in text
     assert "`scope_ui_fields`" in text
+    assert "`browser_site_acceptance_tests`" in text
+    assert "`connect_from_codex_contract`" in text
     assert "`auth connect-requirements`" in text
     assert "`connect_from_codex.device_code_url`" in text
     assert "`unusable_exports`" in text
@@ -394,11 +397,13 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "check-role",
         "uncheck-label",
         "uncheck-role",
+        "click-label",
         "click-text",
         "click-role",
         "click-index",
         "focus",
         "focus-role",
+        "fill",
         "fill-label",
         "fill-role",
         "get-value",

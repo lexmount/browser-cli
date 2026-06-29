@@ -63,8 +63,12 @@ If credentials are missing, parse the `auth login` JSON and guide the user
 through `handoff.connect_from_codex_url`, `handoff.copyable_commands`, and
 `verification.doctor_command`; use
 `browser-cli commands --workflow connect_from_codex_auth` as the machine-readable
-auth setup path. Keep `LEXMOUNT_API_KEY`, revealed export output, and full
-direct browser URLs out of chat.
+auth setup path. When reading `auth export-env`, require `usable`,
+`unusable_exports`, `safe_to_paste_in_chat`, `local_shell_only`,
+`contains_secret_values`, `contains_secret_placeholders`, `safety`,
+`setup_block`, and `verification.doctor_command` before treating commands as
+runnable. Keep `LEXMOUNT_API_KEY`, revealed export output, and full direct
+browser URLs out of chat.
 
 If the task is to improve browser.lexmount.cn, read
 `browser-cli commands --workflow connect_from_codex_site_requirements` and run
@@ -164,6 +168,7 @@ browser-cli action form-snapshot --session-id <session_id> --selector form
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
+browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
 browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
@@ -183,6 +188,7 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
 browser-cli action get-text-role --session-id <session_id> --role button --name "Submit"
 browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"
+browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action hover-role --session-id <session_id> --role button --name "Menu"
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
@@ -264,7 +270,7 @@ browser-cli action list-snapshot --session-id <session_id> --selector "[role=men
 browser-cli action press-key --session-id <session_id> --key Escape
 ```
 
-For double-clicks, right-clicks, and context menus, read the mouse interaction
+For double-clicks, right-clicks, drag/drop, and context menus, read the mouse interaction
 workflow before custom event JavaScript:
 
 ```bash
@@ -274,6 +280,8 @@ browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
 browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"
 browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"
 browser-cli action right-click --session-id <session_id> --selector ".row"
+browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
+browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"
 ```
 
 For deterministic page or target state, read the state-wait workflow before
@@ -388,7 +396,7 @@ browser-cli case run --file examples/cases/page-inspection.yaml --close-created-
 
 Case files are good for smoke tests, regression checks, and demos because they
 produce structured JSON summaries and event logs. `case schema` includes
-semantic form and targeting steps such as `fill-label`, `click-role`,
+semantic form and targeting steps such as `fill`, `fill-label`, `click-label`, `click-role`,
 `wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `interactive-snapshot`,
@@ -434,12 +442,12 @@ browser-cli action snapshot --session-id <session_id>
 When expanded action commands are available, use them for common browser
 operations such as reading page info, setting a stable viewport, taking selector or role screenshots, checking existence, reading text,
 waiting on title changes, waiting for text to disappear, scrolling, selecting
-options, checking boxes, hovering, double-clicking, right-clicking, pressing selector keys, and sending
+options, checking boxes, hovering, double-clicking, right-clicking, drag/drop, pressing selector keys, and sending
 active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
-actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-role`, `click-text`,
-`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `scroll-into-view-role`, `interactive-snapshot`, and
+actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
+`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `drag-role-to-role`, `drag-to`, `scroll-into-view-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as

@@ -104,11 +104,13 @@ without exposing token values.
 The Connect from Codex site requirements workflow includes
 `auth scopes --include-site-contract`, `auth connect-requirements`,
 `browser_site_contract.scope_ui_fields`,
+`browser_site_contract.browser_site_acceptance_tests`,
 `connect_from_codex.site_capability_status.missing`,
+`connect_from_codex.browser_site_acceptance_tests`,
 `required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, `required_runtime_auth`, `setup_blocks`, and
-verification commands so agents can coordinate browser.lexmount.cn changes
-without pretending a user is logging in.
+`required_token_lifecycle`, `required_runtime_auth`, `setup_blocks`,
+`browser_site_acceptance_tests`, and verification commands so agents can
+coordinate browser.lexmount.cn changes without pretending a user is logging in.
 The device-code auth workflow includes `auth login --device-code`,
 `device_code.required_endpoints`, `device_code.required_browser_site_support`,
 `connect_from_codex.site_capability_status.missing`, and `fallback_handoff`
@@ -129,7 +131,8 @@ The interactive targeting workflow exposes `selection_order`,
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of
 writing JavaScript.
 The mouse interaction workflow exposes role/name and selector `double-click`,
-`double-click-role`, `right-click`, and `right-click-role` routes so agents can
+`double-click-role`, `right-click`, `right-click-role`, role/name
+`drag-role-to-role`, and selector `drag-to` routes so agents can
 open editors or context menus without custom event JavaScript.
 The form interaction workflow exposes form snapshots, labeled and role/name
 fill steps, role/name value read/wait verification, labeled select/check steps,
@@ -142,7 +145,10 @@ The form interaction, interactive targeting, and page diagnostics workflows
 start with an `inspect_action_guide` step so agents read the compact task guide
 before selecting first-class actions or considering custom JavaScript.
 
-`context pick` and session context reuse return `selection_summary` with stable
+`context list --include-reuse-state` returns `reuse_candidates`,
+`recommended_context_id`, `metadata_values_redacted=true`, and
+`selection_summary` without mutating persistent contexts. `context pick` and
+session context reuse also return `selection_summary` with stable
 counts such as `checked`, `metadata_matches`, `metadata_mismatches`,
 `reusable_matches`, `locked_matches`, `unavailable_matches`, `unknown_matches`,
 `recommended_next_action`, `decision_reason`, and `would_create`. Agents should
@@ -236,8 +242,9 @@ Default behavior:
   `permission_count`, `risk`, `destructive`, `unknown_scopes`, and the
   repeatable `scope` query parameter. With `--include-site-contract`, it also
   reports `browser_site_contract.url`, `device_code_url`, `scope_ui_fields`,
-  `required_query_parameters`, `site_capability_status`, and token lifecycle
-  requirements for browser.lexmount.cn.
+  `required_query_parameters`, `site_capability_status`,
+  `browser_site_acceptance_tests`, and token lifecycle requirements for
+  browser.lexmount.cn.
 - `auth login` reports top-level `flow`, `selected_flow`, `available`,
   `manual_env_available`, and `device_code_available` so agents can choose the
   currently usable setup path without inferring it from nested flow metadata.
@@ -251,7 +258,8 @@ Default behavior:
   `connect_from_codex.device_code_url`, `site_capabilities`,
   `site_capability_status`, `required_device_code_endpoints`,
   `required_api_contract`, `required_token_lifecycle`,
-  `required_runtime_auth`, `setup_blocks`, and verification commands.
+  `required_runtime_auth`, `setup_blocks`, `browser_site_acceptance_tests`, and
+  verification commands.
 - `auth login` nested `connect_from_codex` output may also include
   `required_runtime_auth` so agents can report browser.lexmount.cn, SDK, and
   gateway gaps from either the login handoff or the standalone requirements
@@ -300,9 +308,19 @@ Default behavior:
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
   `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and
   custom JavaScript for common asynchronous state transitions.
-- `auth export-env` reports top-level `usable` and `unusable_exports` so agents
-  can distinguish directly runnable export commands from placeholder or masked
-  commands.
+- `auth export-env` reports top-level `usable`, `unusable_exports`,
+  `contains_secret_values`, `contains_secret_placeholders`,
+  `safe_to_paste_in_chat`, `local_shell_only`, `secret_env`, `safety`,
+  `setup_block`, and `verification` so agents can distinguish directly
+  runnable local-shell export commands from placeholder, masked, or secret
+  output before copying or running them.
+- `doctor` includes an `auth_export_env_contract` check so missing or invalid
+  `auth export-env` safety metadata becomes an actionable warning instead of an
+  agent-side guess.
+- `doctor` includes a `connect_from_codex_contract` check so missing
+  browser-site capabilities, `browser_site_acceptance_tests`, token lifecycle,
+  runtime auth, or device-code API contract fields become actionable warnings
+  before browser.lexmount.cn implementers rely on stale setup guidance.
 - `auth refresh` may report `refresh_needed`, `has_refresh_token`,
   `refresh_available`, `refreshed`, `reason`,
   `token_lifecycle_base_url_source`, `refresh_endpoint`, `remote_refresh`, and
@@ -311,7 +329,12 @@ Default behavior:
   With `--token-base-url`, `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
   `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it may call
   `POST /api/auth/token/refresh`; `remote_refresh` may report `attempted`,
-  `ok`, `status_code`, `error`, `message`, `endpoint`, and `saved`.
+  `ok`, `status_code`, `error`, `message`, `endpoint`,
+  `response_payload_source`, `response_summary`, and `saved`. The CLI sends
+  `grant_type=refresh_token`, `credential_kind`, `project_id`, `token_id`, and
+  `requested_scopes`; refresh responses may return token fields at the top level
+  or under `token`, `device_token`, `credential`, or `credentials`, with
+  camelCase token keys normalized before saving.
 - `reference list` and `reference get` expose packaged agent reference docs as
   JSON. `reference get --metadata-only` omits markdown content, and unknown ids
   fail as JSON with `error=unknown_reference` plus `available_references`.
@@ -322,7 +345,7 @@ Default behavior:
   `actions`, top-level target/session schema, optional `--names-only`, and
   action-specific output with `--action`. Supported case actions include the
   original page actions plus semantic form and targeting actions such as
-  `fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
+  `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
   `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
   `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
   `scroll-into-view-role`, `form-snapshot`, `interactive-snapshot`, and
@@ -365,9 +388,9 @@ Default behavior:
   wait-state, wait-state-role, query, inspect,
   get-attribute, get-attribute-role, wait-attribute, wait-attribute-role, bounding-box, bounding-box-role,
   select-option, select-label, select-role, check, uncheck, check-label,
-  check-role, uncheck-label, uncheck-role, click-text, click-role, click-index,
-  double-click, double-click-role, right-click, right-click-role,
-  focus, focus-role, fill-label, fill-role, get-value, get-value-role,
+  check-role, uncheck-label, uncheck-role, click-label, click-text, click-role, click-index,
+  double-click, double-click-role, drag-role-to-role, drag-to, right-click, right-click-role,
+  focus, focus-role, fill, fill-label, fill-role, get-value, get-value-role,
   wait-value, wait-value-role,
   link-snapshot, table-snapshot, list-snapshot, text-snapshot, dialog-snapshot,
   wait-dialog, frame-snapshot, wait-frame, performance-snapshot, network-snapshot,
@@ -394,7 +417,9 @@ Default behavior:
   `revoke_endpoint`, `remote_revoke`, and `revoked`, but must not print token
   values or unset environment variables. With `--revoke` and a configured token
   lifecycle endpoint, it may call `POST /api/auth/token/revoke`; without one,
-  it reports `revoke_available=false`.
+  it reports `revoke_available=false`. `remote_revoke` may report
+  `token_type_hint` and endpoint `revoked` confirmation; explicit
+  `revoked=false` must not be treated as a successful remote revoke.
 
 Explicit reveal behavior:
 

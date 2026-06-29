@@ -137,7 +137,7 @@ Expected behavior after the website page exists:
   `connect_from_codex.site_capability_status.missing`,
   `required_device_code_endpoints`, `required_api_contract`,
   `required_token_lifecycle`, `setup_blocks`, and
-  `verification.doctor_command`.
+  `browser_site_acceptance_tests` plus `verification.doctor_command`.
 - `browser-cli auth login` prints
   `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
   opens it in the local default browser and reports `open_result`.
@@ -148,6 +148,15 @@ Expected behavior after the website page exists:
   `site_capability_status` so agents can report structured browser site gaps:
   `project_id_display`, `scoped_api_key`, `copy_install_and_env`,
   `doctor_verification`, `scoped_key_lifecycle`, and `device_code_oauth`.
+- `browser-cli auth login`, `auth scopes --include-site-contract`, and
+  `auth connect-requirements` include `browser_site_acceptance_tests` so
+  browser.lexmount.cn can verify Project ID display, scope review, local env
+  copy safety, doctor verification, credential lifecycle controls, and
+  device-code behavior before marking Connect from Codex available.
+- The Connect from Codex site workflow reads
+  `connect_from_codex.browser_site_acceptance_tests` from both manual handoff
+  and device-code handoff responses so agents can verify the same checklist no
+  matter which auth path the site currently supports.
 - `browser-cli auth login` includes `setup_blocks` for install, Connect, local
   env, and verification copy sections. Each block reports commands,
   `contains_secret_values`, `contains_secret_placeholders`,
@@ -180,19 +189,30 @@ Expected behavior after the website page exists:
   `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
   `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
   `POST /api/auth/token/refresh` and reports `refresh_endpoint`,
-  `remote_refresh`, `refreshed`, and safe refreshed credential metadata.
+  `remote_refresh`, `refreshed`, and safe refreshed credential metadata. The
+  request includes `grant_type=refresh_token`, `credential_kind`, `project_id`,
+  `token_id`, and `requested_scopes`; the response may return token fields at
+  the top level or under `token`, `device_token`, `credential`, or
+  `credentials`. camelCase fields such as `accessToken`, `refreshToken`,
+  `expiresIn`, `projectId`, and `tokenId` are accepted. `remote_refresh`
+  reports response shape metadata, not token values.
   Without a configured endpoint, it reports `refresh_available=false` and
   `refreshed=false`.
 - `browser-cli auth logout` remains local, removes fallback device-token
   metadata, and only attempts remote revoke when `--revoke` and a token
   lifecycle base URL are configured. The remote path is
   `POST /api/auth/token/revoke`; output reports `revoke_endpoint`,
-  `remote_revoke`, `revoke_available`, and `revoked`. Without a configured
-  endpoint, `--revoke` reports `revoke_available=false`.
+  `remote_revoke`, `revoke_available`, and `revoked`. The request includes
+  `token_type_hint`, `credential_kind`, `project_id`, `token_id`, and scopes
+  alongside token values. A response may omit `revoked`, but explicit
+  `revoked=false` is treated as not confirmed. Without a configured endpoint,
+  `--revoke` reports `revoke_available=false`.
 - `browser-cli auth export-env` remains local and masks secrets by default.
 - `browser-cli doctor --json` checks local env, package availability, command
   catalog compatibility, API connectivity, and optionally session creation when
-  the user opts in.
+  the user opts in. It also reports a `connect_from_codex_contract` check so
+  missing capabilities, `browser_site_acceptance_tests`, token lifecycle,
+  runtime auth, or device-code API contract fields become actionable warnings.
 - `browser-cli doctor --json` reports `runtime_auth.bearer_runtime.required_support`
   when a local device token exists but cannot yet drive browser actions. The
   required support spans lexmount-python-sdk bearer-token construction,
