@@ -12,16 +12,13 @@ ad hoc Playwright scripts.
 ## Setup
 
 Check that the CLI is available:
-
 ```bash
-browser-cli --help
 browser-cli --version
 browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli reference list
 browser-cli example list
 ```
-
 If it is not installed, install it with:
 
 ```bash
@@ -127,6 +124,9 @@ browser-cli commands --workflow scoped_token_lifecycle
 Follow its `read` fields for `device_token.valid`, `scope_check.missing_scopes`,
 `refresh_available`, `refreshed`, `revoke_available`, and `warnings`.
 
+For the current usable baseline, readiness fields, and browser.lexmount.cn
+boundary, read `browser-cli reference get --id usable_status`.
+
 After credentials are configured, run:
 
 ```bash
@@ -155,8 +155,9 @@ what to do:
 - `case_schema` with `status: "warn"`: inspect `missing_required_case_actions`,
   `missing_action_schemas`, `invalid_action_schemas`; reinstall if needed.
 - `agent_references` with `status: "warn"`: run
-  `browser-cli reference get --id action_playbook` or follow its `fix` commands
-  before relying on detailed action guidance.
+  `browser-cli reference get --id usable_status`,
+  `browser-cli reference get --id action_playbook`, or follow its `fix`
+  commands before relying on detailed setup or action guidance.
 - `agent_examples` with `status: "warn"`: run `browser-cli example list`, inspect
   `invalid_examples` and `checked_examples`, and reinstall browser-cli if
   packaged playbooks or case files are unreadable or invalid.
@@ -183,9 +184,11 @@ Use the catalog's `browser_target.exactly_one_of`, `required_options`,
 `required_one_of`, `json_output`, `secret_policy`, `agent_references`,
 `agent_examples`, `agent_entrypoints`, and `agent_workflows` fields instead of
 parsing `--help` text. Follow `agent_references` when detailed action guidance is needed; use
-`agent_references.action_playbook.content_command` or
-`browser-cli reference get --id action_playbook` to read packaged reference
-content from an installed CLI. Use `browser-cli example list` and
+`agent_references.usable_status.content_command` or
+`browser-cli reference get --id usable_status` for the current usable baseline,
+and `agent_references.action_playbook.content_command` or
+`browser-cli reference get --id action_playbook` for action guidance from an
+installed CLI. Use `browser-cli example list` and
 `browser-cli example get --id page_inspection_case` when a common task or case
 file template would help. Use `browser-cli case scaffold --template page-inspection`
 to generate a valid starter case before hand-writing YAML, then follow each workflow step's `read` array first;

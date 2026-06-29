@@ -48,6 +48,8 @@ browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli reference list
+browser-cli reference get --id usable_status --metadata-only
+browser-cli reference get --id usable_status
 browser-cli example list
 browser-cli example get --id page_inspection_case --metadata-only
 browser-cli case schema

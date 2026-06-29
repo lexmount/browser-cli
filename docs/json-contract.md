@@ -66,12 +66,13 @@ surface. It returns `schema_version`, `selection_policy`, and `tasks`; with
 with `error=unknown_action_guide_task`, `available_tasks`, and a `fix` object
 with commands for inspecting valid guide tasks.
 `agent_references` describes optional Skill reference files such as
-`references/action-playbook.md`, with `content_command`, `package_resource`,
-`load_when`, `related_workflows`, `covers`, and `grep_patterns` so agents can
-load detailed action guidance only when needed. `browser-cli reference list`
-returns packaged reference metadata, and
-`browser-cli reference get --id action_playbook` returns the installed markdown
-content as JSON.
+`references/usable-status.md` and `references/action-playbook.md`, with
+`content_command`, `package_resource`, `load_when`, `related_workflows`,
+`covers`, and `grep_patterns` so agents can load setup or action guidance only
+when needed. `browser-cli reference list` returns packaged reference metadata;
+`browser-cli reference get --id usable_status` returns the installed usable
+baseline/status reference, and `browser-cli reference get --id action_playbook`
+returns the installed action playbook as JSON.
 `agent_examples` describes packaged common-task examples and case files.
 `browser-cli example list` returns example metadata, and
 `browser-cli example get --id page_inspection_case` returns an installed example
@@ -365,8 +366,9 @@ Default behavior:
 - `doctor` reports an `agent_references` check with `required_references`,
   `missing_required_references`, `invalid_references`, and
   `checked_references`. Treat `status=warn` as a signal to run
-  `browser-cli reference get --id action_playbook` or reinstall browser-cli
-  before relying on the full Codex Skill action guidance.
+  `browser-cli reference get --id usable_status`,
+  `browser-cli reference get --id action_playbook`, or reinstall browser-cli
+  before relying on the full Codex Skill setup or action guidance.
 - `doctor` reports an `agent_examples` check with `required_examples`,
   `missing_required_examples`, `invalid_examples`, and `checked_examples`.
   YAML case examples include `case_valid` and `case_errors`; treat
