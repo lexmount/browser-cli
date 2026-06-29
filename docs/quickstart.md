@@ -13,12 +13,6 @@ For mainline/default-branch usage, install from GitHub:
 uv tool install --force git+https://github.com/lexmount/browser-cli.git
 ```
 
-If you are testing PR #69 before it merges, install the tested branch directly:
-
-```bash
-uv tool install --force git+https://github.com/lexmount/browser-cli.git@codex/add-export-env-safety-metadata
-```
-
 Verify that command discovery returns JSON:
 
 ```bash
