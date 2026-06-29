@@ -208,6 +208,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.click-index",
     "action.double-click",
     "action.double-click-role",
+    "action.drag-to",
     "action.right-click",
     "action.right-click-role",
     "action.focus",
@@ -284,6 +285,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "dispatch-event",
     "double-click",
     "double-click-role",
+    "drag-to",
     "eval",
     "exists",
     "exists-role",
@@ -1422,6 +1424,7 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"',
                 'browser-cli action double-click --session-id <session_id> --selector ".row"',
                 'browser-cli action right-click --session-id <session_id> --selector ".row"',
+                'browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"',
                 'browser-cli action wait-text --session-id <session_id> --text "Context menu"',
             ],
             "visual_capture": [
@@ -2366,7 +2369,7 @@ def _command_catalog() -> dict[str, Any]:
                 ],
             },
             "mouse_interaction": {
-                "purpose": "Trigger double-click or right-click/context-menu interactions on semantic or selector targets without custom JavaScript.",
+                "purpose": "Trigger double-click, right-click/context-menu, or selector drag/drop interactions without custom JavaScript.",
                 "steps": [
                     {
                         "id": "inspect_action_guide",
@@ -2394,13 +2397,14 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "choose_mouse_action",
-                        "command": "<choose double-click-role, right-click-role, double-click, or right-click using target evidence>",
+                        "command": "<choose double-click-role, right-click-role, double-click, right-click, or drag-to using target evidence>",
                         "agent_action": True,
                         "selection_order": [
                             "double-click-role",
                             "right-click-role",
                             "double-click",
                             "right-click",
+                            "drag-to",
                             "hover-role",
                             "bounding-box-role",
                             "inspect",
@@ -2410,6 +2414,7 @@ def _command_catalog() -> dict[str, Any]:
                             'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
                             'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+                            'browser-cli action drag-to --session-id <session_id> --selector "<source selector>" --target-selector "<target selector>"',
                         ],
                         "fallback_commands": [
                             'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
@@ -2427,10 +2432,14 @@ def _command_catalog() -> dict[str, Any]:
                             "result.role_found",
                             "result.double_clicked",
                             "result.right_clicked",
+                            "result.dragged",
+                            "result.dropped",
+                            "result.target_found",
                             "result.context_menu",
                             "result.events",
                             "result.default_prevented",
                             "result.element",
+                            "result.target_element",
                             "result.candidate_count",
                         ],
                     },
@@ -9529,6 +9538,100 @@ def _mouse_action_role_expression(
 """.strip()
 
 
+def _drag_to_expression(*, selector: str, target_selector: str) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const targetSelector = {_js_literal(target_selector)};
+  const source = document.querySelector(selector);
+  const target = document.querySelector(targetSelector);
+  if (!source || !target) {{
+    return {{
+      selector,
+      target_selector: targetSelector,
+      found: Boolean(source),
+      target_found: Boolean(target),
+      dragged: false,
+      dropped: false,
+      events: []
+    }};
+  }}
+  const sourceRect = source.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const sourcePoint = {{
+    x: sourceRect.left + sourceRect.width / 2,
+    y: sourceRect.top + sourceRect.height / 2
+  }};
+  const targetPoint = {{
+    x: targetRect.left + targetRect.width / 2,
+    y: targetRect.top + targetRect.height / 2
+  }};
+  let dataTransfer = null;
+  try {{
+    dataTransfer = new DataTransfer();
+  }} catch (error) {{
+    dataTransfer = null;
+  }}
+  const events = [];
+  const defaultPrevented = [];
+  const dispatchMouse = (element, type, point, init = {{}}) => {{
+    const event = new MouseEvent(type, {{
+      view: window,
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      ...init
+    }});
+    const accepted = element.dispatchEvent(event);
+    events.push(type);
+    if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+  }};
+  const dispatchDrag = (element, type, point) => {{
+    const EventCtor = typeof DragEvent === "function" ? DragEvent : MouseEvent;
+    const event = new EventCtor(type, {{
+      view: window,
+      bubbles: true,
+      cancelable: true,
+      clientX: point.x,
+      clientY: point.y,
+      dataTransfer
+    }});
+    const accepted = element.dispatchEvent(event);
+    events.push(type);
+    if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+  }};
+  source.focus?.();
+  dispatchMouse(source, "mousedown", sourcePoint, {{ button: 0, buttons: 1 }});
+  dispatchDrag(source, "dragstart", sourcePoint);
+  dispatchMouse(target, "mousemove", targetPoint, {{ button: 0, buttons: 1 }});
+  dispatchDrag(target, "dragenter", targetPoint);
+  dispatchDrag(target, "dragover", targetPoint);
+  dispatchDrag(target, "drop", targetPoint);
+  dispatchDrag(source, "dragend", targetPoint);
+  dispatchMouse(target, "mouseup", targetPoint, {{ button: 0, buttons: 0 }});
+  return {{
+    selector,
+    target_selector: targetSelector,
+    found: true,
+    target_found: true,
+    dragged: true,
+    dropped: true,
+    events,
+    default_prevented: defaultPrevented,
+    data_transfer: Boolean(dataTransfer),
+    source_client_x: sourcePoint.x,
+    source_client_y: sourcePoint.y,
+    target_client_x: targetPoint.x,
+    target_client_y: targetPoint.y,
+    element: nodeInfo(source),
+    target_element: nodeInfo(target)
+  }};
+}}
+""".strip()
+
+
 def _form_snapshot_expression(
     *,
     selector: str | None,
@@ -15819,15 +15922,15 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ),
         },
         "mouse_interaction": {
-            "purpose": "Trigger double-click and right-click/context-menu interactions before custom JavaScript.",
+            "purpose": "Trigger double-click, right-click/context-menu, and selector drag/drop interactions before custom JavaScript.",
             "related_workflows": [
                 "mouse_interaction",
                 "interactive_targeting",
                 "menu_keyboard_flow",
             ],
             "when_to_use": [
-                "The task asks to double-click, right-click, open a context menu, or trigger row/card editing.",
-                "The target can be identified by role/name or a stable selector.",
+                "The task asks to double-click, right-click, open a context menu, drag an item, drop onto a target, or trigger row/card editing.",
+                "The target can be identified by role/name or stable source/target selectors.",
             ],
             "selection_order": [
                 "interactive-snapshot",
@@ -15836,6 +15939,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "right-click-role",
                 "double-click",
                 "right-click",
+                "drag-to",
                 "hover-role",
                 "bounding-box-role",
                 "wait-text",
@@ -15851,6 +15955,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
                 'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+                'browser-cli action drag-to --session-id <session_id> --selector "<source selector>" --target-selector "<target selector>"',
             ],
             "fallback_commands": [
                 'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
@@ -15868,17 +15973,21 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.role_found",
                 "result.double_clicked",
                 "result.right_clicked",
+                "result.dragged",
+                "result.dropped",
+                "result.target_found",
                 "result.context_menu",
                 "result.events",
                 "result.default_prevented",
                 "result.element",
+                "result.target_element",
                 "result.candidate_count",
                 "result.bounding_box",
             ],
             "custom_js_boundary": (
-                "Use action eval only after double-click/right-click role and "
-                "selector actions plus hover, bounding-box, and wait-text cannot "
-                "express the mouse interaction."
+                "Use action eval only after double-click/right-click role, "
+                "selector drag/drop actions, hover, bounding-box, and wait-text "
+                "cannot express the mouse interaction."
             ),
         },
         "navigation_flow": {
@@ -17706,6 +17815,17 @@ def cmd_action_double_click_role(args: argparse.Namespace) -> None:
             result_field="double_clicked",
             exact=args.exact,
             case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_drag_to(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.drag-to",
+        _drag_to_expression(
+            selector=args.selector,
+            target_selector=args.target_selector,
         ),
     )
 
@@ -19670,6 +19790,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "dispatch-event": ("selector", "event"),
     "double-click": ("selector",),
     "double-click-role": ("role",),
+    "drag-to": ("selector", "target_selector"),
     "exists": ("selector",),
     "exists-role": ("role",),
     "fill": ("selector", "text"),
@@ -20085,6 +20206,7 @@ def _case_action_schema() -> dict[str, Any]:
         "dispatch-event": ["no_bubbles", "cancelable"],
         "double-click": [],
         "double-click-role": ["name", "exact", "case_sensitive"],
+        "drag-to": [],
         "exists": [],
         "exists-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "fill-label": ["exact", "case_sensitive"],
@@ -20503,6 +20625,20 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "events",
             "element",
+            "url",
+        ],
+        "drag-to": [
+            "selector",
+            "target_selector",
+            "found",
+            "target_found",
+            "dragged",
+            "dropped",
+            "events",
+            "default_prevented",
+            "data_transfer",
+            "element",
+            "target_element",
             "url",
         ],
         "exists": ["selector", "exists", "url"],
@@ -21215,6 +21351,11 @@ def _case_action_schema() -> dict[str, Any]:
             "event": ["input", "change"],
         },
         "double-click": {"action": "double-click", "selector": ".item"},
+        "drag-to": {
+            "action": "drag-to",
+            "selector": ".card",
+            "target_selector": ".dropzone",
+        },
         "double-click-role": {
             "action": "double-click-role",
             "role": "button",
@@ -22000,6 +22141,14 @@ def _run_browser_cli_case_step(
                 result_field="double_clicked",
                 exact=exact,
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "drag-to":
+        return _case_eval_expression(
+            page,
+            _drag_to_expression(
+                selector=str(step["selector"]),
+                target_selector=str(step["target_selector"]),
             ),
         )
     if action == "exists":
@@ -24430,6 +24579,15 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_double_click_role.add_argument("--name")
     _add_text_match_args(action_double_click_role)
     action_double_click_role.set_defaults(func=cmd_action_double_click_role)
+
+    action_drag_to = action_subparsers.add_parser(
+        "drag-to",
+        help="Dispatch drag/drop events from one selector to another selector",
+    )
+    _add_session_target_args(action_drag_to)
+    action_drag_to.add_argument("--selector", required=True)
+    action_drag_to.add_argument("--target-selector", required=True)
+    action_drag_to.set_defaults(func=cmd_action_drag_to)
 
     action_right_click = action_subparsers.add_parser(
         "right-click",

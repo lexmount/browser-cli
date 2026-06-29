@@ -133,6 +133,7 @@ browser-cli action double-click-role --session-id <session_id> --role button --n
 browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"
 browser-cli action double-click --session-id <session_id> --selector ".row"
 browser-cli action right-click --session-id <session_id> --selector ".row"
+browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 ```
@@ -188,7 +189,7 @@ Prefer built-in actions over writing custom JavaScript. `page-info`, `set-viewpo
 `fill`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
 `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `select-option`, `select-label`, `select-role`, `check`,
 `uncheck`, `check-label`, `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, and `press-key`
-plus `click-label`, `click-text`, `click-role`, `click-index`, `double-click`, `double-click-role`, `right-click`, `right-click-role`, `fill-label`, `fill-role`, `link-snapshot`,
+plus `click-label`, `click-text`, `click-role`, `click-index`, `double-click`, `double-click-role`, `drag-to`, `right-click`, `right-click-role`, `fill-label`, `fill-role`, `link-snapshot`,
 `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
 `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`,
 `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`,
@@ -324,7 +325,7 @@ then use `hover-role`, `focus-role`, `press-role`, `wait-attribute-role`,
 `list-snapshot`, or `press-key` before custom JavaScript.
 Mouse gestures: run `browser-cli commands --workflow mouse_interaction` and
 `browser-cli action guide --task mouse_interaction`, inspect with
-`interactive-snapshot`, then prefer `double-click-role` or `right-click-role`;
+`interactive-snapshot`, then prefer `double-click-role`, `right-click-role`, or selector `drag-to`;
 fall back to selector `double-click` or `right-click` and verify with
 `page-info`, `wait-text`, `interactive-snapshot`, or `wait-url`.
 2. Click a visible control: run `browser-cli commands --workflow

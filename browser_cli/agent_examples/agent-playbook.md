@@ -270,7 +270,7 @@ browser-cli action list-snapshot --session-id <session_id> --selector "[role=men
 browser-cli action press-key --session-id <session_id> --key Escape
 ```
 
-For double-clicks, right-clicks, and context menus, read the mouse interaction
+For double-clicks, right-clicks, drag/drop, and context menus, read the mouse interaction
 workflow before custom event JavaScript:
 
 ```bash
@@ -280,6 +280,7 @@ browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
 browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"
 browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"
 browser-cli action right-click --session-id <session_id> --selector ".row"
+browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"
 ```
 
 For deterministic page or target state, read the state-wait workflow before
@@ -440,12 +441,12 @@ browser-cli action snapshot --session-id <session_id>
 When expanded action commands are available, use them for common browser
 operations such as reading page info, setting a stable viewport, taking selector or role screenshots, checking existence, reading text,
 waiting on title changes, waiting for text to disappear, scrolling, selecting
-options, checking boxes, hovering, double-clicking, right-clicking, pressing selector keys, and sending
+options, checking boxes, hovering, double-clicking, right-clicking, drag/drop, pressing selector keys, and sending
 active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
 actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
-`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `scroll-into-view-role`, `interactive-snapshot`, and
+`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `drag-to`, `scroll-into-view-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as

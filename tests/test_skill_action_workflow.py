@@ -332,7 +332,7 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "for mouse gestures use `mouse_interaction`" in normalized
     assert (
-        "`double-click-role`, `right-click-role`, `double-click`, or `right-click`"
+        "`double-click-role`, `right-click-role`, `drag-to`, `double-click`, or `right-click`"
         in normalized
     )
     assert "and `click-text` before selectors" in normalized

@@ -643,7 +643,7 @@ the boundary for custom JavaScript.
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `inspect`,
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
 `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-label`, `click-text`, `click-role`,
-`double-click`, `double-click-role`, `right-click`, `right-click-role`,
+`double-click`, `double-click-role`, `drag-to`, `right-click`, `right-click-role`,
 `click-index`, `fill`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
@@ -987,7 +987,7 @@ Common agent recipes:
   `list-snapshot`, or `press-key` before custom JavaScript.
 - Mouse gestures: run `browser-cli commands --workflow mouse_interaction` and
   `browser-cli action guide --task mouse_interaction`, then prefer
-  `double-click-role` or `right-click-role`, falling back to selector
+  `double-click-role`, `right-click-role`, or selector `drag-to`, falling back to selector
   `double-click` or `right-click`; verify with `page-info`, `wait-text`,
   `interactive-snapshot`, or `wait-url`.
 - Navigation: run `browser-cli commands --workflow navigation_flow` and
