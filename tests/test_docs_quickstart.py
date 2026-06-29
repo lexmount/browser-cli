@@ -8,11 +8,14 @@ QUICKSTART = REPO_ROOT / "docs" / "quickstart.md"
 README = REPO_ROOT / "README.md"
 DOCS_INDEX = REPO_ROOT / "docs" / "README.md"
 MVP_QUICKSTART = REPO_ROOT / "docs" / "mvp-quickstart.md"
+USABLE_VERSION = REPO_ROOT / "docs" / "usable-version.md"
 
 
 def test_stable_quickstart_is_linked_from_primary_docs() -> None:
     assert "[docs/quickstart.md](docs/quickstart.md)" in README.read_text()
+    assert "[docs/usable-version.md](docs/usable-version.md)" in README.read_text()
     assert "[Quickstart](./quickstart.md)" in DOCS_INDEX.read_text()
+    assert "[Usable version status](./usable-version.md)" in DOCS_INDEX.read_text()
     assert "[browser-cli quickstart](./quickstart.md)" in MVP_QUICKSTART.read_text()
 
 
@@ -35,3 +38,20 @@ def test_quickstart_covers_minimum_usable_flow() -> None:
     assert "browser-cli context pick" in text
     assert "browser-cli action guide --task interactive_targeting" in text
     assert "browser-cli case schema" in text
+
+
+def test_usable_version_status_documents_trial_boundaries() -> None:
+    text = USABLE_VERSION.read_text()
+
+    assert "browser-cli` version `0.2.0" in text
+    assert "browser-cli doctor --json" in text
+    assert "browser-cli doctor --smoke-session" in text
+    assert "browser_smoke_session.status=pass" in text
+    assert "created=true" in text
+    assert "closed=true" in text
+    assert "LEXMOUNT_API_KEY" in text
+    assert "LEXMOUNT_PROJECT_ID" in text
+    assert "browser-cli auth connect-requirements --checklist" in text
+    assert "Device-code/OAuth endpoints" in text
+    assert "bearer-token support" in text
+    assert "Do not paste API keys" in text
