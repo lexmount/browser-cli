@@ -9248,6 +9248,38 @@ def test_context_status_reports_reusable_and_locked_state(
     }
 
 
+def test_context_pick_missing_credentials_points_to_auth_setup(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--metadata-json",
+                '{"purpose":"codex-login"}',
+                "--dry-run",
+            ]
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "context.pick"
+    assert payload["error"] == "BrowserConfigError"
+    assert "LEXMOUNT_API_KEY" in payload["message"]
+    assert payload["fix"]["code"] == "configure_credentials"
+    assert payload["fix"]["env"] == ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+    assert "browser-cli auth login" in payload["fix"]["commands"]
+    assert "browser-cli auth export-env" in payload["fix"]["commands"]
+    assert payload["next_steps"] == payload["fix"]["guidance"]
+    assert "connect_from_codex" in payload["fix"]
+
+
 def test_context_pick_selects_first_available_metadata_match(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
