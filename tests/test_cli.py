@@ -556,25 +556,34 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["page_diagnostics"]
     )
     workflows = payload["agent_workflows"]
-    assert workflows["setup_and_verify"]["steps"][1]["command"] == (
-        "browser-cli doctor --json"
+    setup_steps = {
+        step["id"]: step for step in workflows["setup_and_verify"]["steps"]
+    }
+    assert setup_steps["inspect_usable_status"]["command"] == (
+        "browser-cli reference get --id usable_status --metadata-only"
     )
+    assert (
+        setup_steps["inspect_usable_status"]["follow_up_command"]
+        == "browser-cli reference get --id usable_status"
+    )
+    assert "reference.content_command" in setup_steps["inspect_usable_status"]["read"]
+    assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
     assert (
         "repair_plan.connect_from_codex.url"
-        in workflows["setup_and_verify"]["steps"][1]["on_failure_read"]
+        in setup_steps["doctor"]["on_failure_read"]
     )
-    assert workflows["setup_and_verify"]["steps"][2]["optional"] is True
+    assert setup_steps["smoke_session"]["optional"] is True
     assert (
         "browser_smoke_session.status"
-        in workflows["setup_and_verify"]["steps"][2]["read"]
+        in setup_steps["smoke_session"]["read"]
     )
     assert (
         "browser_smoke_session.session_id"
-        in workflows["setup_and_verify"]["steps"][2]["read"]
+        in setup_steps["smoke_session"]["read"]
     )
     assert (
         "browser_smoke_session.fix.commands"
-        in workflows["setup_and_verify"]["steps"][2]["on_failure_read"]
+        in setup_steps["smoke_session"]["on_failure_read"]
     )
     site_steps = workflows["connect_from_codex_site_requirements"]["steps"]
     assert [step["id"] for step in site_steps] == [
@@ -2258,12 +2267,17 @@ def test_commands_catalog_returns_workflows_only(
         "page_diagnostics"
         in payload["agent_references"]["action_playbook"]["related_workflows"]
     )
-    assert payload["agent_workflows"]["setup_and_verify"]["steps"][1]["command"] == (
-        "browser-cli doctor --json"
+    setup_steps = {
+        step["id"]: step
+        for step in payload["agent_workflows"]["setup_and_verify"]["steps"]
+    }
+    assert setup_steps["inspect_usable_status"]["command"] == (
+        "browser-cli reference get --id usable_status --metadata-only"
     )
+    assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
     assert (
         "browser_smoke_session.status"
-        in payload["agent_workflows"]["setup_and_verify"]["steps"][2]["read"]
+        in setup_steps["smoke_session"]["read"]
     )
     assert (
         "required_token_lifecycle"
@@ -5102,6 +5116,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
     assert checks["command_catalog"]["required_workflow_steps"]["setup_and_verify"] == [
+        "inspect_usable_status",
         "auth_status",
         "doctor",
         "smoke_session",
@@ -6399,7 +6414,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "one_off_page_task": ["close_session"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
-        "setup_and_verify": ["smoke_session"],
+        "setup_and_verify": ["inspect_usable_status", "smoke_session"],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
         "dialog_frame_handling": ["verify_result"],

@@ -89,8 +89,9 @@ to the preferred action without parsing help text.
 Workflow `read` arrays include current auth availability fields, scope catalog
 fields, export usability fields, and context reuse availability fields when
 those values drive the next agent decision.
-The setup workflow includes `auth status`, `doctor --json`, and optional
-`doctor --smoke-session` steps; the smoke step reads
+The setup workflow includes a `usable_status` reference inspection step,
+`auth status`, `doctor --json`, and optional `doctor --smoke-session`; the
+smoke step reads
 `browser_smoke_session.status`, `browser_smoke_session.created`, and
 `browser_smoke_session.closed` so agents can verify a temporary session can be
 created and cleaned up. The same smoke result is also present in
