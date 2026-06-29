@@ -2737,6 +2737,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "inspect",
         "interactive-only-snapshot",
         "interactive-snapshot",
+        "link-snapshot",
+        "list-snapshot",
         "open-url",
         "outline-snapshot",
         "page-info",
@@ -2759,6 +2761,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "storage-remove",
         "storage-set",
         "submit",
+        "table-snapshot",
+        "text-snapshot",
         "type",
         "uncheck",
         "uncheck-label",
@@ -2862,6 +2866,10 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "text" in payload["actions"]["get-text-role"]["result_fields"]
     assert "exists" in payload["actions"]["exists-role"]["result_fields"]
     assert "scrolled" in payload["actions"]["scroll-into-view-role"]["result_fields"]
+    assert "links" in payload["actions"]["link-snapshot"]["result_fields"]
+    assert "lists" in payload["actions"]["list-snapshot"]["result_fields"]
+    assert "tables" in payload["actions"]["table-snapshot"]["result_fields"]
+    assert "texts" in payload["actions"]["text-snapshot"]["result_fields"]
     assert "steps" in payload["top_level"]["required_fields"]
     assert "session.create" in payload["top_level"]["target_options"]
     assert "field/path" in payload["top_level"]["step_options"]["expect"]
@@ -2880,7 +2888,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 80,
+        "action_count": 84,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -2921,6 +2929,8 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "inspect",
             "interactive-only-snapshot",
             "interactive-snapshot",
+            "link-snapshot",
+            "list-snapshot",
             "open-url",
             "outline-snapshot",
             "page-info",
@@ -2943,6 +2953,8 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "storage-remove",
             "storage-set",
             "submit",
+            "table-snapshot",
+            "text-snapshot",
             "type",
             "uncheck",
             "uncheck-label",
@@ -3499,6 +3511,8 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
         ({"action": "get-value", "selector": "input"}, "readFormValue"),
         ({"action": "inspect", "selector": "button"}, "selected_options"),
         ({"action": "interactive-only-snapshot"}, 'kind: "interactive"'),
+        ({"action": "link-snapshot", "selector": "main"}, 'kind: "links"'),
+        ({"action": "list-snapshot", "selector": "main"}, 'kind: "lists"'),
         ({"action": "outline-snapshot", "selector": "main"}, "heading_count"),
         ({"action": "query", "selector": ".item"}, 'kind: "query"'),
         (
@@ -3506,6 +3520,8 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
             "requestedValue",
         ),
         ({"action": "submit", "selector": "form"}, "requestSubmit"),
+        ({"action": "table-snapshot", "selector": "table"}, 'kind: "tables"'),
+        ({"action": "text-snapshot", "selector": "main"}, 'kind: "text"'),
         (
             {"action": "wait-attribute", "selector": "button", "name": "disabled"},
             "requestedState",

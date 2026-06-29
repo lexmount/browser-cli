@@ -18186,6 +18186,8 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "inspect": ("selector",),
     "interactive-only-snapshot": tuple(),
     "interactive-snapshot": tuple(),
+    "link-snapshot": tuple(),
+    "list-snapshot": tuple(),
     "outline-snapshot": tuple(),
     "page-info": tuple(),
     "press": ("selector", "key"),
@@ -18205,6 +18207,8 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "storage-remove": ("key",),
     "storage-set": ("key", "value"),
     "submit": ("selector",),
+    "table-snapshot": tuple(),
+    "text-snapshot": tuple(),
     "uncheck": ("selector",),
     "uncheck-label": ("label",),
     "uncheck-role": ("role",),
@@ -18551,6 +18555,14 @@ def _case_action_schema() -> dict[str, Any]:
         "inspect": ["include_html", "max_html_chars", "reveal_sensitive_values"],
         "interactive-only-snapshot": ["include_hidden", "max_nodes"],
         "interactive-snapshot": ["include_hidden", "max_nodes"],
+        "link-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "include_empty",
+            "same_origin_only",
+        ],
+        "list-snapshot": ["selector", "include_hidden", "max_nodes", "max_items"],
         "outline-snapshot": ["selector", "include_hidden", "max_nodes"],
         "page-info": [],
         "press": [],
@@ -18583,6 +18595,14 @@ def _case_action_schema() -> dict[str, Any]:
         "storage-remove": ["area"],
         "storage-set": ["area"],
         "submit": ["skip_validation"],
+        "table-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_rows",
+            "max_cells",
+        ],
+        "text-snapshot": ["selector", "include_hidden", "max_nodes", "max_chars"],
         "uncheck": [],
         "uncheck-label": ["exact", "case_sensitive"],
         "uncheck-role": ["name", "exact", "case_sensitive"],
@@ -18912,6 +18932,26 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "interactive-only-snapshot": ["nodes", "node_count", "url", "title"],
         "interactive-snapshot": ["nodes", "node_count", "url", "title"],
+        "link-snapshot": [
+            "links",
+            "link_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "list-snapshot": [
+            "lists",
+            "list_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
         "outline-snapshot": [
             "headings",
             "landmarks",
@@ -19104,6 +19144,26 @@ def _case_action_schema() -> dict[str, Any]:
             "skip_validation",
             "used_request_submit",
             "url",
+        ],
+        "table-snapshot": [
+            "tables",
+            "table_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "text-snapshot": [
+            "texts",
+            "text_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
         ],
         "uncheck": ["selector", "found", "checkable", "checked", "url"],
         "uncheck-label": [
@@ -19357,6 +19417,8 @@ def _case_action_schema() -> dict[str, Any]:
             "max_nodes": 80,
         },
         "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
+        "link-snapshot": {"action": "link-snapshot", "selector": "main"},
+        "list-snapshot": {"action": "list-snapshot", "selector": "main"},
         "outline-snapshot": {"action": "outline-snapshot", "selector": "main"},
         "page-info": {"action": "page-info"},
         "press": {"action": "press", "selector": "input[name=q]", "key": "Enter"},
@@ -19419,6 +19481,8 @@ def _case_action_schema() -> dict[str, Any]:
             "value": "true",
         },
         "submit": {"action": "submit", "selector": "form"},
+        "table-snapshot": {"action": "table-snapshot", "selector": "table"},
+        "text-snapshot": {"action": "text-snapshot", "selector": "main"},
         "uncheck": {"action": "uncheck", "selector": "input[name=subscribe]"},
         "uncheck-label": {"action": "uncheck-label", "label": "Subscribe"},
         "uncheck-role": {
@@ -20152,6 +20216,27 @@ def _run_browser_cli_case_step(
                 max_nodes=_case_step_int(step, "max_nodes", default=80),
             ),
         )
+    if action == "link-snapshot":
+        return _case_eval_expression(
+            page,
+            _link_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                include_empty=_case_step_bool(step, "include_empty"),
+                same_origin_only=_case_step_bool(step, "same_origin_only"),
+            ),
+        )
+    if action == "list-snapshot":
+        return _case_eval_expression(
+            page,
+            _list_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_items=_case_step_int(step, "max_items", default=50),
+            ),
+        )
     if action == "outline-snapshot":
         return _case_eval_expression(
             page,
@@ -20331,6 +20416,27 @@ def _run_browser_cli_case_step(
             _submit_expression(
                 selector=str(step["selector"]),
                 skip_validation=_case_step_bool(step, "skip_validation"),
+            ),
+        )
+    if action == "table-snapshot":
+        return _case_eval_expression(
+            page,
+            _table_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_rows=_case_step_int(step, "max_rows", default=50),
+                max_cells=_case_step_int(step, "max_cells", default=20),
+            ),
+        )
+    if action == "text-snapshot":
+        return _case_eval_expression(
+            page,
+            _text_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_chars=_case_step_int(step, "max_chars", default=500),
             ),
         )
     if action == "uncheck":
