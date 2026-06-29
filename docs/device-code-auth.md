@@ -65,7 +65,7 @@ Destructive scope `browser.contexts:delete` should be opt-in.
 CLI request:
 
 ```http
-POST /v1/auth/device/code
+POST /api/auth/device/code
 Content-Type: application/json
 ```
 
@@ -107,8 +107,17 @@ CLI behavior:
 
 - Print JSON containing `verification_uri_complete`, `user_code`, `expires_at`,
   and requested scopes.
-- With `auth login --open`, open `verification_uri_complete`.
-- Poll only after displaying the approval instructions.
+- In manual handoff mode, `auth login --open` opens the Connect from Codex URL.
+  In device-code mode with an endpoint configured, the same flag opens
+  `verification_uri_complete`.
+- Current CLI behavior: `browser-cli auth login --device-code` returns
+  `available=false`, `reason=browser_site_endpoint_missing`, required
+  device-code endpoints, and a manual env fallback when no endpoint is
+  configured. With `--device-code-base-url <url>` or
+  `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
+  `POST /api/auth/device/code`.
+- Poll only after displaying approval instructions; pass `--wait` to poll
+  `POST /api/auth/device/token` and save approved local scoped-token metadata.
 
 ### 2. Browser Approval
 
@@ -129,7 +138,7 @@ approval flow. The resulting token must be bound to exactly one project.
 CLI request:
 
 ```http
-POST /v1/auth/device/token
+POST /api/auth/device/token
 Content-Type: application/json
 ```
 
@@ -216,15 +225,62 @@ Suggested local credential shape:
 }
 ```
 
+Current CLI support:
+
+- `browser-cli auth status`, `browser-cli auth token-info`,
+  `browser-cli auth refresh`, `browser-cli auth logout`, and
+  `browser-cli doctor` read the fallback credentials file,
+  `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or
+  `--credentials-file`.
+- Output includes safe metadata such as `auth_source`, `runtime_auth_usable`,
+  `device_token.valid`, `device_token.expired`, `device_token.refresh_needed`,
+  `device_token.scopes`, and `device_token.token_id`.
+- `browser-cli auth status` and `browser-cli doctor` include `runtime_auth`.
+  Agents should read `runtime_auth.usable` and
+  `runtime_auth.bearer_runtime.required_support` before treating a local device
+  token as usable for browser actions. Required bearer-runtime support is:
+  SDK bearer-token client construction, API `Authorization: Bearer` support for
+  scoped browser permissions, and browser gateway CDP websocket bearer-token
+  authorization without `api_key` query parameters.
+- `browser-cli auth connect-requirements`, `auth scopes --include-site-contract`,
+  and `auth login` also expose those launch blockers as
+  `required_runtime_auth`.
+- `browser-cli auth token-info --required-scope <scope>` reports
+  `scope_check.required_scopes`, `scope_check.missing_scopes`, and
+  `scope_check.satisfied`.
+- `browser-cli auth refresh` reports local refresh state such as
+  `refresh_needed`, `has_refresh_token`, `refresh_available`, `refreshed`, and
+  `reason`. Without a token lifecycle base URL it remains inspection-only and
+  returns `refresh_available=false`; with `--token-base-url <url>`,
+  `LEXMOUNT_BROWSER_TOKEN_BASE_URL`, or
+  `LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL`, it calls
+  `POST /api/auth/token/refresh` and saves refreshed local metadata when the
+  response includes a usable access token.
+- `browser-cli auth logout` removes the local fallback credentials file and
+  reports `deleted`, `present_before`, `present_after`, `revoke_requested`, and
+  `revoke_available`.
+- `browser-cli auth logout --revoke` calls `POST /api/auth/token/revoke` when a
+  token lifecycle base URL is configured; without one it reports
+  `revoke_available=false` and still removes local metadata.
+- Output never includes access or refresh token values.
+- Until browser API bearer-token support lands, `runtime_auth_usable` remains
+  false for device tokens and browser actions still require env API-key
+  credentials.
+- `browser-cli doctor --smoke-session` currently validates env API-key browser
+  runtime access by creating and closing a temporary session after API
+  connectivity passes.
+
 ## CLI Commands
 
 Future command behavior:
 
 ```bash
 browser-cli auth login --open
+browser-cli auth login --device-code
+browser-cli auth connect-requirements
 browser-cli auth status
-browser-cli auth logout
 browser-cli auth token-info
+browser-cli auth logout
 browser-cli auth refresh
 ```
 
@@ -239,10 +295,20 @@ browser-cli auth refresh
 
 It must mask token values.
 
-`auth logout` should remove local credentials and optionally revoke the token:
+`auth refresh` reports local refresh eligibility. Configure a token lifecycle
+base URL to attempt remote refresh:
+
+```bash
+browser-cli auth refresh
+browser-cli auth refresh --token-base-url https://browser.lexmount.cn
+```
+
+`auth logout` removes local credentials. Configure a token lifecycle base URL to
+attempt remote revoke:
 
 ```bash
 browser-cli auth logout --revoke
+browser-cli auth logout --revoke --token-base-url https://browser.lexmount.cn
 ```
 
 ## Doctor Integration
@@ -261,8 +327,9 @@ When a device token is active, doctor should check:
 - API reachable
 - project id matches token project
 
-`doctor --smoke-session` may validate the token by creating and closing a
-temporary browser session.
+`doctor --smoke-session` currently validates env API-key credentials by
+creating and closing a temporary browser session. Once bearer-token runtime
+support lands, it should validate device-code tokens the same way.
 
 ## API Compatibility
 

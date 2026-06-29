@@ -3,18 +3,32 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import mimetypes
 import os
 import re
+import shutil
 import shlex
-from importlib.metadata import PackageNotFoundError, version
-from typing import Any, NoReturn
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+import sys
+import time
+import webbrowser
+from collections import Counter
+from datetime import datetime, timezone
+from importlib import resources as importlib_resources
+from importlib.metadata import PackageNotFoundError, version as distribution_version
+from pathlib import Path
+from typing import Any, Callable, NoReturn
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
+from browser_cli import __version__
 from lex_browser_runtime.browser.actions import (
     BrowserActionTarget,
     ClickRequest,
     EvalRequest,
+    get_or_create_page,
     OpenUrlRequest,
     ScreenshotRequest,
     SnapshotRequest,
@@ -23,7 +37,17 @@ from lex_browser_runtime.browser.actions import (
     resolve_browser_action_connect_url,
     run_browser_action,
 )
-from lex_browser_runtime.browser.cases import run_case_file, validate_case_file
+from lex_browser_runtime.browser.cases import (
+    append_event,
+    CaseRunSummary,
+    CaseStepRunResult,
+    CaseValidationResult,
+    load_case_file,
+    REQUIRED_CASE_FIELDS,
+    resolve_case_target,
+    run_case_step as _runtime_run_case_step,
+    SUPPORTED_CASE_ACTIONS,
+)
 from lex_browser_runtime.browser.lexmount import (
     LexmountBrowserAdmin,
     LexmountErrorInfo,
@@ -44,6 +68,366 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
     "browser:actions",
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
+AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
+DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
+DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
+DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
+TOKEN_LIFECYCLE_BASE_URL_ENV = "LEXMOUNT_BROWSER_TOKEN_BASE_URL"
+CONTEXT_REGISTRY_FILE_ENV = "LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE"
+DEVICE_TOKEN_REFRESH_WINDOW_SECONDS = 300
+COMMON_DOM_STATE_CHOICES = (
+    "attached",
+    "detached",
+    "visible",
+    "hidden",
+    "enabled",
+    "disabled",
+    "editable",
+    "readonly",
+    "checked",
+    "unchecked",
+    "focused",
+    "in-viewport",
+    "out-of-viewport",
+)
+DOCTOR_REQUIRED_COMMANDS = (
+    "commands",
+    "reference.list",
+    "reference.get",
+    "example.list",
+    "example.get",
+    "version",
+    "doctor",
+    "case.schema",
+    "case.scaffold",
+    "case.validate",
+    "case.run",
+    "auth.status",
+    "auth.scopes",
+    "auth.login",
+    "auth.connect-requirements",
+    "auth.export-env",
+    "context.pick",
+    "context.status",
+    "session.create",
+    "session.close",
+    "action.guide",
+    "action.open-url",
+    "action.wait-selector",
+    "action.click",
+    "action.type",
+    "action.screenshot",
+    "action.eval",
+    "action.snapshot",
+    "action.page-info",
+    "action.set-viewport",
+    "action.reload",
+    "action.go-back",
+    "action.go-forward",
+    "action.screenshot-selector",
+    "action.screenshot-role",
+    "action.wait-url",
+    "action.wait-title",
+    "action.wait-load-state",
+    "action.wait-network-idle",
+    "action.get-text",
+    "action.get-text-role",
+    "action.exists",
+    "action.exists-role",
+    "action.count",
+    "action.wait-count",
+    "action.wait-state",
+    "action.wait-state-role",
+    "action.query",
+    "action.inspect",
+    "action.get-attribute",
+    "action.get-attribute-role",
+    "action.wait-attribute",
+    "action.wait-attribute-role",
+    "action.scroll",
+    "action.bounding-box",
+    "action.bounding-box-role",
+    "action.scroll-into-view",
+    "action.scroll-into-view-role",
+    "action.select-option",
+    "action.select-label",
+    "action.select-role",
+    "action.check",
+    "action.uncheck",
+    "action.check-label",
+    "action.check-role",
+    "action.uncheck-label",
+    "action.uncheck-role",
+    "action.hover",
+    "action.hover-role",
+    "action.press",
+    "action.press-role",
+    "action.press-key",
+    "action.click-text",
+    "action.click-role",
+    "action.click-index",
+    "action.double-click",
+    "action.double-click-role",
+    "action.right-click",
+    "action.right-click-role",
+    "action.focus",
+    "action.focus-role",
+    "action.fill-label",
+    "action.fill-role",
+    "action.get-value",
+    "action.get-value-role",
+    "action.wait-value",
+    "action.wait-value-role",
+    "action.blur",
+    "action.blur-role",
+    "action.clear",
+    "action.clear-role",
+    "action.set-value",
+    "action.set-file-input",
+    "action.dispatch-event",
+    "action.submit",
+    "action.accessibility-snapshot",
+    "action.form-snapshot",
+    "action.interactive-snapshot",
+    "action.interactive-only-snapshot",
+    "action.link-snapshot",
+    "action.table-snapshot",
+    "action.list-snapshot",
+    "action.text-snapshot",
+    "action.outline-snapshot",
+    "action.storage-get",
+    "action.storage-set",
+    "action.storage-remove",
+    "action.storage-clear",
+    "action.wait-storage",
+    "action.cookie-get",
+    "action.cookie-set",
+    "action.cookie-delete",
+    "action.cookie-clear",
+    "action.wait-cookie",
+    "action.wait-text",
+    "action.wait-role",
+    "action.dialog-snapshot",
+    "action.wait-dialog",
+    "action.frame-snapshot",
+    "action.wait-frame",
+    "action.performance-snapshot",
+    "action.network-snapshot",
+    "action.wait-network",
+    "action.console-snapshot",
+    "action.wait-console",
+)
+DOCTOR_REQUIRED_REFERENCES = ("action_playbook",)
+DOCTOR_REQUIRED_EXAMPLES = (
+    "agent_playbook",
+    "page_inspection_case",
+    "form_fill_case",
+)
+DOCTOR_REQUIRED_WORKFLOWS = (
+    "setup_and_verify",
+    "connect_from_codex_site_requirements",
+    "connect_from_codex_auth",
+    "device_code_auth",
+    "scoped_token_lifecycle",
+    "session_recovery",
+    "one_off_page_task",
+    "navigation_flow",
+    "link_navigation",
+    "case_file_task",
+    "persistent_login_state",
+    "browser_state_management",
+    "form_interaction",
+    "file_upload",
+    "dialog_frame_handling",
+    "interactive_targeting",
+    "mouse_interaction",
+    "visual_capture",
+    "semantic_waits",
+    "menu_keyboard_flow",
+    "content_extraction",
+    "state_waits",
+    "page_diagnostics",
+)
+DOCTOR_REQUIRED_WORKFLOW_STEPS = {
+    "setup_and_verify": (
+        "auth_status",
+        "doctor",
+        "smoke_session",
+    ),
+    "connect_from_codex_auth": (
+        "auth_status",
+        "inspect_scope_catalog",
+        "auth_login",
+        "export_env",
+        "doctor",
+    ),
+    "connect_from_codex_site_requirements": (
+        "inspect_scope_catalog",
+        "inspect_site_requirements",
+        "verify_manual_handoff",
+        "verify_device_code_handoff",
+        "doctor_after_credentials",
+    ),
+    "device_code_auth": (
+        "request_device_code",
+        "fallback_manual_env",
+        "verify_auth_status",
+        "doctor",
+    ),
+    "scoped_token_lifecycle": (
+        "status_scoped_token",
+        "inspect_scope_catalog",
+        "inspect_required_scopes",
+        "refresh_if_needed",
+        "verify_browser_readiness",
+        "logout_or_revoke_when_requested",
+    ),
+    "session_recovery": (
+        "list_active_sessions",
+        "inspect_session",
+        "keepalive_session",
+        "close_stale_session",
+        "create_replacement_session",
+    ),
+    "one_off_page_task": (
+        "create_session",
+        "open_url",
+        "find_targets",
+        "close_session",
+    ),
+    "navigation_flow": (
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_navigation_action",
+        "run_navigation_action",
+        "verify_navigation_result",
+    ),
+    "link_navigation": (
+        "inspect_action_guide",
+        "inspect_current_page",
+        "inspect_links",
+        "choose_link_target",
+        "activate_link",
+        "verify_navigation_result",
+    ),
+    "case_file_task": (
+        "inspect_case_commands",
+        "inspect_case_schema",
+        "inspect_semantic_case_action",
+        "inspect_form_case_example",
+        "scaffold_case_file",
+        "scaffold_form_case_file",
+        "validate_case_file",
+        "run_case_file",
+    ),
+    "persistent_login_state": (
+        "dry_run_context_pick",
+        "inspect_context_status",
+        "create_session_with_context",
+        "close_session",
+    ),
+    "browser_state_management": (
+        "inspect_action_guide",
+        "inspect_page_info",
+        "read_existing_state",
+        "modify_state",
+        "wait_for_state",
+        "cleanup_state",
+    ),
+    "form_interaction": (
+        "inspect_action_guide",
+        "inspect_form",
+        "fill_labeled_field",
+        "choose_labeled_option",
+        "check_labeled_control",
+        "wait_submit_ready",
+        "submit_form",
+        "verify_result",
+    ),
+    "file_upload": (
+        "inspect_action_guide",
+        "inspect_upload_controls",
+        "attach_files",
+        "verify_upload_state",
+        "submit_if_requested",
+    ),
+    "dialog_frame_handling": (
+        "inspect_action_guide",
+        "inspect_page_context",
+        "inspect_or_wait_dialog",
+        "handle_dialog_control",
+        "inspect_or_wait_frame",
+        "verify_result",
+    ),
+    "interactive_targeting": (
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "inspect_accessibility_context",
+        "choose_click_method",
+        "wait_target_ready",
+        "activate_target",
+        "verify_after_click",
+    ),
+    "mouse_interaction": (
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "choose_mouse_action",
+        "run_mouse_action",
+        "verify_result",
+    ),
+    "visual_capture": (
+        "inspect_action_guide",
+        "inspect_page_context",
+        "set_viewport_if_needed",
+        "choose_capture_target",
+        "capture_visual_evidence",
+        "verify_capture_artifact",
+    ),
+    "semantic_waits": (
+        "inspect_action_guide",
+        "inspect_current_page",
+        "choose_wait_predicate",
+        "wait_for_semantic_state",
+        "verify_observed_state",
+    ),
+    "menu_keyboard_flow": (
+        "inspect_action_guide",
+        "inspect_interactive_targets",
+        "open_or_focus_menu",
+        "verify_menu_state",
+        "inspect_menu_items",
+        "send_keyboard_input",
+        "verify_result",
+    ),
+    "content_extraction": (
+        "inspect_action_guide",
+        "inspect_page_info",
+        "choose_extraction_surface",
+        "extract_content",
+        "verify_extraction_bounds",
+    ),
+    "state_waits": (
+        "inspect_action_guide",
+        "inspect_current_state",
+        "choose_wait_condition",
+        "wait_for_state",
+        "verify_after_wait",
+    ),
+    "page_diagnostics": (
+        "inspect_action_guide",
+        "page_info_before",
+        "set_viewport",
+        "install_console_capture",
+        "install_network_capture",
+        "reproduce_issue",
+        "read_console_entries",
+        "read_network_entries",
+        "capture_visible_state",
+    ),
+}
+COMMAND_ALIASES = {
+    "action.interactive-only-snapshot": "action.interactive-snapshot",
+}
 COMMON_DOM_EVENT_NAMES = (
     "input",
     "change",
@@ -57,8 +441,37 @@ COMMON_DOM_EVENT_NAMES = (
     "mouseenter",
     "mousemove",
 )
-CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle"}
-CONTEXT_LOCKED_STATUSES = {"locked", "busy", "in_use", "in-use", "active", "running"}
+CONTEXT_REUSABLE_STATUSES = {"available", "ready", "idle", "free", "unlocked"}
+CONTEXT_LOCKED_STATUSES = {
+    "locked",
+    "busy",
+    "in_use",
+    "active",
+    "running",
+    "reserved",
+    "leased",
+    "occupied",
+}
+CONTEXT_UNAVAILABLE_STATUSES = {
+    "unavailable",
+    "failed",
+    "error",
+    "closed",
+    "deleted",
+    "deleting",
+    "expired",
+    "disabled",
+    "archived",
+    "terminated",
+    "stopped",
+}
+CONTEXT_SELECTION_STRATEGIES = ("first", "last", "newest", "oldest")
+CONTEXT_SELECTION_TIMESTAMP_FIELDS = (
+    "last_used_at",
+    "last_active_at",
+    "updated_at",
+    "created_at",
+)
 SENSITIVE_PAYLOAD_KEYS = {
     "api_key",
     "apikey",
@@ -142,6 +555,2616 @@ class JsonArgumentParser(argparse.ArgumentParser):
         )
 
 
+def _parser_has_option(parser: argparse.ArgumentParser, option: str) -> bool:
+    return any(option in action.option_strings for action in parser._actions)
+
+
+def _add_json_compatibility_flag(parser: argparse.ArgumentParser) -> None:
+    if not _parser_has_option(parser, "--json"):
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help=argparse.SUPPRESS,
+        )
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for subparser in action.choices.values():
+                _add_json_compatibility_flag(subparser)
+
+
+def _subparser_actions(
+    parser: argparse.ArgumentParser,
+) -> list[argparse._SubParsersAction[Any]]:
+    return [
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    ]
+
+
+def _preferred_option(action: argparse.Action) -> str | None:
+    if not action.option_strings or action.help is argparse.SUPPRESS:
+        return None
+    for option in action.option_strings:
+        if option.startswith("--"):
+            return option
+    return action.option_strings[0]
+
+
+def _catalog_default(value: Any) -> Any:
+    if value is argparse.SUPPRESS:
+        return None
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    return str(value)
+
+
+def _catalog_option(action: argparse.Action) -> dict[str, Any] | None:
+    if not action.option_strings or action.help is argparse.SUPPRESS:
+        return None
+    if isinstance(action, argparse._HelpAction):
+        return None
+
+    takes_value = not isinstance(
+        action,
+        argparse._StoreTrueAction | argparse._StoreFalseAction,
+    )
+    option: dict[str, Any] = {
+        "flags": list(action.option_strings),
+        "dest": action.dest,
+        "required": bool(getattr(action, "required", False)),
+        "takes_value": takes_value,
+    }
+    if action.help:
+        option["help"] = str(action.help)
+    choices = getattr(action, "choices", None)
+    if choices is not None:
+        option["choices"] = [str(choice) for choice in choices]
+    default = _catalog_default(getattr(action, "default", None))
+    if default is not None:
+        option["default"] = default
+    nargs = getattr(action, "nargs", None)
+    if nargs not in (None, 0):
+        option["nargs"] = nargs
+    if isinstance(action, argparse._AppendAction):
+        option["repeatable"] = True
+    return option
+
+
+def _catalog_required_one_of(
+    parser: argparse.ArgumentParser,
+) -> list[list[str]]:
+    groups: list[list[str]] = []
+    for group in parser._mutually_exclusive_groups:
+        if not group.required:
+            continue
+        options = [
+            option
+            for action in group._group_actions
+            if (option := _preferred_option(action)) is not None
+        ]
+        if options:
+            groups.append(options)
+    return groups
+
+
+def _catalog_leaf_commands(
+    parser: argparse.ArgumentParser,
+) -> list[dict[str, Any]]:
+    subparser_actions = _subparser_actions(parser)
+    if subparser_actions:
+        commands: list[dict[str, Any]] = []
+        for subparser_action in subparser_actions:
+            for subparser in subparser_action.choices.values():
+                commands.extend(_catalog_leaf_commands(subparser))
+        return commands
+
+    name = _command_from_prog(parser.prog)
+    path = name.split(".")
+    options = [
+        option
+        for action in parser._actions
+        if (option := _catalog_option(action)) is not None
+    ]
+    required_options = [
+        option
+        for action in parser._actions
+        if getattr(action, "required", False)
+        and (option := _preferred_option(action)) is not None
+    ]
+    target_options = {
+        "--session-id",
+        "--connect-url",
+        "--direct-url",
+    }
+    option_flags = {
+        flag
+        for option in options
+        for flag in option.get("flags", [])
+        if isinstance(flag, str)
+    }
+    command: dict[str, Any] = {
+        "name": name,
+        "path": path,
+        "group": path[0],
+        "usage": parser.format_usage().strip(),
+        "options": options,
+        "required_options": required_options,
+        "required_one_of": _catalog_required_one_of(parser),
+    }
+    if target_options.intersection(option_flags):
+        command["browser_target"] = {
+            "required": True,
+            "exactly_one_of": sorted(target_options.intersection(option_flags)),
+        }
+    if name in COMMAND_ALIASES:
+        command["alias_of"] = COMMAND_ALIASES[name]
+        command["canonical_name"] = COMMAND_ALIASES[name]
+    aliases = sorted(
+        alias for alias, canonical in COMMAND_ALIASES.items() if canonical == name
+    )
+    if aliases:
+        command["aliases"] = aliases
+    return [command]
+
+
+def _agent_references() -> dict[str, Any]:
+    return {
+        "action_playbook": {
+            "path": "references/action-playbook.md",
+            "content_command": "browser-cli reference get --id action_playbook",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:action-playbook.md",
+            "format": "markdown",
+            "purpose": (
+                "Choose browser actions, parse structured action results, handle "
+                "action masking, and follow common page-operation recipes."
+            ),
+            "load_when": [
+                "Selecting between semantic actions, selectors, snapshots, or eval.",
+                "Filling forms, choosing visible controls, menus, dialogs, or frames.",
+                "Diagnosing fetch/XHR, console/page errors, or runtime page failures.",
+                "Inspecting storage, cookies, masked action values, or structured result fields.",
+            ],
+            "related_workflows": [
+                "state_waits",
+                "content_extraction",
+                "browser_state_management",
+                "one_off_page_task",
+                "navigation_flow",
+                "link_navigation",
+                "form_interaction",
+                "file_upload",
+                "dialog_frame_handling",
+                "interactive_targeting",
+                "mouse_interaction",
+                "visual_capture",
+                "semantic_waits",
+                "menu_keyboard_flow",
+                "page_diagnostics",
+            ],
+            "covers": [
+                "action command examples",
+                "structured result fields",
+                "secret and URL masking rules",
+                "action selection order",
+                "common task recipes",
+                "browser target contract",
+            ],
+            "grep_patterns": [
+                "Action Selection Order",
+                "Common Task Recipes",
+                "Structured Results And Masking",
+                "Target Contract",
+            ],
+        }
+    }
+
+
+def _read_agent_reference_content(reference_id: str) -> str:
+    reference = _agent_references().get(reference_id)
+    if reference is None:
+        raise KeyError(reference_id)
+    package_resource = str(reference["package_resource"])
+    package, resource_name = package_resource.split(":", 1)
+    return (
+        importlib_resources.files(package)
+        .joinpath(resource_name)
+        .read_text(encoding="utf-8")
+    )
+
+
+def _agent_examples() -> dict[str, Any]:
+    return {
+        "agent_playbook": {
+            "path": "examples/agent-playbook.md",
+            "content_command": "browser-cli example get --id agent_playbook",
+            "metadata_command": "browser-cli example list",
+            "package_resource": "browser_cli.agent_examples:agent-playbook.md",
+            "format": "markdown",
+            "purpose": (
+                "Show a complete agent-facing browser workflow with setup, "
+                "doctor checks, context reuse, diagnostics, and case files."
+            ),
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_auth",
+                "session_recovery",
+                "case_file_task",
+                "browser_state_management",
+                "navigation_flow",
+                "link_navigation",
+                "form_interaction",
+                "file_upload",
+                "dialog_frame_handling",
+                "interactive_targeting",
+                "mouse_interaction",
+                "visual_capture",
+                "semantic_waits",
+                "menu_keyboard_flow",
+                "content_extraction",
+                "state_waits",
+                "page_diagnostics",
+            ],
+            "load_when": [
+                "Starting from a fresh Codex/browser-cli setup.",
+                "Choosing a workflow for a common browser task.",
+                "Writing or reviewing Skill instructions for browser-cli.",
+            ],
+            "grep_patterns": [
+                "First Checks",
+                "Case Files",
+                "Action Selection",
+                "browser-cli doctor --json",
+                "browser-cli case scaffold",
+            ],
+        },
+        "page_inspection_case": {
+            "path": "examples/cases/page-inspection.yaml",
+            "content_command": "browser-cli example get --id page_inspection_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:page-inspection.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a temporary-session page inspection case "
+                "that opens example.com, snapshots content, and saves a screenshot."
+            ),
+            "related_workflows": ["case_file_task", "one_off_page_task"],
+            "load_when": [
+                "Creating a repeatable page inspection smoke test.",
+                "Needing a small browser case file template with artifacts.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: page-inspection",
+                "action: open-url",
+                "action: snapshot",
+                "action: screenshot",
+            ],
+        },
+        "form_fill_case": {
+            "path": "examples/cases/form-fill.yaml",
+            "content_command": "browser-cli example get --id form_fill_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": "browser_cli.agent_examples.cases:form-fill.yaml",
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local form-fill case that builds a tiny "
+                "page, fills a field, clicks submit, verifies state, and screenshots."
+            ),
+            "related_workflows": ["case_file_task", "form_interaction"],
+            "load_when": [
+                "Creating a repeatable form interaction smoke test.",
+                "Needing a small case file template for fill/click/verify steps.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: form-fill",
+                "action: eval",
+                "action: fill-label",
+                "action: click-role",
+                "action: wait-text",
+                "action: get-value-role",
+                "action: screenshot",
+            ],
+        },
+    }
+
+
+def _read_agent_example_content(example_id: str) -> str:
+    example = _agent_examples().get(example_id)
+    if example is None:
+        raise KeyError(example_id)
+    package_resource = str(example["package_resource"])
+    package, resource_name = package_resource.split(":", 1)
+    return (
+        importlib_resources.files(package)
+        .joinpath(resource_name)
+        .read_text(encoding="utf-8")
+    )
+
+
+def _command_catalog() -> dict[str, Any]:
+    parser = build_parser()
+    commands = _catalog_leaf_commands(parser)
+    groups = _dedupe_preserving_order([str(command["group"]) for command in commands])
+    return {
+        "schema_version": 1,
+        "groups": groups,
+        "command_count": len(commands),
+        "commands": commands,
+        "json_output": {
+            "always_json": True,
+            "json_flag": "accepted as a compatibility no-op at the top level and after subcommands",
+            "argument_errors": "emit JSON with error=argument_error and usage",
+        },
+        "secret_policy": {
+            "default_masking": True,
+            "never_paste": [
+                "LEXMOUNT_API_KEY",
+                "access_token",
+                "refresh_token",
+                "full direct connect URLs containing api_key",
+            ],
+        },
+        "agent_references": _agent_references(),
+        "agent_examples": _agent_examples(),
+        "agent_entrypoints": {
+            "setup": [
+                "browser-cli auth status",
+                "browser-cli auth scopes",
+                "browser-cli auth refresh",
+                "browser-cli auth connect-requirements",
+                "browser-cli auth login",
+                "browser-cli auth export-env",
+                AGENT_DOCTOR_COMMAND,
+                "browser-cli doctor --smoke-session",
+            ],
+            "connect_from_codex_site_requirements": [
+                "browser-cli auth scopes --include-site-contract",
+                "browser-cli auth connect-requirements",
+                "browser-cli auth connect-requirements --project-id <project_id>",
+                "browser-cli auth login",
+                "browser-cli auth login --device-code",
+                AGENT_DOCTOR_COMMAND,
+            ],
+            "connect_from_codex_auth": [
+                "browser-cli auth status",
+                "browser-cli auth scopes",
+                "browser-cli auth connect-requirements",
+                "browser-cli auth login",
+                "browser-cli auth login --open",
+                "browser-cli auth export-env",
+                AGENT_DOCTOR_COMMAND,
+            ],
+            "device_code_auth": [
+                "browser-cli auth connect-requirements",
+                "browser-cli auth login --device-code",
+                "browser-cli auth login",
+                "browser-cli auth export-env",
+                "browser-cli auth status",
+                AGENT_DOCTOR_COMMAND,
+            ],
+            "scoped_token_lifecycle": [
+                "browser-cli auth status",
+                "browser-cli auth scopes --scope browser:actions",
+                "browser-cli auth token-info --required-scope browser.actions:run",
+                "browser-cli auth refresh",
+                AGENT_DOCTOR_COMMAND,
+                "browser-cli auth logout --revoke",
+            ],
+            "session_recovery": [
+                "browser-cli session list --status active",
+                "browser-cli session get --session-id <session_id>",
+                "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive",
+                "browser-cli session close --session-id <session_id>",
+                "browser-cli session create",
+            ],
+            "one_off_page_task": [
+                "browser-cli session create",
+                "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id>",
+                "browser-cli session close --session-id <session_id>",
+            ],
+            "navigation_flow": [
+                "browser-cli action guide --task navigation_flow",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                'browser-cli action wait-title --session-id <session_id> --title "<title text>"',
+                "browser-cli action reload --session-id <session_id>",
+                "browser-cli action go-back --session-id <session_id>",
+                "browser-cli action go-forward --session-id <session_id>",
+            ],
+            "link_navigation": [
+                "browser-cli action guide --task link_navigation",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                'browser-cli action wait-role --session-id <session_id> --role link --name "Docs"',
+                'browser-cli action click-role --session-id <session_id> --role link --name "Docs"',
+                'browser-cli action click-text --session-id <session_id> --text "Docs"',
+                'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "case_file_task": [
+                "browser-cli commands --group case",
+                "browser-cli case schema",
+                "browser-cli case schema --action fill-label",
+                "browser-cli example get --id form_fill_case --metadata-only",
+                "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+                "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                "browser-cli case validate --file <case.yaml>",
+                "browser-cli case run --file <case.yaml> --close-created-session",
+            ],
+            "persistent_login_state": [
+                'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
+                "browser-cli context status --context-id <context_id>",
+                'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
+            ],
+            "browser_state_management": [
+                "browser-cli action guide --task browser_state_management",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action storage-get --session-id <session_id> --area local --key <key>",
+                "browser-cli action storage-set --session-id <session_id> --area local --key <key> --value <value>",
+                "browser-cli action wait-storage --session-id <session_id> --area local --key <key> --value <value> --match exact",
+                "browser-cli action storage-remove --session-id <session_id> --area session --key <key>",
+                "browser-cli action storage-clear --session-id <session_id> --area session --prefix <prefix>",
+                "browser-cli action cookie-get --session-id <session_id> --name <name>",
+                "browser-cli action cookie-set --session-id <session_id> --name <name> --value <value> --path /",
+                "browser-cli action wait-cookie --session-id <session_id> --name <name> --value <value> --match exact",
+                "browser-cli action cookie-delete --session-id <session_id> --name <name> --path /",
+            ],
+            "form_interaction": [
+                "browser-cli action guide --task form_interaction",
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
+                'browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"',
+                'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
+                'browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"',
+                'browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled',
+                'browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"',
+                'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
+            ],
+            "file_upload": [
+                "browser-cli action guide --task file_upload",
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./upload.txt',
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./front.png --file ./back.png',
+                'browser-cli action wait-text --session-id <session_id> --text "uploaded"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
+            ],
+            "dialog_frame_handling": [
+                "browser-cli action guide --task dialog_frame_handling",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action wait-dialog --session-id <session_id> --text <text> --modal-only",
+                "browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 40 --max-controls 40",
+                'browser-cli action click-role --session-id <session_id> --role button --name "OK"',
+                "browser-cli action wait-frame --session-id <session_id> --url <path> --url-match contains --readable-only",
+                'browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 40 --max-chars 1000',
+            ],
+            "interactive_targeting": [
+                "browser-cli action guide --task interactive_targeting",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                'browser-cli action wait-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action exists-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action get-text-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action hover-role --session-id <session_id> --role button --name "Menu"',
+                'browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter',
+                'browser-cli action click-text --session-id <session_id> --text "Submit"',
+                'browser-cli action click-index --session-id <session_id> --selector "button" --index 0',
+            ],
+            "mouse_interaction": [
+                "browser-cli action guide --task mouse_interaction",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                'browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"',
+                'browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"',
+                'browser-cli action double-click --session-id <session_id> --selector ".row"',
+                'browser-cli action right-click --session-id <session_id> --selector ".row"',
+                'browser-cli action wait-text --session-id <session_id> --text "Context menu"',
+            ],
+            "visual_capture": [
+                "browser-cli action guide --task visual_capture",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                'browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png',
+                "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+            ],
+            "semantic_waits": [
+                "browser-cli action guide --task semantic_waits",
+                "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action wait-role --session-id <session_id> --role button --name "Submit" --state visible',
+                'browser-cli action wait-text --session-id <session_id> --text "Saved" --match contains',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact',
+                'browser-cli action exists-role --session-id <session_id> --role button --name "Submit"',
+                'browser-cli action get-text-role --session-id <session_id> --role alert --name "Status"',
+                'browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"',
+            ],
+            "menu_keyboard_flow": [
+                "browser-cli action guide --task menu_keyboard_flow",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                'browser-cli action hover-role --session-id <session_id> --role button --name "Menu"',
+                'browser-cli action focus-role --session-id <session_id> --role button --name "Menu"',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact',
+                'browser-cli action list-snapshot --session-id <session_id> --selector "[role=menu], [role=listbox], nav" --max-items 50',
+                "browser-cli action press-key --session-id <session_id> --key Escape",
+            ],
+            "content_extraction": [
+                "browser-cli action guide --task content_extraction",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+                "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200",
+                "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
+            ],
+            "state_waits": [
+                "browser-cli action guide --task state_waits",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "<name>" --state enabled',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded --value true --match exact',
+                'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+                "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains",
+                "browser-cli action wait-console --session-id <session_id> --source pageerror",
+            ],
+            "page_diagnostics": [
+                "browser-cli action guide --task page_diagnostics",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                "browser-cli action console-snapshot --session-id <session_id> --install-only",
+                "browser-cli action network-snapshot --session-id <session_id> --install-only",
+                "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+                'browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/browser-cli-target.png',
+                "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
+            ],
+        },
+        "agent_workflows": {
+            "setup_and_verify": {
+                "purpose": "Verify local credentials and browser action readiness before the first browser action.",
+                "steps": [
+                    {
+                        "id": "auth_status",
+                        "command": "browser-cli auth status",
+                        "read": [
+                            "configured",
+                            "auth_source",
+                            "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.source",
+                            "device_token.valid",
+                        ],
+                    },
+                    {
+                        "id": "doctor",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "warning_checks",
+                            "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                    {
+                        "id": "smoke_session",
+                        "command": "browser-cli doctor --smoke-session",
+                        "optional": True,
+                        "success_condition": "browser_smoke_session.status=pass",
+                        "read": [
+                            "browser_smoke_session.status",
+                            "browser_smoke_session.created",
+                            "browser_smoke_session.closed",
+                            "browser_smoke_session.session_id",
+                        ],
+                        "on_failure_read": [
+                            "browser_smoke_session.status",
+                            "browser_smoke_session.stage",
+                            "browser_smoke_session.fix.commands",
+                        ],
+                    },
+                ],
+            },
+            "connect_from_codex_auth": {
+                "purpose": "Guide a local user through Connect from Codex credentials and verify browser readiness.",
+                "steps": [
+                    {
+                        "id": "auth_status",
+                        "command": "browser-cli auth status",
+                        "read": [
+                            "configured",
+                            "auth_source",
+                            "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.source",
+                            "device_token.valid",
+                        ],
+                    },
+                    {
+                        "id": "inspect_scope_catalog",
+                        "command": "browser-cli auth scopes",
+                        "read": [
+                            "default_scopes",
+                            "scopes",
+                            "unknown_scopes",
+                        ],
+                    },
+                    {
+                        "id": "auth_login",
+                        "command": "browser-cli auth login",
+                        "read": [
+                            "selected_flow",
+                            "available",
+                            "manual_env_available",
+                            "device_code_available",
+                            "connect_from_codex.url",
+                            "connect_from_codex.requested_scope_details",
+                            "connect_from_codex.required_runtime_auth",
+                            "handoff.setup_blocks",
+                            "handoff.verification.doctor_command",
+                        ],
+                        "on_user_action": "Open connect_from_codex.url or run browser-cli auth login --open, then paste generated env commands into the local shell only.",
+                    },
+                    {
+                        "id": "export_env",
+                        "command": "browser-cli auth export-env",
+                        "local_shell_only": True,
+                        "read": [
+                            "usable",
+                            "unusable_exports",
+                        ],
+                        "secret_handling": "Do not paste revealed API keys into chat, logs, docs, or commits.",
+                    },
+                    {
+                        "id": "doctor",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                ],
+            },
+            "connect_from_codex_site_requirements": {
+                "purpose": "Inspect the browser.lexmount.cn /connect/codex frontend, API, token lifecycle, and verification requirements before implementing or diagnosing Connect from Codex.",
+                "steps": [
+                    {
+                        "id": "inspect_scope_catalog",
+                        "command": "browser-cli auth scopes --include-site-contract",
+                        "read": [
+                            "default_scopes",
+                            "scopes",
+                            "browser_site_contract.url",
+                            "browser_site_contract.required_query_parameters",
+                            "browser_site_contract.scope_ui_fields",
+                            "browser_site_contract.site_capability_status.missing",
+                        ],
+                    },
+                    {
+                        "id": "inspect_site_requirements",
+                        "command": "browser-cli auth connect-requirements",
+                        "read": [
+                            "connect_from_codex.url",
+                            "connect_from_codex.device_code_url",
+                            "connect_from_codex.site_capability_status.missing",
+                            "connect_from_codex.site_capabilities",
+                            "required_device_code_endpoints",
+                            "required_browser_site_support",
+                            "required_token_lifecycle",
+                            "required_runtime_auth",
+                            "setup_blocks",
+                            "verification.doctor_command",
+                        ],
+                    },
+                    {
+                        "id": "verify_manual_handoff",
+                        "command": "browser-cli auth login",
+                        "optional": True,
+                        "read": [
+                            "selected_flow",
+                            "manual_env_available",
+                            "connect_from_codex.url",
+                            "connect_from_codex.site_capability_status.missing",
+                            "connect_from_codex.required_runtime_auth",
+                            "handoff.setup_blocks",
+                        ],
+                    },
+                    {
+                        "id": "verify_device_code_handoff",
+                        "command": "browser-cli auth login --device-code",
+                        "optional": True,
+                        "read": [
+                            "selected_flow",
+                            "available",
+                            "device_code_available",
+                            "reason",
+                            "device_code.required_endpoints",
+                            "device_code.required_browser_site_support",
+                            "fallback_handoff.setup_blocks",
+                            "connect_from_codex.required_runtime_auth",
+                        ],
+                    },
+                    {
+                        "id": "doctor_after_credentials",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "optional": True,
+                        "success_condition": "ok=true and ready_for_browser_actions=true after the user configures credentials",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "warning_checks",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                ],
+            },
+            "device_code_auth": {
+                "purpose": "Attempt device-code approval, read browser.lexmount.cn readiness gaps, and fall back to manual env setup until device-code endpoints are configured.",
+                "steps": [
+                    {
+                        "id": "request_device_code",
+                        "command": "browser-cli auth login --device-code",
+                        "success_condition": "available=true with approval instructions or saved credentials, or available=false with fallback_flow=manual_env",
+                        "read": [
+                            "selected_flow",
+                            "available",
+                            "device_code_available",
+                            "authenticated",
+                            "credentials_saved",
+                            "reason",
+                            "device_code.available",
+                            "device_code.reason",
+                            "device_code.required_endpoints",
+                            "device_code.required_browser_site_support",
+                            "device_code.verification_uri",
+                            "device_code.verification_uri_complete",
+                            "device_code.user_code",
+                            "connect_from_codex.required_runtime_auth",
+                            "polling.requested",
+                            "polling.authenticated",
+                            "polling.status",
+                            "credentials.saved",
+                            "credentials.credentials_file",
+                            "credentials.device_token.valid",
+                            "connect_from_codex.site_capability_status.missing",
+                            "fallback_flow",
+                            "fallback_handoff.setup_blocks",
+                            "fallback_handoff.verification.doctor_command",
+                        ],
+                    },
+                    {
+                        "id": "fallback_manual_env",
+                        "command": "browser-cli auth login",
+                        "optional": True,
+                        "read": [
+                            "selected_flow",
+                            "manual_env_available",
+                            "device_code_available",
+                            "connect_from_codex.url",
+                            "connect_from_codex.required_runtime_auth",
+                            "handoff.setup_blocks",
+                            "handoff.verification.doctor_command",
+                        ],
+                        "on_user_action": "Use this fallback when request_device_code reports available=false; paste generated env commands into the local shell only.",
+                    },
+                    {
+                        "id": "verify_auth_status",
+                        "command": "browser-cli auth status",
+                        "read": [
+                            "configured",
+                            "auth_source",
+                            "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.bearer_runtime.required_support",
+                            "device_token.present",
+                            "device_token.valid",
+                            "missing_env",
+                        ],
+                    },
+                    {
+                        "id": "doctor",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                ],
+            },
+            "scoped_token_lifecycle": {
+                "purpose": "Inspect, refresh, verify, and locally remove scoped device-token credentials without exposing token values.",
+                "steps": [
+                    {
+                        "id": "status_scoped_token",
+                        "command": "browser-cli auth status",
+                        "read": [
+                            "configured",
+                            "auth_source",
+                            "runtime_auth_usable",
+                            "runtime_auth.usable",
+                            "runtime_auth.bearer_runtime.available",
+                            "runtime_auth.bearer_runtime.required_support",
+                            "device_token.present",
+                            "device_token.valid",
+                            "device_token.expired",
+                            "device_token.refresh_needed",
+                            "device_token.scopes",
+                            "missing_env",
+                        ],
+                    },
+                    {
+                        "id": "inspect_scope_catalog",
+                        "command": "browser-cli auth scopes --scope browser:actions",
+                        "read": [
+                            "scopes",
+                            "scopes[0].permissions",
+                            "scopes[0].risk",
+                            "scopes[0].destructive",
+                            "unknown_scopes",
+                        ],
+                    },
+                    {
+                        "id": "inspect_required_scopes",
+                        "command": "browser-cli auth token-info --required-scope browser.actions:run",
+                        "read": [
+                            "present",
+                            "valid",
+                            "expired",
+                            "refresh_needed",
+                            "device_token.project_id",
+                            "device_token.scopes",
+                            "scope_check.satisfied",
+                            "scope_check.missing_scopes",
+                        ],
+                    },
+                    {
+                        "id": "refresh_if_needed",
+                        "command": "browser-cli auth refresh",
+                        "optional": True,
+                        "read": [
+                            "present",
+                            "valid",
+                            "refresh_needed",
+                            "has_refresh_token",
+                            "refresh_available",
+                            "refreshed",
+                            "reason",
+                            "refresh_endpoint",
+                            "remote_refresh.attempted",
+                            "remote_refresh.status_code",
+                            "remote_refresh.error",
+                            "credentials.saved",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli auth login",
+                            "browser-cli auth export-env",
+                        ],
+                    },
+                    {
+                        "id": "verify_browser_readiness",
+                        "command": AGENT_DOCTOR_COMMAND,
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                        "on_failure_read": [
+                            "failed_checks",
+                            "warning_checks",
+                            "checks",
+                            "repair_plan.commands",
+                            "repair_plan.connect_from_codex.url",
+                        ],
+                    },
+                    {
+                        "id": "logout_or_revoke_when_requested",
+                        "command": "browser-cli auth logout --revoke",
+                        "optional": True,
+                        "user_requested_only": True,
+                        "read": [
+                            "deleted",
+                            "present_before",
+                            "present_after",
+                            "revoke_requested",
+                            "revoke_available",
+                            "revoked",
+                            "revoke_endpoint",
+                            "remote_revoke.attempted",
+                            "remote_revoke.status_code",
+                            "remote_revoke.error",
+                            "warnings",
+                        ],
+                        "secret_handling": "Do not print access_token, refresh_token, or API key values.",
+                    },
+                ],
+            },
+            "session_recovery": {
+                "purpose": "Inspect active sessions, keep a needed session alive, close stale sessions, or create a replacement session.",
+                "steps": [
+                    {
+                        "id": "list_active_sessions",
+                        "command": "browser-cli session list --status active",
+                        "read": [
+                            "count",
+                            "status_filter",
+                            "sessions",
+                            "pagination",
+                        ],
+                    },
+                    {
+                        "id": "inspect_session",
+                        "command": "browser-cli session get --session-id <session_id>",
+                        "optional": True,
+                        "read": [
+                            "session.session_id",
+                            "session.status",
+                            "session.context_id",
+                            "session.created_at",
+                            "session.updated_at",
+                        ],
+                    },
+                    {
+                        "id": "keepalive_session",
+                        "command": "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive",
+                        "optional": True,
+                        "read": [
+                            "session_id",
+                            "checks",
+                            "final_status",
+                        ],
+                    },
+                    {
+                        "id": "close_stale_session",
+                        "command": "browser-cli session close --session-id <session_id>",
+                        "optional": True,
+                        "user_requested_only": True,
+                        "read": [
+                            "session_id",
+                            "closed",
+                        ],
+                    },
+                    {
+                        "id": "create_replacement_session",
+                        "command": "browser-cli session create",
+                        "optional": True,
+                        "read": [
+                            "session.session_id",
+                            "session.status",
+                            "context_reuse.selected",
+                            "context_reuse.created",
+                            "context_reuse.availability",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli doctor --json",
+                            "browser-cli commands --workflow persistent_login_state",
+                        ],
+                    },
+                ],
+            },
+            "one_off_page_task": {
+                "purpose": "Create a temporary browser session, inspect or operate one page, then close the session.",
+                "steps": [
+                    {
+                        "id": "create_session",
+                        "command": "browser-cli session create",
+                        "read": ["session_id"],
+                    },
+                    {
+                        "id": "open_url",
+                        "command": "browser-cli action open-url --session-id <session_id> --url <url>",
+                        "success_condition": "ok=true",
+                    },
+                    {
+                        "id": "inspect_page",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": ["title", "url"],
+                    },
+                    {
+                        "id": "find_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id>",
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                            "result.title",
+                            "result.url",
+                        ],
+                    },
+                    {
+                        "id": "close_session",
+                        "command": "browser-cli session close --session-id <session_id>",
+                        "cleanup": True,
+                    },
+                ],
+            },
+            "navigation_flow": {
+                "purpose": "Open URLs, reload, go back or forward, and verify page navigation without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task navigation_flow",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_current_page",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "choose_navigation_action",
+                        "command": "<choose open-url, reload, go-back, or go-forward using task intent and current url/title>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "open-url",
+                            "reload",
+                            "go-back",
+                            "go-forward",
+                            "wait-load-state",
+                            "wait-url",
+                            "wait-title",
+                        ],
+                        "preferred_commands": [
+                            "browser-cli action open-url --session-id <session_id> --url <url>",
+                            "browser-cli action reload --session-id <session_id>",
+                            "browser-cli action go-back --session-id <session_id>",
+                            "browser-cli action go-forward --session-id <session_id>",
+                        ],
+                    },
+                    {
+                        "id": "run_navigation_action",
+                        "command": "<run the selected navigation command>",
+                        "agent_action": True,
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "result.url",
+                            "result.title",
+                            "result.navigation_requested",
+                            "result.waited_ms",
+                        ],
+                    },
+                    {
+                        "id": "verify_navigation_result",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected url text>"',
+                            'browser-cli action wait-title --session-id <session_id> --title "<expected title text>"',
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        ],
+                    },
+                ],
+            },
+            "link_navigation": {
+                "purpose": "Inspect page links, choose a visible link target, activate it, and verify navigation without scraping hrefs in custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task link_navigation",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_current_page",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                    },
+                    {
+                        "id": "inspect_links",
+                        "command": "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                        "read": [
+                            "result.links",
+                            "result.link_count",
+                            "result.truncated",
+                            "result.max_nodes",
+                            "result.links[].text",
+                            "result.links[].href",
+                            "result.links[].href_masked",
+                            "result.links[].absolute_url",
+                            "result.links[].absolute_url_masked",
+                            "result.links[].same_origin",
+                            "result.links[].external",
+                            "result.links[].download",
+                        ],
+                    },
+                    {
+                        "id": "choose_link_target",
+                        "command": "<choose click-role, click-text, open-url, or click-index using visible text, role/name, and masked href evidence>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "click-role",
+                            "click-text",
+                            "open-url",
+                            "click-index",
+                            "click",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action wait-role --session-id <session_id> --role link --name "<link text>"',
+                            'browser-cli action click-role --session-id <session_id> --role link --name "<link text>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible link text>"',
+                            "browser-cli action open-url --session-id <session_id> --url <absolute_url>",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action query --session-id <session_id> --selector "a[href]" --max-nodes 80',
+                            'browser-cli action get-attribute --session-id <session_id> --selector "a[href]" --name href',
+                            'browser-cli action click-index --session-id <session_id> --selector "a[href]" --index <n>',
+                            'browser-cli action click --session-id <session_id> --selector "<stable link selector>"',
+                        ],
+                        "secret_handling": "Do not copy href or absolute_url values when href_masked or absolute_url_masked is true.",
+                    },
+                    {
+                        "id": "activate_link",
+                        "command": "<run the selected link activation command>",
+                        "agent_action": True,
+                        "read": [
+                            "result.clicked",
+                            "result.role_found",
+                            "result.matched",
+                            "result.navigation_requested",
+                            "result.url",
+                            "result.title",
+                            "url",
+                            "title",
+                        ],
+                    },
+                    {
+                        "id": "verify_navigation_result",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                            'browser-cli action wait-title --session-id <session_id> --title "<expected title>"',
+                            "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
+                        ],
+                    },
+                ],
+            },
+            "case_file_task": {
+                "purpose": "Validate and run a repeatable JSON or YAML browser case file without writing custom browser automation code.",
+                "steps": [
+                    {
+                        "id": "inspect_case_commands",
+                        "command": "browser-cli commands --group case",
+                        "read": [
+                            "command_count",
+                            "commands",
+                            "json_output",
+                        ],
+                    },
+                    {
+                        "id": "inspect_case_schema",
+                        "command": "browser-cli case schema",
+                        "read": [
+                            "supported_actions",
+                            "required_fields",
+                            "actions",
+                            "top_level",
+                        ],
+                    },
+                    {
+                        "id": "inspect_semantic_case_action",
+                        "command": "browser-cli case schema --action fill-label",
+                        "read": [
+                            "action_schema.required_fields",
+                            "action_schema.optional_fields",
+                            "action_schema.result_fields",
+                            "action_schema.example_step",
+                        ],
+                    },
+                    {
+                        "id": "inspect_form_case_example",
+                        "command": "browser-cli example get --id form_fill_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_case_file",
+                        "command": "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "output",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_form_case_file",
+                        "command": "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "validate_case_file",
+                        "command": "browser-cli case validate --file <case.yaml>",
+                        "success_condition": "valid=true",
+                        "read": [
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "file",
+                        ],
+                    },
+                    {
+                        "id": "run_case_file",
+                        "command": "browser-cli case run --file <case.yaml> --close-created-session",
+                        "success_condition": "ok=true",
+                        "read": [
+                            "ok",
+                            "run_id",
+                            "artifacts_dir",
+                            "events_path",
+                            "session",
+                            "steps",
+                        ],
+                        "on_failure_read": [
+                            "error",
+                            "message",
+                            "steps",
+                            "events_path",
+                        ],
+                    },
+                ],
+            },
+            "interactive_targeting": {
+                "purpose": "Find and activate visible controls with snapshot, role, text, or indexed click commands without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task interactive_targeting",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_interactive_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                            "result.url",
+                            "result.title",
+                        ],
+                    },
+                    {
+                        "id": "inspect_accessibility_context",
+                        "command": "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                        "optional": True,
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                        ],
+                    },
+                    {
+                        "id": "choose_click_method",
+                        "command": "<choose one preferred command using role/name/text/selector evidence from prior steps>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "exists-role",
+                            "get-text-role",
+                            "bounding-box-role",
+                            "click-role",
+                            "hover-role",
+                            "press-role",
+                            "scroll-into-view-role",
+                            "click-text",
+                            "click-index",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
+                            'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
+                        ],
+                    },
+                    {
+                        "id": "wait_target_ready",
+                        "command": 'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+                        ],
+                    },
+                    {
+                        "id": "activate_target",
+                        "command": 'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                            "result.hovered",
+                            "result.pressed",
+                            "result.scrolled",
+                            "result.in_viewport",
+                            "result.element",
+                            "result.candidate_count",
+                            "result.candidates",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
+                            'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
+                        ],
+                    },
+                    {
+                        "id": "verify_after_click",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50",
+                        ],
+                    },
+                ],
+            },
+            "mouse_interaction": {
+                "purpose": "Trigger double-click or right-click/context-menu interactions on semantic or selector targets without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task mouse_interaction",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_interactive_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                            "result.url",
+                            "result.title",
+                        ],
+                    },
+                    {
+                        "id": "choose_mouse_action",
+                        "command": "<choose double-click-role, right-click-role, double-click, or right-click using target evidence>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "double-click-role",
+                            "right-click-role",
+                            "double-click",
+                            "right-click",
+                            "hover-role",
+                            "bounding-box-role",
+                            "inspect",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action double-click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
+                            'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action inspect --session-id <session_id> --selector "<selector>"',
+                            "browser-cli action page-info --session-id <session_id>",
+                        ],
+                    },
+                    {
+                        "id": "run_mouse_action",
+                        "command": "<run the selected mouse action>",
+                        "agent_action": True,
+                        "read": [
+                            "result.found",
+                            "result.role_found",
+                            "result.double_clicked",
+                            "result.right_clicked",
+                            "result.context_menu",
+                            "result.events",
+                            "result.default_prevented",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                    },
+                    {
+                        "id": "verify_result",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected menu or edit state>"',
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                        ],
+                    },
+                ],
+            },
+            "visual_capture": {
+                "purpose": "Capture page, region, or semantic target screenshots with viewport context and text fallback before custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task visual_capture",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page_context",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "set_viewport_if_needed",
+                        "command": "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                        "optional": True,
+                        "read": [
+                            "result.requested_viewport",
+                            "result.previous_viewport",
+                            "result.viewport",
+                            "result.window_viewport",
+                            "result.changed",
+                        ],
+                    },
+                    {
+                        "id": "choose_capture_target",
+                        "command": "<choose screenshot-role, screenshot-selector, screenshot, or text-snapshot using task intent and target evidence>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "screenshot-role",
+                            "screenshot-selector",
+                            "screenshot",
+                            "text-snapshot",
+                            "page-info",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action screenshot-role --session-id <session_id> --role <role> --name "<name>" --output /tmp/browser-cli-target.png',
+                            'browser-cli action screenshot-selector --session-id <session_id> --selector "<selector>" --output /tmp/browser-cli-region.png',
+                            "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page",
+                        ],
+                    },
+                    {
+                        "id": "capture_visual_evidence",
+                        "command": "<run the selected screenshot or text-snapshot command>",
+                        "agent_action": True,
+                        "read": [
+                            "result.screenshot",
+                            "result.path",
+                            "result.output",
+                            "result.found",
+                            "result.role_found",
+                            "result.visible",
+                            "result.match_count",
+                            "result.bounding_box",
+                            "result.texts",
+                            "result.text_count",
+                            "result.text_truncated",
+                        ],
+                    },
+                    {
+                        "id": "verify_capture_artifact",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png",
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        ],
+                    },
+                ],
+            },
+            "semantic_waits": {
+                "purpose": "Wait for user-visible role, text, state, or attribute predicates with semantic verification before sleeps or custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task semantic_waits",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_current_page",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                    },
+                    {
+                        "id": "choose_wait_predicate",
+                        "command": "<choose wait-role, wait-text, wait-state-role, wait-attribute-role, wait-count, or wait-selector using task intent>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "wait-role",
+                            "wait-text",
+                            "wait-state-role",
+                            "wait-attribute-role",
+                            "wait-count",
+                            "wait-selector",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>" --state visible',
+                            'browser-cli action wait-text --session-id <session_id> --text "<visible text>" --match contains',
+                            'browser-cli action wait-state-role --session-id <session_id> --role <role> --name "<name>" --state enabled',
+                            'browser-cli action wait-attribute-role --session-id <session_id> --role <role> --name "<name>" --attribute aria-expanded --value true --match exact',
+                        ],
+                    },
+                    {
+                        "id": "wait_for_semantic_state",
+                        "command": "<run the selected semantic wait command>",
+                        "agent_action": True,
+                        "read": [
+                            "result.found",
+                            "result.role_found",
+                            "result.matched",
+                            "result.timed_out",
+                            "result.waited_ms",
+                            "result.element",
+                            "result.text",
+                            "result.texts",
+                            "result.state_values",
+                            "result.attribute_found",
+                            "result.value",
+                            "result.count",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                            'browser-cli action wait-count --session-id <session_id> --selector "<selector>" --count 1 --comparison ge',
+                            "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                        ],
+                    },
+                    {
+                        "id": "verify_observed_state",
+                        "command": 'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
+                        "read": [
+                            "result.exists",
+                            "result.found",
+                            "result.role_found",
+                            "result.text",
+                            "result.bounding_box",
+                            "result.visible",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                            "browser-cli action page-info --session-id <session_id>",
+                        ],
+                    },
+                ],
+            },
+            "menu_keyboard_flow": {
+                "purpose": "Open menus, operate popovers/listboxes, and send keyboard shortcuts without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task menu_keyboard_flow",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_interactive_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                            'browser-cli action list-snapshot --session-id <session_id> --selector "nav, [role=menu], [role=listbox]" --max-items 50',
+                        ],
+                    },
+                    {
+                        "id": "open_or_focus_menu",
+                        "command": 'browser-cli action hover-role --session-id <session_id> --role button --name "<menu name>"',
+                        "agent_action": True,
+                        "read": [
+                            "result.found",
+                            "result.role_found",
+                            "result.hovered",
+                            "result.focused",
+                            "result.pressed",
+                            "result.scrolled",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action focus-role --session-id <session_id> --role button --name "<menu name>"',
+                            'browser-cli action press-role --session-id <session_id> --role button --name "<menu name>" --key Enter',
+                            'browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "<menu name>"',
+                            'browser-cli action click-role --session-id <session_id> --role button --name "<menu name>"',
+                        ],
+                    },
+                    {
+                        "id": "verify_menu_state",
+                        "command": 'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<menu name>" --attribute aria-expanded --value true --match exact',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.role_found",
+                            "result.matched",
+                            "result.attribute_found",
+                            "result.value",
+                            "result.requested_value",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                        "alternative_commands": [
+                            "browser-cli action wait-role --session-id <session_id> --role menu",
+                            'browser-cli action wait-text --session-id <session_id> --text "<menu item>"',
+                        ],
+                    },
+                    {
+                        "id": "inspect_menu_items",
+                        "command": 'browser-cli action list-snapshot --session-id <session_id> --selector "[role=menu], [role=listbox], nav" --max-items 50',
+                        "read": [
+                            "result.lists",
+                            "result.items",
+                            "result.item_count",
+                            "result.links",
+                            "result.selected",
+                            "result.checked",
+                            "result.expanded",
+                            "result.truncated",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+                        ],
+                    },
+                    {
+                        "id": "send_keyboard_input",
+                        "command": "browser-cli action press-key --session-id <session_id> --key Escape",
+                        "optional": True,
+                        "agent_action": True,
+                        "read": [
+                            "result.pressed",
+                            "result.key",
+                            "result.modifiers",
+                            "result.events",
+                            "result.keydown_accepted",
+                            "result.navigation_requested",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action press-role --session-id <session_id> --role menuitem --name "<item>" --key Enter',
+                            'browser-cli action click-role --session-id <session_id> --role menuitem --name "<item>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<item>"',
+                        ],
+                    },
+                    {
+                        "id": "verify_result",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                            'browser-cli action list-snapshot --session-id <session_id> --selector "[role=menu], [role=listbox], nav" --max-items 50',
+                        ],
+                    },
+                ],
+            },
+            "content_extraction": {
+                "purpose": "Extract bounded page text, links, tables, lists, outline, accessibility nodes, or HTML snapshots without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task content_extraction",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page_info",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                        ],
+                    },
+                    {
+                        "id": "choose_extraction_surface",
+                        "command": "<choose the narrowest snapshot/read command for the requested content>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "outline-snapshot",
+                            "text-snapshot",
+                            "link-snapshot",
+                            "table-snapshot",
+                            "list-snapshot",
+                            "accessibility-snapshot",
+                            "get-text-role",
+                            "get-text",
+                            "snapshot",
+                        ],
+                        "preferred_commands": [
+                            "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+                            "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                            "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200",
+                            "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
+                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                            'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                            'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
+                        ],
+                    },
+                    {
+                        "id": "extract_content",
+                        "command": "<run the selected extraction command>",
+                        "agent_action": True,
+                        "read": [
+                            "url",
+                            "title",
+                            "result.kind",
+                            "result.texts",
+                            "result.text_count",
+                            "result.links",
+                            "result.link_count",
+                            "result.tables",
+                            "result.rows",
+                            "result.row_count",
+                            "result.lists",
+                            "result.items",
+                            "result.item_count",
+                            "result.headings",
+                            "result.heading_count",
+                            "result.landmarks",
+                            "result.landmark_count",
+                            "result.nodes",
+                            "result.node_count",
+                            "result.text",
+                            "result.html",
+                            "result.truncated",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
+                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                            "browser-cli action text-snapshot --session-id <session_id> --max-nodes 80 --max-chars 1000",
+                        ],
+                    },
+                    {
+                        "id": "verify_extraction_bounds",
+                        "command": "<confirm the result is bounded and not truncated before treating it as complete>",
+                        "agent_action": True,
+                        "read": [
+                            "result.truncated",
+                            "result.max_nodes",
+                            "result.max_chars",
+                            "result.max_rows",
+                            "result.max_cells",
+                            "result.max_items",
+                            "result.node_count",
+                            "result.text_count",
+                            "result.link_count",
+                            "result.heading_count",
+                            "result.landmark_count",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 120 --max-chars 2000",
+                            "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 50 --max-cells 500",
+                            "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 100",
+                        ],
+                    },
+                ],
+            },
+            "persistent_login_state": {
+                "purpose": "Reuse or create a persistent context for login state, cookies, and storage.",
+                "steps": [
+                    {
+                        "id": "dry_run_context_pick",
+                        "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
+                        "read": [
+                            "availability",
+                            "reusable",
+                            "locked",
+                            "reuse_reason",
+                            "selection_strategy",
+                            "selection_summary.recommended_next_action",
+                            "selection_summary.decision_reason",
+                            "selection_summary.locked_matches",
+                            "selection_summary.reusable_matches",
+                            "selection_summary.metadata_mismatches",
+                            "selection_summary.unavailable_matches",
+                            "selection_summary.unknown_matches",
+                            "selection_summary.availability_counts",
+                            "selection_summary.would_create",
+                        ],
+                    },
+                    {
+                        "id": "inspect_context_status",
+                        "command": "browser-cli context status --context-id <context_id>",
+                        "optional": True,
+                        "read": [
+                            "context_id",
+                            "status",
+                            "normalized_status",
+                            "availability",
+                            "reusable",
+                            "locked",
+                            "reuse_reason",
+                            "reuse",
+                            "context",
+                        ],
+                    },
+                    {
+                        "id": "create_session_with_context",
+                        "command": 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
+                        "read": [
+                            "session_id",
+                            "context_reuse.selected",
+                            "context_reuse.created",
+                            "context_reuse.selection_strategy",
+                            "context_reuse.availability",
+                            "context_reuse.reusable",
+                            "context_reuse.locked",
+                            "context_reuse.reuse_reason",
+                            "context_reuse.selection_summary.recommended_next_action",
+                        ],
+                    },
+                    {
+                        "id": "close_session",
+                        "command": "browser-cli session close --session-id <session_id>",
+                        "cleanup": True,
+                    },
+                ],
+            },
+            "browser_state_management": {
+                "purpose": "Inspect, set, wait for, and clean up local/session storage or document.cookie-visible cookie state without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task browser_state_management",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page_info",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                    },
+                    {
+                        "id": "read_existing_state",
+                        "command": "browser-cli action storage-get --session-id <session_id> --area local --key <key>",
+                        "read": [
+                            "result.area",
+                            "result.key",
+                            "result.prefix",
+                            "result.found",
+                            "result.value",
+                            "result.value_length",
+                            "result.count",
+                            "result.item_count",
+                            "result.items",
+                            "result.truncated",
+                        ],
+                        "alternative_commands": [
+                            "browser-cli action cookie-get --session-id <session_id> --name <name>",
+                            "browser-cli action storage-get --session-id <session_id> --area session --prefix <prefix> --max-items 20",
+                            "browser-cli action cookie-get --session-id <session_id> --prefix <prefix> --max-items 20",
+                        ],
+                    },
+                    {
+                        "id": "modify_state",
+                        "command": "browser-cli action storage-set --session-id <session_id> --area local --key <key> --value <value>",
+                        "agent_action": True,
+                        "read": [
+                            "result.area",
+                            "result.key",
+                            "result.name",
+                            "result.set",
+                            "result.found",
+                            "result.previous_value",
+                            "result.value",
+                            "result.value_length",
+                            "result.path",
+                            "result.domain",
+                            "result.same_site",
+                            "result.secure",
+                            "result.document_cookie_scope",
+                        ],
+                        "alternative_commands": [
+                            "browser-cli action cookie-set --session-id <session_id> --name <name> --value <value> --path /",
+                            "browser-cli action storage-remove --session-id <session_id> --area session --key <key>",
+                            "browser-cli action cookie-delete --session-id <session_id> --name <name> --path /",
+                        ],
+                    },
+                    {
+                        "id": "wait_for_state",
+                        "command": "browser-cli action wait-storage --session-id <session_id> --area local --key <key> --value <value> --match exact",
+                        "read": [
+                            "result.area",
+                            "result.key",
+                            "result.name",
+                            "result.found",
+                            "result.exists",
+                            "result.state",
+                            "result.value",
+                            "result.requested_value",
+                            "result.match",
+                            "result.waited_ms",
+                            "result.document_cookie_scope",
+                        ],
+                        "alternative_commands": [
+                            "browser-cli action wait-cookie --session-id <session_id> --name <name> --value <value> --match exact",
+                            "browser-cli action wait-storage --session-id <session_id> --area local --key <key> --state absent",
+                            "browser-cli action wait-cookie --session-id <session_id> --name <name> --state absent",
+                        ],
+                    },
+                    {
+                        "id": "cleanup_state",
+                        "command": "browser-cli action storage-remove --session-id <session_id> --area session --key <key>",
+                        "optional": True,
+                        "user_requested_only": True,
+                        "read": [
+                            "result.area",
+                            "result.key",
+                            "result.name",
+                            "result.removed",
+                            "result.deleted",
+                            "result.had_key",
+                            "result.had_cookie",
+                            "result.cleared",
+                            "result.cleared_count",
+                            "result.names",
+                            "result.keys",
+                        ],
+                        "alternative_commands": [
+                            "browser-cli action storage-clear --session-id <session_id> --area session --prefix <prefix>",
+                            "browser-cli action cookie-delete --session-id <session_id> --name <name> --path /",
+                            "browser-cli action cookie-clear --session-id <session_id> --prefix <prefix> --path /",
+                        ],
+                    },
+                ],
+            },
+            "form_interaction": {
+                "purpose": "Inspect, fill, submit, and verify a common web form without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task form_interaction",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_form",
+                        "command": "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                        "read": [
+                            "result.fields",
+                            "result.field_count",
+                            "result.visible_count",
+                            "result.truncated",
+                        ],
+                    },
+                    {
+                        "id": "fill_labeled_field",
+                        "command": 'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
+                        "read": [
+                            "result.found",
+                            "result.filled",
+                            "result.value_masked",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
+                        ],
+                    },
+                    {
+                        "id": "choose_labeled_option",
+                        "command": 'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.selected",
+                            "result.role_found",
+                            "result.option_found",
+                            "result.option_label",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
+                        ],
+                    },
+                    {
+                        "id": "check_labeled_control",
+                        "command": 'browser-cli action check-label --session-id <session_id> --label "<label>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.checked",
+                            "result.role_found",
+                            "result.changed",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                            'browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                        ],
+                    },
+                    {
+                        "id": "wait_submit_ready",
+                        "command": 'browser-cli action wait-state-role --session-id <session_id> --role button --name "<submit text>" --state enabled',
+                        "read": [
+                            "result.found",
+                            "result.matched",
+                            "result.state_values",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-role --session-id <session_id> --role button --name "<submit text>"',
+                            'browser-cli action wait-state --session-id <session_id> --selector "<submit selector>" --state enabled',
+                        ],
+                    },
+                    {
+                        "id": "submit_form",
+                        "command": 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                        ],
+                    },
+                    {
+                        "id": "verify_result",
+                        "command": 'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                        "optional": True,
+                        "read": [
+                            "found",
+                            "url",
+                            "requested_url",
+                            "match",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main",
+                        ],
+                    },
+                ],
+            },
+            "file_upload": {
+                "purpose": "Attach one or more local files to an input[type=file], verify the file input state, and optionally submit without opening an OS file picker.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task file_upload",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_upload_controls",
+                        "command": "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                        "read": [
+                            "result.fields",
+                            "result.field_count",
+                            "result.visible_count",
+                            "result.truncated",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action query --session-id <session_id> --selector "input[type=file]" --max-nodes 20',
+                            'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                        ],
+                    },
+                    {
+                        "id": "attach_files",
+                        "command": 'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path>',
+                        "agent_action": True,
+                        "read": [
+                            "result.found",
+                            "result.file_input",
+                            "result.set",
+                            "result.multiple",
+                            "result.requested_count",
+                            "result.requested_files",
+                            "result.previous_count",
+                            "result.file_count",
+                            "result.files",
+                            "result.value_masked",
+                            "result.dispatched_events",
+                            "result.error",
+                            "result.message",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path1> --file <path2>',
+                            'browser-cli action set-file-input --session-id <session_id> --selector "<file input selector>" --file <path> --no-events',
+                        ],
+                    },
+                    {
+                        "id": "verify_upload_state",
+                        "command": 'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                        "read": [
+                            "result.found",
+                            "result.file_input",
+                            "result.file_count",
+                            "result.files",
+                            "result.value_masked",
+                            "result.element",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<uploaded filename or success text>"',
+                            "browser-cli action page-info --session-id <session_id>",
+                        ],
+                    },
+                    {
+                        "id": "submit_if_requested",
+                        "command": 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+                        "optional": True,
+                        "user_requested_only": True,
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action submit --session-id <session_id> --selector "form"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                        ],
+                    },
+                ],
+            },
+            "dialog_frame_handling": {
+                "purpose": "Inspect, wait for, and handle modal dialogs, cookie banners, confirmation prompts, and embedded frames without custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task dialog_frame_handling",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page_context",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                    },
+                    {
+                        "id": "inspect_or_wait_dialog",
+                        "command": "browser-cli action wait-dialog --session-id <session_id> --text <text> --modal-only",
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.dialog_count",
+                            "result.modal_count",
+                            "result.dialogs",
+                            "result.controls",
+                            "result.control_count",
+                            "result.texts",
+                            "result.text_count",
+                            "result.matched",
+                            "result.reason",
+                        ],
+                        "alternative_commands": [
+                            "browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 40 --max-controls 40",
+                            'browser-cli action wait-text --session-id <session_id> --text "<dialog text>"',
+                        ],
+                    },
+                    {
+                        "id": "handle_dialog_control",
+                        "command": 'browser-cli action click-role --session-id <session_id> --role button --name "<button text>"',
+                        "optional": True,
+                        "agent_action": True,
+                        "read": [
+                            "result.found",
+                            "result.role_found",
+                            "result.clicked",
+                            "result.element",
+                            "result.candidate_count",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action click-text --session-id <session_id> --text "<button text>"',
+                            'browser-cli action click-index --session-id <session_id> --selector "button" --index <n>',
+                        ],
+                    },
+                    {
+                        "id": "inspect_or_wait_frame",
+                        "command": "browser-cli action wait-frame --session-id <session_id> --url <path> --url-match contains --readable-only",
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.frame_count",
+                            "result.frames",
+                            "result.readable",
+                            "result.same_origin",
+                            "result.frame_url",
+                            "result.read_error",
+                            "result.matched",
+                            "result.reason",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 40 --max-chars 1000',
+                            'browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 40 --max-chars 1000',
+                        ],
+                    },
+                    {
+                        "id": "verify_result",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 20",
+                            'browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 20 --max-chars 500',
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+                        ],
+                    },
+                ],
+            },
+            "state_waits": {
+                "purpose": "Wait for deterministic page, target, URL, text, network, console, storage, or cookie state without sleeps or custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task state_waits",
+                        "read": [
+                            "guide.selection_order",
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.fallback_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "inspect_current_state",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "choose_wait_condition",
+                        "command": "<choose the narrowest wait-* command from the guide using task evidence>",
+                        "agent_action": True,
+                        "preferred_commands": [
+                            "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                            'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                            'browser-cli action wait-state-role --session-id <session_id> --role button --name "<name>" --state enabled',
+                            'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded --value true --match exact',
+                            'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                            'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+                            "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains",
+                            "browser-cli action wait-console --session-id <session_id> --source pageerror",
+                            'browser-cli action wait-storage --session-id <session_id> --area local --key "<key>" --value "<value>"',
+                            'browser-cli action wait-cookie --session-id <session_id> --name "<cookie>"',
+                        ],
+                        "selection_order": [
+                            "wait-load-state",
+                            "wait-url",
+                            "wait-state-role",
+                            "wait-attribute-role",
+                            "wait-selector",
+                            "wait-role",
+                            "wait-text",
+                            "wait-network",
+                            "wait-console",
+                            "wait-storage",
+                            "wait-cookie",
+                        ],
+                    },
+                    {
+                        "id": "wait_for_state",
+                        "command": "<run the selected wait-* command>",
+                        "agent_action": True,
+                        "read": [
+                            "found",
+                            "url",
+                            "title",
+                            "result.found",
+                            "result.exists",
+                            "result.role_found",
+                            "result.matched",
+                            "result.state_values",
+                            "result.attribute_found",
+                            "result.value",
+                            "result.requested_value",
+                            "result.count",
+                            "result.entry",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action wait-network-idle --session-id <session_id>",
+                            "browser-cli action wait-count --session-id <session_id> --selector <selector> --count <n>",
+                            "browser-cli action wait-state --session-id <session_id> --selector <selector> --state enabled",
+                        ],
+                        "success_condition": "the selected wait command reports found=true, match=true, or the expected result field for the waited state",
+                    },
+                    {
+                        "id": "verify_after_wait",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action exists-role --session-id <session_id> --role button --name "<name>"',
+                            'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+                        ],
+                    },
+                ],
+            },
+            "page_diagnostics": {
+                "purpose": "Capture page state, console/page errors, and fetch/XHR activity around a suspicious browser action.",
+                "steps": [
+                    {
+                        "id": "inspect_action_guide",
+                        "command": "browser-cli action guide --task page_diagnostics",
+                        "read": [
+                            "guide.inspect_commands",
+                            "guide.preferred_commands",
+                            "guide.verify_commands",
+                            "guide.read_fields",
+                            "guide.custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "page_info_before",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                        ],
+                    },
+                    {
+                        "id": "set_viewport",
+                        "command": "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                        "optional": True,
+                        "read": [
+                            "result.requested_viewport",
+                            "result.previous_viewport",
+                            "result.viewport",
+                            "result.window_viewport",
+                        ],
+                    },
+                    {
+                        "id": "install_console_capture",
+                        "command": "browser-cli action console-snapshot --session-id <session_id> --install-only",
+                        "read": [
+                            "result.installed",
+                            "result.newly_installed",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "install_network_capture",
+                        "command": "browser-cli action network-snapshot --session-id <session_id> --install-only",
+                        "read": [
+                            "result.installed",
+                            "result.newly_installed",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "reproduce_issue",
+                        "command": "<run the browser action that should be diagnosed, such as click-role, click-text, fill-label, fill-role, or form_interaction>",
+                        "agent_action": True,
+                    },
+                    {
+                        "id": "read_console_entries",
+                        "command": "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                        "read": [
+                            "result.entry_count",
+                            "result.entries",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "read_network_entries",
+                        "command": "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+                        "read": [
+                            "result.entry_count",
+                            "result.entries",
+                            "result.buffered_count_after",
+                        ],
+                    },
+                    {
+                        "id": "capture_visible_state",
+                        "command": "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                        "read": [
+                            "result.texts",
+                            "result.text_count",
+                            "result.aria_live",
+                            "result.text_truncated",
+                        ],
+                        "fallback_commands": [
+                            'browser-cli action screenshot-role --session-id <session_id> --role button --name "<name>" --output /tmp/browser-cli-target.png',
+                            "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
+                            "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
+                            "browser-cli action page-info --session-id <session_id>",
+                        ],
+                    },
+                ],
+            },
+        },
+    }
+
+
 def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
     if not raw:
         return None
@@ -189,9 +3212,16 @@ def _model_payload(value: Any) -> dict[str, Any]:
 
 def _package_version(distribution: str) -> str | None:
     try:
-        return version(distribution)
+        return distribution_version(distribution)
     except PackageNotFoundError:
         return None
+
+
+def _browser_cli_version() -> tuple[str, str]:
+    installed_version = _package_version("browser-cli")
+    if installed_version is not None:
+        return installed_version, "package_metadata"
+    return __version__, "package_fallback"
 
 
 def _mask_direct_url_secret(connect_url: str) -> str:
@@ -276,6 +3306,7 @@ def _doctor_fix(
     commands: list[str] | None = None,
     env: list[str] | None = None,
     guidance: list[str] | None = None,
+    connect_from_codex: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     fix: dict[str, Any] = {"code": code}
     if commands:
@@ -284,31 +3315,538 @@ def _doctor_fix(
         fix["env"] = env
     if guidance:
         fix["guidance"] = guidance
+    if connect_from_codex:
+        fix["connect_from_codex"] = connect_from_codex
     return fix
 
 
-def _credential_doctor_fix(*env: str) -> dict[str, Any]:
-    return _doctor_fix(
-        "configure_credentials",
-        env=list(env),
-        commands=[
-            "browser-cli auth login",
-            "browser-cli auth export-env",
-            "browser-cli auth status",
-            "browser-cli doctor",
-        ],
-        guidance=[
-            "Get Project ID and API key from https://browser.lexmount.cn.",
-            "Set credentials only in the local shell, not in chat.",
-            "Run doctor again after exporting credentials.",
-        ],
+def _doctor_check_names(
+    checks: list[dict[str, Any]],
+    *,
+    status: str,
+) -> list[str]:
+    return [str(check["name"]) for check in checks if check.get("status") == status]
+
+
+def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    statuses = {"fail", "warn", "skipped"}
+    commands: list[str] = []
+    env: list[str] = []
+    guidance: list[str] = []
+    fixes: list[dict[str, Any]] = []
+    connect_from_codex: dict[str, Any] | None = None
+
+    for check in checks:
+        if check.get("status") not in statuses:
+            continue
+        fix = check.get("fix")
+        if not isinstance(fix, dict):
+            continue
+
+        item: dict[str, Any] = {
+            "check": check.get("name"),
+            "status": check.get("status"),
+            "code": fix.get("code"),
+        }
+        for key in ("commands", "env", "guidance"):
+            values = fix.get(key)
+            if isinstance(values, list):
+                item[key] = values
+        fix_connect_from_codex = fix.get("connect_from_codex")
+        if isinstance(fix_connect_from_codex, dict):
+            item["connect_from_codex"] = fix_connect_from_codex
+            if connect_from_codex is None:
+                connect_from_codex = fix_connect_from_codex
+        fixes.append(item)
+
+        commands.extend(str(value) for value in fix.get("commands", []))
+        env.extend(str(value) for value in fix.get("env", []))
+        guidance.extend(str(value) for value in fix.get("guidance", []))
+
+    repair_plan: dict[str, Any] = {
+        "required": bool(_doctor_check_names(checks, status="fail")),
+        "recommended": bool(fixes),
+        "commands": _dedupe_preserving_order(commands),
+        "env": _dedupe_preserving_order(env),
+        "guidance": _dedupe_preserving_order(guidance),
+        "fixes": fixes,
+    }
+    if connect_from_codex:
+        repair_plan["connect_from_codex"] = connect_from_codex
+    return repair_plan
+
+
+def _doctor_workflow_step_names(workflow: Any) -> set[str]:
+    if not isinstance(workflow, dict):
+        return set()
+    steps = workflow.get("steps")
+    if not isinstance(steps, list):
+        return set()
+    return {
+        str(step.get("id"))
+        for step in steps
+        if isinstance(step, dict) and step.get("id")
+    }
+
+
+def _doctor_command_catalog_check() -> dict[str, Any]:
+    try:
+        catalog = _command_catalog()
+    except Exception as exc:
+        return _doctor_check(
+            "command_catalog",
+            "warn",
+            "Command catalog could not be built.",
+            error=exc.__class__.__name__,
+            fix=_doctor_fix(
+                "verify_command_catalog",
+                commands=[
+                    "browser-cli commands --names-only",
+                    "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on command discovery before writing custom JavaScript.",
+                    "Upgrade or reinstall browser-cli if command discovery fails.",
+                ],
+            ),
+        )
+
+    command_names = {
+        str(command.get("name"))
+        for command in catalog.get("commands", [])
+        if isinstance(command, dict)
+    }
+    workflows = catalog.get("agent_workflows")
+    workflow_names = set(workflows) if isinstance(workflows, dict) else set()
+    missing_commands = [
+        command for command in DOCTOR_REQUIRED_COMMANDS if command not in command_names
+    ]
+    missing_workflows = [
+        workflow
+        for workflow in DOCTOR_REQUIRED_WORKFLOWS
+        if workflow not in workflow_names
+    ]
+    required_workflow_steps = {
+        workflow: list(steps)
+        for workflow, steps in DOCTOR_REQUIRED_WORKFLOW_STEPS.items()
+    }
+    missing_workflow_steps: dict[str, list[str]] = {}
+    if isinstance(workflows, dict):
+        for workflow, required_steps in DOCTOR_REQUIRED_WORKFLOW_STEPS.items():
+            if workflow not in workflow_names:
+                continue
+            step_names = _doctor_workflow_step_names(workflows.get(workflow))
+            missing_steps = [step for step in required_steps if step not in step_names]
+            if missing_steps:
+                missing_workflow_steps[workflow] = missing_steps
+
+    if missing_commands or missing_workflows or missing_workflow_steps:
+        return _doctor_check(
+            "command_catalog",
+            "warn",
+            "Command catalog is missing commands, workflows, or workflow steps expected by the Codex Skill.",
+            schema_version=catalog.get("schema_version"),
+            command_count=len(command_names),
+            workflow_count=len(workflow_names),
+            required_commands=list(DOCTOR_REQUIRED_COMMANDS),
+            missing_required_commands=missing_commands,
+            required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
+            missing_required_workflows=missing_workflows,
+            required_workflow_steps=required_workflow_steps,
+            missing_required_workflow_steps=missing_workflow_steps,
+            fix=_doctor_fix(
+                "upgrade_browser_cli_command_surface",
+                commands=[
+                    "browser-cli commands --names-only",
+                    "browser-cli commands",
+                    "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Upgrade browser-cli before relying on the full Codex Skill workflow.",
+                    "Use `browser-cli commands --group action --names-only` to inspect available actions.",
+                    "Use `browser-cli commands` to inspect structured agent_workflows and their steps.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "command_catalog",
+        "pass",
+        "Command catalog includes the commands expected by the Codex Skill.",
+        schema_version=catalog.get("schema_version"),
+        command_count=len(command_names),
+        workflow_count=len(workflow_names),
+        required_commands=list(DOCTOR_REQUIRED_COMMANDS),
+        missing_required_commands=[],
+        required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
+        missing_required_workflows=[],
+        required_workflow_steps=required_workflow_steps,
+        missing_required_workflow_steps={},
+    )
+
+
+def _doctor_agent_references_check() -> dict[str, Any]:
+    try:
+        references = _agent_references()
+    except Exception as exc:
+        return _doctor_check(
+            "agent_references",
+            "warn",
+            "Agent reference metadata could not be built.",
+            error=exc.__class__.__name__,
+            required_references=list(DOCTOR_REQUIRED_REFERENCES),
+            fix=_doctor_fix(
+                "verify_agent_reference_metadata",
+                commands=[
+                    "browser-cli reference list",
+                    "browser-cli commands --workflows-only",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on packaged references before choosing custom JavaScript.",
+                    "Upgrade or reinstall browser-cli if agent reference metadata is unavailable.",
+                ],
+            ),
+        )
+
+    missing_references = [
+        reference_id
+        for reference_id in DOCTOR_REQUIRED_REFERENCES
+        if reference_id not in references
+    ]
+    checked_references: list[dict[str, Any]] = []
+    invalid_references: list[dict[str, Any]] = []
+
+    for reference_id in DOCTOR_REQUIRED_REFERENCES:
+        reference = references.get(reference_id)
+        if not isinstance(reference, dict):
+            continue
+        item: dict[str, Any] = {
+            "id": reference_id,
+            "path": reference.get("path"),
+            "package_resource": reference.get("package_resource"),
+            "content_command": reference.get("content_command"),
+        }
+        try:
+            content = _read_agent_reference_content(reference_id)
+        except Exception as exc:
+            item.update(
+                {
+                    "status": "unavailable",
+                    "error": exc.__class__.__name__,
+                }
+            )
+            invalid_references.append(item)
+            checked_references.append(item)
+            continue
+
+        missing_patterns = [
+            str(pattern)
+            for pattern in reference.get("grep_patterns", [])
+            if str(pattern) not in content
+        ]
+        item.update(
+            {
+                "status": "pass"
+                if content.strip() and not missing_patterns
+                else "invalid",
+                "content_length": len(content),
+                "missing_patterns": missing_patterns,
+            }
+        )
+        if item["status"] != "pass":
+            invalid_references.append(item)
+        checked_references.append(item)
+
+    if missing_references or invalid_references:
+        return _doctor_check(
+            "agent_references",
+            "warn",
+            "Packaged agent references are missing or invalid.",
+            required_references=list(DOCTOR_REQUIRED_REFERENCES),
+            reference_count=len(references),
+            missing_required_references=missing_references,
+            invalid_references=invalid_references,
+            checked_references=checked_references,
+            fix=_doctor_fix(
+                "repair_packaged_agent_references",
+                commands=[
+                    "browser-cli reference list",
+                    "browser-cli reference get --id action_playbook --metadata-only",
+                    "browser-cli reference get --id action_playbook",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Packaged references should be readable from an installed CLI.",
+                    "Reinstall browser-cli if reference get cannot load action_playbook.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "agent_references",
+        "pass",
+        "Packaged agent references are readable.",
+        required_references=list(DOCTOR_REQUIRED_REFERENCES),
+        reference_count=len(references),
+        missing_required_references=[],
+        invalid_references=[],
+        checked_references=checked_references,
+    )
+
+
+def _validate_case_example_content(content: str) -> list[str]:
+    try:
+        import yaml
+    except Exception as exc:
+        return [f"PyYAML unavailable: {exc.__class__.__name__}"]
+
+    try:
+        spec = yaml.safe_load(content)
+    except Exception as exc:
+        return [f"Invalid YAML: {exc}"]
+    if not isinstance(spec, dict):
+        return ["Case example root must be an object."]
+    return _validate_browser_cli_case_spec(spec)
+
+
+def _doctor_agent_examples_check() -> dict[str, Any]:
+    try:
+        examples = _agent_examples()
+    except Exception as exc:
+        return _doctor_check(
+            "agent_examples",
+            "warn",
+            "Agent example metadata could not be built.",
+            error=exc.__class__.__name__,
+            required_examples=list(DOCTOR_REQUIRED_EXAMPLES),
+            fix=_doctor_fix(
+                "verify_agent_example_metadata",
+                commands=[
+                    "browser-cli example list",
+                    "browser-cli commands --workflows-only",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on packaged examples for repeatable browser tasks.",
+                    "Upgrade or reinstall browser-cli if agent example metadata is unavailable.",
+                ],
+            ),
+        )
+
+    missing_examples = [
+        example_id
+        for example_id in DOCTOR_REQUIRED_EXAMPLES
+        if example_id not in examples
+    ]
+    checked_examples: list[dict[str, Any]] = []
+    invalid_examples: list[dict[str, Any]] = []
+
+    for example_id in DOCTOR_REQUIRED_EXAMPLES:
+        example = examples.get(example_id)
+        if not isinstance(example, dict):
+            continue
+        item: dict[str, Any] = {
+            "id": example_id,
+            "path": example.get("path"),
+            "package_resource": example.get("package_resource"),
+            "content_command": example.get("content_command"),
+            "format": example.get("format"),
+        }
+        try:
+            content = _read_agent_example_content(example_id)
+        except Exception as exc:
+            item.update(
+                {
+                    "status": "unavailable",
+                    "error": exc.__class__.__name__,
+                }
+            )
+            invalid_examples.append(item)
+            checked_examples.append(item)
+            continue
+
+        missing_patterns = [
+            str(pattern)
+            for pattern in example.get("grep_patterns", [])
+            if str(pattern) not in content
+        ]
+        case_errors: list[str] = []
+        if example.get("case_file"):
+            case_errors = _validate_case_example_content(content)
+        item.update(
+            {
+                "status": "pass"
+                if content.strip() and not missing_patterns and not case_errors
+                else "invalid",
+                "content_length": len(content),
+                "missing_patterns": missing_patterns,
+            }
+        )
+        if example.get("case_file"):
+            item.update(
+                {
+                    "case_valid": not case_errors,
+                    "case_errors": case_errors,
+                }
+            )
+        if item["status"] != "pass":
+            invalid_examples.append(item)
+        checked_examples.append(item)
+
+    if missing_examples or invalid_examples:
+        return _doctor_check(
+            "agent_examples",
+            "warn",
+            "Packaged agent examples are missing, unreadable, or invalid.",
+            required_examples=list(DOCTOR_REQUIRED_EXAMPLES),
+            example_count=len(examples),
+            missing_required_examples=missing_examples,
+            invalid_examples=invalid_examples,
+            checked_examples=checked_examples,
+            fix=_doctor_fix(
+                "repair_packaged_agent_examples",
+                commands=[
+                    "browser-cli example list",
+                    "browser-cli example get --id agent_playbook --metadata-only",
+                    "browser-cli example get --id page_inspection_case",
+                    "browser-cli example get --id form_fill_case",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Packaged examples should be readable from an installed CLI.",
+                    "Reinstall browser-cli if example get cannot load playbooks or case files.",
+                    "Run `browser-cli case validate --file <case.yaml>` on copied case examples before running them.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "agent_examples",
+        "pass",
+        "Packaged agent examples are readable and case examples validate.",
+        required_examples=list(DOCTOR_REQUIRED_EXAMPLES),
+        example_count=len(examples),
+        missing_required_examples=[],
+        invalid_examples=[],
+        checked_examples=checked_examples,
+    )
+
+
+def _doctor_error_name(exc: Exception) -> str:
+    info = getattr(exc, "lexmount_error_info", None)
+    if isinstance(info, LexmountErrorInfo):
+        error = info.payload().get("error")
+        if error:
+            return str(error)
+    return exc.__class__.__name__
+
+
+def _doctor_session_id(payload: dict[str, Any]) -> str | None:
+    session_id = payload.get("session_id")
+    if session_id:
+        return str(session_id)
+    session = payload.get("session")
+    if isinstance(session, dict) and session.get("session_id"):
+        return str(session["session_id"])
+    return None
+
+
+def _doctor_smoke_session_check(admin: Any) -> dict[str, Any]:
+    session_id: str | None = None
+    try:
+        result = admin.create_session(
+            context_id=None,
+            create_context=False,
+            context_mode="read_write",
+            browser_mode="normal",
+            metadata={"purpose": "browser-cli-doctor-smoke"},
+        )
+    except Exception as exc:
+        return _doctor_check(
+            "browser_smoke_session",
+            "fail",
+            _mask_sensitive_text(str(exc)),
+            stage="create",
+            created=False,
+            closed=False,
+            error=_doctor_error_name(exc),
+            fix=_doctor_fix(
+                "verify_browser_session_creation",
+                commands=[
+                    "browser-cli auth status",
+                    "browser-cli doctor --smoke-session",
+                ],
+                guidance=[
+                    "Confirm the API key can create browser sessions for this project.",
+                    "Check project session quotas and key scopes in browser.lexmount.cn.",
+                ],
+            ),
+        )
+
+    payload = _model_payload(result)
+    session_id = _doctor_session_id(payload)
+    if not session_id:
+        return _doctor_check(
+            "browser_smoke_session",
+            "fail",
+            "Smoke session was created, but the response did not include a session_id to close.",
+            stage="response",
+            created=True,
+            closed=False,
+            session=_sanitize_failure_value(payload.get("session")),
+            fix=_doctor_fix(
+                "verify_browser_session_response",
+                commands=[
+                    "browser-cli doctor --smoke-session",
+                ],
+                guidance=[
+                    "Confirm the browser session API response includes session.session_id.",
+                ],
+            ),
+        )
+
+    try:
+        admin.close_session(session_id)
+    except Exception as exc:
+        return _doctor_check(
+            "browser_smoke_session",
+            "fail",
+            f"Smoke session was created but could not be closed automatically: {_mask_sensitive_text(str(exc))}",
+            stage="close",
+            created=True,
+            closed=False,
+            session_id=session_id,
+            error=_doctor_error_name(exc),
+            fix=_doctor_fix(
+                "close_smoke_session",
+                commands=[
+                    f"browser-cli session close --session-id {session_id}",
+                    "browser-cli doctor --smoke-session",
+                ],
+                guidance=[
+                    "Close the temporary smoke-test session manually, then rerun doctor.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "browser_smoke_session",
+        "pass",
+        "Temporary browser session can be created and closed",
+        stage="closed",
+        created=True,
+        closed=True,
+        session_id=session_id,
     )
 
 
 def _normalize_status(value: Any) -> str | None:
     if value is None:
         return None
-    return str(value).strip().lower()
+    normalized = re.sub(r"[\s\-]+", "_", str(value).strip().lower())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    return normalized or None
 
 
 def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
@@ -316,6 +3854,8 @@ def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
     if status in CONTEXT_REUSABLE_STATUSES:
         return {
             "status": context.get("status"),
+            "normalized_status": status,
+            "availability": "available",
             "reusable": True,
             "locked": False,
             "reason": "status_reusable",
@@ -323,19 +3863,34 @@ def _context_reuse_state(context: dict[str, Any]) -> dict[str, Any]:
     if status in CONTEXT_LOCKED_STATUSES:
         return {
             "status": context.get("status"),
+            "normalized_status": status,
+            "availability": "locked",
             "reusable": False,
             "locked": True,
             "reason": "status_locked",
         }
+    if status in CONTEXT_UNAVAILABLE_STATUSES:
+        return {
+            "status": context.get("status"),
+            "normalized_status": status,
+            "availability": "unavailable",
+            "reusable": False,
+            "locked": False,
+            "reason": "status_unavailable",
+        }
     if status is None:
         return {
             "status": None,
+            "normalized_status": None,
+            "availability": "unknown",
             "reusable": False,
             "locked": False,
             "reason": "status_missing",
         }
     return {
         "status": context.get("status"),
+        "normalized_status": status,
+        "availability": "unknown",
         "reusable": False,
         "locked": False,
         "reason": "status_not_reusable",
@@ -353,19 +3908,336 @@ def _metadata_matches(
     return all(metadata.get(key) == value for key, value in expected.items())
 
 
+def _context_registry_path(raw_path: str | None = None) -> tuple[Path, str]:
+    if raw_path:
+        return Path(raw_path).expanduser(), "argument"
+    env_path = os.environ.get(CONTEXT_REGISTRY_FILE_ENV)
+    if env_path:
+        return Path(env_path).expanduser(), "env"
+    return (
+        Path.home() / ".config" / "lexmount" / "browser-cli" / "context-registry.json",
+        "default",
+    )
+
+
+def _context_registry_scope() -> dict[str, str | None]:
+    return {
+        "project_id": os.environ.get("LEXMOUNT_PROJECT_ID"),
+        "base_url": os.environ.get("LEXMOUNT_BASE_URL") or DEFAULT_LEXMOUNT_BASE_URL,
+    }
+
+
+def _read_context_registry() -> dict[str, Any]:
+    path, _path_source = _context_registry_path()
+    if not path.exists():
+        return {"version": 1, "contexts": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": 1, "contexts": {}}
+    if not isinstance(data, dict):
+        return {"version": 1, "contexts": {}}
+    contexts = data.get("contexts")
+    if not isinstance(contexts, dict):
+        contexts = {}
+    return {"version": 1, "contexts": contexts}
+
+
+def _write_context_registry(registry: dict[str, Any]) -> None:
+    path, _path_source = _context_registry_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(registry, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    if os.name == "posix":
+        path.chmod(0o600)
+
+
+def _record_context_metadata(context: dict[str, Any]) -> None:
+    context_id = context.get("context_id") or context.get("id")
+    metadata = context.get("metadata")
+    if not context_id or not isinstance(metadata, dict) or not metadata:
+        return
+    registry = _read_context_registry()
+    contexts = registry.setdefault("contexts", {})
+    contexts[str(context_id)] = {
+        "context_id": str(context_id),
+        "metadata": metadata,
+        **_context_registry_scope(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _write_context_registry(registry)
+
+
+def _forget_context_metadata(context_id: str) -> None:
+    registry = _read_context_registry()
+    contexts = registry.get("contexts")
+    if not isinstance(contexts, dict) or context_id not in contexts:
+        return
+    del contexts[context_id]
+    _write_context_registry(registry)
+
+
+def _registry_metadata_for_context(
+    context: dict[str, Any],
+    registry: dict[str, Any],
+) -> dict[str, Any] | None:
+    context_id = context.get("context_id") or context.get("id")
+    if not context_id:
+        return None
+    contexts = registry.get("contexts")
+    if not isinstance(contexts, dict):
+        return None
+    entry = contexts.get(str(context_id))
+    if not isinstance(entry, dict):
+        return None
+    scope = _context_registry_scope()
+    if entry.get("project_id") != scope["project_id"]:
+        return None
+    if entry.get("base_url") != scope["base_url"]:
+        return None
+    metadata = entry.get("metadata")
+    if not isinstance(metadata, dict) or not metadata:
+        return None
+    return metadata
+
+
+def _effective_context_metadata(
+    context: dict[str, Any],
+    registry: dict[str, Any],
+) -> tuple[Any, str]:
+    metadata = context.get("metadata")
+    if isinstance(metadata, dict) and metadata:
+        return metadata, "api"
+    registry_metadata = _registry_metadata_for_context(context, registry)
+    if registry_metadata is not None:
+        return registry_metadata, "local_registry"
+    if isinstance(metadata, dict):
+        return metadata, "api_empty"
+    return metadata, "missing"
+
+
+def _metadata_match_diagnostics(
+    metadata: Any,
+    expected: dict[str, Any],
+    *,
+    metadata_source: str,
+) -> dict[str, Any]:
+    if isinstance(metadata, dict):
+        metadata_keys = sorted(str(key) for key in metadata)
+    else:
+        metadata_keys = []
+
+    expected_keys = sorted(expected, key=str)
+    filter_keys = [str(key) for key in expected_keys]
+    matched_keys: list[str] = []
+    missing_keys: list[str] = []
+    different_keys: list[str] = []
+
+    for key in expected_keys:
+        key_name = str(key)
+        if not isinstance(metadata, dict) or key not in metadata:
+            missing_keys.append(key_name)
+        elif metadata.get(key) == expected.get(key):
+            matched_keys.append(key_name)
+        else:
+            different_keys.append(key_name)
+
+    return {
+        "metadata_present": isinstance(metadata, dict),
+        "metadata_source": metadata_source,
+        "metadata_keys": metadata_keys,
+        "filter_keys": filter_keys,
+        "matched_keys": matched_keys,
+        "missing_keys": missing_keys,
+        "different_keys": different_keys,
+        "value_redacted": True,
+    }
+
+
 def _context_pick_candidate(
     context: dict[str, Any],
     metadata_filter: dict[str, Any],
+    registry: dict[str, Any],
 ) -> dict[str, Any]:
     reuse = _context_reuse_state(context)
-    metadata_match = _metadata_matches(context.get("metadata"), metadata_filter)
+    metadata, metadata_source = _effective_context_metadata(context, registry)
+    metadata_match = _metadata_matches(metadata, metadata_filter)
+    metadata_diagnostics = _metadata_match_diagnostics(
+        metadata,
+        metadata_filter,
+        metadata_source=metadata_source,
+    )
     return {
         "context_id": context.get("context_id"),
         "status": context.get("status"),
+        "normalized_status": reuse["normalized_status"],
+        "availability": reuse["availability"],
         "metadata_match": metadata_match,
+        "metadata_diagnostics": metadata_diagnostics,
         "reusable": reuse["reusable"],
         "locked": reuse["locked"],
         "reason": reuse["reason"] if metadata_match else "metadata_mismatch",
+    }
+
+
+def _parse_context_timestamp(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _context_selection_timestamp(context: dict[str, Any]) -> float | None:
+    for field in CONTEXT_SELECTION_TIMESTAMP_FIELDS:
+        parsed = _parse_context_timestamp(context.get(field))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _select_reusable_context(
+    contexts: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    *,
+    selection_strategy: str,
+) -> dict[str, Any] | None:
+    reusable_pairs = [
+        (index, context)
+        for index, (context, candidate) in enumerate(zip(contexts, candidates))
+        if candidate.get("metadata_match") and candidate.get("reusable")
+    ]
+    if not reusable_pairs:
+        return None
+    if selection_strategy == "last":
+        return reusable_pairs[-1][1]
+    if selection_strategy in {"newest", "oldest"}:
+        timestamped = [
+            (index, context, timestamp)
+            for index, context in reusable_pairs
+            if (timestamp := _context_selection_timestamp(context)) is not None
+        ]
+        if not timestamped:
+            return (
+                reusable_pairs[-1][1]
+                if selection_strategy == "newest"
+                else reusable_pairs[0][1]
+            )
+        return sorted(
+            timestamped,
+            key=lambda pair: (pair[2], pair[0]),
+            reverse=selection_strategy == "newest",
+        )[0][1]
+    return reusable_pairs[0][1]
+
+
+def _context_selection_decision(
+    candidates: list[dict[str, Any]],
+    *,
+    selected_context_id: Any = None,
+    created: bool = False,
+    create_if_missing: bool = False,
+    dry_run: bool = False,
+) -> tuple[str, str]:
+    if selected_context_id is not None:
+        if created:
+            return "use_created_context", "created_context_selected"
+        return "use_selected_context", "reusable_context_selected"
+
+    metadata_matches = [
+        candidate for candidate in candidates if candidate.get("metadata_match") is True
+    ]
+    locked_matches = [
+        candidate for candidate in metadata_matches if candidate.get("locked") is True
+    ]
+    if dry_run and create_if_missing:
+        return "rerun_without_dry_run_to_create", "dry_run_create_if_missing"
+    if locked_matches:
+        return "wait_or_choose_different_context", "locked_context_matches"
+    if candidates and not metadata_matches:
+        return "adjust_metadata_filter", "no_metadata_matches"
+    if create_if_missing:
+        return "create_context", "create_if_missing"
+    return "rerun_with_create_if_missing", "no_reusable_context"
+
+
+def _context_selection_summary(
+    candidates: list[dict[str, Any]],
+    *,
+    selected_context_id: Any = None,
+    created: bool = False,
+    create_if_missing: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    availability_counts = Counter(
+        str(candidate.get("availability", "unknown")) for candidate in candidates
+    )
+    reason_counts = Counter(
+        str(candidate.get("reason", "unknown")) for candidate in candidates
+    )
+    metadata_matches = [
+        candidate for candidate in candidates if candidate.get("metadata_match") is True
+    ]
+    reusable_matches = [
+        candidate for candidate in metadata_matches if candidate.get("reusable") is True
+    ]
+    locked_matches = [
+        candidate for candidate in metadata_matches if candidate.get("locked") is True
+    ]
+    unavailable_matches = [
+        candidate
+        for candidate in metadata_matches
+        if candidate.get("availability") == "unavailable"
+    ]
+    unknown_matches = [
+        candidate
+        for candidate in metadata_matches
+        if candidate.get("availability") == "unknown"
+    ]
+    recommended_next_action, decision_reason = _context_selection_decision(
+        candidates,
+        selected_context_id=selected_context_id,
+        created=created,
+        create_if_missing=create_if_missing,
+        dry_run=dry_run,
+    )
+    return {
+        "checked": len(candidates),
+        "selected_context_id": selected_context_id,
+        "recommended_next_action": recommended_next_action,
+        "decision_reason": decision_reason,
+        "metadata_matches": len(metadata_matches),
+        "metadata_mismatches": len(candidates) - len(metadata_matches),
+        "reusable_matches": len(reusable_matches),
+        "locked_matches": len(locked_matches),
+        "unavailable_matches": len(unavailable_matches),
+        "unknown_matches": len(unknown_matches),
+        "availability_counts": dict(sorted(availability_counts.items())),
+        "reason_counts": dict(sorted(reason_counts.items())),
+        "create_if_missing": bool(create_if_missing),
+        "dry_run": bool(dry_run),
+        "would_create": bool(
+            dry_run and selected_context_id is None and create_if_missing
+        ),
     }
 
 
@@ -376,6 +4248,7 @@ def _select_or_create_context_for_session(
     metadata_filter: dict[str, Any],
     status: str | None,
     limit: int,
+    selection_strategy: str,
     create_if_missing: bool,
 ) -> dict[str, Any]:
     try:
@@ -387,24 +4260,43 @@ def _select_or_create_context_for_session(
     contexts = payload.get("contexts", [])
     if not isinstance(contexts, list):
         contexts = []
+    registry = _read_context_registry()
     candidates = [
-        _context_pick_candidate(context, metadata_filter) for context in contexts
+        _context_pick_candidate(context, metadata_filter, registry)
+        for context in contexts
     ]
+    selected_context = _select_reusable_context(
+        contexts,
+        candidates,
+        selection_strategy=selection_strategy,
+    )
 
-    for context, candidate in zip(contexts, candidates, strict=True):
-        if candidate["metadata_match"] and candidate["reusable"]:
-            return {
-                "selected": True,
-                "created": False,
-                "context_id": context.get("context_id"),
-                "context": context,
-                "reuse": _context_reuse_state(context),
-                "checked": len(contexts),
-                "candidates": candidates,
-                "metadata_filter": metadata_filter,
-                "status_filter": status,
-                "limit": limit,
-            }
+    if selected_context is not None:
+        context_id = selected_context.get("context_id")
+        reuse = _context_reuse_state(selected_context)
+        return {
+            "selected": True,
+            "created": False,
+            "context_id": context_id,
+            "context": selected_context,
+            "normalized_status": reuse["normalized_status"],
+            "availability": reuse["availability"],
+            "reusable": reuse["reusable"],
+            "locked": reuse["locked"],
+            "reuse_reason": reuse["reason"],
+            "reuse": reuse,
+            "checked": len(contexts),
+            "candidates": candidates,
+            "selection_strategy": selection_strategy,
+            "selection_summary": _context_selection_summary(
+                candidates,
+                selected_context_id=context_id,
+                create_if_missing=create_if_missing,
+            ),
+            "metadata_filter": metadata_filter,
+            "status_filter": status,
+            "limit": limit,
+        }
 
     if create_if_missing:
         try:
@@ -412,14 +4304,28 @@ def _select_or_create_context_for_session(
         except Exception as exc:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
+        _record_context_metadata(created_context)
+        reuse = _context_reuse_state(created_context)
         return {
             "selected": True,
             "created": True,
             "context_id": created_context.get("context_id"),
             "context": created_context,
-            "reuse": _context_reuse_state(created_context),
+            "normalized_status": reuse["normalized_status"],
+            "availability": reuse["availability"],
+            "reusable": reuse["reusable"],
+            "locked": reuse["locked"],
+            "reuse_reason": reuse["reason"],
+            "reuse": reuse,
             "checked": len(contexts),
             "candidates": candidates,
+            "selection_strategy": selection_strategy,
+            "selection_summary": _context_selection_summary(
+                candidates,
+                selected_context_id=created_context.get("context_id"),
+                created=True,
+                create_if_missing=create_if_missing,
+            ),
             "metadata_filter": metadata_filter,
             "status_filter": status,
             "limit": limit,
@@ -433,6 +4339,11 @@ def _select_or_create_context_for_session(
         created=False,
         checked=len(contexts),
         candidates=candidates,
+        selection_strategy=selection_strategy,
+        selection_summary=_context_selection_summary(
+            candidates,
+            create_if_missing=create_if_missing,
+        ),
         metadata_filter=metadata_filter,
         status_filter=status,
         limit=limit,
@@ -464,17 +4375,749 @@ def _env_value_status(
     return payload
 
 
-def _auth_next_steps(*, configured: bool) -> list[str]:
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _device_token_credentials_path(raw_path: str | None = None) -> tuple[Path, str]:
+    if raw_path:
+        return Path(raw_path).expanduser(), "argument"
+    env_path = os.environ.get(DEVICE_TOKEN_CREDENTIALS_FILE_ENV)
+    if env_path:
+        return Path(env_path).expanduser(), "env"
+    return (
+        Path.home() / ".config" / "lexmount" / "browser-cli" / "credentials.json",
+        "default",
+    )
+
+
+def _parse_datetime_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _device_code_base_url(raw_url: str | None = None) -> tuple[str | None, str]:
+    if raw_url:
+        return raw_url.rstrip("/"), "argument"
+    env_url = os.environ.get(DEVICE_CODE_BASE_URL_ENV)
+    if env_url:
+        return env_url.rstrip("/"), "env"
+    return None, "unset"
+
+
+def _device_code_endpoint(base_url: str, path: str) -> str:
+    return urljoin(f"{base_url.rstrip('/')}/", path.lstrip("/"))
+
+
+def _token_lifecycle_base_url(raw_url: str | None = None) -> tuple[str | None, str]:
+    if raw_url:
+        return raw_url.rstrip("/"), "argument"
+    env_url = os.environ.get(TOKEN_LIFECYCLE_BASE_URL_ENV)
+    if env_url:
+        return env_url.rstrip("/"), "env"
+    device_code_env_url = os.environ.get(DEVICE_CODE_BASE_URL_ENV)
+    if device_code_env_url:
+        return device_code_env_url.rstrip("/"), "device_code_env"
+    return None, "unset"
+
+
+def _token_lifecycle_endpoint(base_url: str, path: str) -> str:
+    return urljoin(f"{base_url.rstrip('/')}/", path.lstrip("/"))
+
+
+def _json_http_post(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    request = Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            raw_body = response.read()
+            status_code = int(getattr(response, "status", 200))
+    except HTTPError as exc:
+        raw_body = exc.read()
+        status_code = int(exc.code)
+    except URLError as exc:
+        return {
+            "ok": False,
+            "status_code": None,
+            "error": "network_error",
+            "message": _mask_sensitive_text(str(exc.reason)),
+            "json": {},
+        }
+    except OSError as exc:
+        return {
+            "ok": False,
+            "status_code": None,
+            "error": "network_error",
+            "message": _mask_sensitive_text(str(exc)),
+            "json": {},
+        }
+
+    text = raw_body.decode("utf-8", errors="replace") if raw_body else ""
+    try:
+        parsed = json.loads(text) if text else {}
+    except json.JSONDecodeError as exc:
+        return {
+            "ok": False,
+            "status_code": status_code,
+            "error": "invalid_json_response",
+            "message": f"Response JSON could not be parsed: {exc}",
+            "json": {},
+        }
+    if not isinstance(parsed, dict):
+        return {
+            "ok": False,
+            "status_code": status_code,
+            "error": "invalid_json_response",
+            "message": "Response JSON must contain an object.",
+            "json": {},
+        }
+    error = parsed.get("error")
+    return {
+        "ok": 200 <= status_code < 300 and not error,
+        "status_code": status_code,
+        "error": str(error) if error else None,
+        "message": _mask_sensitive_text(str(parsed.get("message") or "")) or None,
+        "json": parsed,
+    }
+
+
+def _device_token_expires_at(token_payload: dict[str, Any]) -> str | None:
+    expires_at = token_payload.get("expires_at")
+    if isinstance(expires_at, str) and expires_at:
+        return expires_at
+    expires_in = token_payload.get("expires_in")
+    if isinstance(expires_in, str) and expires_in.isdigit():
+        expires_in = int(expires_in)
+    if isinstance(expires_in, int | float):
+        return datetime.fromtimestamp(
+            _now_utc().timestamp() + float(expires_in),
+            tz=timezone.utc,
+        ).isoformat()
+    return None
+
+
+def _write_device_token_credentials(
+    token_payload: dict[str, Any],
+    *,
+    credentials_file: str | None,
+    requested_scopes: list[str],
+) -> dict[str, Any]:
+    path, path_source = _device_token_credentials_path(credentials_file)
+    access_token = token_payload.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        return {
+            "saved": False,
+            "credentials_file": str(path),
+            "path_source": path_source,
+            "error": "missing_access_token",
+        }
+    scopes = token_payload.get("scopes")
+    if not isinstance(scopes, list):
+        scopes = requested_scopes
+    data = {
+        "kind": "device_token",
+        "project_id": token_payload.get("project_id"),
+        "api_base_url": token_payload.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+        "access_token": access_token,
+        "refresh_token": token_payload.get("refresh_token"),
+        "expires_at": _device_token_expires_at(token_payload),
+        "scopes": scopes,
+        "token_id": token_payload.get("token_id"),
+        "token_type": token_payload.get("token_type") or "Bearer",
+        "created_at": _now_utc().isoformat(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    if os.name == "posix":
+        path.chmod(0o600)
+    return {
+        "saved": True,
+        "credentials_file": str(path),
+        "path_source": path_source,
+        "device_token": _local_device_token_status(str(path)),
+    }
+
+
+def _read_device_token_credentials_data(
+    raw_path: str | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    path, path_source = _device_token_credentials_path(raw_path)
+    meta = {"credentials_file": str(path), "path_source": path_source}
+    try:
+        raw_data = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, {
+            **meta,
+            "error": "read_error",
+            "message": _mask_sensitive_text(str(exc)),
+        }
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError as exc:
+        return None, {
+            **meta,
+            "error": "invalid_json",
+            "message": f"Invalid credentials JSON: {exc}",
+        }
+    if not isinstance(data, dict):
+        return None, {
+            **meta,
+            "error": "invalid_credentials",
+            "message": "Credentials JSON must contain an object.",
+        }
+    return data, meta
+
+
+def _posix_file_mode(path: Path) -> tuple[str | None, bool | None]:
+    if os.name != "posix":
+        return None, None
+    try:
+        mode = path.stat().st_mode & 0o777
+    except OSError:
+        return None, None
+    return oct(mode), mode == 0o600
+
+
+def _local_device_token_status(raw_path: str | None = None) -> dict[str, Any]:
+    path, path_source = _device_token_credentials_path(raw_path)
+    status: dict[str, Any] = {
+        "present": False,
+        "path": str(path),
+        "path_source": path_source,
+        "kind": None,
+        "valid": False,
+        "expired": None,
+        "refresh_needed": None,
+        "usable_for_runtime": False,
+        "warnings": [],
+    }
+    if not path.exists():
+        return status
+
+    status["present"] = True
+    file_mode, file_mode_ok = _posix_file_mode(path)
+    if file_mode is not None:
+        status["file_mode"] = file_mode
+        status["file_mode_ok"] = file_mode_ok
+        if file_mode_ok is False:
+            status["warnings"].append(
+                "Credential file permissions should be 0600 on POSIX systems."
+            )
+
+    try:
+        raw_data = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        status.update({"readable": False, "error": "read_error", "message": str(exc)})
+        return status
+
+    status["readable"] = True
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError as exc:
+        status.update(
+            {
+                "error": "invalid_json",
+                "message": f"Invalid credentials JSON: {exc}",
+            }
+        )
+        return status
+    if not isinstance(data, dict):
+        status.update(
+            {
+                "error": "invalid_credentials",
+                "message": "Credentials JSON must contain an object.",
+            }
+        )
+        return status
+
+    kind = data.get("kind")
+    access_token = data.get("access_token")
+    refresh_token = data.get("refresh_token")
+    expires_at = data.get("expires_at")
+    expires_at_dt = _parse_datetime_utc(expires_at)
+    expires_in_seconds: int | None = None
+    expired: bool | None = None
+    refresh_needed: bool | None = None
+    if expires_at_dt is not None:
+        expires_in_seconds = int((expires_at_dt - _now_utc()).total_seconds())
+        expired = expires_in_seconds <= 0
+        refresh_needed = (
+            expired or expires_in_seconds <= DEVICE_TOKEN_REFRESH_WINDOW_SECONDS
+        )
+    scopes = data.get("scopes")
+    if not isinstance(scopes, list):
+        scopes = []
+    scopes = [str(scope) for scope in scopes]
+
+    status.update(
+        {
+            "kind": kind,
+            "valid": (
+                kind == "device_token"
+                and isinstance(access_token, str)
+                and bool(access_token)
+                and isinstance(data.get("project_id"), str)
+                and bool(data.get("project_id"))
+                and expires_at_dt is not None
+                and expired is False
+            ),
+            "expired": expired,
+            "refresh_needed": refresh_needed,
+            "expires_at": expires_at,
+            "expires_in_seconds": expires_in_seconds,
+            "project_id": data.get("project_id"),
+            "api_base_url": data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+            "scopes": scopes,
+            "scope_count": len(scopes),
+            "token_id": data.get("token_id"),
+            "has_access_token": isinstance(access_token, str) and bool(access_token),
+            "has_refresh_token": isinstance(refresh_token, str) and bool(refresh_token),
+        }
+    )
+    if kind != "device_token":
+        status["warnings"].append("Unsupported credential kind.")
+    if not status["has_access_token"]:
+        status["warnings"].append("Device token is missing access_token.")
+    if not status.get("project_id"):
+        status["warnings"].append("Device token is missing project_id.")
+    if expires_at_dt is None:
+        status["warnings"].append("Device token expires_at is missing or invalid.")
+    elif expired:
+        status["warnings"].append("Device token is expired.")
+    status["usable_for_runtime"] = False
+    status["runtime_note"] = (
+        "Device-token bearer auth is not enabled in browser-cli runtime yet; "
+        "use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions."
+    )
+    return status
+
+
+def _auth_source(
+    *,
+    env_configured: bool,
+    device_token_status: dict[str, Any],
+) -> str:
+    if env_configured:
+        return "env"
+    if device_token_status.get("present"):
+        return "device_token"
+    return "missing"
+
+
+def _bearer_runtime_required_support() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "sdk_accepts_bearer_token",
+            "owner": "lexmount-python-sdk",
+            "required_change": (
+                "Lexmount client accepts scoped bearer/access tokens and sends "
+                "Authorization: Bearer without requiring LEXMOUNT_API_KEY."
+            ),
+        },
+        {
+            "id": "api_accepts_bearer_token",
+            "owner": "Lexmount API",
+            "required_change": (
+                "Session, context, and action-related APIs accept project-bound "
+                "scoped bearer tokens with browser.* permissions."
+            ),
+        },
+        {
+            "id": "browser_gateway_accepts_bearer_token",
+            "owner": "Lexmount browser gateway",
+            "required_change": (
+                "Browser CDP websocket connection can be authorized with a "
+                "short-lived bearer token instead of an api_key query parameter."
+            ),
+        },
+    ]
+
+
+def _runtime_auth_status(
+    *,
+    env_configured: bool,
+    missing_env: list[str],
+    device_token_status: dict[str, Any],
+) -> dict[str, Any]:
+    device_token_present = bool(device_token_status.get("present"))
+    device_token_valid = bool(device_token_status.get("valid"))
+    bearer_runtime_required = _bearer_runtime_required_support()
+    if env_configured:
+        return {
+            "usable": True,
+            "source": "env_api_key",
+            "browser_actions_auth": "env_api_key",
+            "fallback_missing_env": [],
+            "device_token_runtime_usable": False,
+            "bearer_runtime": {
+                "available": False,
+                "reason": "bearer_token_runtime_not_enabled",
+                "device_token_present": device_token_present,
+                "device_token_valid": device_token_valid,
+                "required_support": bearer_runtime_required,
+            },
+            "next_steps": [
+                f"Run `{AGENT_DOCTOR_COMMAND}` to verify live API connectivity.",
+                "Continue using env API-key credentials for browser actions until bearer-token runtime support lands.",
+            ],
+        }
+    if device_token_present:
+        return {
+            "usable": False,
+            "source": "device_token_pending_runtime",
+            "browser_actions_auth": "unavailable",
+            "fallback_missing_env": missing_env,
+            "device_token_runtime_usable": False,
+            "bearer_runtime": {
+                "available": False,
+                "reason": "bearer_token_runtime_not_enabled",
+                "device_token_present": device_token_present,
+                "device_token_valid": device_token_valid,
+                "required_support": bearer_runtime_required,
+            },
+            "next_steps": [
+                "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions today.",
+                "Track runtime_auth.bearer_runtime.required_support before treating device tokens as browser-action credentials.",
+                "Run `browser-cli commands --workflow scoped_token_lifecycle` for refresh, scope, and logout checks.",
+            ],
+        }
+    return {
+        "usable": False,
+        "source": "missing",
+        "browser_actions_auth": "missing_env_api_key",
+        "fallback_missing_env": missing_env,
+        "device_token_runtime_usable": False,
+        "bearer_runtime": {
+            "available": False,
+            "reason": "no_device_token_metadata",
+            "device_token_present": False,
+            "device_token_valid": False,
+            "required_support": bearer_runtime_required,
+        },
+        "next_steps": [
+            "Run `browser-cli auth login` for Connect from Codex setup guidance.",
+            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+            f"Run `{AGENT_DOCTOR_COMMAND}` after setting credentials.",
+        ],
+    }
+
+
+def _device_token_scope_check(
+    device_token_status: dict[str, Any],
+    required_scopes: list[str] | None,
+) -> dict[str, Any]:
+    required = _dedupe_preserving_order(required_scopes or [])
+    available = [
+        str(scope)
+        for scope in device_token_status.get("scopes", [])
+        if isinstance(scope, str)
+    ]
+    missing = [scope for scope in required if scope not in available]
+    return {
+        "required_scopes": required,
+        "available_scopes": available,
+        "missing_scopes": missing,
+        "satisfied": not missing,
+    }
+
+
+def _auth_next_steps(
+    *,
+    configured: bool,
+    device_token_status: dict[str, Any] | None = None,
+) -> list[str]:
     if configured:
         return [
-            "Run `browser-cli doctor` to verify live API connectivity.",
+            f"Run `{AGENT_DOCTOR_COMMAND}` to verify live API connectivity.",
             "Create a session with `browser-cli session create`.",
+        ]
+    if device_token_status and device_token_status.get("present"):
+        if device_token_status.get("valid"):
+            return [
+                "Device token metadata is present, but browser actions still require env API-key credentials until bearer-token support lands.",
+                "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+                f"Run `{AGENT_DOCTOR_COMMAND}` after setting credentials.",
+            ]
+        return [
+            "Local device-token metadata is present but not currently valid.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+            "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
         ]
     return [
         "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
         "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-        "Run `browser-cli doctor` after setting credentials.",
+        f"Run `{AGENT_DOCTOR_COMMAND}` after setting credentials.",
     ]
+
+
+def _auth_token_info_next_steps(
+    *,
+    device_token_status: dict[str, Any],
+    scope_check: dict[str, Any],
+) -> list[str]:
+    if not device_token_status.get("present"):
+        return [
+            "No local device-token metadata was found.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+            "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support lands.",
+        ]
+    if not device_token_status.get("valid"):
+        return [
+            "Local device-token metadata is present but not currently valid.",
+            "Run `browser-cli auth login` to request fresh credentials when device-code login is available.",
+            "Use env API-key credentials for browser actions today.",
+        ]
+    if not scope_check.get("satisfied"):
+        return [
+            "Local device-token metadata is valid but missing one or more requested scopes.",
+            "Request a scoped credential that includes the missing scopes.",
+            "Use env API-key credentials for browser actions today.",
+        ]
+    return [
+        "Local device-token metadata is valid for the requested scope check.",
+        "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
+    ]
+
+
+def _auth_refresh_reason(
+    device_token_status: dict[str, Any],
+    *,
+    force: bool,
+) -> str:
+    if not device_token_status.get("present"):
+        return "missing_credentials_file"
+    if device_token_status.get("error"):
+        return "invalid_credentials_file"
+    if device_token_status.get("kind") != "device_token":
+        return "unsupported_credentials_kind"
+    if not device_token_status.get("has_refresh_token"):
+        return "missing_refresh_token"
+    if not force and device_token_status.get("refresh_needed") is False:
+        return "refresh_not_needed"
+    return "remote_refresh_unavailable"
+
+
+def _auth_refresh_next_steps(
+    *,
+    reason: str,
+    device_token_status: dict[str, Any],
+) -> list[str]:
+    if reason == "missing_credentials_file":
+        return [
+            "No local device-token metadata was found.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+            "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support lands.",
+        ]
+    if reason in {"invalid_credentials_file", "unsupported_credentials_kind"}:
+        return [
+            "Local token metadata cannot be refreshed in its current form.",
+            "Run `browser-cli auth logout` to remove local metadata if it is stale.",
+            "Run `browser-cli auth login` for browser.lexmount.cn setup guidance.",
+        ]
+    if reason == "missing_refresh_token":
+        return [
+            "Local device-token metadata does not include a refresh token.",
+            "Run `browser-cli auth login` to request fresh credentials when device-code login is available.",
+            "Use env API-key credentials for browser actions today.",
+        ]
+    if reason == "refresh_not_needed":
+        return [
+            "Local device-token metadata does not currently need refresh.",
+            "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
+        ]
+    if reason == "refreshed":
+        return [
+            "Local device-token metadata was refreshed and saved.",
+            "Run `browser-cli auth status` to inspect the refreshed metadata.",
+            "Bearer-token runtime auth is not enabled yet, so browser actions still require env API-key credentials.",
+        ]
+    if reason in {"refresh_endpoint_error", "refresh_response_invalid"}:
+        return [
+            "Remote token refresh was attempted but did not complete.",
+            "Inspect `remote_refresh.status_code`, `remote_refresh.error`, and `remote_refresh.message`.",
+            "Use env API-key credentials for browser actions today.",
+        ]
+    steps = [
+        "Remote token refresh is not implemented in browser-cli yet.",
+        "Run `browser-cli auth login` to request fresh credentials when browser.lexmount.cn supports device-code login.",
+        "Use env API-key credentials for browser actions today.",
+    ]
+    if device_token_status.get("expired"):
+        steps.insert(0, "Local device-token metadata is expired.")
+    return steps
+
+
+def _auth_logout_next_steps(
+    *,
+    deleted: bool,
+    revoke_requested: bool,
+    revoke_available: bool = False,
+    revoked: bool = False,
+) -> list[str]:
+    steps = [
+        "Run `browser-cli auth status` to verify local credential state.",
+        "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support lands.",
+    ]
+    if deleted:
+        steps.insert(0, "Local device-token metadata was removed.")
+    else:
+        steps.insert(0, "No local device-token metadata file was removed.")
+    if revoke_requested:
+        if revoked:
+            steps.append("Remote token revoke completed.")
+        elif revoke_available:
+            steps.append(
+                "Remote token revoke was attempted but did not complete; inspect `remote_revoke`."
+            )
+        else:
+            steps.append(
+                "Remote revoke is not implemented in browser-cli yet; revoke the token from browser.lexmount.cn if needed."
+            )
+    return steps
+
+
+def _merge_refreshed_token_payload(
+    response_payload: dict[str, Any],
+    current_credentials: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(response_payload)
+    for key in (
+        "refresh_token",
+        "project_id",
+        "api_base_url",
+        "scopes",
+        "token_id",
+        "token_type",
+    ):
+        if merged.get(key) in (None, "", []):
+            merged[key] = current_credentials.get(key)
+    return merged
+
+
+def _request_remote_token_refresh(
+    *,
+    endpoint: str,
+    credentials_file: str | None,
+    requested_scopes: list[str],
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    current_credentials, read_meta = _read_device_token_credentials_data(
+        credentials_file
+    )
+    if current_credentials is None:
+        return {
+            "attempted": False,
+            "ok": False,
+            "error": read_meta.get("error"),
+            "message": read_meta.get("message"),
+            **read_meta,
+        }
+    refresh_token = current_credentials.get("refresh_token")
+    if not isinstance(refresh_token, str) or not refresh_token:
+        return {
+            "attempted": False,
+            "ok": False,
+            "error": "missing_refresh_token",
+            "message": "Local credentials do not contain a refresh token.",
+            **read_meta,
+        }
+    response = _json_http_post(
+        endpoint,
+        {
+            "client_name": "browser-cli",
+            "refresh_token": refresh_token,
+            "token_id": current_credentials.get("token_id"),
+            "project_id": current_credentials.get("project_id"),
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    response_payload = response.get("json", {})
+    result: dict[str, Any] = {
+        "attempted": True,
+        "ok": bool(response.get("ok")),
+        "endpoint": endpoint,
+        "status_code": response.get("status_code"),
+        "error": response.get("error"),
+        "message": response.get("message"),
+    }
+    if not response.get("ok") or not isinstance(response_payload, dict):
+        return result
+    token_payload = _merge_refreshed_token_payload(
+        response_payload,
+        current_credentials,
+    )
+    credentials = _write_device_token_credentials(
+        token_payload,
+        credentials_file=credentials_file,
+        requested_scopes=requested_scopes,
+    )
+    return {
+        **result,
+        "credentials": credentials,
+        "saved": bool(credentials.get("saved")),
+    }
+
+
+def _request_remote_token_revoke(
+    *,
+    endpoint: str,
+    credentials_file: str | None,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    current_credentials, read_meta = _read_device_token_credentials_data(
+        credentials_file
+    )
+    if current_credentials is None:
+        return {
+            "attempted": False,
+            "ok": False,
+            "error": read_meta.get("error"),
+            "message": read_meta.get("message"),
+            **read_meta,
+        }
+    response = _json_http_post(
+        endpoint,
+        {
+            "client_name": "browser-cli",
+            "access_token": current_credentials.get("access_token"),
+            "refresh_token": current_credentials.get("refresh_token"),
+            "token_id": current_credentials.get("token_id"),
+            "project_id": current_credentials.get("project_id"),
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    return {
+        "attempted": True,
+        "ok": bool(response.get("ok")),
+        "endpoint": endpoint,
+        "status_code": response.get("status_code"),
+        "error": response.get("error"),
+        "message": response.get("message"),
+    }
 
 
 def _dedupe_preserving_order(values: list[str] | tuple[str, ...]) -> list[str]:
@@ -499,22 +5142,783 @@ def _auth_login_scopes(args: argparse.Namespace) -> list[str]:
     return _dedupe_preserving_order(raw_scopes)
 
 
+def _known_scope_details() -> dict[str, dict[str, Any]]:
+    return {
+        "browser:sessions": {
+            "label": "Browser sessions",
+            "description": "Create, list, inspect, keep alive, and close browser sessions.",
+            "permissions": [
+                "browser.sessions:create",
+                "browser.sessions:list",
+                "browser.sessions:read",
+                "browser.sessions:close",
+            ],
+            "risk": "medium",
+            "destructive": False,
+        },
+        "browser:contexts": {
+            "label": "Persistent browser contexts",
+            "description": "Create, list, inspect, reuse, and delete persistent browser contexts.",
+            "permissions": [
+                "browser.contexts:create",
+                "browser.contexts:list",
+                "browser.contexts:read",
+                "browser.contexts:delete",
+            ],
+            "risk": "medium",
+            "destructive": True,
+        },
+        "browser:actions": {
+            "label": "Browser actions",
+            "description": "Open pages and operate browser pages with clicks, typing, snapshots, screenshots, and DOM-backed actions.",
+            "permissions": [
+                "browser.actions:run",
+            ],
+            "risk": "high",
+            "destructive": False,
+        },
+    }
+
+
+def _scope_detail(scope: str) -> dict[str, Any]:
+    detail = _known_scope_details().get(scope)
+    if detail is None:
+        return {
+            "scope": scope,
+            "known": False,
+            "label": scope,
+            "description": "Custom or future scope requested by the caller.",
+            "permissions": [scope],
+            "risk": "unknown",
+            "destructive": None,
+        }
+    return {
+        "scope": scope,
+        "known": True,
+        **detail,
+    }
+
+
+def _scope_details(scopes: list[str]) -> list[dict[str, Any]]:
+    return [_scope_detail(scope) for scope in scopes]
+
+
+def _scope_catalog_entry(scope: str) -> dict[str, Any]:
+    detail = _scope_detail(scope)
+    permissions = list(detail["permissions"])
+    entry = {
+        **detail,
+        "default_requested": scope in DEFAULT_CODEX_CONNECT_SCOPES,
+        "permission_count": len(permissions),
+        "query_parameter": f"scope={scope}",
+        "browser_site_ui": {
+            "label_field": "label",
+            "description_field": "description",
+            "permissions_field": "permissions",
+            "risk_field": "risk",
+            "destructive_field": "destructive",
+            "default_checked_field": "default_requested",
+        },
+    }
+    if not detail["known"]:
+        entry["browser_site_ui"]["custom_scope"] = True
+    return entry
+
+
+def _scope_catalog_entries(scopes: list[str]) -> list[dict[str, Any]]:
+    return [_scope_catalog_entry(scope) for scope in scopes]
+
+
 def _connect_from_codex_url(
     *,
     project_id: str | None,
     scopes: list[str],
     expires_in: str,
+    response: str = "env",
 ) -> str:
     query: list[tuple[str, str]] = [
         ("source", "browser-cli"),
         ("intent", "agent-browser-control"),
-        ("response", "env"),
+        ("response", response),
         ("expires_in", expires_in),
     ]
     if project_id:
         query.append(("project_id", project_id))
     query.extend(("scope", scope) for scope in scopes)
     return f"{LEXMOUNT_CODEX_CONNECT_URL}?{urlencode(query)}"
+
+
+def _connect_from_codex_site_capabilities() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "project_id_display",
+            "available": False,
+            "required_for": ["manual_env", "scoped_api_key", "device_code"],
+            "browser_site_action": (
+                "Show the selected Project ID, project name, API host, and region "
+                "before issuing agent credentials."
+            ),
+        },
+        {
+            "id": "scoped_api_key",
+            "available": False,
+            "required_for": ["manual_env", "scoped_api_key"],
+            "browser_site_action": (
+                "Create a local-agent API key with explicit browser session, "
+                "context, and action permissions."
+            ),
+        },
+        {
+            "id": "copy_install_and_env",
+            "available": False,
+            "required_for": ["manual_env", "scoped_api_key"],
+            "browser_site_action": (
+                "Provide copyable uv install, auth export-env, local shell export, "
+                "and browser-cli doctor --json commands."
+            ),
+        },
+        {
+            "id": "doctor_verification",
+            "available": False,
+            "required_for": ["manual_env", "support"],
+            "browser_site_action": (
+                "Explain browser-cli doctor --json success criteria and map "
+                "repair_plan commands, env, and guidance to troubleshooting text."
+            ),
+        },
+        {
+            "id": "scoped_key_lifecycle",
+            "available": False,
+            "required_for": ["scoped_api_key", "security"],
+            "browser_site_action": (
+                "Show permission labels, expiration, status, masked preview, "
+                "revoke, and rotation controls for agent keys."
+            ),
+        },
+        {
+            "id": "device_code_oauth",
+            "available": False,
+            "required_for": ["device_code", "scoped_local_token"],
+            "browser_site_action": (
+                "Expose device-code or OAuth approval endpoints and issue "
+                "project-bound, scoped, time-limited local tokens."
+            ),
+        },
+    ]
+
+
+def _connect_from_codex_site_capability_status(
+    capabilities: list[dict[str, Any]],
+) -> dict[str, Any]:
+    missing = [
+        str(capability["id"])
+        for capability in capabilities
+        if not capability.get("available")
+    ]
+    return {
+        "available": not missing,
+        "available_count": len(capabilities) - len(missing),
+        "missing_count": len(missing),
+        "missing": missing,
+    }
+
+
+def _device_code_required_endpoints() -> list[str]:
+    return [
+        "POST /api/auth/device/code",
+        "POST /api/auth/device/token",
+    ]
+
+
+def _device_code_required_browser_site_support() -> list[str]:
+    return [
+        "Show user_code approval UI on /connect/codex.",
+        "Issue scoped, project-bound, short-lived access tokens.",
+        "Issue refresh tokens with revoke and expiration metadata.",
+        "Expose token refresh and revoke endpoints for browser-cli.",
+        "Enable browser runtime bearer-token authentication.",
+    ]
+
+
+def _connect_from_codex_browser_site_requirements() -> list[str]:
+    return [
+        "Implement /connect/codex on browser.lexmount.cn.",
+        "Accept optional project_id, repeated scope, expires_in, source, intent, and response query parameters.",
+        "Show the selected Project ID, project name, API host, and region before issuing credentials.",
+        "Issue scoped credentials for browser sessions, contexts, and actions.",
+        "Offer copyable install, local env, auth export-env, and doctor verification commands without exposing secrets in chat.",
+        "Display requested scopes with labels, permission names, risk levels, destructive markers, expiration, masked preview, revoke, and rotation controls.",
+        "Support device-code or OAuth approval for project-bound, scoped, time-limited local tokens.",
+    ]
+
+
+def _connect_from_codex_required_token_lifecycle() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "issue_scoped_key",
+            "required": True,
+            "purpose": "Create a scoped API key or local token bound to the selected project and requested scopes.",
+            "must_show": [
+                "project_id",
+                "scope labels",
+                "expires_at",
+                "masked credential preview",
+            ],
+        },
+        {
+            "id": "refresh_token",
+            "required": True,
+            "purpose": "Refresh short-lived local access tokens without exposing token values in chat.",
+            "cli_command": "browser-cli auth refresh",
+            "endpoint": "POST /api/auth/token/refresh",
+            "configure_with": [
+                "--token-base-url",
+                TOKEN_LIFECYCLE_BASE_URL_ENV,
+                DEVICE_CODE_BASE_URL_ENV,
+            ],
+        },
+        {
+            "id": "revoke_token",
+            "required": True,
+            "purpose": "Revoke scoped API keys or device tokens when the user or agent requests cleanup.",
+            "cli_command": "browser-cli auth logout --revoke",
+            "endpoint": "POST /api/auth/token/revoke",
+            "configure_with": [
+                "--token-base-url",
+                TOKEN_LIFECYCLE_BASE_URL_ENV,
+                DEVICE_CODE_BASE_URL_ENV,
+            ],
+        },
+        {
+            "id": "expire_token",
+            "required": True,
+            "purpose": "Attach expiration metadata so agents can detect stale credentials before browser actions.",
+            "status_fields": [
+                "device_token.expires_at",
+                "device_token.expired",
+                "device_token.refresh_needed",
+            ],
+        },
+    ]
+
+
+def _connect_from_codex_required_runtime_auth() -> list[dict[str, Any]]:
+    return [
+        {
+            **item,
+            "required": True,
+            "purpose": "Allow scoped local tokens from Connect from Codex to drive browser actions.",
+        }
+        for item in _bearer_runtime_required_support()
+    ]
+
+
+def _connect_from_codex_required_api_contract() -> dict[str, Any]:
+    return {
+        "device_code": [
+            {
+                "method": "POST",
+                "path": "/api/auth/device/code",
+                "purpose": "Start a device-code approval request for Codex or another local agent.",
+                "request_fields": [
+                    "project_id",
+                    "scope[]",
+                    "expires_in",
+                    "source",
+                    "intent",
+                ],
+                "response_fields": [
+                    "device_code",
+                    "user_code",
+                    "verification_uri",
+                    "verification_uri_complete",
+                    "expires_in",
+                    "interval",
+                ],
+            },
+            {
+                "method": "POST",
+                "path": "/api/auth/device/token",
+                "purpose": "Poll for the approved project-bound scoped local token.",
+                "request_fields": [
+                    "device_code",
+                ],
+                "response_fields": [
+                    "access_token",
+                    "refresh_token",
+                    "token_type",
+                    "expires_in",
+                    "project_id",
+                    "scopes",
+                ],
+                "secret_fields": [
+                    "access_token",
+                    "refresh_token",
+                ],
+            },
+        ],
+        "token_lifecycle": [
+            {
+                "method": "POST",
+                "path": "/api/auth/token/refresh",
+                "purpose": "Refresh local short-lived agent credentials.",
+                "secret_fields": [
+                    "refresh_token",
+                    "access_token",
+                ],
+            },
+            {
+                "method": "POST",
+                "path": "/api/auth/token/revoke",
+                "purpose": "Revoke local agent credentials or scoped API keys.",
+                "secret_fields": [
+                    "refresh_token",
+                    "access_token",
+                    "api_key",
+                ],
+            },
+        ],
+    }
+
+
+def _auth_login_setup_blocks(project_id: str | None) -> list[dict[str, Any]]:
+    project_id_value = project_id or "<project-id>"
+    return [
+        {
+            "id": "install",
+            "label": "Install browser-cli",
+            "commands": [
+                "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                "browser-cli --help",
+                "browser-cli --version",
+            ],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+        },
+        {
+            "id": "open_connect",
+            "label": "Open Connect from Codex",
+            "commands": [
+                "browser-cli auth login --open",
+            ],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+        },
+        {
+            "id": "local_env",
+            "label": "Configure local shell",
+            "commands": [
+                "browser-cli auth export-env",
+                "export LEXMOUNT_API_KEY='<api-key>'",
+                f"export LEXMOUNT_PROJECT_ID={shlex.quote(project_id_value)}",
+            ],
+            "secret_env": ["LEXMOUNT_API_KEY"],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": True,
+            "safe_to_paste_in_chat": False,
+            "local_shell_only": True,
+        },
+        {
+            "id": "verify",
+            "label": "Verify local setup",
+            "commands": [
+                "browser-cli auth status",
+                AGENT_DOCTOR_COMMAND,
+                "browser-cli doctor --smoke-session",
+            ],
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+        },
+    ]
+
+
+def _auth_login_handoff(
+    *,
+    connect_url: str,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    expires_in: str,
+) -> dict[str, Any]:
+    return {
+        "recommended_flow": "manual_env",
+        "login_url": LEXMOUNT_CONSOLE_URL,
+        "connect_from_codex_url": connect_url,
+        "connect_from_codex_available": False,
+        "open_command": "browser-cli auth login --open",
+        "open_url": connect_url,
+        "install_command": "uv tool install git+https://github.com/lexmount/browser-cli.git",
+        "setup_blocks": _auth_login_setup_blocks(project_id),
+        "copyable_commands": [
+            "browser-cli auth status",
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            AGENT_DOCTOR_COMMAND,
+        ],
+        "local_env": [
+            {
+                "name": "LEXMOUNT_API_KEY",
+                "secret": True,
+                "required": True,
+                "source": "browser.lexmount.cn scoped API key",
+            },
+            {
+                "name": "LEXMOUNT_PROJECT_ID",
+                "secret": False,
+                "required": True,
+                "source": "browser.lexmount.cn Project ID",
+                "value": project_id,
+                "value_source": project_id_source,
+            },
+        ],
+        "requested_scopes": scopes,
+        "requested_scope_details": _scope_details(scopes),
+        "requested_expires_in": expires_in,
+        "verification": {
+            "status_command": "browser-cli auth status",
+            "doctor_command": AGENT_DOCTOR_COMMAND,
+            "success_condition": "auth.status configured is true and doctor ok is true",
+        },
+        "secret_policy": {
+            "do_not_paste_in_chat": [
+                "LEXMOUNT_API_KEY",
+                "full direct connect URLs containing api_key",
+                "auth export-env output produced with --reveal-secrets",
+            ],
+            "safe_to_share": [
+                "browser-cli auth status output",
+                "browser-cli doctor output with default masking",
+                "browser-cli auth export-env output without --reveal-secrets",
+            ],
+        },
+    }
+
+
+def _device_code_public_start(
+    response: dict[str, Any],
+    *,
+    connect_from_codex_url: str,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    scope_details: list[dict[str, Any]],
+    expires_in: str,
+    base_url: str,
+    base_url_source: str,
+    code_endpoint: str,
+    token_endpoint: str,
+) -> dict[str, Any]:
+    response_expires_in = response.get("expires_in")
+    if isinstance(response_expires_in, str) and response_expires_in.isdigit():
+        response_expires_in = int(response_expires_in)
+    expires_at = None
+    if isinstance(response_expires_in, int | float):
+        expires_at = datetime.fromtimestamp(
+            _now_utc().timestamp() + float(response_expires_in),
+            tz=timezone.utc,
+        ).isoformat()
+    return {
+        "available": True,
+        "reason": "approval_required",
+        "base_url": base_url,
+        "base_url_source": base_url_source,
+        "code_endpoint": code_endpoint,
+        "token_endpoint": token_endpoint,
+        "connect_from_codex_url": connect_from_codex_url,
+        "verification_uri": response.get("verification_uri"),
+        "verification_uri_complete": response.get("verification_uri_complete")
+        or response.get("verification_uri"),
+        "user_code": response.get("user_code"),
+        "device_code_present": bool(response.get("device_code")),
+        "device_code_length": len(str(response.get("device_code") or "")),
+        "expires_in": response_expires_in,
+        "expires_at": expires_at,
+        "interval": response.get("interval") or 5,
+        "project_id": project_id,
+        "project_id_source": project_id_source,
+        "requested_scopes": scopes,
+        "requested_scope_details": scope_details,
+        "requested_expires_in": expires_in,
+        "required_endpoints": _device_code_required_endpoints(),
+        "required_browser_site_support": _device_code_required_browser_site_support(),
+        "secret_policy": {
+            "contains_secret_values": False,
+            "device_code_redacted": True,
+            "do_not_paste_in_chat": [
+                "access_token",
+                "refresh_token",
+                "raw device_code",
+            ],
+        },
+    }
+
+
+def _poll_device_code_token(
+    *,
+    token_endpoint: str,
+    device_code: str,
+    timeout_seconds: float,
+    http_timeout_seconds: float,
+    interval_seconds: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    attempts = 0
+    interval = max(float(interval_seconds), 0.1)
+    last_error: str | None = None
+    while time.monotonic() <= deadline:
+        attempts += 1
+        response = _json_http_post(
+            token_endpoint,
+            {
+                "device_code": device_code,
+                "client_name": "browser-cli",
+            },
+            timeout_seconds=http_timeout_seconds,
+        )
+        payload = response.get("json", {})
+        if response.get("ok") and isinstance(payload, dict):
+            return {
+                "authenticated": True,
+                "status": "approved",
+                "attempts": attempts,
+                "token_payload": payload,
+            }
+        error = str(response.get("error") or "")
+        last_error = error or str(response.get("status_code"))
+        if error == "authorization_pending":
+            time.sleep(interval)
+            continue
+        if error == "slow_down":
+            interval += 5
+            time.sleep(interval)
+            continue
+        return {
+            "authenticated": False,
+            "status": error or "token_endpoint_error",
+            "attempts": attempts,
+            "status_code": response.get("status_code"),
+            "message": response.get("message"),
+        }
+    return {
+        "authenticated": False,
+        "status": "timeout",
+        "attempts": attempts,
+        "last_error": last_error,
+    }
+
+
+def _run_device_code_login(
+    *,
+    args: argparse.Namespace,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    scope_details: list[dict[str, Any]],
+    expires_in: str,
+    connect_url: str,
+) -> dict[str, Any]:
+    base_url, base_url_source = _device_code_base_url(args.device_code_base_url)
+    if not base_url:
+        return {
+            "attempted": False,
+            "available": False,
+            "reason": "browser_site_endpoint_missing",
+            "base_url": None,
+            "base_url_source": base_url_source,
+        }
+
+    code_endpoint = _device_code_endpoint(base_url, "/api/auth/device/code")
+    token_endpoint = _device_code_endpoint(base_url, "/api/auth/device/token")
+    start_request = {
+        "client_name": "browser-cli",
+        "client_version": __version__,
+        "device_name": args.device_name,
+        "project_id": project_id,
+        "requested_scopes": scopes,
+        "audience": "lexmount-browser",
+        "expires_in": expires_in,
+    }
+    start_response = _json_http_post(
+        code_endpoint,
+        start_request,
+        timeout_seconds=args.device_code_http_timeout_seconds,
+    )
+    start_payload = start_response.get("json", {})
+    if not start_response.get("ok") or not isinstance(start_payload, dict):
+        return {
+            "attempted": True,
+            "available": False,
+            "reason": "device_code_endpoint_error",
+            "base_url": base_url,
+            "base_url_source": base_url_source,
+            "code_endpoint": code_endpoint,
+            "token_endpoint": token_endpoint,
+            "status_code": start_response.get("status_code"),
+            "error": start_response.get("error"),
+            "message": start_response.get("message"),
+        }
+
+    device_code = start_payload.get("device_code")
+    if not isinstance(device_code, str) or not device_code:
+        return {
+            "attempted": True,
+            "available": False,
+            "reason": "missing_device_code",
+            "base_url": base_url,
+            "base_url_source": base_url_source,
+            "code_endpoint": code_endpoint,
+            "token_endpoint": token_endpoint,
+            "status_code": start_response.get("status_code"),
+        }
+
+    device_code_public = _device_code_public_start(
+        start_payload,
+        connect_from_codex_url=connect_url,
+        project_id=project_id,
+        project_id_source=project_id_source,
+        scopes=scopes,
+        scope_details=scope_details,
+        expires_in=expires_in,
+        base_url=base_url,
+        base_url_source=base_url_source,
+        code_endpoint=code_endpoint,
+        token_endpoint=token_endpoint,
+    )
+    verification_url = (
+        device_code_public.get("verification_uri_complete") or connect_url
+    )
+    open_result: dict[str, Any] = {
+        "requested": bool(args.open),
+        "url": verification_url,
+        "opened": False,
+    }
+    warnings: list[str] = []
+    if args.open:
+        try:
+            open_result["opened"] = bool(webbrowser.open(str(verification_url)))
+        except Exception as exc:
+            open_result["error"] = _mask_sensitive_text(str(exc))
+            warnings.append(
+                "Failed to open the device-code verification URL automatically; copy the URL manually."
+            )
+        else:
+            if not open_result["opened"]:
+                warnings.append(
+                    "The system browser did not confirm opening the device-code verification URL; copy the URL manually."
+                )
+
+    polling = {
+        "requested": bool(args.device_code_wait),
+        "authenticated": False,
+        "status": "not_requested",
+        "attempts": 0,
+    }
+    credentials: dict[str, Any] = {
+        "saved": False,
+        "credentials_file": str(
+            _device_token_credentials_path(args.credentials_file)[0]
+        ),
+    }
+    if args.device_code_wait:
+        interval = device_code_public.get("interval") or 5
+        polling = _poll_device_code_token(
+            token_endpoint=token_endpoint,
+            device_code=device_code,
+            timeout_seconds=args.device_code_timeout_seconds,
+            http_timeout_seconds=args.device_code_http_timeout_seconds,
+            interval_seconds=float(interval),
+        )
+        token_payload = polling.pop("token_payload", None)
+        if polling.get("authenticated") and isinstance(token_payload, dict):
+            credentials = _write_device_token_credentials(
+                token_payload,
+                credentials_file=args.credentials_file,
+                requested_scopes=scopes,
+            )
+
+    authenticated = bool(polling.get("authenticated"))
+    return {
+        "attempted": True,
+        "available": True,
+        "reason": "authenticated" if authenticated else "approval_required",
+        "authenticated": authenticated,
+        "credentials_saved": bool(credentials.get("saved")),
+        "device_code": device_code_public,
+        "polling": polling,
+        "credentials": credentials,
+        "open_result": open_result,
+        "warnings": warnings,
+    }
+
+
+def _doctor_connect_from_codex_fix() -> dict[str, Any]:
+    project_id = os.environ.get("LEXMOUNT_PROJECT_ID") or None
+    project_id_source = "env" if project_id else "unset"
+    scopes = list(DEFAULT_CODEX_CONNECT_SCOPES)
+    expires_in = DEFAULT_CODEX_CONNECT_EXPIRES_IN
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
+    connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=expires_in,
+    )
+    device_connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=expires_in,
+        response="device_code",
+    )
+    return {
+        "available": False,
+        "url": connect_url,
+        "device_code_url": device_connect_url,
+        "open_command": "browser-cli auth login --open",
+        "auth_login_command": "browser-cli auth login",
+        "project_id": project_id,
+        "project_id_source": project_id_source,
+        "requested_scopes": scopes,
+        "requested_scope_details": _scope_details(scopes),
+        "requested_expires_in": expires_in,
+        "site_capability_status": site_capability_status,
+        "site_capabilities": site_capabilities,
+        "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
+        "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+        "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
+        "setup_blocks": _auth_login_setup_blocks(project_id),
+        "verification": {
+            "status_command": "browser-cli auth status",
+            "doctor_command": AGENT_DOCTOR_COMMAND,
+            "success_condition": "auth.status configured is true and doctor ok is true",
+        },
+    }
+
+
+def _credential_doctor_fix(*env: str) -> dict[str, Any]:
+    return _doctor_fix(
+        "configure_credentials",
+        env=list(env),
+        commands=[
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            "browser-cli auth status",
+            AGENT_DOCTOR_COMMAND,
+        ],
+        guidance=[
+            "Get Project ID and API key from https://browser.lexmount.cn.",
+            "Set credentials only in the local shell, not in chat.",
+            "Run doctor again after exporting credentials.",
+        ],
+        connect_from_codex=_doctor_connect_from_codex_fix(),
+    )
 
 
 def _quote_env_value(value: str, shell: str) -> str:
@@ -573,6 +5977,7 @@ def cmd_session_create(args: argparse.Namespace) -> None:
                 metadata_filter=context_metadata_filter,
                 status=args.context_status,
                 limit=args.context_limit,
+                selection_strategy=args.context_selection,
                 create_if_missing=args.create_context_if_missing,
             )
             context_id = context_reuse.get("context_id")
@@ -647,7 +6052,9 @@ def cmd_context_create(args: argparse.Namespace) -> None:
         context = LexmountBrowserAdmin().create_context(metadata=args.metadata)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_model_payload(context))
+    payload = _model_payload(context)
+    _record_context_metadata(payload)
+    _success(command, context=payload)
 
 
 def cmd_context_list(args: argparse.Namespace) -> None:
@@ -682,8 +6089,11 @@ def cmd_context_status(args: argparse.Namespace) -> None:
     _success(
         command,
         context_id=payload.get("context_id") or args.context_id,
+        normalized_status=reuse["normalized_status"],
+        availability=reuse["availability"],
         reusable=reuse["reusable"],
         locked=reuse["locked"],
+        reuse_reason=reuse["reason"],
         reuse=reuse,
         context=payload,
     )
@@ -703,26 +6113,69 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
 
     payload = _model_payload(result)
     contexts = payload.get("contexts", [])
+    registry = _read_context_registry()
     candidates = [
-        _context_pick_candidate(context, metadata_filter) for context in contexts
+        _context_pick_candidate(context, metadata_filter, registry)
+        for context in contexts
     ]
-    selected_context: dict[str, Any] | None = None
-    for context, candidate in zip(contexts, candidates, strict=True):
-        if candidate["metadata_match"] and candidate["reusable"]:
-            selected_context = context
-            break
+    selected_context = _select_reusable_context(
+        contexts,
+        candidates,
+        selection_strategy=args.selection,
+    )
+    selected_context_id = (
+        selected_context.get("context_id") if selected_context is not None else None
+    )
+    selection_summary = _context_selection_summary(
+        candidates,
+        selected_context_id=selected_context_id,
+        create_if_missing=args.create_if_missing,
+        dry_run=args.dry_run,
+    )
 
     if selected_context is not None:
+        reuse = _context_reuse_state(selected_context)
         _success(
             command,
             selected=True,
             created=False,
+            dry_run=args.dry_run,
             context_id=selected_context.get("context_id"),
             context=selected_context,
-            reuse=_context_reuse_state(selected_context),
+            normalized_status=reuse["normalized_status"],
+            availability=reuse["availability"],
+            reusable=reuse["reusable"],
+            locked=reuse["locked"],
+            reuse_reason=reuse["reason"],
+            reuse=reuse,
             checked=len(contexts),
             candidates=candidates,
+            selection_strategy=args.selection,
+            selection_summary=selection_summary,
             metadata_filter=metadata_filter,
+        )
+
+    if args.dry_run:
+        _success(
+            command,
+            selected=False,
+            created=False,
+            dry_run=True,
+            would_create=selection_summary["would_create"],
+            context_id=None,
+            context=None,
+            reuse=None,
+            checked=len(contexts),
+            candidates=candidates,
+            selection_strategy=args.selection,
+            selection_summary=selection_summary,
+            metadata_filter=metadata_filter,
+            message=(
+                "No reusable context matched. A non-dry-run context pick with "
+                "--create-if-missing would create a context."
+                if selection_summary["would_create"]
+                else "No reusable context matched the requested filters."
+            ),
         )
 
     if args.create_if_missing:
@@ -731,15 +6184,31 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
         except Exception as exc:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
+        created_context_id = created_context.get("context_id")
+        _record_context_metadata(created_context)
+        reuse = _context_reuse_state(created_context)
         _success(
             command,
             selected=True,
             created=True,
-            context_id=created_context.get("context_id"),
+            dry_run=False,
+            context_id=created_context_id,
             context=created_context,
-            reuse=_context_reuse_state(created_context),
+            normalized_status=reuse["normalized_status"],
+            availability=reuse["availability"],
+            reusable=reuse["reusable"],
+            locked=reuse["locked"],
+            reuse_reason=reuse["reason"],
+            reuse=reuse,
             checked=len(contexts),
             candidates=candidates,
+            selection_strategy=args.selection,
+            selection_summary=_context_selection_summary(
+                candidates,
+                selected_context_id=created_context_id,
+                created=True,
+                create_if_missing=args.create_if_missing,
+            ),
             metadata_filter=metadata_filter,
         )
 
@@ -749,8 +6218,11 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
         "No reusable context matched the requested filters.",
         selected=False,
         created=False,
+        dry_run=False,
         checked=len(contexts),
         candidates=candidates,
+        selection_strategy=args.selection,
+        selection_summary=selection_summary,
         metadata_filter=metadata_filter,
     )
 
@@ -761,6 +6233,7 @@ def cmd_context_delete(args: argparse.Namespace) -> None:
         LexmountBrowserAdmin().delete_context(args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
+    _forget_context_metadata(args.context_id)
     _success(command, context_id=args.context_id, deleted=True)
 
 
@@ -811,8 +6284,453 @@ def _run_action_command(
     )
 
 
+def _run_with_playwright_page(
+    *,
+    connect_url: str,
+    operation: Callable[[Any], dict[str, Any]],
+) -> dict[str, Any]:
+    try:
+        from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
+    except Exception as exc:
+        raise BrowserConfigError(
+            "Failed to import Playwright. Install lex-browser-runtime[browser] "
+            "or provide an environment that already includes playwright."
+        ) from exc
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.connect_over_cdp(connect_url)
+        try:
+            context = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = context.pages[0] if context.pages else context.new_page()
+            return operation(page)
+        finally:
+            browser.close()
+
+
+def _set_page_viewport(
+    *,
+    connect_url: str,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    def apply(page: Any) -> dict[str, Any]:
+        previous_viewport = page.viewport_size
+        page.set_viewport_size({"width": width, "height": height})
+        viewport = page.viewport_size
+        window_viewport = page.evaluate(
+            """
+() => ({
+  width: window.innerWidth,
+  height: window.innerHeight,
+  device_pixel_ratio: window.devicePixelRatio
+})
+""".strip()
+        )
+        return {
+            "url": page.url,
+            "title": page.title(),
+            "requested_viewport": {"width": width, "height": height},
+            "previous_viewport": previous_viewport,
+            "viewport": viewport,
+            "window_viewport": window_viewport,
+            "changed": previous_viewport != viewport,
+        }
+
+    return _run_with_playwright_page(connect_url=connect_url, operation=apply)
+
+
+def _screenshot_selector(
+    *,
+    connect_url: str,
+    selector: str,
+    output: str | None,
+    index: int,
+    timeout_ms: float,
+) -> dict[str, Any]:
+    output_path = output or str(
+        Path("/tmp")
+        / f"browser-cli-selector-screenshot-{int(datetime.now(timezone.utc).timestamp())}.png"
+    )
+
+    def apply(page: Any) -> dict[str, Any]:
+        try:
+            page.wait_for_selector(selector, state="attached", timeout=timeout_ms)
+        except Exception:
+            return {
+                "url": page.url,
+                "selector": selector,
+                "index": index,
+                "found": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": 0,
+                "error": "selector_not_found",
+            }
+
+        matches = page.locator(selector)
+        match_count = matches.count()
+        if index >= match_count:
+            return {
+                "url": page.url,
+                "selector": selector,
+                "index": index,
+                "found": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "error": "index_out_of_range",
+            }
+
+        target = matches.nth(index)
+        try:
+            target.wait_for(state="visible", timeout=timeout_ms)
+        except Exception:
+            return {
+                "url": page.url,
+                "selector": selector,
+                "index": index,
+                "found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": target.bounding_box(),
+                "error": "element_not_visible",
+            }
+
+        bounding_box = target.bounding_box()
+        if bounding_box is None:
+            return {
+                "url": page.url,
+                "selector": selector,
+                "index": index,
+                "found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": None,
+                "error": "missing_bounding_box",
+            }
+
+        target.screenshot(path=output_path, timeout=timeout_ms)
+        return {
+            "url": page.url,
+            "selector": selector,
+            "index": index,
+            "found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": output_path,
+            "match_count": match_count,
+            "bounding_box": bounding_box,
+        }
+
+    return _run_with_playwright_page(connect_url=connect_url, operation=apply)
+
+
+def _screenshot_role(
+    *,
+    connect_url: str,
+    role: str,
+    name: str | None,
+    output: str | None,
+    index: int,
+    timeout_ms: float,
+    exact: bool,
+    include_hidden: bool,
+) -> dict[str, Any]:
+    output_path = output or str(
+        Path("/tmp")
+        / f"browser-cli-role-screenshot-{int(datetime.now(timezone.utc).timestamp())}.png"
+    )
+
+    def apply(page: Any) -> dict[str, Any]:
+        matches = page.get_by_role(
+            role,
+            name=name,
+            exact=exact,
+            include_hidden=include_hidden,
+        )
+        target = matches.nth(index)
+        try:
+            target.wait_for(state="attached", timeout=timeout_ms)
+        except Exception:
+            match_count = matches.count()
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": False,
+                "role_found": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "error": "role_not_found",
+            }
+
+        match_count = matches.count()
+        if index >= match_count:
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": False,
+                "role_found": match_count > 0,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "error": "index_out_of_range",
+            }
+
+        try:
+            target.wait_for(state="visible", timeout=timeout_ms)
+        except Exception:
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": True,
+                "role_found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": target.bounding_box(),
+                "error": "element_not_visible",
+            }
+
+        bounding_box = target.bounding_box()
+        if bounding_box is None:
+            return {
+                "url": page.url,
+                "role": role,
+                "name": name,
+                "exact": exact,
+                "include_hidden": include_hidden,
+                "index": index,
+                "found": True,
+                "role_found": True,
+                "visible": False,
+                "screenshot": False,
+                "path": output_path,
+                "match_count": match_count,
+                "bounding_box": None,
+                "error": "missing_bounding_box",
+            }
+
+        target.screenshot(path=output_path, timeout=timeout_ms)
+        return {
+            "url": page.url,
+            "role": role,
+            "name": name,
+            "exact": exact,
+            "include_hidden": include_hidden,
+            "index": index,
+            "found": True,
+            "role_found": True,
+            "visible": True,
+            "screenshot": True,
+            "path": output_path,
+            "match_count": match_count,
+            "bounding_box": bounding_box,
+        }
+
+    return _run_with_playwright_page(connect_url=connect_url, operation=apply)
+
+
+def _run_set_viewport_action_command(args: argparse.Namespace) -> None:
+    command = "action.set-viewport"
+    if args.width <= 0 or args.height <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--width and --height must be positive integers.",
+            exit_code=2,
+            width=args.width,
+            height=args.height,
+        )
+
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = _set_page_viewport(
+            connect_url=connect_url,
+            width=args.width,
+            height=args.height,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def _run_screenshot_selector_action_command(args: argparse.Namespace) -> None:
+    command = "action.screenshot-selector"
+    if args.index < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--index must be zero or greater.",
+            exit_code=2,
+            index=args.index,
+        )
+    if args.timeout_ms < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--timeout-ms must be zero or greater.",
+            exit_code=2,
+            timeout_ms=args.timeout_ms,
+        )
+
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = _screenshot_selector(
+            connect_url=connect_url,
+            selector=args.selector,
+            output=args.output,
+            index=args.index,
+            timeout_ms=args.timeout_ms,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def _run_screenshot_role_action_command(args: argparse.Namespace) -> None:
+    command = "action.screenshot-role"
+    if args.index < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--index must be zero or greater.",
+            exit_code=2,
+            index=args.index,
+        )
+    if args.timeout_ms < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--timeout-ms must be zero or greater.",
+            exit_code=2,
+            timeout_ms=args.timeout_ms,
+        )
+
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        result = _screenshot_role(
+            connect_url=connect_url,
+            role=args.role,
+            name=args.name,
+            output=args.output,
+            index=args.index,
+            timeout_ms=args.timeout_ms,
+            exact=args.exact,
+            include_hidden=args.include_hidden,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
 def _js_literal(value: Any) -> str:
     return json.dumps(value)
+
+
+def _read_file_input_payloads(
+    *,
+    command: str,
+    files: list[str],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    if max_bytes < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--max-bytes must be zero or greater.",
+            exit_code=2,
+            max_bytes=max_bytes,
+        )
+
+    payloads: list[dict[str, Any]] = []
+    total_bytes = 0
+    for raw_file in files:
+        path = Path(raw_file).expanduser()
+        if not path.is_file():
+            _failure(
+                command,
+                "file_not_found",
+                "File input path does not exist or is not a file.",
+                exit_code=2,
+                file=raw_file,
+            )
+        try:
+            data = path.read_bytes()
+            stat = path.stat()
+        except OSError as exc:
+            _failure(
+                command,
+                "file_read_error",
+                str(exc),
+                exit_code=2,
+                file=raw_file,
+            )
+        total_bytes += len(data)
+        if total_bytes > max_bytes:
+            _failure(
+                command,
+                "file_payload_too_large",
+                "Total file input payload exceeds --max-bytes.",
+                exit_code=2,
+                max_bytes=max_bytes,
+                total_bytes=total_bytes,
+            )
+        mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        payloads.append(
+            {
+                "name": path.name,
+                "type": mime_type,
+                "size": len(data),
+                "last_modified": int(stat.st_mtime * 1000),
+                "data_base64": base64.b64encode(data).decode("ascii"),
+            }
+        )
+    return payloads
 
 
 def _eval_backed_result_payload(result: Any) -> dict[str, Any]:
@@ -853,6 +6771,34 @@ def _run_eval_backed_action_command(
     )
 
 
+def _page_info_expression() -> str:
+    return """
+() => {
+  const bodyText = document.body ? (document.body.innerText || document.body.textContent || "") : "";
+  const html = document.documentElement ? document.documentElement.outerHTML || "" : "";
+  return {
+    url: location.href,
+    title: document.title,
+    ready_state: document.readyState,
+    visibility_state: document.visibilityState,
+    language: document.documentElement ? document.documentElement.lang || null : null,
+    referrer: document.referrer || null,
+    body_text_length: bodyText.length,
+    html_length: html.length,
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      device_pixel_ratio: window.devicePixelRatio
+    },
+    scroll: {
+      x: window.scrollX,
+      y: window.scrollY
+    }
+  };
+}
+""".strip()
+
+
 def _selector_expression(selector: str, body: str) -> str:
     return f"""
 () => {{
@@ -866,6 +6812,51 @@ def _selector_expression(selector: str, body: str) -> str:
 """.strip()
 
 
+def _sensitive_value_helpers_expression() -> str:
+    return """
+  const sensitiveNamePattern =
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token/i;
+  const sensitiveText = (value) => sensitiveNamePattern.test(String(value ?? ""));
+  const sensitiveElement = (element) => {
+    const tag = element.tagName.toLowerCase();
+    const type = String(element.getAttribute("type") || "").toLowerCase();
+    if (tag === "input" && ["password", "hidden", "file"].includes(type)) {
+      return true;
+    }
+    return [
+      "name",
+      "id",
+      "autocomplete",
+      "aria-label",
+      "placeholder",
+      "title",
+      "data-testid",
+      "data-test",
+      "data-cy"
+    ].some((attribute) => sensitiveNamePattern.test(element.getAttribute(attribute) || ""));
+  };
+  const shouldMaskValue = (element, value) =>
+    sensitiveElement(element) && String(value ?? "") !== "";
+  const maskValue = (element, value) => shouldMaskValue(element, value) ? "***" : value;
+  const publicRequestedValue = (element, value) => {
+    const masked = shouldMaskValue(element, value);
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+  const publicSelectorRequestedValue = (selector, value) => {
+    const masked = sensitiveText(selector) && String(value ?? "") !== "";
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+""".rstrip()
+
+
 def _event_expression(selector: str, body: str) -> str:
     return _selector_expression(
         selector,
@@ -874,6 +6865,277 @@ def _event_expression(selector: str, body: str) -> str:
 {body}
 """.rstrip(),
     )
+
+
+def _get_text_expression(selector: str) -> str:
+    return _selector_expression(
+        selector,
+        """
+  const text = element.innerText ?? element.textContent ?? "";
+  return { selector, found: true, text };
+""".rstrip(),
+    )
+
+
+def _exists_expression(selector: str) -> str:
+    selector_source = _js_literal(selector)
+    return f"""
+() => {{
+  const selector = {selector_source};
+  return {{ selector, exists: Boolean(document.querySelector(selector)) }};
+}}
+""".strip()
+
+
+def _count_expression(*, selector: str, include_hidden: bool) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const selector = {_js_literal(selector)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const matched = includeHidden ? all : visibleNodes;
+  return {{
+    selector,
+    include_hidden: includeHidden,
+    count: matched.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length
+  }};
+}}
+""".strip()
+
+
+def _scroll_expression(
+    *,
+    selector: str | None,
+    x: float,
+    y: float,
+    behavior: str,
+) -> str:
+    x_source = _js_literal(x)
+    y_source = _js_literal(y)
+    behavior_source = _js_literal(behavior)
+    if selector:
+        return _selector_expression(
+            selector,
+            f"""
+  element.scrollBy({{ left: {x_source}, top: {y_source}, behavior: {behavior_source} }});
+  return {{ selector, found: true, scrolled: true, x: {x_source}, y: {y_source} }};
+""".rstrip(),
+        )
+    return f"""
+() => {{
+  window.scrollBy({{ left: {x_source}, top: {y_source}, behavior: {behavior_source} }});
+  return {{
+    selector: null,
+    found: true,
+    scrolled: true,
+    x: {x_source},
+    y: {y_source},
+    scroll_x: window.scrollX,
+    scroll_y: window.scrollY
+  }};
+}}
+""".strip()
+
+
+def _select_option_expression(*, selector: str, value: str) -> str:
+    value_source = _js_literal(value)
+    return _event_expression(
+        selector,
+        f"""
+  const requestedValue = {value_source};
+  const previousValue = element.value;
+  element.value = requestedValue;
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    selected: element.value === requestedValue,
+    value: element.value,
+    requested_value: requestedValue,
+    previous_value: previousValue
+  }};
+""".rstrip(),
+    )
+
+
+def _checkbox_action_expression(*, selector: str, checked: bool) -> str:
+    checked_source = _js_literal(checked)
+    return _event_expression(
+        selector,
+        f"""
+  if (!("checked" in element)) {{
+    return {{
+      selector,
+      found: true,
+      checkable: false,
+      checked: Boolean(element.checked)
+    }};
+  }}
+  element.checked = {checked_source};
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  return {{
+    selector,
+    found: true,
+    checkable: true,
+    checked: Boolean(element.checked)
+  }};
+""".rstrip(),
+    )
+
+
+def _hover_expression(selector: str) -> str:
+    return _event_expression(
+        selector,
+        """
+  const init = {
+    view: window,
+    bubbles: true,
+    cancelable: true,
+    clientX: element.getBoundingClientRect().left,
+    clientY: element.getBoundingClientRect().top
+  };
+  for (const type of ["mouseover", "mouseenter", "mousemove"]) {
+    dispatch(new MouseEvent(type, init));
+  }
+  return { selector, found: true, hovered: true };
+""".rstrip(),
+    )
+
+
+def _hover_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      hovered: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const init = {{
+    view: window,
+    bubbles: true,
+    cancelable: true,
+    clientX: element.getBoundingClientRect().left,
+    clientY: element.getBoundingClientRect().top
+  }};
+  for (const type of ["mouseover", "mouseenter", "mousemove"]) {{
+    element.dispatchEvent(new MouseEvent(type, init));
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    hovered: true,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _press_expression(*, selector: str, key: str) -> str:
+    key_source = _js_literal(key)
+    return _event_expression(
+        selector,
+        f"""
+  const key = {key_source};
+  element.focus();
+  const init = {{ key, code: key, bubbles: true, cancelable: true }};
+  const keydownAccepted = dispatch(new KeyboardEvent("keydown", init));
+  dispatch(new KeyboardEvent("keypress", init));
+  dispatch(new KeyboardEvent("keyup", init));
+  return {{
+    selector,
+    found: true,
+    focused: document.activeElement === element,
+    key,
+    pressed: true,
+    keydown_accepted: keydownAccepted
+  }};
+""".rstrip(),
+    )
+
+
+def _press_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    key: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    key_source = _js_literal(key)
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      focused: false,
+      key: {key_source},
+      pressed: false,
+      keydown_accepted: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const key = {key_source};
+  element.focus();
+  const init = {{ key, code: key, bubbles: true, cancelable: true }};
+  const keydownAccepted = element.dispatchEvent(new KeyboardEvent("keydown", init));
+  element.dispatchEvent(new KeyboardEvent("keypress", init));
+  element.dispatchEvent(new KeyboardEvent("keyup", init));
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    focused: document.activeElement === element,
+    key,
+    pressed: true,
+    keydown_accepted: keydownAccepted,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
 
 
 def _dom_helpers_expression(
@@ -885,6 +7147,8 @@ def _dom_helpers_expression(
     return f"""
   const includeHidden = {_js_literal(include_hidden)};
   const maxNodes = {max_nodes_source};
+  const sensitiveNamePattern =
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token/i;
   const interactiveSelector = [
     "a[href]",
     "button",
@@ -899,6 +7163,28 @@ def _dom_helpers_expression(
   ].join(",");
 
   const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const sensitiveText = (value) => sensitiveNamePattern.test(String(value ?? ""));
+  const sensitiveElement = (element) => {{
+    const tag = element.tagName.toLowerCase();
+    const type = String(element.getAttribute("type") || "").toLowerCase();
+    if (tag === "input" && ["password", "hidden", "file"].includes(type)) {{
+      return true;
+    }}
+    return [
+      "name",
+      "id",
+      "autocomplete",
+      "aria-label",
+      "placeholder",
+      "title",
+      "data-testid",
+      "data-test",
+      "data-cy"
+    ].some((attribute) => sensitiveNamePattern.test(element.getAttribute(attribute) || ""));
+  }};
+  const shouldMaskValue = (element, value) =>
+    sensitiveElement(element) && String(value ?? "") !== "";
+  const maskValue = (element, value) => shouldMaskValue(element, value) ? "***" : value;
   const visible = (element) => {{
     if (includeHidden) return true;
     const style = window.getComputedStyle(element);
@@ -915,7 +7201,12 @@ def _dom_helpers_expression(
       element.getClientRects().length
     );
   }};
-  const textOf = (element) => normalize(element.innerText ?? element.textContent ?? "");
+  const rawTextOf = (element) => normalize(element.innerText ?? element.textContent ?? "");
+  const textOf = (element) => maskValue(element, rawTextOf(element));
+  const valueNameOf = (element) => {{
+    if (!("value" in element)) return "";
+    return normalize(maskValue(element, element.value));
+  }};
   const nameFromLabelledBy = (element) => {{
     const labelledBy = element.getAttribute("aria-labelledby");
     if (!labelledBy) return "";
@@ -926,13 +7217,29 @@ def _dom_helpers_expression(
         .join(" ")
     );
   }};
+  const nameFromLabels = (element) => {{
+    const explicitLabels = "labels" in element && element.labels
+      ? [...element.labels]
+      : [];
+    if (explicitLabels.length) {{
+      return normalize(explicitLabels.map((label) => rawTextOf(label)).join(" "));
+    }}
+    const id = element.id;
+    if (!id) return "";
+    return normalize(
+      [...document.querySelectorAll(`label[for="${{CSS.escape(id)}}"]`)]
+        .map((label) => rawTextOf(label))
+        .join(" ")
+    );
+  }};
   const accessibleName = (element) => normalize(
     element.getAttribute("aria-label") ||
     nameFromLabelledBy(element) ||
+    nameFromLabels(element) ||
     element.getAttribute("alt") ||
     element.getAttribute("title") ||
     element.getAttribute("placeholder") ||
-    element.value ||
+    valueNameOf(element) ||
     textOf(element)
   );
   const roleOf = (element) => {{
@@ -1127,13 +7434,22 @@ def _fill_label_expression(
 {_label_control_helpers_expression()}
   const requestedLabel = {_js_literal(label)};
   const text = {_js_literal(text)};
+  const labelSuggestsSensitive = sensitiveText(requestedLabel);
+  const labelSafeText = labelSuggestsSensitive && text !== "" ? "***" : text;
   const exact = {_js_literal(exact)};
   const caseSensitive = {_js_literal(case_sensitive)};
   const fieldSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true']";
   const match = findFieldByLabel(requestedLabel, exact, caseSensitive, fieldSelector);
   const element = match.element;
   if (!element) {{
-    return {{ found: false, filled: false, label: requestedLabel, text }};
+    return {{
+      found: false,
+      filled: false,
+      label: requestedLabel,
+      text: labelSafeText,
+      text_masked: labelSafeText !== text,
+      text_length: labelSafeText !== text ? String(text ?? "").length : null
+    }};
   }}
   const previousValue = element.isContentEditable ? element.textContent : element.value;
   if (element.isContentEditable) {{
@@ -1147,10 +7463,123 @@ def _fill_label_expression(
     found: true,
     filled: true,
     label: requestedLabel,
-    text,
-    previous_value: previousValue,
-    value: element.isContentEditable ? element.textContent : element.value,
+    text: maskValue(element, text),
+    text_masked: shouldMaskValue(element, text),
+    text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_masked: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_length: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    )
+      ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
+      : null,
     label_element: match.label_element,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _fill_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    text: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const text = {_js_literal(text)};
+  const nameSuggestsSensitive = sensitiveText(requestedName);
+  const nameSafeText = nameSuggestsSensitive && text !== "" ? "***" : text;
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const fieldSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true'], [role]";
+  const candidates = [...document.querySelectorAll(fieldSelector)].filter(visible);
+  const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+  const element = roleMatches.find((candidate) =>
+    requestedName === null ||
+    matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+  );
+  if (!element) {{
+    return {{
+      found: false,
+      filled: false,
+      role: requestedRole,
+      name: requestedName,
+      text: nameSafeText,
+      text_masked: nameSafeText !== text,
+      text_length: nameSafeText !== text ? String(text ?? "").length : null,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    }};
+  }}
+  const writable = element.isContentEditable || "value" in element;
+  if (!writable) {{
+    return {{
+      found: true,
+      filled: false,
+      writable: false,
+      role: requestedRole,
+      name: requestedName,
+      text: maskValue(element, text),
+      text_masked: shouldMaskValue(element, text),
+      text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+      candidate_count: roleMatches.length,
+      element: nodeInfo(element),
+      error: "not_writable",
+      message: "Matched element does not expose a writable value or contenteditable surface."
+    }};
+  }}
+  const previousValue = element.isContentEditable ? element.textContent : element.value;
+  element.focus?.();
+  if (element.isContentEditable) {{
+    element.textContent = text;
+  }} else {{
+    element.value = text;
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  return {{
+    found: true,
+    filled: true,
+    writable: true,
+    role: requestedRole,
+    name: requestedName,
+    text: maskValue(element, text),
+    text_masked: shouldMaskValue(element, text),
+    text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_masked: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    ),
+    value_length: shouldMaskValue(
+      element,
+      element.isContentEditable ? element.textContent : element.value
+    )
+      ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
+      : null,
+    candidate_count: roleMatches.length,
     element: nodeInfo(element)
   }};
 }}
@@ -1226,6 +7655,95 @@ def _check_label_expression(
     changed: previousChecked !== currentChecked,
     element: nodeInfo(element),
     label_element: match.label_element
+  }};
+}}
+""".strip()
+
+
+def _check_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    checked: bool,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    checkable_selector = _js_literal(
+        ",".join(
+            [
+                "input[type=checkbox]",
+                "input[type=radio]",
+                "[role~=checkbox]",
+                "[role~=radio]",
+                "[role~=switch]",
+                "[aria-checked]",
+            ]
+        )
+    )
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedChecked = {_js_literal(checked)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(checkable_selector)}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      found: false,
+      role_found: false,
+      checkable: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_checked: requestedChecked,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const hasNativeChecked = "checked" in element;
+  const ariaCheckable = element.hasAttribute("aria-checked") ||
+    ["checkbox", "radio", "switch"].includes(roleOf(element));
+  if (!hasNativeChecked && !ariaCheckable) {{
+    return {{
+      found: true,
+      role_found: true,
+      checkable: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_checked: requestedChecked,
+      candidate_count: roleMatch.candidate_count,
+      element: nodeInfo(element)
+    }};
+  }}
+  const previousChecked = hasNativeChecked
+    ? Boolean(element.checked)
+    : element.getAttribute("aria-checked") === "true";
+  if (hasNativeChecked) {{
+    element.checked = requestedChecked;
+  }} else {{
+    element.setAttribute("aria-checked", requestedChecked ? "true" : "false");
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const currentChecked = hasNativeChecked
+    ? Boolean(element.checked)
+    : element.getAttribute("aria-checked") === "true";
+  return {{
+    found: true,
+    role_found: true,
+    checkable: true,
+    role: requestedRole,
+    name: requestedName,
+    requested_checked: requestedChecked,
+    previous_checked: previousChecked,
+    checked: currentChecked,
+    changed: previousChecked !== currentChecked,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
   }};
 }}
 """.strip()
@@ -1326,6 +7844,114 @@ def _select_label_expression(
 """.strip()
 
 
+def _select_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    value: str | None,
+    option_label: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedValueInput = {_js_literal(value)};
+  const requestedOptionLabel = {_js_literal(option_label)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("select,[role]"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      found: false,
+      role_found: false,
+      selectable: false,
+      selected: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_value: requestedValueInput,
+      requested_option_label: requestedOptionLabel,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  if (element.tagName.toLowerCase() !== "select") {{
+    return {{
+      found: true,
+      role_found: true,
+      selectable: false,
+      selected: false,
+      role: requestedRole,
+      name: requestedName,
+      requested_value: requestedValueInput,
+      requested_option_label: requestedOptionLabel,
+      candidate_count: roleMatch.candidate_count,
+      element: nodeInfo(element)
+    }};
+  }}
+  const options = [...element.options];
+  const previousValue = element.value;
+  const previousOptionLabel = element.selectedOptions[0]
+    ? textOf(element.selectedOptions[0])
+    : null;
+  let requestedValue = requestedValueInput;
+  let optionFound = null;
+  if (requestedOptionLabel !== null) {{
+    const option = options.find((candidate) =>
+      matchesText(textOf(candidate), requestedOptionLabel, exact, caseSensitive)
+    );
+    optionFound = Boolean(option);
+    if (!option) {{
+      return {{
+        found: true,
+        role_found: true,
+        selectable: true,
+        selected: false,
+        role: requestedRole,
+        name: requestedName,
+        requested_value: null,
+        requested_option_label: requestedOptionLabel,
+        option_found: false,
+        value: element.value,
+        previous_value: previousValue,
+        previous_option_label: previousOptionLabel,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }};
+    }}
+    requestedValue = option.value;
+  }}
+  element.value = requestedValue;
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const selectedOption = element.selectedOptions[0] || null;
+  return {{
+    found: true,
+    role_found: true,
+    selectable: true,
+    selected: element.value === requestedValue,
+    role: requestedRole,
+    name: requestedName,
+    requested_value: requestedValue,
+    requested_option_label: requestedOptionLabel,
+    option_found: optionFound,
+    value: element.value,
+    option_label: selectedOption ? textOf(selectedOption) : null,
+    previous_value: previousValue,
+    previous_option_label: previousOptionLabel,
+    changed: previousValue !== element.value,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _click_index_expression(
     *,
     selector: str,
@@ -1371,6 +7997,137 @@ def _click_index_expression(
 """.strip()
 
 
+def _mouse_action_helpers_expression(action: str) -> str:
+    return f"""
+  const mouseAction = {_js_literal(action)};
+  const dispatchMouseAction = (element) => {{
+    const rect = element.getBoundingClientRect();
+    const clientX = rect.left + rect.width / 2;
+    const clientY = rect.top + rect.height / 2;
+    const events = [];
+    const defaultPrevented = [];
+    const dispatchMouse = (type, init) => {{
+      const event = new MouseEvent(type, {{
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY,
+        ...init
+      }});
+      const accepted = element.dispatchEvent(event);
+      events.push(type);
+      if (!accepted || event.defaultPrevented) defaultPrevented.push(type);
+    }};
+    element.focus?.();
+    if (mouseAction === "double-click") {{
+      dispatchMouse("mousedown", {{ button: 0, buttons: 1, detail: 1 }});
+      dispatchMouse("mouseup", {{ button: 0, buttons: 0, detail: 1 }});
+      dispatchMouse("click", {{ button: 0, buttons: 0, detail: 1 }});
+      dispatchMouse("mousedown", {{ button: 0, buttons: 1, detail: 2 }});
+      dispatchMouse("mouseup", {{ button: 0, buttons: 0, detail: 2 }});
+      dispatchMouse("click", {{ button: 0, buttons: 0, detail: 2 }});
+      dispatchMouse("dblclick", {{ button: 0, buttons: 0, detail: 2 }});
+    }} else {{
+      dispatchMouse("mousedown", {{ button: 2, buttons: 2, detail: 1 }});
+      dispatchMouse("mouseup", {{ button: 2, buttons: 0, detail: 1 }});
+      dispatchMouse("contextmenu", {{ button: 2, buttons: 0, detail: 1 }});
+    }}
+    return {{ events, default_prevented: defaultPrevented, client_x: clientX, client_y: clientY }};
+  }};
+""".rstrip()
+
+
+def _mouse_action_expression(
+    *,
+    selector: str,
+    action: str,
+    result_field: str,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{
+      selector,
+      found: false,
+      {result_field}: false,
+      context_menu: false,
+      events: []
+    }};
+  }}
+{_mouse_action_helpers_expression(action)}
+  const result = dispatchMouseAction(element);
+  return {{
+    selector,
+    found: true,
+    {result_field}: true,
+    context_menu: mouseAction === "right-click",
+    events: result.events,
+    default_prevented: result.default_prevented,
+    client_x: result.client_x,
+    client_y: result.client_y,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _mouse_action_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    action: str,
+    result_field: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      {result_field}: false,
+      context_menu: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates,
+      events: []
+    }};
+  }}
+{_mouse_action_helpers_expression(action)}
+  const result = dispatchMouseAction(element);
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    {result_field}: true,
+    context_menu: mouseAction === "right-click",
+    candidate_count: roleMatch.candidate_count,
+    events: result.events,
+    default_prevented: result.default_prevented,
+    client_x: result.client_x,
+    client_y: result.client_y,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _form_snapshot_expression(
     *,
     selector: str | None,
@@ -1410,7 +8167,8 @@ def _form_snapshot_expression(
   }};
   const optionsOf = (field) => field.tagName.toLowerCase() === "select"
     ? [...field.options].map((option) => ({{
-        value: option.value,
+        value: sensitiveElement(field) && option.value !== "" ? "***" : option.value,
+        value_masked: sensitiveElement(field) && option.value !== "",
         text: textOf(option),
         selected: Boolean(option.selected),
         disabled: Boolean(option.disabled)
@@ -1421,7 +8179,7 @@ def _form_snapshot_expression(
     const tag = field.tagName.toLowerCase();
     const type = String(field.getAttribute("type") || "").toLowerCase();
     const rawValue = readFormValue(field);
-    const sensitive = tag === "input" && (type === "password" || type === "hidden");
+    const sensitive = sensitiveElement(field);
     const valuePayload = sensitive && !revealSensitiveValues
       ? {{
           ...rawValue,
@@ -1463,10 +8221,2464 @@ def _form_snapshot_expression(
 """.strip()
 
 
+def _link_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    include_empty: bool,
+    same_origin_only: bool,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const includeEmpty = {_js_literal(include_empty)};
+  const sameOriginOnly = {_js_literal(same_origin_only)};
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allLinks = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(linkSelector) ? [root] : []),
+      ...root.querySelectorAll(linkSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allLinks.push(candidate);
+      }}
+    }}
+  }}
+  const visibleLinks = allLinks.filter(visible);
+  const candidateLinks = includeHidden ? allLinks : visibleLinks;
+  const linkInfo = (element) => {{
+    const rawHref = element.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    const parsed = maskedParsedUrl(rawHref);
+    const info = nodeInfo(element);
+    return {{
+      ...info,
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...parsed,
+      external: parsed.same_origin === null ? null : !parsed.same_origin,
+      target: element.getAttribute("target"),
+      rel: element.getAttribute("rel"),
+      download: element.hasAttribute("download")
+        ? element.getAttribute("download") || true
+        : null,
+      hreflang: element.getAttribute("hreflang"),
+      type: element.getAttribute("type")
+    }};
+  }};
+  const usefulLinks = candidateLinks
+    .map(linkInfo)
+    .filter((link) => includeEmpty || link.name || link.text);
+  const filteredLinks = sameOriginOnly
+    ? usefulLinks.filter((link) => link.same_origin === true)
+    : usefulLinks;
+  const nodes = limited(filteredLinks);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "links",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    include_empty: includeEmpty,
+    same_origin_only: sameOriginOnly,
+    link_count: filteredLinks.length,
+    node_count: nodes.length,
+    total_count: allLinks.length,
+    visible_count: visibleLinks.length,
+    truncated: maxNodes !== null && filteredLinks.length > nodes.length,
+    links: nodes
+  }};
+}}
+""".strip()
+
+
+def _table_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_rows: int,
+    max_cells: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxRows = Math.max(0, {_js_literal(max_rows)});
+  const maxCells = Math.max(0, {_js_literal(max_cells)});
+  const tableSelector = "table,[role~='table'],[role~='grid']";
+  const rowSelector = "tr,[role~='row']";
+  const cellSelector = [
+    "th",
+    "td",
+    "[role~='cell']",
+    "[role~='gridcell']",
+    "[role~='columnheader']",
+    "[role~='rowheader']"
+  ].join(",");
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{ absolute_url: raw, absolute_url_masked: false }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{ absolute_url: parsed.href, absolute_url_masked: masked }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allTables = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(tableSelector) ? [root] : []),
+      ...root.querySelectorAll(tableSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allTables.push(candidate);
+      }}
+    }}
+  }}
+  const linkInfo = (link) => {{
+    const rawHref = link.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    return {{
+      text: textOf(link),
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...maskedParsedUrl(rawHref)
+    }};
+  }};
+  const numericAttribute = (element, name, fallback) => {{
+    const value = Number(element.getAttribute(name));
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  }};
+  const cellInfo = (cell, cellIndex) => {{
+    const tag = cell.tagName.toLowerCase();
+    const role = roleOf(cell);
+    const links = [...cell.querySelectorAll(linkSelector)].map(linkInfo);
+    return {{
+      column_index: cellIndex,
+      selector: nodeInfo(cell).selector,
+      tag,
+      role: role || null,
+      header: tag === "th" || role === "columnheader" || role === "rowheader",
+      scope: cell.getAttribute("scope"),
+      text: textOf(cell),
+      colspan: numericAttribute(cell, "colspan", numericAttribute(cell, "aria-colspan", 1)),
+      rowspan: numericAttribute(cell, "rowspan", numericAttribute(cell, "aria-rowspan", 1)),
+      links
+    }};
+  }};
+  const rowInfo = (row, rowIndex) => {{
+    const rawCells = "cells" in row ? [...row.cells] : [...row.querySelectorAll(cellSelector)];
+    const visibleCells = rawCells.filter(visible);
+    const candidateCells = includeHidden ? rawCells : visibleCells;
+    const cells = candidateCells.slice(0, maxCells).map(cellInfo);
+    return {{
+      row_index: rowIndex,
+      selector: nodeInfo(row).selector,
+      cell_count: candidateCells.length,
+      visible_cell_count: visibleCells.length,
+      node_count: cells.length,
+      truncated: candidateCells.length > cells.length,
+      cells
+    }};
+  }};
+  const tableInfo = (table, tableIndex) => {{
+    const nativeTable = table.tagName.toLowerCase() === "table";
+    const rawRows = nativeTable ? [...table.rows] : [...table.querySelectorAll(rowSelector)];
+    const visibleRows = rawRows.filter(visible);
+    const candidateRows = includeHidden ? rawRows : visibleRows;
+    const rows = candidateRows.slice(0, maxRows).map(rowInfo);
+    const captionElement = nativeTable
+      ? table.caption
+      : table.querySelector("caption,[role~='caption']");
+    const headerRow = rows.find((row) => row.cells.some((cell) => cell.header));
+    return {{
+      table_index: tableIndex,
+      ...nodeInfo(table),
+      caption: captionElement ? textOf(captionElement) : null,
+      headers: headerRow ? headerRow.cells.map((cell) => cell.text) : [],
+      row_count: candidateRows.length,
+      visible_row_count: visibleRows.length,
+      node_count: rows.length,
+      truncated: candidateRows.length > rows.length,
+      rows
+    }};
+  }};
+  const visibleTables = allTables.filter(visible);
+  const candidateTables = includeHidden ? allTables : visibleTables;
+  const tables = limited(candidateTables).map(tableInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "tables",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_rows: maxRows,
+    max_cells: maxCells,
+    table_count: candidateTables.length,
+    node_count: tables.length,
+    total_count: allTables.length,
+    visible_count: visibleTables.length,
+    truncated: maxNodes !== null && candidateTables.length > tables.length,
+    tables
+  }};
+}}
+""".strip()
+
+
+def _list_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_items: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxItems = Math.max(0, {_js_literal(max_items)});
+  const listSelector = [
+    "ul",
+    "ol",
+    "menu",
+    "[role~='list']",
+    "[role~='listbox']",
+    "[role~='menu']",
+    "[role~='tree']"
+  ].join(",");
+  const itemSelector = [
+    "li",
+    "[role~='listitem']",
+    "[role~='option']",
+    "[role~='menuitem']",
+    "[role~='menuitemcheckbox']",
+    "[role~='menuitemradio']",
+    "[role~='treeitem']"
+  ].join(",");
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{ absolute_url: raw, absolute_url_masked: false }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        same_origin: parsed.origin === location.origin
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        same_origin: null
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allLists = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(listSelector) ? [root] : []),
+      ...root.querySelectorAll(listSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allLists.push(candidate);
+      }}
+    }}
+  }}
+  const directItemsOf = (list) => {{
+    const items = [...list.querySelectorAll(itemSelector)];
+    const direct = items.filter((item) => item.closest(listSelector) === list);
+    return direct.length ? direct : items;
+  }};
+  const selectedState = (item) => {{
+    const ariaSelected = item.getAttribute("aria-selected");
+    if (ariaSelected === "true") return true;
+    if (ariaSelected === "false") return false;
+    return "selected" in item ? Boolean(item.selected) : null;
+  }};
+  const checkedState = (item) => {{
+    const ariaChecked = item.getAttribute("aria-checked");
+    if (ariaChecked === "true") return true;
+    if (ariaChecked === "false") return false;
+    if (ariaChecked === "mixed") return "mixed";
+    const input = item.matches?.("input[type=checkbox],input[type=radio]")
+      ? item
+      : item.querySelector("input[type=checkbox],input[type=radio]");
+    return input ? Boolean(input.checked) : null;
+  }};
+  const expandedState = (item) => {{
+    const ariaExpanded = item.getAttribute("aria-expanded");
+    if (ariaExpanded === "true") return true;
+    if (ariaExpanded === "false") return false;
+    return null;
+  }};
+  const disabledState = (item) =>
+    Boolean(item.disabled) || item.getAttribute("aria-disabled") === "true";
+  const itemLevel = (item, list) => {{
+    let level = 1;
+    let current = item.parentElement;
+    while (current && current !== list) {{
+      if (current.matches?.(listSelector)) level += 1;
+      current = current.parentElement;
+    }}
+    return level;
+  }};
+  const linkInfo = (link) => {{
+    const rawHref = link.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    return {{
+      text: textOf(link),
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...maskedParsedUrl(rawHref)
+    }};
+  }};
+  const linksOf = (item) => {{
+    const links = [
+      ...(item.matches?.(linkSelector) ? [item] : []),
+      ...item.querySelectorAll(linkSelector)
+    ];
+    return links.map(linkInfo);
+  }};
+  const itemInfo = (item, itemIndex, list) => {{
+    const info = nodeInfo(item);
+    return {{
+      item_index: itemIndex,
+      ...info,
+      level: itemLevel(item, list),
+      selected: selectedState(item),
+      checked: checkedState(item),
+      expanded: expandedState(item),
+      disabled: disabledState(item),
+      links: linksOf(item)
+    }};
+  }};
+  const listInfo = (list, listIndex) => {{
+    const tag = list.tagName.toLowerCase();
+    const rawItems = directItemsOf(list);
+    const visibleItems = rawItems.filter(visible);
+    const candidateItems = includeHidden ? rawItems : visibleItems;
+    const items = candidateItems
+      .slice(0, maxItems)
+      .map((item, itemIndex) => itemInfo(item, itemIndex, list));
+    return {{
+      list_index: listIndex,
+      ...nodeInfo(list),
+      ordered: tag === "ol",
+      start: tag === "ol" ? Number(list.getAttribute("start") || 1) : null,
+      reversed: tag === "ol" ? Boolean(list.reversed) : null,
+      item_count: candidateItems.length,
+      visible_item_count: visibleItems.length,
+      node_count: items.length,
+      truncated: candidateItems.length > items.length,
+      items
+    }};
+  }};
+  const visibleLists = allLists.filter(visible);
+  const candidateLists = includeHidden ? allLists : visibleLists;
+  const lists = limited(candidateLists).map(listInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "lists",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_items: maxItems,
+    list_count: candidateLists.length,
+    node_count: lists.length,
+    total_count: allLists.length,
+    visible_count: visibleLists.length,
+    truncated: maxNodes !== null && candidateLists.length > lists.length,
+    lists
+  }};
+}}
+""".strip()
+
+
+def _text_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_chars: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxChars = Math.max(0, {_js_literal(max_chars)});
+  const textSelector = [
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "blockquote",
+    "pre",
+    "code",
+    "label",
+    "legend",
+    "summary",
+    "figcaption",
+    "caption",
+    "dt",
+    "dd",
+    "[role~='heading']",
+    "[role~='alert']",
+    "[role~='status']",
+    "[role~='log']",
+    "[role~='note']",
+    "[aria-live]"
+  ].join(",");
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allTextBlocks = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(textSelector) ? [root] : []),
+      ...root.querySelectorAll(textSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allTextBlocks.push(candidate);
+      }}
+    }}
+  }}
+  const headingLevel = (element) => {{
+    const tag = element.tagName.toLowerCase();
+    if (/^h[1-6]$/.test(tag)) return Number(tag.slice(1));
+    const value = Number(element.getAttribute("aria-level"));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }};
+  const textKind = (element) => {{
+    const role = roleOf(element);
+    if (role === "heading" || headingLevel(element) !== null) return "heading";
+    if (["alert", "status", "log"].includes(role)) return "live-region";
+    if (element.hasAttribute("aria-live")) return "live-region";
+    const tag = element.tagName.toLowerCase();
+    if (["label", "legend", "caption", "figcaption"].includes(tag)) return "label";
+    if (["pre", "code"].includes(tag)) return "code";
+    if (["dt", "dd"].includes(tag)) return "definition";
+    if (tag === "blockquote") return "quote";
+    return "text";
+  }};
+  const truncateText = (value) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxChars) {{
+      return {{ text, text_truncated: false }};
+    }}
+    return {{
+      text: text.slice(0, maxChars),
+      text_truncated: true
+    }};
+  }};
+  const textInfo = (element, index) => {{
+    const info = nodeInfo(element);
+    const rawText = info.text;
+    return {{
+      index,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      kind: textKind(element),
+      level: headingLevel(element),
+      aria_live: element.getAttribute("aria-live"),
+      aria_atomic: element.getAttribute("aria-atomic"),
+      text_length: rawText.length,
+      ...truncateText(rawText),
+      visible: info.visible
+    }};
+  }};
+  const visibleTextBlocks = allTextBlocks.filter(visible);
+  const candidateTextBlocks = includeHidden ? allTextBlocks : visibleTextBlocks;
+  const nonEmptyTextBlocks = candidateTextBlocks.filter((element) => textOf(element));
+  const texts = limited(nonEmptyTextBlocks).map(textInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "text",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_chars: maxChars,
+    text_count: nonEmptyTextBlocks.length,
+    node_count: texts.length,
+    total_count: allTextBlocks.length,
+    visible_count: visibleTextBlocks.length,
+    truncated: maxNodes !== null && nonEmptyTextBlocks.length > texts.length,
+    texts
+  }};
+}}
+""".strip()
+
+
+def _dialog_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_controls: int,
+    max_chars: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxControls = Math.max(0, {_js_literal(max_controls)});
+  const maxChars = Math.max(0, {_js_literal(max_chars)});
+  const dialogSelector = [
+    "dialog",
+    "[role~='dialog']",
+    "[role~='alertdialog']",
+    "[aria-modal='true']",
+    ".modal",
+    "[data-modal='true']"
+  ].join(",");
+  const linkSelector = "a[href], area[href]";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{ absolute_url: raw, absolute_url_masked: false }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        same_origin: parsed.origin === location.origin
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        same_origin: null
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allDialogs = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(dialogSelector) ? [root] : []),
+      ...root.querySelectorAll(dialogSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allDialogs.push(candidate);
+      }}
+    }}
+  }}
+  const idsText = (value) => normalize(
+    String(value || "")
+      .split(/\\s+/)
+      .map((id) => document.getElementById(id)?.innerText ?? "")
+      .join(" ")
+  );
+  const firstText = (dialog, selector) => {{
+    const element = dialog.querySelector(selector);
+    return element ? textOf(element) : "";
+  }};
+  const truncateText = (value) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxChars) {{
+      return {{ text, text_truncated: false }};
+    }}
+    return {{
+      text: text.slice(0, maxChars),
+      text_truncated: true
+    }};
+  }};
+  const disabledState = (element) =>
+    Boolean(element.disabled) || element.getAttribute("aria-disabled") === "true";
+  const checkedState = (element) => {{
+    const ariaChecked = element.getAttribute("aria-checked");
+    if (ariaChecked === "true") return true;
+    if (ariaChecked === "false") return false;
+    if (ariaChecked === "mixed") return "mixed";
+    return "checked" in element ? Boolean(element.checked) : null;
+  }};
+  const selectedState = (element) => {{
+    const ariaSelected = element.getAttribute("aria-selected");
+    if (ariaSelected === "true") return true;
+    if (ariaSelected === "false") return false;
+    return "selected" in element ? Boolean(element.selected) : null;
+  }};
+  const linkPayload = (element) => {{
+    if (!element.matches?.(linkSelector)) {{
+      return {{}};
+    }}
+    const rawHref = element.getAttribute("href") || "";
+    const maskedHref = maskUrlText(rawHref);
+    return {{
+      href: maskedHref,
+      href_masked: maskedHref !== rawHref,
+      ...maskedParsedUrl(rawHref)
+    }};
+  }};
+  const controlInfo = (element, controlIndex) => {{
+    const info = nodeInfo(element);
+    return {{
+      control_index: controlIndex,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      text: info.text,
+      type: element.getAttribute("type"),
+      disabled: disabledState(element),
+      checked: checkedState(element),
+      selected: selectedState(element),
+      visible: info.visible,
+      ...linkPayload(element)
+    }};
+  }};
+  const dialogTitle = (dialog) =>
+    idsText(dialog.getAttribute("aria-labelledby")) ||
+    firstText(dialog, "h1,h2,h3,h4,h5,h6,[role~='heading'],header");
+  const dialogDescription = (dialog) =>
+    idsText(dialog.getAttribute("aria-describedby")) ||
+    firstText(dialog, "p,[role~='document'],section,article");
+  const dialogInfo = (dialog, dialogIndex) => {{
+    const info = nodeInfo(dialog);
+    const rawControls = [...dialog.querySelectorAll(interactiveSelector)];
+    const visibleControls = rawControls.filter(visible);
+    const candidateControls = includeHidden ? rawControls : visibleControls;
+    const controls = candidateControls
+      .slice(0, maxControls)
+      .map(controlInfo);
+    const truncatedText = truncateText(info.text);
+    return {{
+      dialog_index: dialogIndex,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      title: dialogTitle(dialog),
+      description: dialogDescription(dialog),
+      modal: dialog.getAttribute("aria-modal") === "true" ||
+        (dialog.tagName.toLowerCase() === "dialog" && Boolean(dialog.open)),
+      open: dialog.tagName.toLowerCase() === "dialog"
+        ? Boolean(dialog.open)
+        : null,
+      text_length: info.text.length,
+      ...truncatedText,
+      visible: info.visible,
+      control_count: candidateControls.length,
+      visible_control_count: visibleControls.length,
+      node_count: controls.length,
+      controls_truncated: candidateControls.length > controls.length,
+      controls
+    }};
+  }};
+  const visibleDialogs = allDialogs.filter(visible);
+  const candidateDialogs = includeHidden ? allDialogs : visibleDialogs;
+  const dialogs = limited(candidateDialogs).map(dialogInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "dialogs",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_controls: maxControls,
+    max_chars: maxChars,
+    dialog_count: candidateDialogs.length,
+    node_count: dialogs.length,
+    total_count: allDialogs.length,
+    visible_count: visibleDialogs.length,
+    truncated: maxNodes !== null && candidateDialogs.length > dialogs.length,
+    dialogs
+  }};
+}}
+""".strip()
+
+
+def _wait_dialog_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_controls: int,
+    max_chars: int,
+    text: str | None,
+    match: str,
+    case_sensitive: bool,
+    modal_only: bool,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    text_source = "null" if text is None else _js_literal(text)
+    return f"""
+() => new Promise((resolve) => {{
+  const collectDialogs = {
+        _dialog_snapshot_expression(
+            selector=selector,
+            include_hidden=include_hidden,
+            max_nodes=max_nodes,
+            max_controls=max_controls,
+            max_chars=max_chars,
+        )
+    };
+  const requestedText = {text_source};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const modalOnly = {_js_literal(modal_only)};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const requestedTextString = requestedText === null ? null : String(requestedText);
+  const hasTextFilter = requestedTextString !== null && requestedTextString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let pattern = null;
+  if (hasTextFilter && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedTextString, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const snapshot = collectDialogs();
+      resolve({{
+        url: snapshot.url,
+        title: snapshot.title,
+        kind: "dialog_wait",
+        found: false,
+        matched: false,
+        timed_out: false,
+        requested_text: requestedText,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        modal_only: modalOnly,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        waited_ms: Date.now() - startedAt,
+        dialog_count: 0,
+        total_dialog_count: snapshot.dialog_count,
+        dialog: null,
+        dialogs: [],
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const dialogText = (dialog) => [
+    dialog.name,
+    dialog.title,
+    dialog.description,
+    dialog.text,
+    ...(dialog.controls || []).flatMap((control) => [control.name, control.text])
+  ].filter(Boolean).join(" ");
+  const textMatches = (dialog) => {{
+    if (!hasTextFilter) return true;
+    const candidate = dialogText(dialog);
+    if (matchMode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requestedTextString);
+    if (matchMode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const matchingDialogs = (snapshot) => (snapshot.dialogs || [])
+    .filter((dialog) => !modalOnly || dialog.modal === true)
+    .filter(textMatches);
+  const finish = (found, snapshot, dialogs) => {{
+    resolve({{
+      url: snapshot.url,
+      title: snapshot.title,
+      kind: "dialog_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_text: requestedText,
+      match: matchMode,
+      case_sensitive: caseSensitive,
+      modal_only: modalOnly,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: Date.now() - startedAt,
+      dialog_count: dialogs.length,
+      total_dialog_count: snapshot.dialog_count,
+      dialog: dialogs.length ? dialogs[0] : null,
+      dialogs: dialogs.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    const snapshot = collectDialogs();
+    const dialogs = matchingDialogs(snapshot);
+    if (dialogs.length > 0) {{
+      finish(true, snapshot, dialogs);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false, snapshot, dialogs);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _frame_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_chars: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const maxChars = Math.max(0, {_js_literal(max_chars)});
+  const frameSelector = "iframe,frame";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const truncateText = (value) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxChars) {{
+      return {{ body_text: text, body_text_truncated: false }};
+    }}
+    return {{
+      body_text: text.slice(0, maxChars),
+      body_text_truncated: true
+    }};
+  }};
+  const rectInfo = (element) => {{
+    const rect = element.getBoundingClientRect();
+    return {{
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      left: rect.left,
+      bottom: rect.bottom,
+      right: rect.right,
+      in_viewport: rect.bottom > 0 &&
+        rect.right > 0 &&
+        rect.top < window.innerHeight &&
+        rect.left < window.innerWidth
+    }};
+  }};
+  const readableFrameInfo = (frame) => {{
+    try {{
+      const doc = frame.contentDocument;
+      if (!doc) {{
+        return {{
+          readable: false,
+          read_error: "contentDocument unavailable"
+        }};
+      }}
+      const frameUrl = doc.location ? doc.location.href : "";
+      const maskedFrameUrl = maskedParsedUrl(frameUrl);
+      const bodyText = doc.body
+        ? normalize(doc.body.innerText ?? doc.body.textContent ?? "")
+        : "";
+      return {{
+        readable: true,
+        read_error: null,
+        frame_url: maskedFrameUrl.absolute_url,
+        frame_url_masked: maskedFrameUrl.absolute_url_masked,
+        frame_same_origin: maskedFrameUrl.same_origin,
+        frame_title: doc.title || null,
+        ready_state: doc.readyState,
+        body_text_length: bodyText.length,
+        ...truncateText(bodyText)
+      }};
+    }} catch (error) {{
+      return {{
+        readable: false,
+        read_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const allFrames = [];
+  for (const root of roots) {{
+    const candidates = [
+      ...(root.matches?.(frameSelector) ? [root] : []),
+      ...root.querySelectorAll(frameSelector)
+    ];
+    for (const candidate of candidates) {{
+      if (!seen.has(candidate)) {{
+        seen.add(candidate);
+        allFrames.push(candidate);
+      }}
+    }}
+  }}
+  const frameInfo = (frame, frameIndex) => {{
+    const info = nodeInfo(frame);
+    const rawSrc = frame.getAttribute("src") || "";
+    const maskedSrc = maskUrlText(rawSrc);
+    return {{
+      frame_index: frameIndex,
+      selector: info.selector,
+      tag: info.tag,
+      role: info.role,
+      name: info.name,
+      text: info.text,
+      id: frame.id || null,
+      name_attribute: frame.getAttribute("name"),
+      title_attribute: frame.getAttribute("title"),
+      src: maskedSrc,
+      src_masked: maskedSrc !== rawSrc,
+      ...maskedParsedUrl(rawSrc),
+      sandbox: frame.getAttribute("sandbox"),
+      allow: frame.getAttribute("allow"),
+      loading: frame.getAttribute("loading"),
+      referrer_policy: frame.getAttribute("referrerpolicy"),
+      visible: info.visible,
+      bounding_box: rectInfo(frame),
+      ...readableFrameInfo(frame)
+    }};
+  }};
+  const visibleFrames = allFrames.filter(visible);
+  const candidateFrames = includeHidden ? allFrames : visibleFrames;
+  const frames = limited(candidateFrames).map(frameInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "frames",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    max_chars: maxChars,
+    frame_count: candidateFrames.length,
+    node_count: frames.length,
+    total_count: allFrames.length,
+    visible_count: visibleFrames.length,
+    truncated: maxNodes !== null && candidateFrames.length > frames.length,
+    frames
+  }};
+}}
+""".strip()
+
+
+def _wait_frame_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+    max_chars: int,
+    url: str | None,
+    url_match: str,
+    text: str | None,
+    text_match: str,
+    case_sensitive: bool,
+    readable_only: bool,
+    same_origin_only: bool,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    url_source = "null" if url is None else _js_literal(url)
+    text_source = "null" if text is None else _js_literal(text)
+    return f"""
+() => new Promise((resolve) => {{
+  const collectFrames = {
+        _frame_snapshot_expression(
+            selector=selector,
+            include_hidden=include_hidden,
+            max_nodes=max_nodes,
+            max_chars=max_chars,
+        )
+    };
+  const requestedUrl = {url_source};
+  const urlMatchMode = {_js_literal(url_match)};
+  const requestedText = {text_source};
+  const textMatchMode = {_js_literal(text_match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const readableOnly = {_js_literal(readable_only)};
+  const sameOriginOnly = {_js_literal(same_origin_only)};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const requestedUrlString = requestedUrl === null ? null : String(requestedUrl);
+  const requestedTextString = requestedText === null ? null : String(requestedText);
+  const hasUrlFilter = requestedUrlString !== null && requestedUrlString.length > 0;
+  const hasTextFilter = requestedTextString !== null && requestedTextString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let resolved = false;
+  const finishInvalidRegex = (invalidFilter, error) => {{
+    const snapshot = collectFrames();
+    resolved = true;
+    resolve({{
+      url: snapshot.url,
+      title: snapshot.title,
+      kind: "frame_wait",
+      found: false,
+      matched: false,
+      timed_out: false,
+      requested_url: requestedUrl,
+      url_match: urlMatchMode,
+      requested_text: requestedText,
+      text_match: textMatchMode,
+      case_sensitive: caseSensitive,
+      readable_only: readableOnly,
+      same_origin_only: sameOriginOnly,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: Date.now() - startedAt,
+      frame_count: 0,
+      total_frame_count: snapshot.frame_count,
+      frame: null,
+      frames: [],
+      error: "invalid_regex",
+      invalid_filter: invalidFilter,
+      message: String(error.message || error)
+    }});
+  }};
+  const compilePattern = (value, mode, invalidFilter) => {{
+    if (value === null || value.length === 0 || mode !== "regex") return null;
+    try {{
+      return new RegExp(value, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      finishInvalidRegex(invalidFilter, error);
+      return null;
+    }}
+  }};
+  const urlPattern = compilePattern(requestedUrlString, urlMatchMode, "url");
+  if (resolved) return;
+  const textPattern = compilePattern(requestedTextString, textMatchMode, "text");
+  if (resolved) return;
+  const valueMatches = (candidate, requested, mode, pattern) => {{
+    if (requested === null || requested.length === 0) return true;
+    if (mode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requested);
+    if (mode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const frameUrlText = (frame) => [
+    frame.src,
+    frame.absolute_url,
+    frame.frame_url,
+    frame.origin,
+    frame.pathname
+  ].filter(Boolean).join(" ");
+  const frameText = (frame) => [
+    frame.name,
+    frame.text,
+    frame.name_attribute,
+    frame.title_attribute,
+    frame.frame_title,
+    frame.body_text
+  ].filter(Boolean).join(" ");
+  const isSameOrigin = (frame) =>
+    frame.same_origin === true || frame.frame_same_origin === true;
+  const matchingFrames = (snapshot) => (snapshot.frames || [])
+    .filter((frame) => !readableOnly || frame.readable === true)
+    .filter((frame) => !sameOriginOnly || isSameOrigin(frame))
+    .filter((frame) => !hasUrlFilter ||
+      valueMatches(frameUrlText(frame), requestedUrlString, urlMatchMode, urlPattern)
+    )
+    .filter((frame) => !hasTextFilter ||
+      valueMatches(frameText(frame), requestedTextString, textMatchMode, textPattern)
+    );
+  const finish = (found, snapshot, frames) => {{
+    resolve({{
+      url: snapshot.url,
+      title: snapshot.title,
+      kind: "frame_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_url: requestedUrl,
+      url_match: urlMatchMode,
+      requested_text: requestedText,
+      text_match: textMatchMode,
+      case_sensitive: caseSensitive,
+      readable_only: readableOnly,
+      same_origin_only: sameOriginOnly,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: Date.now() - startedAt,
+      frame_count: frames.length,
+      total_frame_count: snapshot.frame_count,
+      frame: frames.length ? frames[0] : null,
+      frames: frames.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    const snapshot = collectFrames();
+    const frames = matchingFrames(snapshot);
+    if (frames.length > 0) {{
+      finish(true, snapshot, frames);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false, snapshot, frames);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _performance_snapshot_expression(
+    *,
+    max_resources: int,
+    initiator_type: str | None,
+    min_duration_ms: float,
+) -> str:
+    initiator_type_source = (
+        "null" if initiator_type is None else _js_literal(initiator_type)
+    )
+    return f"""
+() => {{
+  const maxResources = Math.max(0, {_js_literal(max_resources)});
+  const requestedInitiatorType = {initiator_type_source};
+  const minDurationMs = Math.max(0, {_js_literal(min_duration_ms)});
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const numberOrNull = (value) => Number.isFinite(value) ? value : null;
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const urlPayload = (value) => {{
+    const raw = String(value ?? "");
+    const maskedName = maskUrlText(raw);
+    return {{
+      name: maskedName,
+      name_masked: maskedName !== raw,
+      ...maskedParsedUrl(raw)
+    }};
+  }};
+  const responseStatus = (entry) =>
+    "responseStatus" in entry ? numberOrNull(entry.responseStatus) : null;
+  const timingPayload = (entry) => ({{
+    start_time: numberOrNull(entry.startTime),
+    duration: numberOrNull(entry.duration),
+    fetch_start: numberOrNull(entry.fetchStart),
+    domain_lookup_start: numberOrNull(entry.domainLookupStart),
+    domain_lookup_end: numberOrNull(entry.domainLookupEnd),
+    connect_start: numberOrNull(entry.connectStart),
+    connect_end: numberOrNull(entry.connectEnd),
+    secure_connection_start: numberOrNull(entry.secureConnectionStart),
+    request_start: numberOrNull(entry.requestStart),
+    response_start: numberOrNull(entry.responseStart),
+    response_end: numberOrNull(entry.responseEnd),
+    transfer_size: numberOrNull(entry.transferSize),
+    encoded_body_size: numberOrNull(entry.encodedBodySize),
+    decoded_body_size: numberOrNull(entry.decodedBodySize),
+    next_hop_protocol: entry.nextHopProtocol || null,
+    response_status: responseStatus(entry)
+  }});
+  const navigationEntry = performance.getEntriesByType("navigation")[0] || null;
+  const navigation = navigationEntry ? {{
+    ...urlPayload(navigationEntry.name),
+    entry_type: navigationEntry.entryType,
+    type: navigationEntry.type || null,
+    redirect_count: numberOrNull(navigationEntry.redirectCount),
+    worker_start: numberOrNull(navigationEntry.workerStart),
+    dom_interactive: numberOrNull(navigationEntry.domInteractive),
+    dom_content_loaded_event_start: numberOrNull(navigationEntry.domContentLoadedEventStart),
+    dom_content_loaded_event_end: numberOrNull(navigationEntry.domContentLoadedEventEnd),
+    dom_complete: numberOrNull(navigationEntry.domComplete),
+    load_event_start: numberOrNull(navigationEntry.loadEventStart),
+    load_event_end: numberOrNull(navigationEntry.loadEventEnd),
+    activation_start: numberOrNull(navigationEntry.activationStart),
+    ...timingPayload(navigationEntry)
+  }} : null;
+  const allResources = performance.getEntriesByType("resource");
+  const candidateResources = allResources
+    .filter((entry) =>
+      requestedInitiatorType === null || entry.initiatorType === requestedInitiatorType
+    )
+    .filter((entry) => entry.duration >= minDurationMs);
+  const resourceInfo = (entry, index) => ({{
+    index,
+    ...urlPayload(entry.name),
+    entry_type: entry.entryType,
+    initiator_type: entry.initiatorType || null,
+    render_blocking_status: entry.renderBlockingStatus || null,
+    delivery_type: "deliveryType" in entry ? entry.deliveryType || null : null,
+    worker_start: numberOrNull(entry.workerStart),
+    redirect_start: numberOrNull(entry.redirectStart),
+    redirect_end: numberOrNull(entry.redirectEnd),
+    ...timingPayload(entry)
+  }});
+  const resources = candidateResources
+    .slice(0, maxResources)
+    .map(resourceInfo);
+  const initiatorTypes = [...new Set(allResources.map((entry) => entry.initiatorType || ""))]
+    .filter(Boolean)
+    .sort();
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "performance",
+    time_origin: performance.timeOrigin,
+    now: performance.now(),
+    requested_initiator_type: requestedInitiatorType,
+    min_duration_ms: minDurationMs,
+    max_resources: maxResources,
+    navigation,
+    resource_count: candidateResources.length,
+    node_count: resources.length,
+    total_count: allResources.length,
+    initiator_types: initiatorTypes,
+    truncated: candidateResources.length > resources.length,
+    resources
+  }};
+}}
+""".strip()
+
+
+def _network_snapshot_expression(
+    *,
+    max_entries: int,
+    clear: bool,
+    install_only: bool,
+    source: str | None,
+    method: str | None,
+    failed_only: bool,
+) -> str:
+    source_filter = "null" if source is None else _js_literal(source)
+    method_filter = "null" if method is None else _js_literal(method.upper())
+    return f"""
+() => {{
+  const maxEntries = Math.max(0, {_js_literal(max_entries)});
+  const clearRequested = {_js_literal(clear)};
+  const installOnly = {_js_literal(install_only)};
+  const requestedSource = {source_filter};
+  const requestedMethod = {method_filter};
+  const failedOnly = {_js_literal(failed_only)};
+  const stateKey = "__browserCliNetworkSnapshot";
+  const sensitiveUrlParamName =
+    /^(api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)$/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const maskUrlText = (value) => String(value ?? "").replace(
+    sensitiveUrlParamPattern,
+    "$1***"
+  );
+  const numberOrNull = (value) => Number.isFinite(value) ? value : null;
+  const maskedParsedUrl = (value) => {{
+    const raw = String(value ?? "");
+    if (!raw) {{
+      return {{
+        absolute_url: raw,
+        absolute_url_masked: false,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: null
+      }};
+    }}
+    try {{
+      const parsed = new URL(raw, location.href);
+      let masked = false;
+      if (parsed.username) {{
+        parsed.username = "***";
+        masked = true;
+      }}
+      if (parsed.password) {{
+        parsed.password = "***";
+        masked = true;
+      }}
+      for (const key of [...parsed.searchParams.keys()]) {{
+        if (sensitiveUrlParamName.test(key)) {{
+          parsed.searchParams.set(key, "***");
+          masked = true;
+        }}
+      }}
+      return {{
+        absolute_url: parsed.href,
+        absolute_url_masked: masked,
+        origin: parsed.origin,
+        pathname: parsed.pathname,
+        search: parsed.search || null,
+        hash: parsed.hash || null,
+        same_origin: parsed.origin === location.origin,
+        url_parse_error: null
+      }};
+    }} catch (error) {{
+      const maskedRaw = maskUrlText(raw);
+      return {{
+        absolute_url: maskedRaw,
+        absolute_url_masked: maskedRaw !== raw,
+        origin: null,
+        pathname: null,
+        search: null,
+        hash: null,
+        same_origin: null,
+        url_parse_error: String(error.message || error)
+      }};
+    }}
+  }};
+  const urlPayload = (value) => {{
+    const raw = String(value ?? "");
+    const maskedUrl = maskUrlText(raw);
+    return {{
+      url: maskedUrl,
+      url_masked: maskedUrl !== raw,
+      ...maskedParsedUrl(raw)
+    }};
+  }};
+  const state = window[stateKey] || {{
+    installed: false,
+    installed_at: Date.now(),
+    next_index: 0,
+    buffer_limit: 500,
+    entries: [],
+    originals: {{}}
+  }};
+  window[stateKey] = state;
+  const push = (entry) => {{
+    const payload = {{
+      index: state.next_index++,
+      timestamp_ms: Date.now(),
+      elapsed_ms: performance.now(),
+      ...entry
+    }};
+    state.entries.push(payload);
+    if (state.entries.length > state.buffer_limit) {{
+      state.entries.splice(0, state.entries.length - state.buffer_limit);
+    }}
+  }};
+  const requestUrlFromFetchArgs = (input) => {{
+    if (typeof input === "string") return input;
+    if (input instanceof URL) return input.href;
+    if (input && typeof input === "object" && "url" in input) return input.url;
+    return String(input ?? "");
+  }};
+  const requestMethodFromFetchArgs = (input, init) => {{
+    if (init && init.method) return String(init.method).toUpperCase();
+    if (input && typeof input === "object" && "method" in input && input.method) {{
+      return String(input.method).toUpperCase();
+    }}
+    return "GET";
+  }};
+  const safeStatus = (xhr) => {{
+    try {{ return xhr.status || 0; }} catch (error) {{ return 0; }}
+  }};
+  const safeStatusText = (xhr) => {{
+    try {{ return xhr.statusText || ""; }} catch (error) {{ return ""; }}
+  }};
+  const install = () => {{
+    if (state.installed) return false;
+    if (typeof window.fetch === "function") {{
+      const originalFetch = window.fetch;
+      state.originals.fetch = originalFetch;
+      window.fetch = function (...args) {{
+        const input = args[0];
+        const init = args[1] || null;
+        const rawUrl = requestUrlFromFetchArgs(input);
+        const method = requestMethodFromFetchArgs(input, init);
+        const startedAt = performance.now();
+        const startedWall = Date.now();
+        const requestHasBody = Boolean(init && init.body);
+        return originalFetch.apply(this, args).then(
+          (response) => {{
+            const completedAt = Date.now();
+            push({{
+              source: "fetch",
+              method,
+              ...urlPayload(rawUrl),
+              status: response.status,
+              status_text: response.statusText || "",
+              ok: Boolean(response.ok),
+              redirected: Boolean(response.redirected),
+              response_type: response.type || null,
+              failed: false,
+              request_has_body: requestHasBody,
+              duration_ms: numberOrNull(performance.now() - startedAt),
+              started_at: startedWall,
+              completed_at: completedAt
+            }});
+            return response;
+          }},
+          (error) => {{
+            const completedAt = Date.now();
+            push({{
+              source: "fetch",
+              method,
+              ...urlPayload(rawUrl),
+              status: null,
+              status_text: "",
+              ok: false,
+              redirected: null,
+              response_type: null,
+              failed: true,
+              error_name: error && error.name ? String(error.name) : "Error",
+              error_message: String(error && error.message ? error.message : error),
+              request_has_body: requestHasBody,
+              duration_ms: numberOrNull(performance.now() - startedAt),
+              started_at: startedWall,
+              completed_at: completedAt
+            }});
+            throw error;
+          }}
+        );
+      }};
+    }}
+    if (window.XMLHttpRequest?.prototype) {{
+      const originalOpen = window.XMLHttpRequest.prototype.open;
+      const originalSend = window.XMLHttpRequest.prototype.send;
+      if (typeof originalOpen === "function" && typeof originalSend === "function") {{
+        state.originals.xhrOpen = originalOpen;
+        state.originals.xhrSend = originalSend;
+        window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {{
+          this.__browserCliNetworkRequest = {{
+            method: String(method || "GET").toUpperCase(),
+            url: String(url ?? "")
+          }};
+          return originalOpen.call(this, method, url, ...rest);
+        }};
+        window.XMLHttpRequest.prototype.send = function(body) {{
+          const meta = this.__browserCliNetworkRequest || {{
+            method: "GET",
+            url: ""
+          }};
+          const startedAt = performance.now();
+          const startedWall = Date.now();
+          let recorded = false;
+          const record = (failed, error = null) => {{
+            if (recorded) return;
+            recorded = true;
+            const status = failed && error ? null : safeStatus(this);
+            push({{
+              source: "xhr",
+              method: meta.method,
+              ...urlPayload(meta.url),
+              status,
+              status_text: failed && error ? "" : safeStatusText(this),
+              ok: status !== null ? status >= 200 && status < 400 : false,
+              failed,
+              error_name: error && error.name ? String(error.name) : null,
+              error_message: error ? String(error.message || error) : null,
+              request_has_body: body !== undefined && body !== null,
+              duration_ms: numberOrNull(performance.now() - startedAt),
+              started_at: startedWall,
+              completed_at: Date.now()
+            }});
+          }};
+          this.addEventListener("loadend", () => record(false), {{ once: true }});
+          this.addEventListener("error", () => record(true, new Error("xhr_error")), {{ once: true }});
+          this.addEventListener("timeout", () => record(true, new Error("xhr_timeout")), {{ once: true }});
+          this.addEventListener("abort", () => record(true, new Error("xhr_abort")), {{ once: true }});
+          try {{
+            return originalSend.call(this, body);
+          }} catch (error) {{
+            record(true, error);
+            throw error;
+          }}
+        }};
+      }}
+    }}
+    state.installed = true;
+    state.installed_at = Date.now();
+    return true;
+  }};
+  const newlyInstalled = install();
+  const matchesFilters = (entry) => {{
+    if (requestedSource !== null && entry.source !== requestedSource) return false;
+    if (requestedMethod !== null && entry.method !== requestedMethod) return false;
+    if (failedOnly && !entry.failed) return false;
+    return true;
+  }};
+  const bufferedCount = state.entries.length;
+  const matchedEntries = state.entries.filter(matchesFilters);
+  const entries = installOnly ? [] : matchedEntries.slice(-maxEntries);
+  const truncated = !installOnly && matchedEntries.length > entries.length;
+  if (clearRequested) {{
+    state.entries = [];
+  }}
+  const maskedLocation = maskUrlText(location.href);
+  return {{
+    url: maskedLocation,
+    url_masked: maskedLocation !== location.href,
+    title: document.title,
+    kind: "network",
+    installed: state.installed,
+    newly_installed: newlyInstalled,
+    installed_at: state.installed_at,
+    install_only: installOnly,
+    clear: clearRequested,
+    max_entries: maxEntries,
+    requested_source: requestedSource,
+    requested_method: requestedMethod,
+    failed_only: failedOnly,
+    fetch_instrumented: typeof state.originals.fetch === "function",
+    xhr_instrumented: typeof state.originals.xhrSend === "function",
+    entry_count: entries.length,
+    matched_count: matchedEntries.length,
+    buffered_count: bufferedCount,
+    buffered_count_after: state.entries.length,
+    truncated,
+    entries
+  }};
+}}
+""".strip()
+
+
+def _network_capture_bootstrap_expression() -> str:
+    expression = _network_snapshot_expression(
+        max_entries=0,
+        clear=False,
+        install_only=True,
+        source=None,
+        method=None,
+        failed_only=False,
+    )
+    start_marker = '  const stateKey = "__browserCliNetworkSnapshot";'
+    end_marker = "  const newlyInstalled = install();"
+    return expression[
+        expression.index(start_marker) : expression.index(end_marker)
+    ].rstrip()
+
+
+def _wait_network_expression(
+    *,
+    url: str | None,
+    url_match: str,
+    source: str | None,
+    method: str | None,
+    status: int | None,
+    failed_only: bool,
+    case_sensitive: bool,
+    after_index: int | None,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    url_source = "null" if url is None else _js_literal(url)
+    source_filter = "null" if source is None else _js_literal(source)
+    method_filter = "null" if method is None else _js_literal(method.upper())
+    status_filter = "null" if status is None else _js_literal(status)
+    after_index_source = "null" if after_index is None else _js_literal(after_index)
+    return f"""
+() => new Promise((resolve) => {{
+{_network_capture_bootstrap_expression()}
+  const requestedUrl = {url_source};
+  const urlMatchMode = {_js_literal(url_match)};
+  const requestedSource = {source_filter};
+  const requestedMethod = {method_filter};
+  const requestedStatus = {status_filter};
+  const failedOnly = {_js_literal(failed_only)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const afterIndex = {after_index_source};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const newlyInstalled = install();
+  const requestedUrlString = requestedUrl === null ? null : String(requestedUrl);
+  const hasUrlFilter = requestedUrlString !== null && requestedUrlString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let pattern = null;
+  if (hasUrlFilter && urlMatchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedUrlString, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const maskedLocation = maskUrlText(location.href);
+      resolve({{
+        url: maskedLocation,
+        url_masked: maskedLocation !== location.href,
+        title: document.title,
+        kind: "network_wait",
+        found: false,
+        matched: false,
+        timed_out: false,
+        requested_url: requestedUrl,
+        url_match: urlMatchMode,
+        case_sensitive: caseSensitive,
+        requested_source: requestedSource,
+        requested_method: requestedMethod,
+        requested_status: requestedStatus,
+        failed_only: failedOnly,
+        after_index: afterIndex,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        waited_ms: Date.now() - startedAt,
+        installed: state.installed,
+        newly_installed: newlyInstalled,
+        installed_at: state.installed_at,
+        entry_count: 0,
+        buffered_count: state.entries.length,
+        entry: null,
+        entries: [],
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const entryUrl = (entry) => entry.absolute_url || entry.url || "";
+  const urlMatches = (entry) => {{
+    if (!hasUrlFilter) return true;
+    const candidate = entryUrl(entry);
+    if (urlMatchMode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requestedUrlString);
+    if (urlMatchMode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const entryMatches = (entry) => {{
+    if (afterIndex !== null && Number(entry.index) <= afterIndex) return false;
+    if (requestedSource !== null && entry.source !== requestedSource) return false;
+    if (requestedMethod !== null && entry.method !== requestedMethod) return false;
+    if (requestedStatus !== null && entry.status !== requestedStatus) return false;
+    if (failedOnly && !entry.failed) return false;
+    return urlMatches(entry);
+  }};
+  const matchingEntries = () => state.entries.filter(entryMatches);
+  const finish = (found) => {{
+    const entries = matchingEntries();
+    const maskedLocation = maskUrlText(location.href);
+    const waitedMs = Date.now() - startedAt;
+    resolve({{
+      url: maskedLocation,
+      url_masked: maskedLocation !== location.href,
+      title: document.title,
+      kind: "network_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_url: requestedUrl,
+      url_match: urlMatchMode,
+      case_sensitive: caseSensitive,
+      requested_source: requestedSource,
+      requested_method: requestedMethod,
+      requested_status: requestedStatus,
+      failed_only: failedOnly,
+      after_index: afterIndex,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: waitedMs,
+      installed: state.installed,
+      newly_installed: newlyInstalled,
+      installed_at: state.installed_at,
+      entry_count: entries.length,
+      buffered_count: state.entries.length,
+      entry: entries.length ? entries[0] : null,
+      entries: entries.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    if (matchingEntries().length > 0) {{
+      finish(true);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _console_snapshot_expression(
+    *,
+    max_entries: int,
+    clear: bool,
+    install_only: bool,
+) -> str:
+    return f"""
+() => {{
+  const maxEntries = Math.max(0, {_js_literal(max_entries)});
+  const clearRequested = {_js_literal(clear)};
+  const installOnly = {_js_literal(install_only)};
+  const stateKey = "__browserCliConsoleSnapshot";
+  const sensitiveNamePattern =
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token|code/i;
+  const sensitiveUrlParamPattern =
+    /([?&](?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)=)[^&#]*/gi;
+  const sensitivePairPattern =
+    /((?:api[-_]?key|apikey|key|access[-_]?token|refresh[-_]?token|id[-_]?token|token|auth|authorization|code|secret|password|passwd|credential|bearer)\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s,;&}}]+)/gi;
+  const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const truncate = (value, maxLength = 1000) => {{
+    const text = String(value ?? "");
+    if (text.length <= maxLength) {{
+      return {{ text, truncated: false }};
+    }}
+    return {{ text: text.slice(0, maxLength), truncated: true }};
+  }};
+  const maskText = (value) => String(value ?? "")
+    .replace(sensitiveUrlParamPattern, "$1***")
+    .replace(sensitivePairPattern, "$1***");
+  const maskedTextPayload = (value, maxLength = 1000) => {{
+    const raw = String(value ?? "");
+    const masked = maskText(raw);
+    const truncated = truncate(masked, maxLength);
+    return {{
+      text: truncated.text,
+      text_masked: masked !== raw,
+      text_truncated: truncated.truncated,
+      text_length: raw.length
+    }};
+  }};
+  const elementPayload = (element) => ({{
+    tag: element.tagName.toLowerCase(),
+    id: element.id || null,
+    class_name: element.className || null,
+    role: element.getAttribute("role"),
+    name: element.getAttribute("aria-label") || element.getAttribute("title") || null
+  }});
+  const state = window[stateKey] || {{
+    installed: false,
+    installed_at: Date.now(),
+    next_index: 0,
+    buffer_limit: 500,
+    entries: [],
+    originals: {{}},
+    listeners: {{}}
+  }};
+  window[stateKey] = state;
+  const push = (entry) => {{
+    const payload = {{
+      index: state.next_index++,
+      timestamp_ms: Date.now(),
+      elapsed_ms: performance.now(),
+      ...entry
+    }};
+    state.entries.push(payload);
+    if (state.entries.length > state.buffer_limit) {{
+      state.entries.splice(0, state.entries.length - state.buffer_limit);
+    }}
+  }};
+  const sanitizeValue = (value, depth = 0, seen = new WeakSet()) => {{
+    if (value === null) return null;
+    const type = typeof value;
+    if (type === "string") {{
+      const masked = maskText(value);
+      return masked.length > 500 ? `${{masked.slice(0, 500)}}...` : masked;
+    }}
+    if (["number", "boolean", "undefined", "bigint"].includes(type)) {{
+      return String(value);
+    }}
+    if (type === "function") return "[Function]";
+    if (value instanceof Error) {{
+      return {{
+        name: value.name || "Error",
+        message: maskText(value.message || ""),
+        stack: maskText(value.stack || "")
+      }};
+    }}
+    if (value instanceof Element) return elementPayload(value);
+    if (depth >= 2) return `[${{Object.prototype.toString.call(value)}}]`;
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    if (Array.isArray(value)) {{
+      return value.slice(0, 10).map((item) => sanitizeValue(item, depth + 1, seen));
+    }}
+    const result = {{}};
+    for (const [key, nestedValue] of Object.entries(value).slice(0, 20)) {{
+      result[key] = sensitiveNamePattern.test(key)
+        ? "***"
+        : sanitizeValue(nestedValue, depth + 1, seen);
+    }}
+    return result;
+  }};
+  const argPayload = (value) => {{
+    const type = value === null
+      ? "null"
+      : Array.isArray(value)
+        ? "array"
+        : typeof value;
+    let sanitized;
+    try {{
+      sanitized = sanitizeValue(value);
+    }} catch (error) {{
+      sanitized = `[Unserializable: ${{String(error.message || error)}}]`;
+    }}
+    const textValue = type === "string"
+      ? value
+      : value instanceof Error
+        ? `${{value.name || "Error"}}: ${{value.message || ""}}`
+        : (() => {{
+            try {{
+              return JSON.stringify(sanitized);
+            }} catch (error) {{
+              return String(value);
+            }}
+          }})();
+    return {{
+      type,
+      value: sanitized,
+      ...maskedTextPayload(textValue, 1000)
+    }};
+  }};
+  const entryText = (args) => normalize(args.map((arg) => arg.text).join(" "));
+  const entryTextPayload = (args) => ({{
+    text: entryText(args),
+    text_masked: args.some((arg) => Boolean(arg.text_masked)),
+    text_truncated: args.some((arg) => Boolean(arg.text_truncated))
+  }});
+  const install = () => {{
+    if (state.installed) return false;
+    for (const method of ["debug", "log", "info", "warn", "error"]) {{
+      const original = console[method];
+      state.originals[method] = original;
+      console[method] = function (...args) {{
+        const argPayloads = args.map(argPayload);
+        push({{
+          source: "console",
+          level: method === "log" ? "info" : method,
+          method,
+          ...entryTextPayload(argPayloads),
+          args: argPayloads
+        }});
+        return original.apply(this, args);
+      }};
+    }}
+    state.listeners.error = (event) => {{
+      const error = event.error || null;
+      const argPayloads = error ? [argPayload(error)] : [argPayload(event.message || "")];
+      const textPayload = maskedTextPayload(event.message || entryText(argPayloads));
+      const maskedFilename = maskText(event.filename || "");
+      push({{
+        source: "pageerror",
+        level: "error",
+        method: "error",
+        ...textPayload,
+        args: argPayloads,
+        filename: maskedFilename,
+        filename_masked: maskedFilename !== String(event.filename || ""),
+        lineno: event.lineno || null,
+        colno: event.colno || null
+      }});
+    }};
+    state.listeners.unhandledrejection = (event) => {{
+      const argPayloads = [argPayload(event.reason)];
+      push({{
+        source: "unhandledrejection",
+        level: "error",
+        method: "unhandledrejection",
+        ...entryTextPayload(argPayloads),
+        args: argPayloads
+      }});
+    }};
+    window.addEventListener("error", state.listeners.error);
+    window.addEventListener("unhandledrejection", state.listeners.unhandledrejection);
+    state.installed = true;
+    state.installed_at = Date.now();
+    return true;
+  }};
+  const newlyInstalled = install();
+  const maskedLocation = maskText(location.href);
+  const bufferedCount = state.entries.length;
+  const entries = installOnly ? [] : state.entries.slice(-maxEntries);
+  const truncated = !installOnly && bufferedCount > entries.length;
+  if (clearRequested) {{
+    state.entries = [];
+  }}
+  return {{
+    url: maskedLocation,
+    url_masked: maskedLocation !== location.href,
+    title: document.title,
+    kind: "console",
+    installed: state.installed,
+    newly_installed: newlyInstalled,
+    installed_at: state.installed_at,
+    install_only: installOnly,
+    clear: clearRequested,
+    max_entries: maxEntries,
+    entry_count: entries.length,
+    buffered_count: bufferedCount,
+    buffered_count_after: state.entries.length,
+    truncated,
+    entries
+  }};
+}}
+""".strip()
+
+
+def _console_capture_bootstrap_expression() -> str:
+    expression = _console_snapshot_expression(
+        max_entries=0,
+        clear=False,
+        install_only=True,
+    )
+    start_marker = '  const stateKey = "__browserCliConsoleSnapshot";'
+    end_marker = "  const newlyInstalled = install();"
+    return expression[
+        expression.index(start_marker) : expression.index(end_marker)
+    ].rstrip()
+
+
+def _wait_console_expression(
+    *,
+    text: str | None,
+    match: str,
+    source: str | None,
+    level: str | None,
+    case_sensitive: bool,
+    after_index: int | None,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    text_source = "null" if text is None else _js_literal(text)
+    source_source = "null" if source is None else _js_literal(source)
+    level_source = "null" if level is None else _js_literal(level)
+    after_index_source = "null" if after_index is None else _js_literal(after_index)
+    return f"""
+() => new Promise((resolve) => {{
+{_console_capture_bootstrap_expression()}
+  const requestedText = {text_source};
+  const matchMode = {_js_literal(match)};
+  const requestedSource = {source_source};
+  const requestedLevel = {level_source};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const afterIndex = {after_index_source};
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const startedAt = Date.now();
+  const newlyInstalled = install();
+  const requestedTextString = requestedText === null ? null : String(requestedText);
+  const hasTextFilter = requestedTextString !== null && requestedTextString.length > 0;
+  const normalizeForMatch = (value) => caseSensitive
+    ? String(value ?? "")
+    : String(value ?? "").toLowerCase();
+  let pattern = null;
+  if (hasTextFilter && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedTextString, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const maskedLocation = maskText(location.href);
+      resolve({{
+        url: maskedLocation,
+        url_masked: maskedLocation !== location.href,
+        title: document.title,
+        kind: "console_wait",
+        found: false,
+        matched: false,
+        timed_out: false,
+        requested_text: requestedText,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        requested_source: requestedSource,
+        requested_level: requestedLevel,
+        after_index: afterIndex,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        waited_ms: Date.now() - startedAt,
+        installed: state.installed,
+        newly_installed: newlyInstalled,
+        installed_at: state.installed_at,
+        entry_count: 0,
+        buffered_count: state.entries.length,
+        entry: null,
+        entries: [],
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const textMatches = (entry) => {{
+    if (!hasTextFilter) return true;
+    const candidate = String(entry.text || "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    const candidateComparable = normalizeForMatch(candidate);
+    const requestedComparable = normalizeForMatch(requestedTextString);
+    if (matchMode === "exact") return candidateComparable === requestedComparable;
+    return candidateComparable.includes(requestedComparable);
+  }};
+  const entryMatches = (entry) => {{
+    if (afterIndex !== null && Number(entry.index) <= afterIndex) return false;
+    if (requestedSource !== null && entry.source !== requestedSource) return false;
+    if (requestedLevel !== null && entry.level !== requestedLevel) return false;
+    return textMatches(entry);
+  }};
+  const matchingEntries = () => state.entries.filter(entryMatches);
+  const finish = (found) => {{
+    const entries = matchingEntries();
+    const maskedLocation = maskText(location.href);
+    const waitedMs = Date.now() - startedAt;
+    resolve({{
+      url: maskedLocation,
+      url_masked: maskedLocation !== location.href,
+      title: document.title,
+      kind: "console_wait",
+      found,
+      matched: found,
+      timed_out: !found,
+      requested_text: requestedText,
+      match: matchMode,
+      case_sensitive: caseSensitive,
+      requested_source: requestedSource,
+      requested_level: requestedLevel,
+      after_index: afterIndex,
+      timeout_ms: timeoutMs,
+      poll_ms: pollMs,
+      waited_ms: waitedMs,
+      installed: state.installed,
+      newly_installed: newlyInstalled,
+      installed_at: state.installed_at,
+      entry_count: entries.length,
+      buffered_count: state.entries.length,
+      entry: entries.length ? entries[0] : null,
+      entries: entries.slice(0, 5)
+    }});
+  }};
+  const check = () => {{
+    if (matchingEntries().length > 0) {{
+      finish(true);
+      return;
+    }}
+    if (Date.now() - startedAt >= timeoutMs) {{
+      finish(false);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _outline_snapshot_expression(
+    *,
+    selector: str | None,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    selector_source = "null" if selector is None else _js_literal(selector)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const rootSelector = {selector_source};
+  const outlineSelector = [
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "[role~='heading']",
+    "main",
+    "nav",
+    "header",
+    "footer",
+    "aside",
+    "section",
+    "article",
+    "form",
+    "search",
+    "[role~='main']",
+    "[role~='navigation']",
+    "[role~='banner']",
+    "[role~='contentinfo']",
+    "[role~='complementary']",
+    "[role~='region']",
+    "[role~='search']",
+    "[role~='form']"
+  ].join(",");
+  const roots = rootSelector === null
+    ? [document.body || document.documentElement].filter(Boolean)
+    : [...document.querySelectorAll(rootSelector)];
+  const seen = new Set();
+  const candidates = [];
+  const explicitRoleOf = (element) => normalize(element.getAttribute("role")).split(" ")[0];
+  const semanticLandmarkRole = (element) => {{
+    const explicitRole = explicitRoleOf(element);
+    if ([
+      "main",
+      "navigation",
+      "banner",
+      "contentinfo",
+      "complementary",
+      "region",
+      "search",
+      "form"
+    ].includes(explicitRole)) {{
+      return explicitRole;
+    }}
+    const tag = element.tagName.toLowerCase();
+    if (tag === "main") return "main";
+    if (tag === "nav") return "navigation";
+    if (tag === "header") return "banner";
+    if (tag === "footer") return "contentinfo";
+    if (tag === "aside") return "complementary";
+    if (tag === "form") return "form";
+    if (tag === "search") return "search";
+    if (["section", "article"].includes(tag) && accessibleName(element)) {{
+      return "region";
+    }}
+    return "";
+  }};
+  const headingLevel = (element) => {{
+    const tag = element.tagName.toLowerCase();
+    if (/^h[1-6]$/.test(tag)) return Number(tag.slice(1));
+    const value = Number(element.getAttribute("aria-level"));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }};
+  for (const root of roots) {{
+    const nodes = [
+      ...(root.matches?.(outlineSelector) ? [root] : []),
+      ...root.querySelectorAll(outlineSelector)
+    ];
+    for (const node of nodes) {{
+      if (!seen.has(node)) {{
+        seen.add(node);
+        candidates.push(node);
+      }}
+    }}
+  }}
+  const visibleNodes = candidates.filter(visible);
+  const outlineNodes = (includeHidden ? candidates : visibleNodes)
+    .map((element, index) => {{
+      const tag = element.tagName.toLowerCase();
+      const role = roleOf(element) || semanticLandmarkRole(element) || null;
+      const level = role === "heading" ? headingLevel(element) : null;
+      const nodeType = role === "heading" || level !== null
+        ? "heading"
+        : "landmark";
+      const info = nodeInfo(element);
+      return {{
+        index,
+        node_type: nodeType,
+        selector: info.selector,
+        tag,
+        role,
+        level,
+        name: info.name,
+        text: info.text,
+        visible: info.visible
+      }};
+    }})
+    .filter((node) => node.node_type === "heading" || node.role);
+  const headings = outlineNodes.filter((node) => node.node_type === "heading");
+  const landmarks = outlineNodes.filter((node) => node.node_type === "landmark");
+  const nodes = limited(outlineNodes);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "outline",
+    selector: rootSelector,
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    total_count: candidates.length,
+    visible_count: visibleNodes.length,
+    outline_count: outlineNodes.length,
+    heading_count: headings.length,
+    landmark_count: landmarks.length,
+    truncated: maxNodes !== null && outlineNodes.length > nodes.length,
+    headings: limited(headings),
+    landmarks: limited(landmarks),
+    nodes
+  }};
+}}
+""".strip()
+
+
 def _wait_text_expression(
     *,
     text: str,
     selector: str | None,
+    state: str,
     exact: bool,
     case_sensitive: bool,
     timeout_ms: float,
@@ -1479,6 +10691,7 @@ def _wait_text_expression(
 {_dom_helpers_expression(include_hidden=include_hidden)}
   const requestedText = {_js_literal(text)};
   const selector = {selector_source};
+  const requestedState = {_js_literal(state)};
   const exact = {_js_literal(exact)};
   const caseSensitive = {_js_literal(case_sensitive)};
   const startedAt = Date.now();
@@ -1497,13 +10710,103 @@ def _wait_text_expression(
       matchesText(accessibleName(candidate), requestedText, exact, caseSensitive)
     );
     const waitedMs = Date.now() - startedAt;
-    if (element) {{
+    const matched = Boolean(element);
+    const reached = requestedState === "absent" ? !matched : matched;
+    if (reached) {{
+      if (requestedState === "present") {{
+        resolve({{
+          found: true,
+          text: requestedText,
+          selector,
+          waited_ms: waitedMs,
+          candidate_count: nodes.length,
+          element: nodeInfo(element)
+        }});
+        return;
+      }}
       resolve({{
-        found: true,
+        found: matched,
+        matched,
+        state: requestedState,
         text: requestedText,
         selector,
         waited_ms: waitedMs,
         candidate_count: nodes.length,
+        element: element ? nodeInfo(element) : null
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      if (requestedState === "present") {{
+        resolve({{
+          found: false,
+          text: requestedText,
+          selector,
+          waited_ms: waitedMs,
+          candidate_count: nodes.length
+        }});
+        return;
+      }}
+      resolve({{
+        found: matched,
+        matched,
+        state: requestedState,
+        text: requestedText,
+        selector,
+        waited_ms: waitedMs,
+        candidate_count: nodes.length,
+        element: element ? nodeInfo(element) : null
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  const candidates = () => [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const check = () => {{
+    const nodes = candidates();
+    const roleMatches = nodes.filter((candidate) => roleOf(candidate) === requestedRole);
+    const element = roleMatches.find((candidate) =>
+      requestedName === null ||
+      matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+    );
+    const waitedMs = Date.now() - startedAt;
+    if (element) {{
+      resolve({{
+        found: true,
+        role: requestedRole,
+        name: requestedName,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        candidate_count: roleMatches.length,
+        total_candidate_count: nodes.length,
         element: nodeInfo(element)
       }});
       return;
@@ -1511,10 +10814,15 @@ def _wait_text_expression(
     if (waitedMs >= timeoutMs) {{
       resolve({{
         found: false,
-        text: requestedText,
-        selector,
+        role: requestedRole,
+        name: requestedName,
+        include_hidden: includeHidden,
         waited_ms: waitedMs,
-        candidate_count: nodes.length
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        candidate_count: roleMatches.length,
+        total_candidate_count: nodes.length,
+        candidates: roleMatches.slice(0, 20).map(nodeInfo)
       }});
       return;
     }}
@@ -1582,6 +10890,122 @@ def _wait_count_expression(
         total_count: all.length,
         visible_count: visibleNodes.length,
         waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _dom_state_helpers_expression() -> str:
+    return """
+  const ariaTrue = (element, name) => element.getAttribute(name) === "true";
+  const ariaFalse = (element, name) => element.getAttribute(name) === "false";
+  const elementState = (element) => {
+    if (!element) {
+      return {
+        found: false,
+        element: null,
+        state_values: {
+          attached: false,
+          detached: true,
+          visible: false,
+          hidden: true,
+          enabled: false,
+          disabled: null,
+          editable: false,
+          readonly: null,
+          checked: null,
+          unchecked: null,
+          focused: false,
+          in_viewport: null,
+          out_of_viewport: null
+        }
+      };
+    }
+    const rect = element.getBoundingClientRect();
+    const inViewport = rect.bottom >= 0 &&
+      rect.right >= 0 &&
+      rect.top <= window.innerHeight &&
+      rect.left <= window.innerWidth;
+    const disabled = Boolean(element.disabled) || ariaTrue(element, "aria-disabled");
+    const readonly = Boolean(element.readOnly) || ariaTrue(element, "aria-readonly");
+    let checked = null;
+    if ("checked" in element) {
+      checked = Boolean(element.checked);
+    } else if (ariaTrue(element, "aria-checked")) {
+      checked = true;
+    } else if (ariaFalse(element, "aria-checked")) {
+      checked = false;
+    }
+    const visibleState = visible(element);
+    const tag = element.tagName.toLowerCase();
+    const editable = Boolean(
+      element.isContentEditable ||
+      (["input", "textarea", "select"].includes(tag) && !disabled && !readonly)
+    );
+    return {
+      found: true,
+      element: nodeInfo(element),
+      state_values: {
+        attached: true,
+        detached: false,
+        visible: visibleState,
+        hidden: !visibleState,
+        enabled: !disabled,
+        disabled,
+        editable,
+        readonly,
+        checked,
+        unchecked: checked === null ? null : !checked,
+        focused: document.activeElement === element,
+        in_viewport: inViewport,
+        out_of_viewport: !inViewport
+      }
+    };
+  };
+  const stateMatches = (stateValues) => {
+    const normalizedState = requestedState.replace(/-/g, "_");
+    return Boolean(stateValues[normalizedState]);
+  };
+""".rstrip()
+
+
+def _wait_state_expression(
+    *,
+    selector: str,
+    state: str,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const requestedState = {_js_literal(state)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+{_dom_state_helpers_expression()}
+  const check = () => {{
+    const element = document.querySelector(selector);
+    const result = elementState(element);
+    const waitedMs = Date.now() - startedAt;
+    const matched = stateMatches(result.state_values);
+    if (matched || waitedMs >= timeoutMs) {{
+      resolve({{
+        selector,
+        state: requestedState,
+        found: result.found,
+        matched,
+        waited_ms: waitedMs,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        state_values: result.state_values,
+        element: result.element
       }});
       return;
     }}
@@ -1717,6 +11141,241 @@ def _wait_attribute_expression(
 """.strip()
 
 
+def _get_attribute_expression(*, selector: str, name: str) -> str:
+    attribute = _js_literal(name)
+    return _selector_expression(
+        selector,
+        f"""
+  const name = {attribute};
+  const attributeValue = element.getAttribute(name);
+  let propertyValue = null;
+  if (name in element) {{
+    const raw = element[name];
+    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
+      ? raw
+      : String(raw);
+  }}
+  return {{
+    selector,
+    found: true,
+    name,
+    value: attributeValue,
+    attribute_value: attributeValue,
+    property_value: propertyValue
+  }};
+""".rstrip(),
+    )
+
+
+def _get_attribute_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    attribute: str,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const attribute = {_js_literal(attribute)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      attribute,
+      found: false,
+      role_found: false,
+      value: null,
+      attribute_value: null,
+      property_value: null,
+      include_hidden: includeHidden,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const attributeValue = element.getAttribute(attribute);
+  let propertyValue = null;
+  if (attribute in element) {{
+    const raw = element[attribute];
+    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
+      ? raw
+      : String(raw);
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    attribute,
+    found: true,
+    role_found: true,
+    value: attributeValue,
+    attribute_value: attributeValue,
+    property_value: propertyValue,
+    include_hidden: includeHidden,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _wait_attribute_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    attribute: str,
+    value: str | None,
+    state: str,
+    match: str,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    value_source = "null" if value is None else _js_literal(value)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const attribute = {_js_literal(attribute)};
+  const requestedValue = {value_source};
+  const requestedState = {_js_literal(state)};
+  const matchMode = {_js_literal(match)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+{_role_target_helpers_expression(_js_literal("body *"))}
+  let pattern = null;
+  if (requestedValue !== null && matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const roleMatch = findRoleTargetElement();
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        attribute,
+        found: false,
+        state: requestedState,
+        role_found: Boolean(roleMatch.element),
+        attribute_found: null,
+        value: null,
+        requested_value: requestedValue,
+        match: matchMode,
+        include_hidden: includeHidden,
+        waited_ms: 0,
+        candidate_count: roleMatch.candidate_count,
+        candidates: roleMatch.candidates,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    if (requestedValue === null) return true;
+    const candidate = String(currentValue ?? "");
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const roleMatch = findRoleTargetElement();
+    const element = roleMatch.element;
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        resolve({{
+          role: requestedRole,
+          name: requestedName,
+          attribute,
+          found: false,
+          state: requestedState,
+          role_found: false,
+          attribute_found: null,
+          value: null,
+          requested_value: requestedValue,
+          match: matchMode,
+          include_hidden: includeHidden,
+          waited_ms: waitedMs,
+          candidate_count: roleMatch.candidate_count,
+          candidates: roleMatch.candidates
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const currentValue = element.getAttribute(attribute);
+    const attributeFound = currentValue !== null;
+    const reached = requestedState === "absent"
+      ? !attributeFound
+      : attributeFound && matches(currentValue);
+    if (reached) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        attribute,
+        found: true,
+        state: requestedState,
+        role_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        attribute,
+        found: false,
+        state: requestedState,
+        role_found: true,
+        attribute_found: attributeFound,
+        value: currentValue,
+        requested_value: requestedValue,
+        match: matchMode,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _query_expression(
     *,
     selector: str,
@@ -1746,6 +11405,66 @@ def _query_expression(
 """.strip()
 
 
+def _wait_state_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    state: str,
+    exact: bool,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedState = {_js_literal(state)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+{_dom_state_helpers_expression()}
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const check = () => {{
+    const roleMatch = findRoleTargetElement();
+    const element = roleMatch.element;
+    const result = elementState(element);
+    const waitedMs = Date.now() - startedAt;
+    const matched = stateMatches(result.state_values);
+    if (matched || waitedMs >= timeoutMs) {{
+      const payload = {{
+        role: requestedRole,
+        name: requestedName,
+        state: requestedState,
+        found: result.found,
+        role_found: Boolean(element),
+        matched,
+        include_hidden: includeHidden,
+        waited_ms: waitedMs,
+        timeout_ms: timeoutMs,
+        poll_ms: pollMs,
+        candidate_count: roleMatch.candidate_count,
+        state_values: result.state_values,
+        element: result.element
+      }};
+      if (!element) {{
+        payload.candidates = roleMatch.candidates;
+      }}
+      resolve(payload);
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
 def _inspect_expression(
     *,
     selector: str,
@@ -1768,15 +11487,14 @@ def _inspect_expression(
   }}
   const tag = element.tagName.toLowerCase();
   const type = String(element.getAttribute("type") || "").toLowerCase();
-  const sensitiveField = tag === "input" && ["password", "hidden"].includes(type);
   const sensitiveAttributeName = (name) =>
-    /api[-_]?key|authorization|password|secret|token/i.test(String(name || ""));
+    /api[-_]?key|apikey|authorization|bearer|credential|password|passwd|secret|token/i.test(String(name || ""));
   const valuePayload = () => {{
     if (!("value" in element) && !element.isContentEditable) {{
       return {{ value: null, value_masked: false, value_length: null }};
     }}
     const raw = readFormValue(element);
-    if (sensitiveField && !revealSensitiveValues) {{
+    if (sensitiveElement(element) && !revealSensitiveValues) {{
       const value = raw.value === null || raw.value === "" ? raw.value : "***";
       return {{
         ...raw,
@@ -1790,7 +11508,7 @@ def _inspect_expression(
   const attributeValue = (attribute) => {{
     if (!revealSensitiveValues && (
       sensitiveAttributeName(attribute.name) ||
-      (sensitiveField && attribute.name.toLowerCase() === "value")
+      (sensitiveElement(element) && attribute.name.toLowerCase() === "value")
     )) {{
       return attribute.value === "" ? "" : "***";
     }}
@@ -1804,13 +11522,15 @@ def _inspect_expression(
   );
   const selectedOptions = "selectedOptions" in element
     ? [...element.selectedOptions].map((option) => ({{
-        value: option.value,
+        value: sensitiveElement(element) && option.value !== "" ? "***" : option.value,
+        value_masked: sensitiveElement(element) && option.value !== "",
         text: textOf(option)
       }}))
     : null;
   const options = tag === "select"
     ? [...element.options].slice(0, 50).map((option) => ({{
-        value: option.value,
+        value: sensitiveElement(element) && option.value !== "" ? "***" : option.value,
+        value_masked: sensitiveElement(element) && option.value !== "",
         text: textOf(option),
         selected: Boolean(option.selected),
         disabled: Boolean(option.disabled)
@@ -1829,9 +11549,7 @@ def _inspect_expression(
     const clone = root.cloneNode(true);
     const nodes = [clone, ...clone.querySelectorAll("*")];
     for (const node of nodes) {{
-      const nodeTag = node.tagName.toLowerCase();
-      const nodeType = String(node.getAttribute("type") || "").toLowerCase();
-      const nodeSensitive = nodeTag === "input" && ["password", "hidden"].includes(nodeType);
+      const nodeSensitive = sensitiveElement(node);
       for (const attribute of [...node.attributes]) {{
         if (
           sensitiveAttributeName(attribute.name) ||
@@ -1983,6 +11701,80 @@ def _wait_url_expression(
         url: currentUrl,
         requested_url: requestedUrl,
         match: matchMode,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_title_expression(
+    *,
+    title: str,
+    match: str,
+    case_sensitive: bool,
+    timeout_ms: float,
+    poll_ms: float,
+) -> str:
+    return f"""
+() => new Promise((resolve) => {{
+  const requestedTitle = {_js_literal(title)};
+  const matchMode = {_js_literal(match)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedTitle, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      resolve({{
+        found: false,
+        title: document.title,
+        requested_title: requestedTitle,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        waited_ms: 0,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const normalize = (value) => caseSensitive ? value : String(value).toLowerCase();
+  const requestedComparable = normalize(requestedTitle);
+  const matches = (candidate) => {{
+    const comparable = normalize(candidate);
+    if (matchMode === "exact") return comparable === requestedComparable;
+    if (matchMode === "regex") return pattern.test(candidate);
+    return comparable.includes(requestedComparable);
+  }};
+  const check = () => {{
+    const currentTitle = document.title;
+    const waitedMs = Date.now() - startedAt;
+    if (matches(currentTitle)) {{
+      resolve({{
+        found: true,
+        title: currentTitle,
+        requested_title: requestedTitle,
+        match: matchMode,
+        case_sensitive: caseSensitive,
+        waited_ms: waitedMs
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        found: false,
+        title: currentTitle,
+        requested_title: requestedTitle,
+        match: matchMode,
+        case_sensitive: caseSensitive,
         waited_ms: waitedMs
       }});
       return;
@@ -2222,6 +12014,71 @@ def _focus_expression(*, selector: str, prevent_scroll: bool) -> str:
     )
 
 
+def _role_target_helpers_expression(selector_source: str) -> str:
+    return f"""
+  const roleTargetSelector = {selector_source};
+  const findRoleTargetElement = () => {{
+    const candidates = [...document.querySelectorAll(roleTargetSelector)].filter(visible);
+    const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+    const element = roleMatches.find((candidate) =>
+      requestedName === null ||
+      matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+    );
+    return {{
+      element: element || null,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    }};
+  }};
+""".rstrip()
+
+
+def _focus_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    prevent_scroll: bool,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      focused: false,
+      prevent_scroll: {_js_literal(prevent_scroll)},
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  element.focus({{ preventScroll: {_js_literal(prevent_scroll)} }});
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    focused: document.activeElement === element,
+    prevent_scroll: {_js_literal(prevent_scroll)},
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _form_value_helpers_expression() -> str:
     return """
   const readFormValue = (node) => {
@@ -2275,6 +12132,51 @@ def _form_value_helpers_expression() -> str:
   const formValueText = (currentValue) => Array.isArray(currentValue)
     ? currentValue.join(",")
     : String(currentValue ?? "");
+  const hasPrintableValue = (value) => Array.isArray(value)
+    ? value.some((item) => String(item ?? "") !== "")
+    : String(value ?? "") !== "";
+  const maskedPublicValue = (value) => Array.isArray(value)
+    ? value.map((item) => String(item ?? "") === "" ? item : "***")
+    : (String(value ?? "") === "" ? value : "***");
+  const valueLength = (value) => Array.isArray(value)
+    ? value.map((item) => String(item ?? "").length)
+    : String(value ?? "").length;
+  const publicValue = (node, state) => {
+    const masked = sensitiveElement(node) && hasPrintableValue(state.value);
+    if (!masked) {
+      return { ...state, value_masked: false };
+    }
+    const selectedOptions = Array.isArray(state.selected_options)
+      ? state.selected_options.map((option) => ({
+          ...option,
+          value: String(option.value ?? "") === "" ? option.value : "***",
+          value_masked: String(option.value ?? "") !== ""
+        }))
+      : state.selected_options;
+    return {
+      ...state,
+      value: maskedPublicValue(state.value),
+      selected_options: selectedOptions,
+      value_masked: true,
+      value_length: valueLength(state.value)
+    };
+  };
+  const publicRequestedValue = (node, value) => {
+    const masked = shouldMaskValue(node, value);
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+  const publicSelectorRequestedValue = (selector, value) => {
+    const masked = sensitiveText(selector) && String(value ?? "") !== "";
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
 """.rstrip()
 
 
@@ -2291,7 +12193,78 @@ def _get_value_expression(selector: str) -> str:
   return {{
     selector,
     found: true,
-    ...readFormValue(element),
+    ...publicValue(element, readFormValue(element)),
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _role_value_helpers_expression() -> str:
+    return """
+  const roleValueSelector = "input:not([type=hidden]), textarea, select, [contenteditable='true'], [role]";
+  const findRoleValueElement = () => {
+    const candidates = [...document.querySelectorAll(roleValueSelector)].filter(visible);
+    const roleMatches = candidates.filter((candidate) => roleOf(candidate) === requestedRole);
+    const element = roleMatches.find((candidate) =>
+      requestedName === null ||
+      matchesText(accessibleName(candidate), requestedName, exact, caseSensitive)
+    );
+    return {
+      element: element || null,
+      candidate_count: roleMatches.length,
+      candidates: roleMatches.slice(0, 20).map(nodeInfo)
+    };
+  };
+  const publicMissingRoleRequestedValue = (value) => {
+    const masked = sensitiveText(requestedName) && String(value ?? "") !== "";
+    return {
+      value: masked ? "***" : value,
+      value_masked: masked,
+      value_length: masked ? String(value ?? "").length : null
+    };
+  };
+""".rstrip()
+
+
+def _get_value_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_value_helpers_expression()}
+  const roleMatch = findRoleValueElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      readable: false,
+      value: null,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    ...publicValue(element, readFormValue(element)),
+    candidate_count: roleMatch.candidate_count,
     element: nodeInfo(element)
   }};
 }}
@@ -2313,6 +12286,7 @@ def _wait_value_expression(
 {_form_value_helpers_expression()}
   const selector = {_js_literal(selector)};
   const requestedValue = {_js_literal(value)};
+  const selectorRequestedValue = publicSelectorRequestedValue(selector, requestedValue);
   const matchMode = {_js_literal(match)};
   const caseSensitive = {_js_literal(case_sensitive)};
   const startedAt = Date.now();
@@ -2328,7 +12302,9 @@ def _wait_value_expression(
         found: false,
         selector_found: Boolean(document.querySelector(selector)),
         value: null,
-        requested_value: requestedValue,
+        requested_value: selectorRequestedValue.value,
+        requested_value_masked: selectorRequestedValue.value_masked,
+        requested_value_length: selectorRequestedValue.value_length,
         match: matchMode,
         waited_ms: 0,
         error: "invalid_regex",
@@ -2359,7 +12335,9 @@ def _wait_value_expression(
           found: false,
           selector_found: false,
           value: null,
-          requested_value: requestedValue,
+          requested_value: selectorRequestedValue.value,
+          requested_value_masked: selectorRequestedValue.value_masked,
+          requested_value_length: selectorRequestedValue.value_length,
           match: matchMode,
           waited_ms: waitedMs
         }});
@@ -2369,13 +12347,17 @@ def _wait_value_expression(
       return;
     }}
     const state = readFormValue(element);
+    const outputState = publicValue(element, state);
+    const outputRequestedValue = publicRequestedValue(element, requestedValue);
     if (!state.readable) {{
       resolve({{
         selector,
         found: false,
         selector_found: true,
-        ...state,
-        requested_value: requestedValue,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
         match: matchMode,
         waited_ms: waitedMs,
         element: nodeInfo(element)
@@ -2387,8 +12369,10 @@ def _wait_value_expression(
         selector,
         found: true,
         selector_found: true,
-        ...state,
-        requested_value: requestedValue,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
         match: matchMode,
         waited_ms: waitedMs,
         element: nodeInfo(element)
@@ -2400,10 +12384,165 @@ def _wait_value_expression(
         selector,
         found: false,
         selector_found: true,
-        ...state,
-        requested_value: requestedValue,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
         match: matchMode,
         waited_ms: waitedMs,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    setTimeout(check, pollMs);
+  }};
+  check();
+}})
+""".strip()
+
+
+def _wait_value_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    value: str,
+    match: str,
+    timeout_ms: float,
+    poll_ms: float,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => new Promise((resolve) => {{
+{_dom_helpers_expression()}
+{_form_value_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const requestedValue = {_js_literal(value)};
+  const matchMode = {_js_literal(match)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(0, {_js_literal(timeout_ms)});
+  const pollMs = Math.max(25, {_js_literal(poll_ms)});
+{_role_value_helpers_expression()}
+  let pattern = null;
+  if (matchMode === "regex") {{
+    try {{
+      pattern = new RegExp(requestedValue, caseSensitive ? "" : "i");
+    }} catch (error) {{
+      const roleMatch = findRoleValueElement();
+      const outputRequestedValue = roleMatch.element
+        ? publicRequestedValue(roleMatch.element, requestedValue)
+        : publicMissingRoleRequestedValue(requestedValue);
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: false,
+        role_found: Boolean(roleMatch.element),
+        value: null,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: 0,
+        candidate_count: roleMatch.candidate_count,
+        candidates: roleMatch.candidates,
+        error: "invalid_regex",
+        message: String(error.message || error)
+      }});
+      return;
+    }}
+  }}
+  const matches = (currentValue) => {{
+    const candidate = formValueText(currentValue);
+    if (matchMode === "regex") return pattern.test(candidate);
+    if (caseSensitive) {{
+      return matchMode === "exact"
+        ? candidate === requestedValue
+        : candidate.includes(requestedValue);
+    }}
+    const haystack = candidate.toLowerCase();
+    const needle = requestedValue.toLowerCase();
+    return matchMode === "exact" ? haystack === needle : haystack.includes(needle);
+  }};
+  const check = () => {{
+    const roleMatch = findRoleValueElement();
+    const element = roleMatch.element;
+    const waitedMs = Date.now() - startedAt;
+    if (!element) {{
+      if (waitedMs >= timeoutMs) {{
+        const outputRequestedValue = publicMissingRoleRequestedValue(requestedValue);
+        resolve({{
+          role: requestedRole,
+          name: requestedName,
+          found: false,
+          role_found: false,
+          value: null,
+          requested_value: outputRequestedValue.value,
+          requested_value_masked: outputRequestedValue.value_masked,
+          requested_value_length: outputRequestedValue.value_length,
+          match: matchMode,
+          waited_ms: waitedMs,
+          candidate_count: roleMatch.candidate_count,
+          candidates: roleMatch.candidates
+        }});
+        return;
+      }}
+      setTimeout(check, pollMs);
+      return;
+    }}
+    const state = readFormValue(element);
+    const outputState = publicValue(element, state);
+    const outputRequestedValue = publicRequestedValue(element, requestedValue);
+    if (!state.readable) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: false,
+        role_found: true,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (matches(state.value)) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: true,
+        role_found: true,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
+        element: nodeInfo(element)
+      }});
+      return;
+    }}
+    if (waitedMs >= timeoutMs) {{
+      resolve({{
+        role: requestedRole,
+        name: requestedName,
+        found: false,
+        role_found: true,
+        ...outputState,
+        requested_value: outputRequestedValue.value,
+        requested_value_masked: outputRequestedValue.value_masked,
+        requested_value_length: outputRequestedValue.value_length,
+        match: matchMode,
+        waited_ms: waitedMs,
+        candidate_count: roleMatch.candidate_count,
         element: nodeInfo(element)
       }});
       return;
@@ -2430,6 +12569,54 @@ def _blur_expression(selector: str) -> str:
   };
 """.rstrip(),
     )
+
+
+def _blur_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      blurred: false,
+      was_focused: false,
+      focused: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const wasFocused = document.activeElement === element;
+  element.blur?.();
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    blurred: document.activeElement !== element,
+    was_focused: wasFocused,
+    focused: document.activeElement === element,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
 
 
 def _storage_area_expression(area: str) -> str:
@@ -3146,7 +13333,9 @@ def _wait_cookie_expression(
 def _clear_expression(selector: str) -> str:
     return _event_expression(
         selector,
-        """
+        _sensitive_value_helpers_expression()
+        + "\n"
+        + """
   const previousValue = element.isContentEditable
     ? element.textContent
     : ("value" in element ? element.value : null);
@@ -3160,7 +13349,8 @@ def _clear_expression(selector: str) -> str:
       found: true,
       clearable: false,
       cleared: false,
-      previous_value: previousValue,
+      previous_value: maskValue(element, previousValue),
+      previous_value_masked: shouldMaskValue(element, previousValue),
       value: null
     };
   }
@@ -3172,18 +13362,100 @@ def _clear_expression(selector: str) -> str:
     found: true,
     clearable: true,
     cleared: value === "",
-    previous_value: previousValue,
-    value
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, value),
+    value_masked: shouldMaskValue(element, value),
+    value_length: shouldMaskValue(element, value) ? String(value ?? "").length : null
   };
 """.rstrip(),
     )
 
 
+def _clear_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_value_helpers_expression()}
+  const roleMatch = findRoleValueElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      clearable: false,
+      cleared: false,
+      value: null,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const dispatch = (event) => element.dispatchEvent(event);
+  const previousValue = element.isContentEditable
+    ? element.textContent
+    : ("value" in element ? element.value : null);
+  if (element.isContentEditable) {{
+    element.textContent = "";
+  }} else if ("value" in element) {{
+    element.value = "";
+  }} else {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: true,
+      role_found: true,
+      clearable: false,
+      cleared: false,
+      previous_value: maskValue(element, previousValue),
+      previous_value_masked: shouldMaskValue(element, previousValue),
+      value: null,
+      candidate_count: roleMatch.candidate_count,
+      element: nodeInfo(element)
+    }};
+  }}
+  dispatch(new Event("input", {{ bubbles: true }}));
+  dispatch(new Event("change", {{ bubbles: true }}));
+  const value = element.isContentEditable ? element.textContent : element.value;
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    clearable: true,
+    cleared: value === "",
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, value),
+    value_masked: shouldMaskValue(element, value),
+    value_length: shouldMaskValue(element, value) ? String(value ?? "").length : null,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -> str:
     return _event_expression(
         selector,
-        f"""
+        _sensitive_value_helpers_expression()
+        + "\n"
+        + f"""
   const requestedValue = {_js_literal(value)};
+  const selectorRequestedValue = publicSelectorRequestedValue(selector, requestedValue);
   const previousValue = element.isContentEditable
     ? element.textContent
     : ("value" in element ? element.value : null);
@@ -3197,9 +13469,12 @@ def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -
       found: true,
       writable: false,
       set: false,
-      previous_value: previousValue,
+      previous_value: maskValue(element, previousValue),
+      previous_value_masked: shouldMaskValue(element, previousValue),
       value: null,
-      requested_value: requestedValue,
+      requested_value: selectorRequestedValue.value,
+      requested_value_masked: selectorRequestedValue.value_masked,
+      requested_value_length: selectorRequestedValue.value_length,
       dispatched_events: []
     }};
   }}
@@ -3211,18 +13486,191 @@ def _set_value_expression(selector: str, value: str, *, dispatch_events: bool) -
     }}
   }}
   const currentValue = element.isContentEditable ? element.textContent : element.value;
+  const outputRequestedValue = publicRequestedValue(element, requestedValue);
   return {{
     selector,
     found: true,
     writable: true,
     set: currentValue === requestedValue,
-    previous_value: previousValue,
-    value: currentValue,
-    requested_value: requestedValue,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, currentValue),
+    value_masked: shouldMaskValue(element, currentValue),
+    value_length: shouldMaskValue(element, currentValue)
+      ? String(currentValue ?? "").length
+      : null,
+    requested_value: outputRequestedValue.value,
+    requested_value_masked: outputRequestedValue.value_masked,
+    requested_value_length: outputRequestedValue.value_length,
     dispatched_events: dispatchedEvents
   }};
 """.rstrip(),
     )
+
+
+def _set_file_input_expression(
+    *,
+    selector: str,
+    files: list[dict[str, Any]],
+    dispatch_events: bool,
+) -> str:
+    file_payloads = [
+        {
+            "name": file["name"],
+            "type": file["type"],
+            "size": file["size"],
+            "last_modified": file["last_modified"],
+            "data_base64": file["data_base64"],
+        }
+        for file in files
+    ]
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const requestedFiles = {_js_literal(file_payloads)};
+  const dispatchEvents = {_js_literal(dispatch_events)};
+  const element = document.querySelector(selector);
+  const publicFileInfo = (file) => ({{
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    last_modified: file.lastModified ?? null
+  }});
+  const requestedFileInfo = requestedFiles.map((file) => ({{
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    last_modified: file.last_modified
+  }}));
+  if (!element) {{
+    return {{
+      selector,
+      found: false,
+      file_input: false,
+      set: false,
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      files: []
+    }};
+  }}
+  const fileInput = element.tagName.toLowerCase() === "input" &&
+    String(element.type || "").toLowerCase() === "file";
+  if (!fileInput) {{
+    return {{
+      selector,
+      found: true,
+      file_input: false,
+      set: false,
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      files: [],
+      element: nodeInfo(element)
+    }};
+  }}
+  if (requestedFiles.length > 1 && !element.multiple) {{
+    return {{
+      selector,
+      found: true,
+      file_input: true,
+      set: false,
+      multiple: Boolean(element.multiple),
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      previous_count: element.files?.length ?? 0,
+      file_count: element.files?.length ?? 0,
+      files: [...(element.files || [])].map(publicFileInfo),
+      error: "multiple_not_allowed",
+      message: "Input does not allow multiple files."
+    }};
+  }}
+  if (typeof DataTransfer !== "function" || typeof File !== "function") {{
+    return {{
+      selector,
+      found: true,
+      file_input: true,
+      set: false,
+      multiple: Boolean(element.multiple),
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      previous_count: element.files?.length ?? 0,
+      file_count: element.files?.length ?? 0,
+      files: [...(element.files || [])].map(publicFileInfo),
+      error: "file_api_unavailable",
+      message: "DataTransfer or File constructor is unavailable in this page."
+    }};
+  }}
+  const decodeBase64 = (value) => {{
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {{
+      bytes[index] = binary.charCodeAt(index);
+    }}
+    return bytes;
+  }};
+  const previousCount = element.files?.length ?? 0;
+  try {{
+    const transfer = new DataTransfer();
+    for (const payload of requestedFiles) {{
+      const file = new File(
+        [decodeBase64(payload.data_base64)],
+        payload.name,
+        {{
+          type: payload.type || "application/octet-stream",
+          lastModified: payload.last_modified || Date.now()
+        }}
+      );
+      transfer.items.add(file);
+    }}
+    element.files = transfer.files;
+  }} catch (error) {{
+    return {{
+      selector,
+      found: true,
+      file_input: true,
+      set: false,
+      multiple: Boolean(element.multiple),
+      requested_count: requestedFiles.length,
+      requested_files: requestedFileInfo,
+      previous_count: previousCount,
+      file_count: element.files?.length ?? 0,
+      files: [...(element.files || [])].map(publicFileInfo),
+      error: String(error.name || "Error"),
+      message: String(error.message || error)
+    }};
+  }}
+  const dispatchedEvents = [];
+  if (dispatchEvents) {{
+    for (const type of ["input", "change"]) {{
+      element.dispatchEvent(new Event(type, {{ bubbles: true }}));
+      dispatchedEvents.push(type);
+    }}
+  }}
+  const files = [...(element.files || [])].map(publicFileInfo);
+  const set = files.length === requestedFiles.length &&
+    files.every((file, index) =>
+      file.name === requestedFiles[index].name &&
+      file.size === requestedFiles[index].size &&
+      file.type === (requestedFiles[index].type || "")
+    );
+  return {{
+    selector,
+    found: true,
+    file_input: true,
+    set,
+    multiple: Boolean(element.multiple),
+    requested_count: requestedFiles.length,
+    requested_files: requestedFileInfo,
+    previous_count: previousCount,
+    file_count: files.length,
+    files,
+    value: element.value ? "***" : "",
+    value_masked: Boolean(element.value),
+    dispatched_events: dispatchedEvents,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
 
 
 def _dispatch_event_expression(
@@ -3372,6 +13820,172 @@ def _bounding_box_expression(selector: str) -> str:
 """.strip()
 
 
+def _get_text_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      include_hidden: includeHidden,
+      text: null,
+      text_length: 0,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const text = textOf(element);
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    include_hidden: includeHidden,
+    text,
+    text_length: text.length,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _exists_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      exists: false,
+      found: false,
+      role_found: false,
+      include_hidden: includeHidden,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    exists: true,
+    found: true,
+    role_found: true,
+    include_hidden: includeHidden,
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _bounding_box_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    exact: bool,
+    case_sensitive: bool,
+    include_hidden: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    rect_object = _rect_object_expression("rect")
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression(_js_literal("body *"))}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      include_hidden: includeHidden,
+      visible: false,
+      in_viewport: false,
+      bounding_box: null,
+      center: null,
+      viewport: {{
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scroll_x: window.scrollX,
+        scroll_y: window.scrollY
+      }},
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const rect = element.getBoundingClientRect();
+  const center = {{
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  }};
+  const inViewport = rect.bottom >= 0 &&
+    rect.right >= 0 &&
+    rect.top <= window.innerHeight &&
+    rect.left <= window.innerWidth;
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    include_hidden: includeHidden,
+    visible: visible(element),
+    in_viewport: inViewport,
+    bounding_box: {rect_object},
+    center,
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    candidate_count: roleMatch.candidate_count,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
 def _scroll_into_view_expression(
     *,
     selector: str,
@@ -3420,6 +14034,1174 @@ def _scroll_into_view_expression(
   }};
 }}
 """.strip()
+
+
+def _scroll_into_view_role_expression(
+    *,
+    role: str,
+    name: str | None,
+    block: str,
+    inline: str,
+    behavior: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    name_source = "null" if name is None else _js_literal(name)
+    before_rect = _rect_object_expression("before")
+    after_rect = _rect_object_expression("after")
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const requestedRole = {_js_literal(role)};
+  const requestedName = {name_source};
+  const block = {_js_literal(block)};
+  const inline = {_js_literal(inline)};
+  const behavior = {_js_literal(behavior)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+{_role_target_helpers_expression("interactiveSelector")}
+  const roleMatch = findRoleTargetElement();
+  const element = roleMatch.element;
+  if (!element) {{
+    return {{
+      role: requestedRole,
+      name: requestedName,
+      found: false,
+      role_found: false,
+      scrolled: false,
+      candidate_count: roleMatch.candidate_count,
+      candidates: roleMatch.candidates
+    }};
+  }}
+  const before = element.getBoundingClientRect();
+  element.scrollIntoView({{ block, inline, behavior }});
+  const after = element.getBoundingClientRect();
+  const inViewport = after.bottom >= 0 &&
+    after.right >= 0 &&
+    after.top <= window.innerHeight &&
+    after.left <= window.innerWidth;
+  return {{
+    role: requestedRole,
+    name: requestedName,
+    found: true,
+    role_found: true,
+    scrolled: true,
+    block,
+    inline,
+    behavior,
+    before: {before_rect},
+    after: {after_rect},
+    in_viewport: inViewport,
+    visible: visible(element),
+    candidate_count: roleMatch.candidate_count,
+    viewport: {{
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scroll_x: window.scrollX,
+      scroll_y: window.scrollY
+    }},
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _action_guide_tasks() -> dict[str, dict[str, Any]]:
+    return {
+        "form_interaction": {
+            "purpose": "Inspect, fill, submit, and verify forms without page-specific JavaScript.",
+            "related_workflows": ["form_interaction"],
+            "when_to_use": [
+                "The page has labels, form fields, selects, checkboxes, radios, or submit buttons.",
+                "The agent needs to fill visible controls and verify a result.",
+            ],
+            "selection_order": [
+                "form-snapshot",
+                "fill-label",
+                "fill-role",
+                "clear-role",
+                "select-label",
+                "select-role",
+                "check-label",
+                "check-role",
+                "focus-role",
+                "blur-role",
+                "wait-state-role",
+                "click-role",
+                "wait-text",
+                "get-value",
+            ],
+            "inspect_commands": [
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+            ],
+            "preferred_commands": [
+                'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
+                'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
+                'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
+                'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
+                'browser-cli action check-label --session-id <session_id> --label "<label>"',
+                'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "<submit text>" --state enabled',
+                'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+            ],
+            "fallback_commands": [
+                'browser-cli action clear-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action focus-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action blur-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action press-role --session-id <session_id> --role textbox --name "<accessible name>" --key Enter',
+                'browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                'browser-cli action set-value --session-id <session_id> --selector "<selector>" --value "<value>"',
+                'browser-cli action dispatch-event --session-id <session_id> --selector "<selector>" --event input --event change',
+                'browser-cli action click --session-id <session_id> --selector "<selector>"',
+            ],
+            "verify_commands": [
+                'browser-cli action blur-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                'browser-cli action wait-value-role --session-id <session_id> --role textbox --name "<accessible name>" --value "<expected value>"',
+                'browser-cli action get-value-role --session-id <session_id> --role textbox --name "<accessible name>"',
+                'browser-cli action get-value --session-id <session_id> --selector "<selector>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.fields",
+                "result.filled",
+                "result.role",
+                "result.name",
+                "result.role_found",
+                "result.clearable",
+                "result.cleared",
+                "result.selectable",
+                "result.selected",
+                "result.option_found",
+                "result.checkable",
+                "result.checked",
+                "result.clicked",
+                "result.focused",
+                "result.blurred",
+                "result.matched",
+                "result.state_values",
+                "value_masked",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after form-snapshot, label actions, selector "
+                "actions, and role/text clicks cannot express the interaction."
+            ),
+        },
+        "file_upload": {
+            "purpose": "Attach local files to input[type=file] controls before custom JavaScript or OS file-picker workarounds.",
+            "related_workflows": [
+                "file_upload",
+                "form_interaction",
+                "interactive_targeting",
+            ],
+            "when_to_use": [
+                "The task asks to upload, attach, import, or choose one or more local files in a browser form.",
+                "The page exposes or can be inspected for an input[type=file] control.",
+            ],
+            "selection_order": [
+                "form-snapshot",
+                "query input[type=file]",
+                "inspect",
+                "set-file-input",
+                "wait-text",
+                "click-role",
+                "submit",
+            ],
+            "inspect_commands": [
+                "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                'browser-cli action query --session-id <session_id> --selector "input[type=file]" --max-nodes 20',
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+            ],
+            "preferred_commands": [
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path>',
+                'browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file <path1> --file <path2>',
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                'browser-cli action wait-text --session-id <session_id> --text "<uploaded filename or success text>"',
+            ],
+            "fallback_commands": [
+                'browser-cli action set-file-input --session-id <session_id> --selector "<file input selector>" --file <path> --no-events',
+                'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
+                'browser-cli action submit --session-id <session_id> --selector "form"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "verify_commands": [
+                'browser-cli action inspect --session-id <session_id> --selector "input[type=file]"',
+                'browser-cli action wait-text --session-id <session_id> --text "<success text>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.fields",
+                "result.nodes",
+                "result.found",
+                "result.file_input",
+                "result.set",
+                "result.multiple",
+                "result.requested_count",
+                "result.requested_files",
+                "result.previous_count",
+                "result.file_count",
+                "result.files",
+                "result.value_masked",
+                "result.dispatched_events",
+                "result.error",
+                "result.message",
+                "result.clicked",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after form-snapshot/query/inspect and "
+                "set-file-input cannot attach the file; do not click file "
+                "inputs to open an OS picker for agent-controlled uploads."
+            ),
+        },
+        "dialog_frame_handling": {
+            "purpose": "Inspect and handle modal dialogs, cookie banners, confirmation prompts, and embedded frames before custom JavaScript.",
+            "related_workflows": [
+                "dialog_frame_handling",
+                "interactive_targeting",
+                "page_diagnostics",
+            ],
+            "when_to_use": [
+                "The page shows a modal, alert-style dialog, consent banner, or confirmation prompt.",
+                "The task needs to inspect or wait for iframe or embedded app content.",
+            ],
+            "selection_order": [
+                "page-info",
+                "wait-dialog",
+                "dialog-snapshot",
+                "click-role",
+                "click-text",
+                "wait-frame",
+                "frame-snapshot",
+                "text-snapshot",
+                "screenshot-selector",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 40 --max-controls 40",
+                'browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 40 --max-chars 1000',
+            ],
+            "preferred_commands": [
+                "browser-cli action wait-dialog --session-id <session_id> --text <text> --modal-only",
+                "browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 40 --max-controls 40",
+                'browser-cli action click-role --session-id <session_id> --role button --name "<button text>"',
+                "browser-cli action wait-frame --session-id <session_id> --url <path> --url-match contains --readable-only",
+                'browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 40 --max-chars 1000',
+            ],
+            "fallback_commands": [
+                'browser-cli action click-text --session-id <session_id> --text "<button text>"',
+                'browser-cli action click-index --session-id <session_id> --selector "button" --index <n>',
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+                "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --max-controls 20",
+                'browser-cli action frame-snapshot --session-id <session_id> --selector "iframe" --max-nodes 20 --max-chars 500',
+                'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "visibility_state",
+                "result.dialogs",
+                "result.dialog_count",
+                "result.controls",
+                "result.control_count",
+                "result.modal_count",
+                "result.texts",
+                "result.text_count",
+                "result.frames",
+                "result.frame_count",
+                "result.readable",
+                "result.same_origin",
+                "result.frame_url",
+                "result.read_error",
+                "result.clicked",
+                "result.matched",
+                "result.reason",
+                "result.screenshot",
+                "result.path",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after dialog/frame snapshots, waits, "
+                "role/text/index actions, and visible text checks cannot express "
+                "the target; cross-origin frames may be intentionally unreadable."
+            ),
+        },
+        "interactive_targeting": {
+            "purpose": "Find and activate visible controls with semantic actions before custom JavaScript.",
+            "related_workflows": ["interactive_targeting"],
+            "when_to_use": [
+                "The task asks to click a button, link, menu item, tab, or repeated control.",
+                "The page target can be identified by role, accessible name, visible text, or index.",
+            ],
+            "selection_order": [
+                "interactive-snapshot",
+                "accessibility-snapshot",
+                "wait-role",
+                "exists-role",
+                "get-text-role",
+                "bounding-box-role",
+                "click-role",
+                "hover-role",
+                "press-role",
+                "scroll-into-view-role",
+                "click-text",
+                "click-index",
+                "click",
+            ],
+            "inspect_commands": [
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+            ],
+            "preferred_commands": [
+                'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action press-role --session-id <session_id> --role <role> --name "<name>" --key Enter',
+                'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                'browser-cli action click-index --session-id <session_id> --selector "<selector>" --index <n>',
+            ],
+            "fallback_commands": [
+                'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+                'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
+                'browser-cli action bounding-box --session-id <session_id> --selector "<selector>"',
+                'browser-cli action hover --session-id <session_id> --selector "<selector>"',
+                'browser-cli action press --session-id <session_id> --selector "<selector>" --key Enter',
+                'browser-cli action click --session-id <session_id> --selector "<selector>"',
+            ],
+            "verify_commands": [
+                'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.nodes",
+                "result.node_count",
+                "result.found",
+                "result.role_found",
+                "result.exists",
+                "result.text",
+                "result.text_length",
+                "result.element",
+                "result.bounding_box",
+                "result.visible",
+                "result.clicked",
+                "result.hovered",
+                "result.pressed",
+                "result.scrolled",
+                "result.in_viewport",
+                "result.url",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after snapshots plus role/text/index/selector "
+                "commands cannot identify or activate the target."
+            ),
+        },
+        "mouse_interaction": {
+            "purpose": "Trigger double-click and right-click/context-menu interactions before custom JavaScript.",
+            "related_workflows": [
+                "mouse_interaction",
+                "interactive_targeting",
+                "menu_keyboard_flow",
+            ],
+            "when_to_use": [
+                "The task asks to double-click, right-click, open a context menu, or trigger row/card editing.",
+                "The target can be identified by role/name or a stable selector.",
+            ],
+            "selection_order": [
+                "interactive-snapshot",
+                "accessibility-snapshot",
+                "double-click-role",
+                "right-click-role",
+                "double-click",
+                "right-click",
+                "hover-role",
+                "bounding-box-role",
+                "wait-text",
+                "page-info",
+            ],
+            "inspect_commands": [
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+            ],
+            "preferred_commands": [
+                'browser-cli action double-click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action right-click-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action double-click --session-id <session_id> --selector "<selector>"',
+                'browser-cli action right-click --session-id <session_id> --selector "<selector>"',
+            ],
+            "fallback_commands": [
+                'browser-cli action hover-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action inspect --session-id <session_id> --selector "<selector>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "verify_commands": [
+                'browser-cli action wait-text --session-id <session_id> --text "<expected menu or edit state>"',
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "result.found",
+                "result.role_found",
+                "result.double_clicked",
+                "result.right_clicked",
+                "result.context_menu",
+                "result.events",
+                "result.default_prevented",
+                "result.element",
+                "result.candidate_count",
+                "result.bounding_box",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after double-click/right-click role and "
+                "selector actions plus hover, bounding-box, and wait-text cannot "
+                "express the mouse interaction."
+            ),
+        },
+        "navigation_flow": {
+            "purpose": "Open URLs, reload, move through browser history, and verify navigation before custom JavaScript.",
+            "related_workflows": [
+                "navigation_flow",
+                "state_waits",
+                "one_off_page_task",
+            ],
+            "when_to_use": [
+                "The task asks to open a URL, refresh a page, or use browser back/forward.",
+                "The next browser action depends on the final URL, title, or load state after navigation.",
+            ],
+            "selection_order": [
+                "page-info",
+                "open-url",
+                "reload",
+                "go-back",
+                "go-forward",
+                "wait-load-state",
+                "wait-url",
+                "wait-title",
+                "interactive-snapshot",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+            ],
+            "preferred_commands": [
+                "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action reload --session-id <session_id>",
+                "browser-cli action go-back --session-id <session_id>",
+                "browser-cli action go-forward --session-id <session_id>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<expected url text>"',
+                'browser-cli action wait-title --session-id <session_id> --title "<expected title text>"',
+            ],
+            "fallback_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                "browser-cli action wait-network-idle --session-id <session_id>",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<expected url text>"',
+                'browser-cli action wait-title --session-id <session_id> --title "<expected title text>"',
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "visibility_state",
+                "result.url",
+                "result.title",
+                "result.navigation_requested",
+                "result.waited_ms",
+                "result.nodes",
+                "result.node_count",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after open-url/reload/back/forward plus "
+                "wait-url, wait-title, wait-load-state, page-info, and snapshots "
+                "cannot express the navigation."
+            ),
+        },
+        "link_navigation": {
+            "purpose": "Inspect visible links, choose a target, activate it, and verify navigation before custom JavaScript.",
+            "related_workflows": [
+                "link_navigation",
+                "navigation_flow",
+                "interactive_targeting",
+                "content_extraction",
+            ],
+            "when_to_use": [
+                "The task asks to choose, click, inspect, or report a page link or navigation URL.",
+                "The agent needs href evidence before clicking a link or opening a discovered URL.",
+            ],
+            "selection_order": [
+                "page-info",
+                "link-snapshot",
+                "interactive-snapshot",
+                "accessibility-snapshot",
+                "wait-role",
+                "click-role",
+                "click-text",
+                "open-url",
+                "wait-url",
+                "wait-title",
+                "wait-load-state",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+            ],
+            "preferred_commands": [
+                'browser-cli action wait-role --session-id <session_id> --role link --name "<link text>"',
+                'browser-cli action click-role --session-id <session_id> --role link --name "<link text>"',
+                'browser-cli action click-text --session-id <session_id> --text "<visible link text>"',
+                "browser-cli action open-url --session-id <session_id> --url <absolute_url>",
+                'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+            ],
+            "fallback_commands": [
+                'browser-cli action query --session-id <session_id> --selector "a[href]" --max-nodes 80',
+                'browser-cli action get-attribute --session-id <session_id> --selector "a[href]" --name href',
+                'browser-cli action click-index --session-id <session_id> --selector "a[href]" --index <n>',
+                'browser-cli action click --session-id <session_id> --selector "<stable link selector>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                'browser-cli action wait-title --session-id <session_id> --title "<expected title>"',
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "visibility_state",
+                "result.links",
+                "result.link_count",
+                "result.truncated",
+                "result.links[].href",
+                "result.links[].href_masked",
+                "result.links[].absolute_url",
+                "result.links[].absolute_url_masked",
+                "result.links[].same_origin",
+                "result.links[].external",
+                "result.links[].download",
+                "result.clicked",
+                "result.role_found",
+                "result.navigation_requested",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after link-snapshot, role/text link "
+                "activation, open-url, wait-url, wait-title, and page-info "
+                "cannot express the link navigation."
+            ),
+        },
+        "visual_capture": {
+            "purpose": "Capture viewport, full-page, selector, or role-target screenshots with bounded text fallback before custom JavaScript.",
+            "related_workflows": [
+                "visual_capture",
+                "page_diagnostics",
+                "interactive_targeting",
+            ],
+            "when_to_use": [
+                "The task asks to capture, inspect, or provide visual evidence of a page or target.",
+                "The agent needs a stable viewport or screenshot artifact before diagnosing or reporting state.",
+            ],
+            "selection_order": [
+                "page-info",
+                "set-viewport",
+                "screenshot-role",
+                "screenshot-selector",
+                "screenshot",
+                "text-snapshot",
+                "interactive-snapshot",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+            ],
+            "preferred_commands": [
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                'browser-cli action screenshot-role --session-id <session_id> --role <role> --name "<name>" --output /tmp/browser-cli-target.png',
+                'browser-cli action screenshot-selector --session-id <session_id> --selector "<selector>" --output /tmp/browser-cli-region.png',
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png --full-page",
+            ],
+            "fallback_commands": [
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 20 --max-chars 300",
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "visibility_state",
+                "result.viewport",
+                "result.window_viewport",
+                "result.screenshot",
+                "result.path",
+                "result.output",
+                "result.found",
+                "result.role_found",
+                "result.visible",
+                "result.match_count",
+                "result.bounding_box",
+                "result.texts",
+                "result.text_count",
+                "result.text_truncated",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after page-info, viewport setup, role/"
+                "selector/full-page screenshots, text snapshots, and interactive "
+                "snapshots cannot capture the requested evidence."
+            ),
+        },
+        "semantic_waits": {
+            "purpose": "Wait for semantic role, text, state, attribute, or count predicates and verify the observed target before sleeps or custom JavaScript.",
+            "related_workflows": [
+                "semantic_waits",
+                "state_waits",
+                "interactive_targeting",
+            ],
+            "when_to_use": [
+                "The task waits for a visible role/name target, status text, enabled/checked/focused state, ARIA attribute, or dynamic count.",
+                "The agent needs to verify a user-visible predicate after an action without writing polling JavaScript.",
+            ],
+            "selection_order": [
+                "wait-role",
+                "wait-text",
+                "wait-state-role",
+                "wait-attribute-role",
+                "wait-count",
+                "wait-selector",
+                "exists-role",
+                "get-text-role",
+                "bounding-box-role",
+                "page-info",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+            ],
+            "preferred_commands": [
+                'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>" --state visible',
+                'browser-cli action wait-text --session-id <session_id> --text "<visible text>" --match contains',
+                'browser-cli action wait-state-role --session-id <session_id> --role <role> --name "<name>" --state enabled',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role <role> --name "<name>" --attribute aria-expanded --value true --match exact',
+                'browser-cli action wait-count --session-id <session_id> --selector "<selector>" --count 1 --comparison ge',
+            ],
+            "fallback_commands": [
+                'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+                'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
+            ],
+            "verify_commands": [
+                'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
+                "browser-cli action page-info --session-id <session_id>",
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "visibility_state",
+                "result.found",
+                "result.role_found",
+                "result.exists",
+                "result.matched",
+                "result.timed_out",
+                "result.waited_ms",
+                "result.element",
+                "result.text",
+                "result.texts",
+                "result.state_values",
+                "result.attribute_found",
+                "result.value",
+                "result.count",
+                "result.bounding_box",
+                "result.visible",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after semantic waits plus selector waits, "
+                "role/text verification, and page-info cannot express the "
+                "required readiness predicate."
+            ),
+        },
+        "menu_keyboard_flow": {
+            "purpose": "Open menus, inspect menu/listbox items, and send keyboard shortcuts before custom JavaScript.",
+            "related_workflows": [
+                "menu_keyboard_flow",
+                "interactive_targeting",
+                "state_waits",
+            ],
+            "when_to_use": [
+                "The task asks to open or choose from a menu, popover, listbox, combobox popup, or navigation menu.",
+                "The task needs keyboard shortcuts such as Escape, Enter, ArrowDown, or Tab on the active page.",
+            ],
+            "selection_order": [
+                "interactive-snapshot",
+                "accessibility-snapshot",
+                "hover-role",
+                "focus-role",
+                "press-role",
+                "wait-attribute-role",
+                "list-snapshot",
+                "press-key",
+                "click-role",
+                "wait-text",
+                "page-info",
+            ],
+            "inspect_commands": [
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                'browser-cli action list-snapshot --session-id <session_id> --selector "nav, [role=menu], [role=listbox]" --max-items 50',
+            ],
+            "preferred_commands": [
+                'browser-cli action hover-role --session-id <session_id> --role button --name "<menu name>"',
+                'browser-cli action focus-role --session-id <session_id> --role button --name "<menu name>"',
+                'browser-cli action press-role --session-id <session_id> --role button --name "<menu name>" --key Enter',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<menu name>" --attribute aria-expanded --value true --match exact',
+                'browser-cli action list-snapshot --session-id <session_id> --selector "[role=menu], [role=listbox], nav" --max-items 50',
+                "browser-cli action press-key --session-id <session_id> --key Escape",
+            ],
+            "fallback_commands": [
+                'browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "<menu name>"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "<menu name>"',
+                'browser-cli action click-role --session-id <session_id> --role menuitem --name "<item>"',
+                'browser-cli action click-text --session-id <session_id> --text "<item>"',
+                'browser-cli action press --session-id <session_id> --selector "<selector>" --key Enter',
+            ],
+            "verify_commands": [
+                'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
+                'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+            ],
+            "read_fields": [
+                "result.nodes",
+                "result.node_count",
+                "result.lists",
+                "result.items",
+                "result.item_count",
+                "result.links",
+                "result.found",
+                "result.role_found",
+                "result.focused",
+                "result.hovered",
+                "result.pressed",
+                "result.key",
+                "result.modifiers",
+                "result.events",
+                "result.keydown_accepted",
+                "result.navigation_requested",
+                "result.matched",
+                "result.attribute_found",
+                "result.value",
+                "result.requested_value",
+                "result.selected",
+                "result.checked",
+                "result.expanded",
+                "result.clicked",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after snapshots plus role hover/focus/"
+                "press/click, list inspection, press-key, and wait-attribute "
+                "commands cannot express the menu or keyboard interaction."
+            ),
+        },
+        "content_extraction": {
+            "purpose": "Extract page text, links, tables, lists, outline, accessibility nodes, or bounded HTML before custom JavaScript.",
+            "related_workflows": ["content_extraction"],
+            "when_to_use": [
+                "The task asks to summarize, report, compare, or extract page content.",
+                "The agent needs bounded structured data from visible text, links, tables, lists, headings, landmarks, or page HTML.",
+            ],
+            "selection_order": [
+                "page-info",
+                "outline-snapshot",
+                "text-snapshot",
+                "link-snapshot",
+                "table-snapshot",
+                "list-snapshot",
+                "accessibility-snapshot",
+                "get-text-role",
+                "get-text",
+                "snapshot",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+            ],
+            "preferred_commands": [
+                "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+                "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200",
+                "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
+                'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
+            ],
+            "fallback_commands": [
+                "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
+                "browser-cli action text-snapshot --session-id <session_id> --max-nodes 120 --max-chars 2000",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 160",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 20 --max-chars 500",
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "ready_state",
+                "result.kind",
+                "result.texts",
+                "result.text_count",
+                "result.links",
+                "result.link_count",
+                "result.tables",
+                "result.rows",
+                "result.row_count",
+                "result.lists",
+                "result.items",
+                "result.item_count",
+                "result.headings",
+                "result.heading_count",
+                "result.landmarks",
+                "result.landmark_count",
+                "result.nodes",
+                "result.node_count",
+                "result.text",
+                "result.html",
+                "result.truncated",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after page-info plus outline/text/link/"
+                "table/list/accessibility snapshots and get-text commands cannot "
+                "express the requested extraction."
+            ),
+        },
+        "browser_state_management": {
+            "purpose": "Inspect, modify, wait for, or clean up local/session storage and document.cookie-visible cookies before custom JavaScript.",
+            "related_workflows": [
+                "browser_state_management",
+                "persistent_login_state",
+                "state_waits",
+            ],
+            "when_to_use": [
+                "The task needs feature flags, onboarding state, consent cookies, non-HttpOnly cookies, or local/session storage setup.",
+                "The agent needs to verify or clean browser state without page-specific JavaScript.",
+            ],
+            "selection_order": [
+                "page-info",
+                "storage-get",
+                "cookie-get",
+                "storage-set",
+                "cookie-set",
+                "wait-storage",
+                "wait-cookie",
+                "storage-remove",
+                "cookie-delete",
+                "storage-clear",
+                "cookie-clear",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action storage-get --session-id <session_id> --area local --key <key>",
+                "browser-cli action cookie-get --session-id <session_id> --name <name>",
+            ],
+            "preferred_commands": [
+                "browser-cli action storage-get --session-id <session_id> --area local --key <key>",
+                "browser-cli action storage-set --session-id <session_id> --area local --key <key> --value <value>",
+                "browser-cli action wait-storage --session-id <session_id> --area local --key <key> --value <value> --match exact",
+                "browser-cli action cookie-get --session-id <session_id> --name <name>",
+                "browser-cli action cookie-set --session-id <session_id> --name <name> --value <value> --path /",
+                "browser-cli action wait-cookie --session-id <session_id> --name <name> --value <value> --match exact",
+            ],
+            "fallback_commands": [
+                "browser-cli action storage-get --session-id <session_id> --area session --prefix <prefix> --max-items 20",
+                "browser-cli action cookie-get --session-id <session_id> --prefix <prefix> --max-items 20",
+                "browser-cli action storage-remove --session-id <session_id> --area session --key <key>",
+                "browser-cli action storage-clear --session-id <session_id> --area session --prefix <prefix>",
+                "browser-cli action cookie-delete --session-id <session_id> --name <name> --path /",
+                "browser-cli action cookie-clear --session-id <session_id> --prefix <prefix> --path /",
+            ],
+            "verify_commands": [
+                "browser-cli action wait-storage --session-id <session_id> --area local --key <key> --value <value> --match exact",
+                "browser-cli action wait-cookie --session-id <session_id> --name <name> --value <value> --match exact",
+                "browser-cli action storage-get --session-id <session_id> --area local --key <key>",
+                "browser-cli action cookie-get --session-id <session_id> --name <name>",
+            ],
+            "read_fields": [
+                "url",
+                "title",
+                "result.area",
+                "result.key",
+                "result.name",
+                "result.prefix",
+                "result.found",
+                "result.exists",
+                "result.value",
+                "result.requested_value",
+                "result.previous_value",
+                "result.value_length",
+                "result.count",
+                "result.item_count",
+                "result.items",
+                "result.set",
+                "result.removed",
+                "result.deleted",
+                "result.cleared",
+                "result.cleared_count",
+                "result.document_cookie_scope",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after storage/cookie commands cannot "
+                "express the requested state change; document.cookie commands "
+                "cannot read HttpOnly cookies."
+            ),
+        },
+        "page_diagnostics": {
+            "purpose": "Capture page state, console errors, and fetch/XHR activity around a browser issue.",
+            "related_workflows": ["page_diagnostics"],
+            "when_to_use": [
+                "A page action fails, navigation stalls, data does not load, or runtime errors are suspected.",
+                "The agent needs evidence before changing selectors or writing JavaScript.",
+            ],
+            "selection_order": [
+                "page-info",
+                "set-viewport",
+                "console-snapshot --install-only",
+                "network-snapshot --install-only",
+                "reproduce issue",
+                "console-snapshot",
+                "network-snapshot",
+                "text-snapshot",
+                "screenshot-role",
+                "screenshot-selector",
+                "screenshot",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                "browser-cli action console-snapshot --session-id <session_id> --install-only",
+                "browser-cli action network-snapshot --session-id <session_id> --install-only",
+            ],
+            "preferred_commands": [
+                "browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720",
+                "<run the browser action that should be diagnosed>",
+                "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 50 --max-chars 500",
+            ],
+            "fallback_commands": [
+                "browser-cli action wait-console --session-id <session_id> --source pageerror",
+                "browser-cli action wait-network --session-id <session_id> --failed-only",
+                'browser-cli action screenshot-role --session-id <session_id> --role button --name "<name>" --output /tmp/browser-cli-target.png',
+                "browser-cli action screenshot-selector --session-id <session_id> --selector main --output /tmp/browser-cli-main.png",
+                "browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-diagnostic.png",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action console-snapshot --session-id <session_id> --max-entries 50",
+                "browser-cli action network-snapshot --session-id <session_id> --max-entries 50",
+            ],
+            "read_fields": [
+                "ready_state",
+                "visibility_state",
+                "result.viewport",
+                "result.window_viewport",
+                "result.entries",
+                "result.entry_count",
+                "result.texts",
+                "result.text_count",
+                "result.screenshot",
+                "result.path",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only after page-info, set-viewport when viewport "
+                "state matters, console/network capture, text snapshots, selector "
+                "screenshots, and full-page screenshots do not explain the issue."
+            ),
+        },
+        "state_waits": {
+            "purpose": "Wait for page, selector, role, URL, text, storage, cookie, console, or network state.",
+            "related_workflows": [
+                "state_waits",
+                "one_off_page_task",
+                "form_interaction",
+                "interactive_targeting",
+                "page_diagnostics",
+            ],
+            "when_to_use": [
+                "The next action depends on page readiness or a visible state transition.",
+                "The agent needs deterministic polling instead of sleeps.",
+            ],
+            "selection_order": [
+                "wait-load-state",
+                "wait-url",
+                "wait-state-role",
+                "wait-attribute-role",
+                "wait-selector",
+                "wait-role",
+                "wait-text",
+                "wait-network",
+                "wait-console",
+                "wait-storage",
+                "wait-cookie",
+            ],
+            "inspect_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action exists-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action get-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded',
+                "browser-cli action exists --session-id <session_id> --selector <selector>",
+            ],
+            "preferred_commands": [
+                "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
+                'browser-cli action wait-url --session-id <session_id> --url "<url text>"',
+                'browser-cli action wait-state-role --session-id <session_id> --role button --name "<name>" --state enabled',
+                'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "<name>" --attribute aria-expanded --value true --match exact',
+                'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
+                'browser-cli action wait-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<text>"',
+                "browser-cli action wait-network --session-id <session_id> --url <path> --url-match contains",
+                "browser-cli action wait-console --session-id <session_id> --source pageerror",
+                'browser-cli action wait-storage --session-id <session_id> --area local --key "<key>" --value "<value>"',
+                'browser-cli action wait-cookie --session-id <session_id> --name "<cookie>"',
+            ],
+            "fallback_commands": [
+                "browser-cli action wait-network-idle --session-id <session_id>",
+                "browser-cli action wait-count --session-id <session_id> --selector <selector> --count <n>",
+                "browser-cli action wait-state --session-id <session_id> --selector <selector> --state enabled",
+            ],
+            "verify_commands": [
+                "browser-cli action page-info --session-id <session_id>",
+                'browser-cli action exists-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action exists --session-id <session_id> --selector "<selector>"',
+            ],
+            "read_fields": [
+                "found",
+                "url",
+                "title",
+                "result.found",
+                "result.exists",
+                "result.role_found",
+                "result.matched",
+                "result.state_values",
+                "result.attribute_found",
+                "result.value",
+                "result.requested_value",
+                "result.count",
+                "result.entry",
+            ],
+            "custom_js_boundary": (
+                "Use action eval only when no wait-* command can express the "
+                "state predicate."
+            ),
+        },
+    }
+
+
+def cmd_action_guide(args: argparse.Namespace) -> None:
+    command = "action.guide"
+    tasks = _action_guide_tasks()
+    task_ids = sorted(tasks)
+    if args.task and args.task not in tasks:
+        _failure(
+            command,
+            "unknown_action_guide_task",
+            f"Unknown action guide task: {args.task}",
+            task=args.task,
+            available_tasks=task_ids,
+            fix=_doctor_fix(
+                "inspect_action_guide_tasks",
+                commands=[
+                    "browser-cli action guide --names-only",
+                    "browser-cli action guide",
+                ],
+                guidance=[
+                    "Choose one of available_tasks, then rerun action guide with that --task value."
+                ],
+            ),
+        )
+
+    selection_policy = {
+        "inspect_before_acting": True,
+        "prefer_semantic_actions": True,
+        "prefer_waits_over_sleep": True,
+        "custom_javascript_last": True,
+        "reference_command": "browser-cli reference get --id action_playbook",
+        "command_catalog": "browser-cli commands --group action",
+    }
+    if args.names_only:
+        _success(
+            command,
+            schema_version=1,
+            task_count=len(task_ids),
+            tasks=task_ids,
+            selection_policy=selection_policy,
+        )
+
+    if args.task:
+        _success(
+            command,
+            schema_version=1,
+            task=args.task,
+            guide=tasks[args.task],
+            available_tasks=task_ids,
+            selection_policy=selection_policy,
+            next_commands=[
+                f"browser-cli commands --workflow {workflow}"
+                for workflow in tasks[args.task]["related_workflows"]
+            ],
+        )
+
+    _success(
+        command,
+        schema_version=1,
+        task_count=len(task_ids),
+        tasks=tasks,
+        selection_policy=selection_policy,
+        next_commands=[
+            "browser-cli action guide --task form_interaction",
+            "browser-cli action guide --task file_upload",
+            "browser-cli action guide --task dialog_frame_handling",
+            "browser-cli action guide --task interactive_targeting",
+            "browser-cli action guide --task navigation_flow",
+            "browser-cli action guide --task visual_capture",
+            "browser-cli action guide --task semantic_waits",
+            "browser-cli action guide --task menu_keyboard_flow",
+            "browser-cli action guide --task content_extraction",
+            "browser-cli action guide --task browser_state_management",
+            "browser-cli action guide --task state_waits",
+            "browser-cli action guide --task page_diagnostics",
+            "browser-cli commands --group action",
+            "browser-cli reference get --id action_playbook",
+        ],
+    )
 
 
 def cmd_action_open_url(args: argparse.Namespace) -> None:
@@ -3483,6 +15265,14 @@ def cmd_action_screenshot(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_screenshot_selector(args: argparse.Namespace) -> None:
+    _run_screenshot_selector_action_command(args)
+
+
+def cmd_action_screenshot_role(args: argparse.Namespace) -> None:
+    _run_screenshot_role_action_command(args)
+
+
 def cmd_action_eval(args: argparse.Namespace) -> None:
     _run_action_command(
         args,
@@ -3497,6 +15287,18 @@ def cmd_action_snapshot(args: argparse.Namespace) -> None:
         "action.snapshot",
         SnapshotRequest(timeout_ms=args.timeout_ms, max_chars=args.max_chars),
     )
+
+
+def cmd_action_page_info(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.page-info",
+        _page_info_expression(),
+    )
+
+
+def cmd_action_set_viewport(args: argparse.Namespace) -> None:
+    _run_set_viewport_action_command(args)
 
 
 def cmd_action_reload(args: argparse.Namespace) -> None:
@@ -3522,6 +15324,20 @@ def cmd_action_wait_url(args: argparse.Namespace) -> None:
         _wait_url_expression(
             url=args.url,
             match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_title(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-title",
+        _wait_title_expression(
+            title=args.title,
+            match=args.match,
+            case_sensitive=args.case_sensitive,
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
         ),
@@ -3557,48 +15373,52 @@ def cmd_action_get_text(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.get-text",
-        _selector_expression(
-            args.selector,
-            """
-  const text = element.innerText ?? element.textContent ?? "";
-  return { selector, found: true, text };
-""".rstrip(),
+        _get_text_expression(args.selector),
+    )
+
+
+def cmd_action_get_text_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-text-role",
+        _get_text_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
         ),
     )
 
 
 def cmd_action_exists(args: argparse.Namespace) -> None:
-    selector = _js_literal(args.selector)
     _run_eval_backed_action_command(
         args,
         "action.exists",
-        f"""
-() => {{
-  const selector = {selector};
-  return {{ selector, exists: Boolean(document.querySelector(selector)) }};
-}}
-""".strip(),
+        _exists_expression(args.selector),
+    )
+
+
+def cmd_action_exists_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.exists-role",
+        _exists_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
+        ),
     )
 
 
 def cmd_action_count(args: argparse.Namespace) -> None:
-    expression = f"""
-() => {{
-{_dom_helpers_expression(include_hidden=args.include_hidden)}
-  const selector = {_js_literal(args.selector)};
-  const all = [...document.querySelectorAll(selector)];
-  const visibleNodes = all.filter(visible);
-  const matched = includeHidden ? all : visibleNodes;
-  return {{
-    selector,
-    include_hidden: includeHidden,
-    count: matched.length,
-    total_count: all.length,
-    visible_count: visibleNodes.length
-  }};
-}}
-""".strip()
-    _run_eval_backed_action_command(args, "action.count", expression)
+    _run_eval_backed_action_command(
+        args,
+        "action.count",
+        _count_expression(selector=args.selector, include_hidden=args.include_hidden),
+    )
 
 
 def cmd_action_wait_count(args: argparse.Namespace) -> None:
@@ -3609,6 +15429,36 @@ def cmd_action_wait_count(args: argparse.Namespace) -> None:
             selector=args.selector,
             count=args.count,
             comparison=args.comparison,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
+def cmd_action_wait_state(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-state",
+        _wait_state_expression(
+            selector=args.selector,
+            state=args.state,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+        ),
+    )
+
+
+def cmd_action_wait_state_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-state-role",
+        _wait_state_role_expression(
+            role=args.role,
+            name=args.name,
+            state=args.state,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
             include_hidden=args.include_hidden,
@@ -3642,31 +15492,24 @@ def cmd_action_inspect(args: argparse.Namespace) -> None:
 
 
 def cmd_action_get_attribute(args: argparse.Namespace) -> None:
-    attribute = _js_literal(args.name)
     _run_eval_backed_action_command(
         args,
         "action.get-attribute",
-        _selector_expression(
-            args.selector,
-            f"""
-  const name = {attribute};
-  const attributeValue = element.getAttribute(name);
-  let propertyValue = null;
-  if (name in element) {{
-    const raw = element[name];
-    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
-      ? raw
-      : String(raw);
-  }}
-  return {{
-    selector,
-    found: true,
-    name,
-    value: attributeValue,
-    attribute_value: attributeValue,
-    property_value: propertyValue
-  }};
-""".rstrip(),
+        _get_attribute_expression(selector=args.selector, name=args.name),
+    )
+
+
+def cmd_action_get_attribute_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-attribute-role",
+        _get_attribute_role_expression(
+            role=args.role,
+            name=args.name,
+            attribute=args.attribute,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
         ),
     )
 
@@ -3688,6 +15531,26 @@ def cmd_action_wait_attribute(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_wait_attribute_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-attribute-role",
+        _wait_attribute_role_expression(
+            role=args.role,
+            name=args.name,
+            attribute=args.attribute,
+            value=args.value,
+            state=args.state,
+            match=args.match,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
 def cmd_action_wait_text(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -3695,6 +15558,23 @@ def cmd_action_wait_text(args: argparse.Namespace) -> None:
         _wait_text_expression(
             text=args.text,
             selector=args.selector,
+            state=args.state,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            include_hidden=args.include_hidden,
+        ),
+    )
+
+
+def cmd_action_wait_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-role",
+        _wait_role_expression(
+            role=args.role,
+            name=args.name,
             exact=args.exact,
             case_sensitive=args.case_sensitive,
             timeout_ms=args.timeout_ms,
@@ -3715,11 +15595,38 @@ def cmd_action_focus(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_focus_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.focus-role",
+        _focus_role_expression(
+            role=args.role,
+            name=args.name,
+            prevent_scroll=args.prevent_scroll,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_get_value(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.get-value",
         _get_value_expression(args.selector),
+    )
+
+
+def cmd_action_get_value_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.get-value-role",
+        _get_value_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
     )
 
 
@@ -3738,11 +15645,41 @@ def cmd_action_wait_value(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_wait_value_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.wait-value-role",
+        _wait_value_role_expression(
+            role=args.role,
+            name=args.name,
+            value=args.value,
+            match=args.match,
+            timeout_ms=args.timeout_ms,
+            poll_ms=args.poll_ms,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_blur(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.blur",
         _blur_expression(args.selector),
+    )
+
+
+def cmd_action_blur_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.blur-role",
+        _blur_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
     )
 
 
@@ -3887,6 +15824,19 @@ def cmd_action_clear(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_clear_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.clear-role",
+        _clear_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_set_value(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -3894,6 +15844,24 @@ def cmd_action_set_value(args: argparse.Namespace) -> None:
         _set_value_expression(
             args.selector,
             args.value,
+            dispatch_events=not args.no_events,
+        ),
+    )
+
+
+def cmd_action_set_file_input(args: argparse.Namespace) -> None:
+    command = "action.set-file-input"
+    files = _read_file_input_payloads(
+        command=command,
+        files=args.file,
+        max_bytes=args.max_bytes,
+    )
+    _run_eval_backed_action_command(
+        args,
+        command,
+        _set_file_input_expression(
+            selector=args.selector,
+            files=files,
             dispatch_events=not args.no_events,
         ),
     )
@@ -3924,36 +15892,16 @@ def cmd_action_submit(args: argparse.Namespace) -> None:
 
 
 def cmd_action_scroll(args: argparse.Namespace) -> None:
-    selector = getattr(args, "selector", None)
-    x = _js_literal(args.x)
-    y = _js_literal(args.y)
-    behavior = _js_literal(args.behavior)
-
-    if selector:
-        expression = _selector_expression(
-            selector,
-            f"""
-  element.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
-  return {{ selector, found: true, scrolled: true, x: {x}, y: {y} }};
-""".rstrip(),
-        )
-    else:
-        expression = f"""
-() => {{
-  window.scrollBy({{ left: {x}, top: {y}, behavior: {behavior} }});
-  return {{
-    selector: null,
-    found: true,
-    scrolled: true,
-    x: {x},
-    y: {y},
-    scroll_x: window.scrollX,
-    scroll_y: window.scrollY
-  }};
-}}
-""".strip()
-
-    _run_eval_backed_action_command(args, "action.scroll", expression)
+    _run_eval_backed_action_command(
+        args,
+        "action.scroll",
+        _scroll_expression(
+            selector=getattr(args, "selector", None),
+            x=args.x,
+            y=args.y,
+            behavior=args.behavior,
+        ),
+    )
 
 
 def cmd_action_bounding_box(args: argparse.Namespace) -> None:
@@ -3961,6 +15909,20 @@ def cmd_action_bounding_box(args: argparse.Namespace) -> None:
         args,
         "action.bounding-box",
         _bounding_box_expression(args.selector),
+    )
+
+
+def cmd_action_bounding_box_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.bounding-box-role",
+        _bounding_box_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+            include_hidden=args.include_hidden,
+        ),
     )
 
 
@@ -3977,29 +15939,27 @@ def cmd_action_scroll_into_view(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_scroll_into_view_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.scroll-into-view-role",
+        _scroll_into_view_role_expression(
+            role=args.role,
+            name=args.name,
+            block=args.block,
+            inline=args.inline,
+            behavior=args.behavior,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_select_option(args: argparse.Namespace) -> None:
-    value = _js_literal(args.value)
     _run_eval_backed_action_command(
         args,
         "action.select-option",
-        _event_expression(
-            args.selector,
-            f"""
-  const requestedValue = {value};
-  const previousValue = element.value;
-  element.value = requestedValue;
-  dispatch(new Event("input", {{ bubbles: true }}));
-  dispatch(new Event("change", {{ bubbles: true }}));
-  return {{
-    selector,
-    found: true,
-    selected: element.value === requestedValue,
-    value: element.value,
-    requested_value: requestedValue,
-    previous_value: previousValue
-  }};
-""".rstrip(),
-        ),
+        _select_option_expression(selector=args.selector, value=args.value),
     )
 
 
@@ -4037,6 +15997,34 @@ def cmd_action_uncheck_label(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_check_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.check-role",
+        _check_role_expression(
+            role=args.role,
+            name=args.name,
+            checked=True,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_uncheck_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.uncheck-role",
+        _check_role_expression(
+            role=args.role,
+            name=args.name,
+            checked=False,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_select_label(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -4051,38 +16039,31 @@ def cmd_action_select_label(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_select_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.select-role",
+        _select_role_expression(
+            role=args.role,
+            name=args.name,
+            value=args.value,
+            option_label=args.option_label,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def _run_checkbox_action(
     args: argparse.Namespace,
     *,
     checked: bool,
     command: str,
 ) -> None:
-    checked_literal = _js_literal(checked)
     _run_eval_backed_action_command(
         args,
         command,
-        _event_expression(
-            args.selector,
-            f"""
-  if (!("checked" in element)) {{
-    return {{
-      selector,
-      found: true,
-      checkable: false,
-      checked: Boolean(element.checked)
-    }};
-  }}
-  element.checked = {checked_literal};
-  dispatch(new Event("input", {{ bubbles: true }}));
-  dispatch(new Event("change", {{ bubbles: true }}));
-  return {{
-    selector,
-    found: true,
-    checkable: true,
-    checked: Boolean(element.checked)
-  }};
-""".rstrip(),
-        ),
+        _checkbox_action_expression(selector=args.selector, checked=checked),
     )
 
 
@@ -4090,48 +16071,142 @@ def cmd_action_hover(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.hover",
-        _event_expression(
-            args.selector,
-            """
-  const init = {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    clientX: element.getBoundingClientRect().left,
-    clientY: element.getBoundingClientRect().top
-  };
-  for (const type of ["mouseover", "mouseenter", "mousemove"]) {
-    dispatch(new MouseEvent(type, init));
-  }
-  return { selector, found: true, hovered: true };
-""".rstrip(),
+        _hover_expression(args.selector),
+    )
+
+
+def cmd_action_hover_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.hover-role",
+        _hover_role_expression(
+            role=args.role,
+            name=args.name,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
         ),
     )
 
 
 def cmd_action_press(args: argparse.Namespace) -> None:
-    key = _js_literal(args.key)
     _run_eval_backed_action_command(
         args,
         "action.press",
-        _event_expression(
-            args.selector,
-            f"""
-  const key = {key};
-  element.focus();
-  const init = {{ key, code: key, bubbles: true, cancelable: true }};
-  const keydownAccepted = dispatch(new KeyboardEvent("keydown", init));
-  dispatch(new KeyboardEvent("keypress", init));
-  dispatch(new KeyboardEvent("keyup", init));
-  return {{
-    selector,
-    found: true,
-    focused: document.activeElement === element,
-    key,
-    pressed: true,
-    keydown_accepted: keydownAccepted
+        _press_expression(selector=args.selector, key=args.key),
+    )
+
+
+def cmd_action_press_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.press-role",
+        _press_role_expression(
+            role=args.role,
+            name=args.name,
+            key=args.key,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def _press_key_expression(
+    *,
+    key: str,
+    code: str | None,
+    alt_key: bool,
+    ctrl_key: bool,
+    meta_key: bool,
+    shift_key: bool,
+) -> str:
+    key_literal = _js_literal(key)
+    code_literal = _js_literal(code or key)
+    return f"""
+() => {{
+  const key = {key_literal};
+  const code = {code_literal};
+  const modifiers = {{
+    alt_key: {_js_literal(alt_key)},
+    ctrl_key: {_js_literal(ctrl_key)},
+    meta_key: {_js_literal(meta_key)},
+    shift_key: {_js_literal(shift_key)}
   }};
-""".rstrip(),
+  const activeElement = document.activeElement;
+  let target = activeElement || document.body || document.documentElement || window;
+  let targetKind = "active_element";
+  if (target === document.body) {{
+    targetKind = "body";
+  }} else if (target === document.documentElement) {{
+    target = document.body || document.documentElement || window;
+    targetKind = target === window ? "window" : (
+      target === document.body ? "body" : "document_element"
+    );
+  }} else if (target === window) {{
+    targetKind = "window";
+  }}
+  const describeElement = (element) => {{
+    if (!element || !(element instanceof Element)) {{
+      return null;
+    }}
+    return {{
+      tag_name: element.tagName.toLowerCase(),
+      id: element.id || null,
+      name: element.getAttribute("name") || null,
+      role: element.getAttribute("role") || null,
+      type: element.getAttribute("type") || null,
+      contenteditable: element.getAttribute("contenteditable") || null
+    }};
+  }};
+  const init = {{
+    key,
+    code,
+    altKey: modifiers.alt_key,
+    ctrlKey: modifiers.ctrl_key,
+    metaKey: modifiers.meta_key,
+    shiftKey: modifiers.shift_key,
+    bubbles: true,
+    cancelable: true
+  }};
+  const events = [];
+  for (const type of ["keydown", "keypress", "keyup"]) {{
+    try {{
+      events.push({{
+        type,
+        accepted: target.dispatchEvent(new KeyboardEvent(type, init))
+      }});
+    }} catch (error) {{
+      events.push({{
+        type,
+        accepted: false,
+        error: String(error.message || error)
+      }});
+    }}
+  }}
+  return {{
+    key,
+    code,
+    pressed: events.every((event) => !event.error),
+    target: targetKind,
+    target_info: describeElement(target),
+    modifiers,
+    events,
+    keydown_accepted: events[0] ? Boolean(events[0].accepted) : null
+  }};
+}}
+""".strip()
+
+
+def cmd_action_press_key(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.press-key",
+        _press_key_expression(
+            key=args.key,
+            code=args.code,
+            alt_key=args.alt_key,
+            ctrl_key=args.ctrl_key,
+            meta_key=args.meta_key,
+            shift_key=args.shift_key,
         ),
     )
 
@@ -4174,12 +16249,80 @@ def cmd_action_click_index(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_double_click(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.double-click",
+        _mouse_action_expression(
+            selector=args.selector,
+            action="double-click",
+            result_field="double_clicked",
+        ),
+    )
+
+
+def cmd_action_double_click_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.double-click-role",
+        _mouse_action_role_expression(
+            role=args.role,
+            name=args.name,
+            action="double-click",
+            result_field="double_clicked",
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_right_click(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.right-click",
+        _mouse_action_expression(
+            selector=args.selector,
+            action="right-click",
+            result_field="right_clicked",
+        ),
+    )
+
+
+def cmd_action_right_click_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.right-click-role",
+        _mouse_action_role_expression(
+            role=args.role,
+            name=args.name,
+            action="right-click",
+            result_field="right_clicked",
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_fill_label(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
         "action.fill-label",
         _fill_label_expression(
             label=args.label,
+            text=args.text,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
+def cmd_action_fill_role(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.fill-role",
+        _fill_role_expression(
+            role=args.role,
+            name=args.name,
             text=args.text,
             exact=args.exact,
             case_sensitive=args.case_sensitive,
@@ -4195,6 +16338,174 @@ def cmd_action_form_snapshot(args: argparse.Namespace) -> None:
         reveal_sensitive_values=args.reveal_sensitive_values,
     )
     _run_eval_backed_action_command(args, "action.form-snapshot", expression)
+
+
+def cmd_action_link_snapshot(args: argparse.Namespace) -> None:
+    expression = _link_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        include_empty=args.include_empty,
+        same_origin_only=args.same_origin_only,
+    )
+    _run_eval_backed_action_command(args, "action.link-snapshot", expression)
+
+
+def cmd_action_table_snapshot(args: argparse.Namespace) -> None:
+    expression = _table_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_rows=args.max_rows,
+        max_cells=args.max_cells,
+    )
+    _run_eval_backed_action_command(args, "action.table-snapshot", expression)
+
+
+def cmd_action_list_snapshot(args: argparse.Namespace) -> None:
+    expression = _list_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_items=args.max_items,
+    )
+    _run_eval_backed_action_command(args, "action.list-snapshot", expression)
+
+
+def cmd_action_text_snapshot(args: argparse.Namespace) -> None:
+    expression = _text_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_chars=args.max_chars,
+    )
+    _run_eval_backed_action_command(args, "action.text-snapshot", expression)
+
+
+def cmd_action_dialog_snapshot(args: argparse.Namespace) -> None:
+    expression = _dialog_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_controls=args.max_controls,
+        max_chars=args.max_chars,
+    )
+    _run_eval_backed_action_command(args, "action.dialog-snapshot", expression)
+
+
+def cmd_action_wait_dialog(args: argparse.Namespace) -> None:
+    expression = _wait_dialog_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_controls=args.max_controls,
+        max_chars=args.max_chars,
+        text=args.text,
+        match=args.match,
+        case_sensitive=args.case_sensitive,
+        modal_only=args.modal_only,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-dialog", expression)
+
+
+def cmd_action_frame_snapshot(args: argparse.Namespace) -> None:
+    expression = _frame_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_chars=args.max_chars,
+    )
+    _run_eval_backed_action_command(args, "action.frame-snapshot", expression)
+
+
+def cmd_action_wait_frame(args: argparse.Namespace) -> None:
+    expression = _wait_frame_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+        max_chars=args.max_chars,
+        url=args.url,
+        url_match=args.url_match,
+        text=args.text,
+        text_match=args.text_match,
+        case_sensitive=args.case_sensitive,
+        readable_only=args.readable_only,
+        same_origin_only=args.same_origin_only,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-frame", expression)
+
+
+def cmd_action_performance_snapshot(args: argparse.Namespace) -> None:
+    expression = _performance_snapshot_expression(
+        max_resources=args.max_resources,
+        initiator_type=args.initiator_type,
+        min_duration_ms=args.min_duration_ms,
+    )
+    _run_eval_backed_action_command(args, "action.performance-snapshot", expression)
+
+
+def cmd_action_network_snapshot(args: argparse.Namespace) -> None:
+    expression = _network_snapshot_expression(
+        max_entries=args.max_entries,
+        clear=args.clear,
+        install_only=args.install_only,
+        source=args.source,
+        method=args.method,
+        failed_only=args.failed_only,
+    )
+    _run_eval_backed_action_command(args, "action.network-snapshot", expression)
+
+
+def cmd_action_wait_network(args: argparse.Namespace) -> None:
+    expression = _wait_network_expression(
+        url=args.url,
+        url_match=args.url_match,
+        source=args.source,
+        method=args.method,
+        status=args.status,
+        failed_only=args.failed_only,
+        case_sensitive=args.case_sensitive,
+        after_index=args.after_index,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-network", expression)
+
+
+def cmd_action_console_snapshot(args: argparse.Namespace) -> None:
+    expression = _console_snapshot_expression(
+        max_entries=args.max_entries,
+        clear=args.clear,
+        install_only=args.install_only,
+    )
+    _run_eval_backed_action_command(args, "action.console-snapshot", expression)
+
+
+def cmd_action_wait_console(args: argparse.Namespace) -> None:
+    expression = _wait_console_expression(
+        text=args.text,
+        match=args.match,
+        source=args.source,
+        level=args.level,
+        case_sensitive=args.case_sensitive,
+        after_index=args.after_index,
+        timeout_ms=args.timeout_ms,
+        poll_ms=args.poll_ms,
+    )
+    _run_eval_backed_action_command(args, "action.wait-console", expression)
+
+
+def cmd_action_outline_snapshot(args: argparse.Namespace) -> None:
+    expression = _outline_snapshot_expression(
+        selector=args.selector,
+        include_hidden=args.include_hidden,
+        max_nodes=args.max_nodes,
+    )
+    _run_eval_backed_action_command(args, "action.outline-snapshot", expression)
 
 
 def cmd_action_accessibility_snapshot(args: argparse.Namespace) -> None:
@@ -4240,21 +16551,72 @@ def cmd_action_interactive_snapshot(args: argparse.Namespace) -> None:
   }};
 }}
 """.strip()
-    _run_eval_backed_action_command(args, "action.interactive-snapshot", expression)
+    _run_eval_backed_action_command(
+        args,
+        getattr(args, "action_command_name", "action.interactive-snapshot"),
+        expression,
+    )
 
 
 def cmd_doctor(args: argparse.Namespace) -> None:
     command = "doctor"
     checks: list[dict[str, Any]] = []
 
-    browser_cli_version = _package_version("browser-cli")
+    checks.append(
+        _doctor_check(
+            "python_runtime",
+            "pass",
+            "Python runtime is available",
+            executable=sys.executable,
+            version=sys.version.split()[0],
+            platform=sys.platform,
+        )
+    )
+
+    browser_cli_path = shutil.which("browser-cli")
+    if browser_cli_path:
+        checks.append(
+            _doctor_check(
+                "browser_cli_executable",
+                "pass",
+                "browser-cli executable is available on PATH",
+                path=browser_cli_path,
+            )
+        )
+    else:
+        checks.append(
+            _doctor_check(
+                "browser_cli_executable",
+                "warn",
+                (
+                    "browser-cli executable was not found on PATH; the current "
+                    "process is running, but future shell commands may fail."
+                ),
+                fix=_doctor_fix(
+                    "install_browser_cli_on_path",
+                    commands=[
+                        "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                        "browser-cli --help",
+                        "browser-cli --version",
+                        "browser-cli doctor",
+                    ],
+                    guidance=[
+                        "Install browser-cli as a uv tool or add its executable directory to PATH.",
+                        "In local development, use `uv run browser-cli ...` from the repository.",
+                    ],
+                ),
+            )
+        )
+
+    browser_cli_version, browser_cli_version_source = _browser_cli_version()
     checks.append(
         _doctor_check(
             "browser_cli",
             "pass",
             "browser-cli import succeeded",
-            version=browser_cli_version or "unknown",
-            version_known=browser_cli_version is not None,
+            version=browser_cli_version,
+            version_known=True,
+            version_source=browser_cli_version_source,
         )
     )
 
@@ -4269,10 +16631,36 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         )
     )
 
+    checks.append(_doctor_command_catalog_check())
+    checks.append(_doctor_agent_references_check())
+    checks.append(_doctor_agent_examples_check())
+
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
     base_url = os.environ.get("LEXMOUNT_BASE_URL")
     region = os.environ.get("LEXMOUNT_REGION")
+    env_configured = bool(api_key and project_id)
+    api_admin: Any | None = None
+    device_token_status = _local_device_token_status(
+        getattr(args, "credentials_file", None)
+    )
+    missing_env = [
+        name
+        for name, value in (
+            ("LEXMOUNT_API_KEY", api_key),
+            ("LEXMOUNT_PROJECT_ID", project_id),
+        )
+        if not value
+    ]
+    runtime_auth = _runtime_auth_status(
+        env_configured=env_configured,
+        missing_env=missing_env,
+        device_token_status=device_token_status,
+    )
+    auth_source = _auth_source(
+        env_configured=env_configured,
+        device_token_status=device_token_status,
+    )
 
     checks.append(
         _doctor_check(
@@ -4321,6 +16709,57 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             value=region,
         )
     )
+    if device_token_status.get("present"):
+        device_token_check_status = (
+            "pass"
+            if device_token_status.get("valid")
+            and not device_token_status.get("warnings")
+            else "warn"
+        )
+        checks.append(
+            _doctor_check(
+                "local_device_token",
+                device_token_check_status,
+                (
+                    "Local device token metadata is valid but bearer-token runtime auth is pending."
+                    if device_token_check_status == "pass"
+                    else "Local device token metadata needs attention."
+                ),
+                device_token=device_token_status,
+                runtime_auth=runtime_auth,
+                fix=_doctor_fix(
+                    "use_env_credentials_until_bearer_auth_lands",
+                    commands=[
+                        "browser-cli auth status",
+                        "browser-cli auth login",
+                        "browser-cli auth export-env",
+                    ],
+                    guidance=[
+                        "Device-token status is reported for forward compatibility.",
+                        "Use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions until bearer-token runtime support is enabled.",
+                    ],
+                ),
+            )
+        )
+    elif getattr(args, "credentials_file", None):
+        checks.append(
+            _doctor_check(
+                "local_device_token",
+                "warn",
+                "Requested local device token credentials file was not found.",
+                device_token=device_token_status,
+                fix=_doctor_fix(
+                    "run_auth_login_or_use_env_credentials",
+                    commands=[
+                        "browser-cli auth login",
+                        "browser-cli auth export-env",
+                    ],
+                    guidance=[
+                        "Use env API-key credentials today, or rerun once device-code login is available."
+                    ],
+                ),
+            )
+        )
 
     try:
         connect_url = build_direct_connect_url()
@@ -4392,20 +16831,15 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         )
     else:
         try:
-            result = LexmountBrowserAdmin().list_sessions(status=None)
+            api_admin = LexmountBrowserAdmin()
+            result = api_admin.list_sessions(status=None)
         except Exception as exc:
-            info = getattr(exc, "lexmount_error_info", None)
-            error = (
-                info.payload().get("error")
-                if isinstance(info, LexmountErrorInfo)
-                else exc.__class__.__name__
-            )
             checks.append(
                 _doctor_check(
                     "api_connectivity",
                     "fail",
                     _mask_sensitive_text(str(exc)),
-                    error=error,
+                    error=_doctor_error_name(exc),
                     fix=_doctor_fix(
                         "verify_api_connectivity",
                         commands=[
@@ -4432,13 +16866,90 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 )
             )
 
+    api_connectivity = next(
+        (check for check in checks if check.get("name") == "api_connectivity"),
+        None,
+    )
+    if args.smoke_session:
+        if args.skip_api:
+            checks.append(
+                _doctor_check(
+                    "browser_smoke_session",
+                    "skipped",
+                    "Browser smoke session skipped by --skip-api",
+                    fix=_doctor_fix(
+                        "run_browser_smoke_session",
+                        commands=["browser-cli doctor --smoke-session"],
+                        guidance=[
+                            "Rerun doctor with --smoke-session and without --skip-api when live browser session creation can be tested."
+                        ],
+                    ),
+                )
+            )
+        elif not api_key or not project_id:
+            checks.append(
+                _doctor_check(
+                    "browser_smoke_session",
+                    "skipped",
+                    "Browser smoke session requires LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID",
+                    fix=_credential_doctor_fix(
+                        "LEXMOUNT_API_KEY",
+                        "LEXMOUNT_PROJECT_ID",
+                    ),
+                )
+            )
+        elif not (
+            isinstance(api_connectivity, dict)
+            and api_connectivity.get("status") == "pass"
+            and api_admin is not None
+        ):
+            checks.append(
+                _doctor_check(
+                    "browser_smoke_session",
+                    "skipped",
+                    "Browser smoke session requires a passing API connectivity check",
+                    fix=_doctor_fix(
+                        "fix_api_connectivity_before_smoke_session",
+                        commands=[
+                            "browser-cli auth status",
+                            "browser-cli doctor",
+                            "browser-cli doctor --smoke-session",
+                        ],
+                        guidance=[
+                            "Repair API connectivity before validating browser session creation."
+                        ],
+                    ),
+                )
+            )
+        else:
+            checks.append(_doctor_smoke_session_check(api_admin))
+
     failed = [check for check in checks if check["status"] == "fail"]
+    warnings = [check for check in checks if check["status"] == "warn"]
+    api_connectivity = next(
+        (check for check in checks if check.get("name") == "api_connectivity"),
+        None,
+    )
     data: dict[str, Any] = {
         "ok": not failed,
         "command": command,
-        "status": "ok" if not failed else "error",
+        "status": "error" if failed else "warning" if warnings else "ok",
         "checked": len(checks),
         "failed": len(failed),
+        "warnings": len(warnings),
+        "failed_checks": _doctor_check_names(checks, status="fail"),
+        "warning_checks": _doctor_check_names(checks, status="warn"),
+        "skipped_checks": _doctor_check_names(checks, status="skipped"),
+        "auth_source": auth_source,
+        "runtime_auth_usable": env_configured,
+        "runtime_auth": runtime_auth,
+        "device_token": device_token_status,
+        "ready_for_browser_actions": (
+            not failed
+            and isinstance(api_connectivity, dict)
+            and api_connectivity.get("status") == "pass"
+        ),
+        "repair_plan": _doctor_repair_plan(checks),
         "checks": checks,
     }
     if failed:
@@ -4451,23 +16962,355 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     _json_dump(data, exit_code=1 if failed else 0)
 
 
+def cmd_auth_scopes(args: argparse.Namespace) -> None:
+    command = "auth.scopes"
+    known_scopes = list(_known_scope_details())
+    selected_scopes = (
+        _dedupe_preserving_order(args.scope) if args.scope else known_scopes
+    )
+    requested_scopes = (
+        _dedupe_preserving_order(args.scope)
+        if args.scope
+        else list(DEFAULT_CODEX_CONNECT_SCOPES)
+    )
+    scope_entries = _scope_catalog_entries(selected_scopes)
+    unknown_scopes = [
+        str(entry["scope"]) for entry in scope_entries if not bool(entry["known"])
+    ]
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
+
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "known_scopes": known_scopes,
+        "default_scopes": list(DEFAULT_CODEX_CONNECT_SCOPES),
+        "requested_scopes": requested_scopes,
+        "scopes": scope_entries,
+        "scope_count": len(scope_entries),
+        "known_scope_count": len(scope_entries) - len(unknown_scopes),
+        "unknown_scopes": unknown_scopes,
+        "all_selected_scopes_known": not unknown_scopes,
+        "default_expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        "scope_query_parameter": {
+            "name": "scope",
+            "repeatable": True,
+            "default": list(DEFAULT_CODEX_CONNECT_SCOPES),
+        },
+        "secret_policy": {
+            "contains_secret_values": False,
+            "safe_to_share": True,
+            "do_not_paste_in_chat": [
+                "LEXMOUNT_API_KEY",
+                "access_token",
+                "refresh_token",
+            ],
+        },
+        "next_commands": [
+            "browser-cli auth connect-requirements",
+            "browser-cli auth login",
+            "browser-cli commands --workflow connect_from_codex_site_requirements",
+        ],
+    }
+
+    if args.include_site_contract:
+        project_id, project_id_source = _auth_login_project_id(args)
+        connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=requested_scopes,
+            expires_in=args.expires_in,
+        )
+        device_connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=requested_scopes,
+            expires_in=args.expires_in,
+            response="device_code",
+        )
+        payload["browser_site_contract"] = {
+            "available": False,
+            "reason": "browser_site_contract_pending",
+            "url": connect_url,
+            "device_code_url": device_connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": requested_scopes,
+            "requested_scope_details": _scope_details(requested_scopes),
+            "requested_expires_in": args.expires_in,
+            "scope_catalog_command": "browser-cli auth scopes",
+            "scope_ui_fields": [
+                "scope",
+                "label",
+                "description",
+                "permissions",
+                "risk",
+                "destructive",
+                "default_requested",
+                "permission_count",
+            ],
+            "required_query_parameters": [
+                "source=browser-cli",
+                "intent=agent-browser-control",
+                "response=env|device_code",
+                "expires_in=<duration>",
+                "project_id=<project-id>",
+                "scope=<scope> (repeatable)",
+            ],
+            "site_capability_status": site_capability_status,
+            "site_capabilities": site_capabilities,
+            "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
+            "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+            "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
+        }
+
+    _success(command, **payload)
+
+
 def cmd_auth_status(args: argparse.Namespace) -> None:
     command = "auth.status"
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
     configured = bool(api_key and project_id)
+    missing_env = [
+        name
+        for name, value in (
+            ("LEXMOUNT_API_KEY", api_key),
+            ("LEXMOUNT_PROJECT_ID", project_id),
+        )
+        if not value
+    ]
+    device_token_status = _local_device_token_status(args.credentials_file)
+    auth_source = _auth_source(
+        env_configured=configured,
+        device_token_status=device_token_status,
+    )
+    runtime_auth = _runtime_auth_status(
+        env_configured=configured,
+        missing_env=missing_env,
+        device_token_status=device_token_status,
+    )
 
-    _success(
-        command,
-        configured=configured,
-        api_key=_env_value_status("LEXMOUNT_API_KEY", secret=True),
-        project_id=_env_value_status("LEXMOUNT_PROJECT_ID"),
-        base_url=_env_value_status(
+    payload: dict[str, Any] = {
+        "configured": configured,
+        "auth_source": auth_source,
+        "runtime_auth_usable": configured,
+        "runtime_auth": runtime_auth,
+        "missing_env": missing_env,
+        "api_key": _env_value_status("LEXMOUNT_API_KEY", secret=True),
+        "project_id": _env_value_status("LEXMOUNT_PROJECT_ID"),
+        "base_url": _env_value_status(
             "LEXMOUNT_BASE_URL",
             default=DEFAULT_LEXMOUNT_BASE_URL,
         ),
-        region=_env_value_status("LEXMOUNT_REGION"),
-        next_steps=_auth_next_steps(configured=configured),
+        "region": _env_value_status("LEXMOUNT_REGION"),
+        "device_token": device_token_status,
+        "next_steps": _auth_next_steps(
+            configured=configured,
+            device_token_status=device_token_status,
+        ),
+    }
+    if missing_env:
+        payload["fix"] = _credential_doctor_fix(*missing_env)
+    _success(command, **payload)
+
+
+def cmd_auth_token_info(args: argparse.Namespace) -> None:
+    command = "auth.token-info"
+    device_token_status = _local_device_token_status(args.credentials_file)
+    scope_check = _device_token_scope_check(
+        device_token_status,
+        args.required_scope,
+    )
+
+    _success(
+        command,
+        present=device_token_status.get("present", False),
+        valid=device_token_status.get("valid", False),
+        expired=device_token_status.get("expired"),
+        refresh_needed=device_token_status.get("refresh_needed"),
+        runtime_auth_usable=False,
+        device_token=device_token_status,
+        scope_check=scope_check,
+        next_steps=_auth_token_info_next_steps(
+            device_token_status=device_token_status,
+            scope_check=scope_check,
+        ),
+    )
+
+
+def cmd_auth_refresh(args: argparse.Namespace) -> None:
+    command = "auth.refresh"
+    if args.http_timeout_seconds <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--http-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            http_timeout_seconds=args.http_timeout_seconds,
+        )
+    device_token_status = _local_device_token_status(args.credentials_file)
+    reason = _auth_refresh_reason(device_token_status, force=bool(args.force))
+    warnings = list(device_token_status.get("warnings", []))
+    token_base_url, token_base_url_source = _token_lifecycle_base_url(
+        args.token_base_url
+    )
+    refresh_endpoint = (
+        _token_lifecycle_endpoint(token_base_url, "/api/auth/token/refresh")
+        if token_base_url
+        else None
+    )
+    refresh_available = bool(
+        refresh_endpoint and reason == "remote_refresh_unavailable"
+    )
+    refreshed = False
+    remote_refresh: dict[str, Any] = {
+        "attempted": False,
+        "endpoint": refresh_endpoint,
+    }
+    credentials: dict[str, Any] | None = None
+    if reason == "remote_refresh_unavailable" and refresh_endpoint:
+        remote_refresh = _request_remote_token_refresh(
+            endpoint=refresh_endpoint,
+            credentials_file=args.credentials_file,
+            requested_scopes=[
+                str(scope)
+                for scope in device_token_status.get("scopes", [])
+                if isinstance(scope, str)
+            ],
+            timeout_seconds=args.http_timeout_seconds,
+        )
+        credentials = remote_refresh.get("credentials")
+        refreshed = bool(remote_refresh.get("saved"))
+        reason = "refreshed" if refreshed else "refresh_endpoint_error"
+        if not refreshed:
+            warnings.append(
+                "Remote token refresh endpoint did not return usable refreshed credentials."
+            )
+    elif reason == "remote_refresh_unavailable":
+        warnings.append(
+            "Remote token refresh is not implemented yet; request fresh credentials from browser.lexmount.cn when device-code login is available."
+        )
+
+    _success(
+        command,
+        credentials_file=device_token_status.get("path"),
+        path_source=device_token_status.get("path_source"),
+        token_lifecycle_base_url=token_base_url,
+        token_lifecycle_base_url_source=token_base_url_source,
+        refresh_endpoint=refresh_endpoint,
+        present=device_token_status.get("present", False),
+        valid=device_token_status.get("valid", False),
+        expired=device_token_status.get("expired"),
+        refresh_needed=device_token_status.get("refresh_needed"),
+        has_refresh_token=device_token_status.get("has_refresh_token", False),
+        force_requested=bool(args.force),
+        refresh_requested=reason != "refresh_not_needed" or bool(args.force),
+        refresh_available=refresh_available,
+        refreshed=refreshed,
+        reason=reason,
+        runtime_auth_usable=False,
+        warnings=warnings,
+        device_token=device_token_status,
+        remote_refresh=remote_refresh,
+        credentials=credentials,
+        next_steps=_auth_refresh_next_steps(
+            reason=reason,
+            device_token_status=device_token_status,
+        ),
+    )
+
+
+def cmd_auth_logout(args: argparse.Namespace) -> None:
+    command = "auth.logout"
+    if args.http_timeout_seconds <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--http-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            http_timeout_seconds=args.http_timeout_seconds,
+        )
+    path, path_source = _device_token_credentials_path(args.credentials_file)
+    device_token_before = _local_device_token_status(args.credentials_file)
+    present_before = bool(device_token_before.get("present"))
+    warnings: list[str] = []
+    deleted = False
+    token_base_url, token_base_url_source = _token_lifecycle_base_url(
+        args.token_base_url
+    )
+    revoke_endpoint = (
+        _token_lifecycle_endpoint(token_base_url, "/api/auth/token/revoke")
+        if token_base_url
+        else None
+    )
+    revoke_available = bool(revoke_endpoint and args.revoke and present_before)
+    revoked = False
+    remote_revoke: dict[str, Any] = {
+        "attempted": False,
+        "endpoint": revoke_endpoint,
+    }
+
+    if args.revoke and revoke_endpoint and present_before:
+        remote_revoke = _request_remote_token_revoke(
+            endpoint=revoke_endpoint,
+            credentials_file=args.credentials_file,
+            timeout_seconds=args.http_timeout_seconds,
+        )
+        revoked = bool(remote_revoke.get("ok"))
+        if not revoked:
+            warnings.append(
+                "Remote token revoke endpoint did not confirm revocation; local metadata will still be removed."
+            )
+    elif args.revoke:
+        warnings.append(
+            "Remote token revoke is not implemented yet; remove local metadata and revoke from browser.lexmount.cn if needed."
+        )
+
+    if path.exists():
+        if not path.is_file():
+            _failure(
+                command,
+                "invalid_credentials_path",
+                "Credentials path exists but is not a file.",
+                exit_code=1,
+                credentials_file=str(path),
+            )
+        try:
+            path.unlink()
+        except OSError as exc:
+            _failure(
+                command,
+                "credential_delete_error",
+                str(exc),
+                exit_code=1,
+                credentials_file=str(path),
+            )
+        deleted = True
+
+    present_after = path.exists()
+    _success(
+        command,
+        credentials_file=str(path),
+        path_source=path_source,
+        token_lifecycle_base_url=token_base_url,
+        token_lifecycle_base_url_source=token_base_url_source,
+        revoke_endpoint=revoke_endpoint,
+        present_before=present_before,
+        present_after=present_after,
+        deleted=deleted,
+        env_unchanged=True,
+        revoke_requested=bool(args.revoke),
+        revoke_available=revoke_available,
+        revoked=revoked,
+        remote_revoke=remote_revoke,
+        warnings=warnings,
+        device_token_before=device_token_before,
+        next_steps=_auth_logout_next_steps(
+            deleted=deleted,
+            revoke_requested=bool(args.revoke),
+            revoke_available=revoke_available,
+            revoked=revoked,
+        ),
     )
 
 
@@ -4554,24 +17397,163 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
         and api_key_source == "env"
         and api_key not in {"<api-key>", "<redacted-api-key>"}
     )
+    unusable_exports = [
+        str(entry["name"]) for entry in entries if not bool(entry.get("usable"))
+    ]
+    next_steps = [
+        "Run the export commands in the local shell."
+        if not unusable_exports
+        else "Replace placeholder or redacted export values before running the commands in the local shell.",
+        f"Run `{AGENT_DOCTOR_COMMAND}` to verify credentials.",
+    ]
     _success(
         command,
         shell=args.shell,
         from_current=args.from_current,
         secrets_revealed=secrets_revealed,
+        usable=not unusable_exports,
+        unusable_exports=unusable_exports,
         warnings=warnings,
         exports=entries,
         commands=commands,
         script="\n".join(commands),
+        next_steps=next_steps,
+    )
+
+
+def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
+    command = "auth.connect-requirements"
+    project_id, project_id_source = _auth_login_project_id(args)
+    scopes = _auth_login_scopes(args)
+    scope_details = _scope_details(scopes)
+    connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+    )
+    device_connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+        response="device_code",
+    )
+    setup_blocks = _auth_login_setup_blocks(project_id)
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
+    _success(
+        command,
+        available=False,
+        reason="browser_site_contract_pending",
+        login_url=LEXMOUNT_CONSOLE_URL,
+        project_id=project_id,
+        project_id_source=project_id_source,
+        requested_scopes=scopes,
+        requested_scope_details=scope_details,
+        requested_expires_in=args.expires_in,
+        connect_from_codex={
+            "available": False,
+            "url": connect_url,
+            "device_code_url": device_connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": scopes,
+            "requested_scope_details": scope_details,
+            "requested_expires_in": args.expires_in,
+            "supported_response_modes": [
+                "env",
+                "device_code",
+            ],
+            "required_query_parameters": [
+                "source=browser-cli",
+                "intent=agent-browser-control",
+                "response=env|device_code",
+                "expires_in=<duration>",
+                "project_id=<project-id>",
+                "scope=<scope> (repeatable)",
+            ],
+            "expected_outputs": [
+                "Project ID for the selected project",
+                "Scoped API key or short-lived local token",
+                "Copyable shell export commands",
+                f"`{AGENT_DOCTOR_COMMAND}` verification guidance",
+                "Revoke and expiration details",
+            ],
+            "setup_blocks": setup_blocks,
+            "site_capability_status": site_capability_status,
+            "site_capabilities": site_capabilities,
+            "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+            "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
+        },
+        setup_blocks=setup_blocks,
+        required_browser_site_support=_connect_from_codex_browser_site_requirements(),
+        required_device_code_endpoints=_device_code_required_endpoints(),
+        required_device_code_support=_device_code_required_browser_site_support(),
+        required_api_contract=_connect_from_codex_required_api_contract(),
+        required_token_lifecycle=_connect_from_codex_required_token_lifecycle(),
+        required_runtime_auth=_connect_from_codex_required_runtime_auth(),
+        verification={
+            "status_command": "browser-cli auth status",
+            "login_command": "browser-cli auth login",
+            "device_code_command": "browser-cli auth login --device-code",
+            "doctor_command": AGENT_DOCTOR_COMMAND,
+            "workflow_command": (
+                "browser-cli commands --workflow connect_from_codex_site_requirements"
+            ),
+            "success_condition": (
+                "auth.status configured is true and doctor ok is true after the "
+                "user configures credentials"
+            ),
+        },
+        agent_commands=[
+            "browser-cli auth connect-requirements",
+            "browser-cli auth login",
+            "browser-cli auth login --device-code",
+            "browser-cli auth status",
+            AGENT_DOCTOR_COMMAND,
+        ],
+        secret_policy={
+            "contains_secret_values": False,
+            "do_not_paste_in_chat": [
+                "LEXMOUNT_API_KEY",
+                "access_token",
+                "refresh_token",
+                "full direct connect URLs containing api_key",
+            ],
+            "safe_to_share": [
+                "browser-cli auth connect-requirements output",
+                "browser-cli auth status output",
+                "browser-cli doctor output with default masking",
+            ],
+        },
         next_steps=[
-            "Run the export commands in the local shell.",
-            "Run `browser-cli doctor` to verify credentials.",
+            "Use connect_from_codex.url for manual scoped API-key setup.",
+            "Use connect_from_codex.device_code_url when implementing device-code approval.",
+            "Render setup_blocks as copyable install, local env, and verification sections.",
+            "Implement required_api_contract and required_token_lifecycle before marking device-code or scoped-token login available.",
         ],
     )
 
 
 def cmd_auth_login(args: argparse.Namespace) -> None:
     command = "auth.login"
+    if getattr(args, "device_code_timeout_seconds", 0) < 0:
+        _failure(
+            command,
+            "argument_error",
+            "--device-code-timeout-seconds must be zero or greater.",
+            exit_code=2,
+            device_code_timeout_seconds=args.device_code_timeout_seconds,
+        )
+    if getattr(args, "device_code_http_timeout_seconds", 0) <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--device-code-http-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            device_code_http_timeout_seconds=args.device_code_http_timeout_seconds,
+        )
     project_id, project_id_source = _auth_login_project_id(args)
     scopes = _auth_login_scopes(args)
     connect_url = _connect_from_codex_url(
@@ -4579,33 +17561,240 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         scopes=scopes,
         expires_in=args.expires_in,
     )
+    device_connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=args.expires_in,
+        response="device_code",
+    )
+    handoff = _auth_login_handoff(
+        connect_url=connect_url,
+        project_id=project_id,
+        project_id_source=project_id_source,
+        scopes=scopes,
+        expires_in=args.expires_in,
+    )
+    site_capabilities = _connect_from_codex_site_capabilities()
+    site_capability_status = _connect_from_codex_site_capability_status(
+        site_capabilities
+    )
+    scope_details = _scope_details(scopes)
+    setup_blocks = handoff["setup_blocks"]
+    device_code_base_url, _device_code_base_url_source = _device_code_base_url(
+        args.device_code_base_url
+    )
+    open_url = device_connect_url if args.device_code else connect_url
+    open_result: dict[str, Any] = {
+        "requested": bool(args.open),
+        "url": open_url,
+        "opened": False,
+    }
+    warnings: list[str] = []
+    if args.open and not (args.device_code and device_code_base_url):
+        try:
+            open_result["opened"] = bool(webbrowser.open(open_url))
+        except Exception as exc:
+            open_result["error"] = _mask_sensitive_text(str(exc))
+            warnings.append(
+                "Failed to open the Connect from Codex URL automatically; copy the URL manually."
+            )
+        else:
+            if not open_result["opened"]:
+                warnings.append(
+                    "The system browser did not confirm opening the Connect from Codex URL; copy the URL manually."
+                )
+    if args.device_code:
+        if device_code_base_url:
+            device_attempt = _run_device_code_login(
+                args=args,
+                project_id=project_id,
+                project_id_source=project_id_source,
+                scopes=scopes,
+                scope_details=scope_details,
+                expires_in=args.expires_in,
+                connect_url=device_connect_url,
+            )
+            warnings.extend(device_attempt.get("warnings", []))
+            device_code = device_attempt.get("device_code", {})
+            authenticated = bool(device_attempt.get("authenticated"))
+            credentials_saved = bool(device_attempt.get("credentials_saved"))
+            device_code_flow_available = bool(device_attempt.get("available"))
+            if not device_code_flow_available:
+                next_steps = [
+                    "Device-code endpoints are not available or did not return the expected JSON contract.",
+                    "Use the manual_env fallback handoff, or configure browser.lexmount.cn device-code endpoints.",
+                    f"Run `{AGENT_DOCTOR_COMMAND}` after credentials are usable.",
+                ]
+            elif authenticated:
+                next_steps = [
+                    "Run `browser-cli auth status` to inspect saved local device-token metadata.",
+                    "Use env API-key credentials for browser actions until bearer-token runtime auth lands.",
+                    f"Run `{AGENT_DOCTOR_COMMAND}` after credentials are usable.",
+                ]
+            else:
+                next_steps = [
+                    "Open verification_uri_complete and approve the device if polling was not requested.",
+                    "Rerun with `browser-cli auth login --device-code --wait` after approving, or use the manual_env fallback.",
+                    f"Run `{AGENT_DOCTOR_COMMAND}` after credentials are usable.",
+                ]
+            _success(
+                command,
+                flow="device_code",
+                selected_flow="device_code",
+                available=device_code_flow_available,
+                manual_env_available=True,
+                device_code_available=device_code_flow_available,
+                authenticated=authenticated,
+                credentials_saved=credentials_saved,
+                reason=device_attempt.get("reason"),
+                fallback_flow=None if authenticated else "manual_env",
+                fallback_handoff=None if authenticated else handoff,
+                handoff=handoff,
+                flows=[
+                    {
+                        "name": "device_code",
+                        "available": device_code_flow_available,
+                        "reason": device_attempt.get("reason"),
+                        "description": "Browser approval flow for scoped local credentials.",
+                    },
+                    {
+                        "name": "manual_env",
+                        "available": True,
+                        "description": "User copies Project ID and API key from browser.lexmount.cn into the local shell.",
+                    },
+                ],
+                device_code=device_code,
+                polling=device_attempt.get("polling"),
+                credentials=device_attempt.get("credentials"),
+                connect_from_codex={
+                    "response": "device_code",
+                    "url": device_connect_url,
+                    "setup_blocks": setup_blocks,
+                    "requested_scope_details": scope_details,
+                    "site_capability_status": site_capability_status,
+                    "site_capabilities": site_capabilities,
+                    "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+                    "verification_uri": device_code.get("verification_uri"),
+                    "verification_uri_complete": device_code.get(
+                        "verification_uri_complete"
+                    ),
+                },
+                open_result=device_attempt.get("open_result", open_result),
+                warnings=warnings,
+                secret_policy={
+                    "contains_secret_values": False,
+                    "credentials_file_contains_secrets": credentials_saved,
+                    "do_not_paste_in_chat": [
+                        "access_token",
+                        "refresh_token",
+                        "raw device_code",
+                    ],
+                },
+                next_steps=next_steps,
+            )
+
+        warnings.append(
+            "Device-code login is not available yet; use the manual_env fallback until browser.lexmount.cn exposes device-code endpoints."
+        )
+        _success(
+            command,
+            flow="device_code",
+            selected_flow="device_code",
+            available=False,
+            manual_env_available=True,
+            login_url=LEXMOUNT_CONSOLE_URL,
+            device_code_available=False,
+            reason="browser_site_endpoint_missing",
+            device_code={
+                "available": False,
+                "reason": "browser_site_endpoint_missing",
+                "verification_uri": LEXMOUNT_CODEX_CONNECT_URL,
+                "connect_from_codex_url": device_connect_url,
+                "project_id": project_id,
+                "project_id_source": project_id_source,
+                "requested_scopes": scopes,
+                "requested_scope_details": scope_details,
+                "requested_expires_in": args.expires_in,
+                "required_endpoints": _device_code_required_endpoints(),
+                "required_browser_site_support": _device_code_required_browser_site_support(),
+            },
+            handoff=handoff,
+            open_result=open_result,
+            warnings=warnings,
+            fallback_flow="manual_env",
+            fallback_handoff=handoff,
+            connect_from_codex={
+                "available": False,
+                "url": device_connect_url,
+                "project_id": project_id,
+                "project_id_source": project_id_source,
+                "requested_scopes": scopes,
+                "requested_scope_details": scope_details,
+                "requested_expires_in": args.expires_in,
+                "response": "device_code",
+                "setup_blocks": setup_blocks,
+                "site_capability_status": site_capability_status,
+                "site_capabilities": site_capabilities,
+                "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+                "fallback": "Use the manual_env steps until browser.lexmount.cn supports device-code login.",
+            },
+            flows=[
+                {
+                    "name": "device_code",
+                    "available": False,
+                    "reason": "browser_site_endpoint_missing",
+                    "description": "Planned browser approval flow for scoped local credentials.",
+                },
+                {
+                    "name": "manual_env",
+                    "available": True,
+                    "description": "User copies Project ID and API key from browser.lexmount.cn into the local shell.",
+                },
+            ],
+            message=(
+                "Device-code login is not available yet. Use the returned "
+                "manual_env fallback handoff until browser.lexmount.cn exposes "
+                "device-code endpoints."
+            ),
+            next_steps=[
+                "Use `browser-cli auth login` or `browser-cli auth login --open` for the manual Connect from Codex handoff today.",
+                "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
+                f"Run `{AGENT_DOCTOR_COMMAND}` to verify the setup.",
+                "Implement browser.lexmount.cn device-code endpoints before treating this flow as available.",
+            ],
+        )
+        return
     _success(
         command,
         flow="manual_env",
+        selected_flow="manual_env",
+        available=True,
+        manual_env_available=True,
         login_url=LEXMOUNT_CONSOLE_URL,
         device_code_available=False,
+        handoff=handoff,
+        open_result=open_result,
+        warnings=warnings,
         connect_from_codex={
             "available": False,
             "url": connect_url,
             "project_id": project_id,
             "project_id_source": project_id_source,
             "requested_scopes": scopes,
+            "requested_scope_details": scope_details,
             "requested_expires_in": args.expires_in,
+            "setup_blocks": setup_blocks,
+            "site_capability_status": site_capability_status,
+            "site_capabilities": site_capabilities,
+            "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "expected_outputs": [
                 "Project ID for the selected project",
                 "Scoped API key or short-lived local token",
                 "Copyable shell export commands",
-                "`browser-cli doctor` verification guidance",
+                f"`{AGENT_DOCTOR_COMMAND}` verification guidance",
                 "Revoke and expiration details",
             ],
-            "browser_site_requirements": [
-                "Implement /connect/codex on browser.lexmount.cn.",
-                "Accept optional project_id, repeated scope, and expires_in query parameters.",
-                "Show the selected Project ID before issuing credentials.",
-                "Issue scoped credentials for browser sessions, contexts, and actions.",
-                "Offer copyable env/install commands without exposing secrets in chat.",
-                "Support revoke, expiration, and device-code or OAuth approval.",
-            ],
+            "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
             "fallback": "Use the manual_env steps until browser.lexmount.cn supports this flow.",
         },
         flows=[
@@ -4632,12 +17821,12 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "Create or copy an API key intended for local agent use.",
             "Run `browser-cli auth export-env` for safe shell export templates.",
             "Set LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID in the local shell.",
-            "Run `browser-cli doctor` to verify the setup.",
+            f"Run `{AGENT_DOCTOR_COMMAND}` to verify the setup.",
         ],
         commands=[
             "browser-cli auth export-env",
             "browser-cli auth status",
-            "browser-cli doctor",
+            AGENT_DOCTOR_COMMAND,
         ],
         browser_site_recommendations=[
             "Add /connect/codex with Project ID display and query parameters for project_id, scope, and expires_in.",
@@ -4663,10 +17852,3407 @@ def cmd_direct_url(args: argparse.Namespace) -> None:
     )
 
 
+def _agent_reference_payload(
+    reference_id: str,
+    reference: dict[str, Any],
+) -> dict[str, Any]:
+    payload = {"id": reference_id}
+    payload.update(reference)
+    return payload
+
+
+def cmd_reference_list(args: argparse.Namespace) -> None:
+    command = "reference.list"
+    references = _agent_references()
+    if args.names_only:
+        _success(
+            command,
+            reference_count=len(references),
+            references=sorted(references),
+        )
+    _success(
+        command,
+        reference_count=len(references),
+        references={
+            reference_id: _agent_reference_payload(reference_id, reference)
+            for reference_id, reference in sorted(references.items())
+        },
+    )
+
+
+def cmd_reference_get(args: argparse.Namespace) -> None:
+    command = "reference.get"
+    reference_id = str(args.reference_id)
+    references = _agent_references()
+    reference = references.get(reference_id)
+    available_references = sorted(references)
+    if reference is None:
+        _failure(
+            command,
+            "unknown_reference",
+            f"Unknown agent reference: {reference_id}",
+            reference_id=reference_id,
+            available_references=available_references,
+            fix=_doctor_fix(
+                "inspect_available_agent_references",
+                commands=[
+                    "browser-cli reference list",
+                    "browser-cli reference list --names-only",
+                ],
+                guidance=[
+                    "Choose one of available_references, then rerun reference get with that --id value."
+                ],
+            ),
+        )
+
+    reference_payload = _agent_reference_payload(reference_id, reference)
+    if args.metadata_only:
+        _success(
+            command,
+            reference_id=reference_id,
+            reference=reference_payload,
+            content_included=False,
+        )
+
+    try:
+        content = _read_agent_reference_content(reference_id)
+    except Exception as exc:
+        _failure(
+            command,
+            "reference_unavailable",
+            f"Agent reference could not be loaded: {reference_id}",
+            reference_id=reference_id,
+            package_resource=reference.get("package_resource"),
+            error_class=exc.__class__.__name__,
+            fix=_doctor_fix(
+                "reinstall_browser_cli_reference_resources",
+                commands=[
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    "browser-cli reference list",
+                ],
+                guidance=[
+                    "The installed package should include packaged agent reference markdown files."
+                ],
+            ),
+        )
+
+    _success(
+        command,
+        reference_id=reference_id,
+        reference=reference_payload,
+        content_format=reference.get("format"),
+        content_length=len(content),
+        content_included=True,
+        content=content,
+    )
+
+
+def _agent_example_payload(
+    example_id: str,
+    example: dict[str, Any],
+) -> dict[str, Any]:
+    payload = {"id": example_id}
+    payload.update(example)
+    return payload
+
+
+def cmd_example_list(args: argparse.Namespace) -> None:
+    command = "example.list"
+    examples = _agent_examples()
+    if args.names_only:
+        _success(
+            command,
+            example_count=len(examples),
+            examples=sorted(examples),
+        )
+    _success(
+        command,
+        example_count=len(examples),
+        examples={
+            example_id: _agent_example_payload(example_id, example)
+            for example_id, example in sorted(examples.items())
+        },
+    )
+
+
+def cmd_example_get(args: argparse.Namespace) -> None:
+    command = "example.get"
+    example_id = str(args.example_id)
+    examples = _agent_examples()
+    example = examples.get(example_id)
+    available_examples = sorted(examples)
+    if example is None:
+        _failure(
+            command,
+            "unknown_example",
+            f"Unknown agent example: {example_id}",
+            example_id=example_id,
+            available_examples=available_examples,
+            fix=_doctor_fix(
+                "inspect_available_agent_examples",
+                commands=[
+                    "browser-cli example list",
+                    "browser-cli example list --names-only",
+                ],
+                guidance=[
+                    "Choose one of available_examples, then rerun example get with that --id value."
+                ],
+            ),
+        )
+
+    example_payload = _agent_example_payload(example_id, example)
+    if args.metadata_only:
+        _success(
+            command,
+            example_id=example_id,
+            example=example_payload,
+            content_included=False,
+        )
+
+    try:
+        content = _read_agent_example_content(example_id)
+    except Exception as exc:
+        _failure(
+            command,
+            "example_unavailable",
+            f"Agent example could not be loaded: {example_id}",
+            example_id=example_id,
+            package_resource=example.get("package_resource"),
+            error_class=exc.__class__.__name__,
+            fix=_doctor_fix(
+                "reinstall_browser_cli_example_resources",
+                commands=[
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    "browser-cli example list",
+                ],
+                guidance=[
+                    "The installed package should include packaged agent example files."
+                ],
+            ),
+        )
+
+    _success(
+        command,
+        example_id=example_id,
+        example=example_payload,
+        content_format=example.get("format"),
+        content_length=len(content),
+        content_included=True,
+        content=content,
+    )
+
+
+def cmd_commands(args: argparse.Namespace) -> None:
+    command = "commands"
+    catalog = _command_catalog()
+    commands = catalog["commands"]
+    if args.group:
+        available_groups = [str(group) for group in catalog["groups"]]
+        if str(args.group) not in available_groups:
+            _failure(
+                command,
+                "unknown_group",
+                f"Unknown command group: {args.group}",
+                group=args.group,
+                available_groups=available_groups,
+                fix=_doctor_fix(
+                    "inspect_available_command_groups",
+                    commands=[
+                        "browser-cli commands",
+                        "browser-cli commands --names-only",
+                    ],
+                    guidance=[
+                        "Choose one of available_groups, then rerun commands with that --group value."
+                    ],
+                ),
+            )
+        commands = [
+            item for item in commands if str(item.get("group")) == str(args.group)
+        ]
+        catalog["groups"] = _dedupe_preserving_order(
+            [str(item["group"]) for item in commands]
+        )
+    catalog["commands"] = commands
+    catalog["command_count"] = len(commands)
+
+    if args.workflow:
+        workflow = catalog["agent_workflows"].get(args.workflow)
+        if workflow is None:
+            _failure(
+                command,
+                "unknown_workflow",
+                f"Unknown agent workflow: {args.workflow}",
+                workflow=args.workflow,
+                available_workflows=sorted(catalog["agent_workflows"]),
+                fix=_doctor_fix(
+                    "inspect_available_agent_workflows",
+                    commands=["browser-cli commands --workflows-only"],
+                    guidance=[
+                        "Choose one of available_workflows, then rerun commands with that --workflow value."
+                    ],
+                ),
+            )
+        _success(
+            command,
+            schema_version=catalog["schema_version"],
+            group=args.group,
+            workflow_id=args.workflow,
+            workflow=workflow,
+            agent_references=catalog["agent_references"],
+            agent_examples=catalog["agent_examples"],
+            agent_entrypoints=catalog["agent_entrypoints"],
+            json_output=catalog["json_output"],
+            secret_policy=catalog["secret_policy"],
+        )
+
+    if args.workflows_only:
+        _success(
+            command,
+            schema_version=catalog["schema_version"],
+            group=args.group,
+            workflow_count=len(catalog["agent_workflows"]),
+            agent_workflows=catalog["agent_workflows"],
+            agent_references=catalog["agent_references"],
+            agent_examples=catalog["agent_examples"],
+            agent_entrypoints=catalog["agent_entrypoints"],
+            json_output=catalog["json_output"],
+            secret_policy=catalog["secret_policy"],
+        )
+
+    if args.names_only:
+        _success(
+            command,
+            schema_version=catalog["schema_version"],
+            group=args.group,
+            command_count=len(commands),
+            commands=[str(item["name"]) for item in commands],
+        )
+
+    _success(command, group=args.group, **catalog)
+
+
+def cmd_version(args: argparse.Namespace) -> None:
+    cli_version, version_source = _browser_cli_version()
+    runtime_version = _package_version("lex-browser-runtime")
+    _success(
+        "version",
+        package="browser-cli",
+        version=cli_version,
+        version_source=version_source,
+        lex_browser_runtime_version=runtime_version or "unknown",
+        lex_browser_runtime_version_known=runtime_version is not None,
+        python_version=sys.version.split()[0],
+        executable=sys.executable,
+    )
+
+
+CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill")
+
+EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "accessibility-snapshot": tuple(),
+    "blur": ("selector",),
+    "blur-role": ("role",),
+    "bounding-box": ("selector",),
+    "bounding-box-role": ("role",),
+    "check": ("selector",),
+    "check-label": ("label",),
+    "check-role": ("role",),
+    "clear": ("selector",),
+    "clear-role": ("role",),
+    "click-index": ("selector", "index"),
+    "click-role": ("role",),
+    "click-text": ("text",),
+    "cookie-clear": tuple(),
+    "cookie-delete": ("name",),
+    "cookie-get": tuple(),
+    "cookie-set": ("name", "value"),
+    "count": ("selector",),
+    "dialog-snapshot": tuple(),
+    "dispatch-event": ("selector", "event"),
+    "double-click": ("selector",),
+    "double-click-role": ("role",),
+    "exists": ("selector",),
+    "exists-role": ("role",),
+    "fill-label": ("label", "text"),
+    "fill-role": ("role", "text"),
+    "focus": ("selector",),
+    "focus-role": ("role",),
+    "frame-snapshot": tuple(),
+    "form-snapshot": tuple(),
+    "get-attribute": ("selector", "name"),
+    "get-attribute-role": ("role", "attribute"),
+    "get-text": ("selector",),
+    "get-text-role": ("role",),
+    "get-value": ("selector",),
+    "get-value-role": ("role",),
+    "hover": ("selector",),
+    "hover-role": ("role",),
+    "inspect": ("selector",),
+    "interactive-only-snapshot": tuple(),
+    "interactive-snapshot": tuple(),
+    "link-snapshot": tuple(),
+    "list-snapshot": tuple(),
+    "outline-snapshot": tuple(),
+    "page-info": tuple(),
+    "performance-snapshot": tuple(),
+    "press": ("selector", "key"),
+    "press-key": ("key",),
+    "press-role": ("role", "key"),
+    "query": ("selector",),
+    "right-click": ("selector",),
+    "right-click-role": ("role",),
+    "scroll": tuple(),
+    "scroll-into-view": ("selector",),
+    "scroll-into-view-role": ("role",),
+    "select-label": ("label",),
+    "select-option": ("selector", "value"),
+    "select-role": ("role",),
+    "set-file-input": ("selector", "file"),
+    "set-value": ("selector", "value"),
+    "storage-clear": tuple(),
+    "storage-get": tuple(),
+    "storage-remove": ("key",),
+    "storage-set": ("key", "value"),
+    "submit": ("selector",),
+    "table-snapshot": tuple(),
+    "text-snapshot": tuple(),
+    "uncheck": ("selector",),
+    "uncheck-label": ("label",),
+    "uncheck-role": ("role",),
+    "wait-attribute": ("selector", "name"),
+    "wait-attribute-role": ("role", "attribute"),
+    "wait-count": ("selector", "count"),
+    "wait-cookie": ("name",),
+    "wait-dialog": tuple(),
+    "wait-frame": tuple(),
+    "wait-load-state": tuple(),
+    "wait-network-idle": tuple(),
+    "wait-role": ("role",),
+    "wait-state": ("selector", "state"),
+    "wait-state-role": ("role", "state"),
+    "wait-title": ("title",),
+    "wait-url": ("url",),
+    "wait-value": ("selector", "value"),
+    "wait-value-role": ("role", "value"),
+    "wait-storage": ("key",),
+    "wait-text": ("text",),
+}
+BROWSER_CLI_SUPPORTED_CASE_ACTIONS = frozenset(
+    set(SUPPORTED_CASE_ACTIONS) | set(EXTENDED_CASE_REQUIRED_FIELDS)
+)
+BROWSER_CLI_REQUIRED_CASE_FIELDS: dict[str, tuple[str, ...]] = {
+    **{action: tuple(fields) for action, fields in REQUIRED_CASE_FIELDS.items()},
+    **EXTENDED_CASE_REQUIRED_FIELDS,
+}
+BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
+    "cookie-set": {"same_site": frozenset({"lax", "strict", "none"})},
+    "storage-clear": {"area": frozenset({"local", "session"})},
+    "storage-get": {"area": frozenset({"local", "session"})},
+    "storage-remove": {"area": frozenset({"local", "session"})},
+    "storage-set": {"area": frozenset({"local", "session"})},
+    "wait-cookie": {
+        "state": frozenset({"present", "absent"}),
+        "match": frozenset({"contains", "exact", "regex"}),
+    },
+    "wait-dialog": {"match": frozenset({"contains", "exact", "regex"})},
+    "dispatch-event": {"event": frozenset(COMMON_DOM_EVENT_NAMES)},
+    "wait-frame": {
+        "url_match": frozenset({"contains", "exact", "regex"}),
+        "text_match": frozenset({"contains", "exact", "regex"}),
+    },
+    "wait-storage": {
+        "area": frozenset({"local", "session"}),
+        "state": frozenset({"present", "absent"}),
+        "match": frozenset({"contains", "exact", "regex"}),
+    },
+}
+
+
+def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    steps = spec.get("steps")
+    if not isinstance(steps, list) or not steps:
+        errors.append("steps must be a non-empty array")
+        return errors
+
+    for index, step in enumerate(steps):
+        if not isinstance(step, dict):
+            errors.append(f"steps[{index}] must be an object")
+            continue
+        action = step.get("action")
+        if action not in BROWSER_CLI_SUPPORTED_CASE_ACTIONS:
+            errors.append(
+                "steps[{}].action must be one of {}".format(
+                    index, sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS)
+                )
+            )
+            continue
+        for field in BROWSER_CLI_REQUIRED_CASE_FIELDS[str(action)]:
+            if field not in step:
+                errors.append(f"steps[{index}] missing required field '{field}'")
+        for field, choices in BROWSER_CLI_CASE_FIELD_CHOICES.get(
+            str(action), {}
+        ).items():
+            if field not in step:
+                continue
+            allow_list = str(action) == "dispatch-event" and field == "event"
+            raw_values = (
+                step[field]
+                if allow_list and isinstance(step[field], list)
+                else [step[field]]
+            )
+            invalid_values = [
+                value
+                for value in raw_values
+                if not isinstance(value, str) or value not in choices
+            ]
+            if invalid_values:
+                choices_text = "', '".join(sorted(choices))
+                errors.append(f"steps[{index}].{field} must be one of '{choices_text}'")
+        if "expect" in step:
+            expect = step["expect"]
+            if not isinstance(expect, dict):
+                errors.append(f"steps[{index}].expect must be an object")
+            else:
+                for path in expect:
+                    if not isinstance(path, str) or not path:
+                        errors.append(
+                            f"steps[{index}].expect keys must be non-empty strings"
+                        )
+                        break
+        if action in {"select-label", "select-role"}:
+            has_value = "value" in step
+            has_option_label = "option_label" in step
+            if not has_value and not has_option_label:
+                errors.append(
+                    f"steps[{index}] missing one of 'value' or 'option_label'"
+                )
+            if has_value and has_option_label:
+                errors.append(
+                    f"steps[{index}] must not set both 'value' and 'option_label'"
+                )
+
+    if "target" in spec and not isinstance(spec["target"], dict):
+        errors.append("target must be an object when present")
+    if "session" in spec and not isinstance(spec["session"], dict):
+        errors.append("session must be an object when present")
+    return errors
+
+
+def validate_browser_cli_case_file(path: str | Path) -> CaseValidationResult:
+    spec = load_case_file(path)
+    errors = _validate_browser_cli_case_spec(spec)
+    steps = spec.get("steps", [])
+    return CaseValidationResult(
+        file=str(path),
+        valid=not errors,
+        errors=errors,
+        step_count=len(steps) if isinstance(steps, list) else 0,
+    )
+
+
+def _case_artifact_stem(name: str) -> str:
+    stem = re.sub(r"[^a-zA-Z0-9_.-]+", "-", name.strip().lower())
+    stem = re.sub(r"-+", "-", stem).strip("-._")
+    return stem or "browser-case"
+
+
+def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
+    template = str(args.template)
+    name = args.name or template
+    browser_mode = args.browser_mode
+
+    if template == "page-inspection":
+        url = args.url or "https://example.com"
+        selector = args.selector or "body"
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                f"Create a temporary browser session, inspect {url}, "
+                "and save snapshot/screenshot artifacts."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-selector",
+                    "selector": selector,
+                    "state": "visible",
+                },
+                {
+                    "action": "snapshot",
+                    "max_chars": args.max_chars,
+                    "output": f"{stem}-snapshot.json",
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}-page.png",
+                    "full_page": True,
+                },
+            ],
+        }
+
+    if template == "form-fill":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny form fixture, then fill, submit, and verify it "
+                "with first-class browser-cli form actions."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <form id="search-form">
+      <label for="q">Query</label>
+      <input id="q" name="q" />
+      <button type="submit">Submit</button>
+      <output id="result" aria-live="polite"></output>
+    </form>
+  `;
+  document.querySelector("#search-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    document.querySelector("#result").textContent =
+      "Submitted: " + document.querySelector("#q").value;
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "form-snapshot",
+                    "selector": "form",
+                    "max_nodes": 20,
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Query",
+                    "text": args.text,
+                },
+                {
+                    "action": "click-role",
+                    "role": "button",
+                    "name": "Submit",
+                },
+                {
+                    "action": "wait-text",
+                    "text": f"Submitted: {args.text}",
+                    "selector": "#result",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-value-role",
+                    "role": "textbox",
+                    "name": "Query",
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}-filled.png",
+                },
+            ],
+        }
+
+    raise AssertionError(f"unhandled case scaffold template: {template}")
+
+
+def _serialize_case_spec(
+    *,
+    command: str,
+    spec: dict[str, Any],
+    output_format: str,
+) -> str:
+    if output_format == "json":
+        return json.dumps(spec, ensure_ascii=False, indent=2) + "\n"
+    if output_format == "yaml":
+        try:
+            import yaml
+        except Exception as exc:
+            _failure(
+                command,
+                "yaml_unavailable",
+                "PyYAML is required for YAML scaffold output.",
+                exit_code=2,
+                error_class=exc.__class__.__name__,
+                fix=_doctor_fix(
+                    "install_yaml_support",
+                    commands=[
+                        "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    ],
+                ),
+            )
+
+        class CaseYamlDumper(yaml.SafeDumper):
+            pass
+
+        def represent_string(dumper: Any, data: str) -> Any:
+            style = "|" if "\n" in data else None
+            return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+        CaseYamlDumper.add_representer(str, represent_string)
+        return yaml.dump(
+            spec,
+            Dumper=CaseYamlDumper,
+            sort_keys=False,
+            allow_unicode=True,
+        )
+    _failure(
+        command,
+        "argument_error",
+        f"Unsupported scaffold output format: {output_format}",
+        exit_code=2,
+    )
+
+
+def _case_scaffold_next_commands(output: str | None) -> list[str]:
+    case_file = output or "case.yaml"
+    return [
+        f"browser-cli case validate --file {shlex.quote(case_file)}",
+        f"browser-cli case run --file {shlex.quote(case_file)} --close-created-session",
+    ]
+
+
+def _case_action_schema() -> dict[str, Any]:
+    optional_fields: dict[str, list[str]] = {
+        "open-url": ["wait_until", "timeout_ms"],
+        "wait-selector": ["state", "timeout_ms"],
+        "click": ["timeout_ms", "wait_after_ms"],
+        "type": ["timeout_ms", "press_enter"],
+        "screenshot": ["output", "full_page", "timeout_ms"],
+        "eval": [],
+        "snapshot": ["max_chars", "output", "timeout_ms"],
+        "accessibility-snapshot": ["include_hidden", "max_nodes"],
+        "blur": [],
+        "blur-role": ["name", "exact", "case_sensitive"],
+        "bounding-box": [],
+        "bounding-box-role": ["name", "exact", "case_sensitive", "include_hidden"],
+        "check": [],
+        "check-label": ["exact", "case_sensitive"],
+        "check-role": ["name", "exact", "case_sensitive"],
+        "clear": [],
+        "clear-role": ["name", "exact", "case_sensitive"],
+        "click-index": ["include_hidden"],
+        "click-role": ["name", "exact", "case_sensitive"],
+        "click-text": ["selector", "exact", "case_sensitive"],
+        "cookie-clear": ["prefix", "path", "domain"],
+        "cookie-delete": ["path", "domain"],
+        "cookie-get": ["name", "prefix", "max_items"],
+        "cookie-set": ["path", "domain", "max_age", "expires", "same_site", "secure"],
+        "count": ["include_hidden"],
+        "dialog-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_controls",
+            "max_chars",
+        ],
+        "dispatch-event": ["no_bubbles", "cancelable"],
+        "double-click": [],
+        "double-click-role": ["name", "exact", "case_sensitive"],
+        "exists": [],
+        "exists-role": ["name", "exact", "case_sensitive", "include_hidden"],
+        "fill-label": ["exact", "case_sensitive"],
+        "fill-role": ["name", "exact", "case_sensitive"],
+        "focus": ["prevent_scroll"],
+        "focus-role": ["name", "prevent_scroll", "exact", "case_sensitive"],
+        "frame-snapshot": ["selector", "include_hidden", "max_nodes", "max_chars"],
+        "form-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "reveal_sensitive_values",
+        ],
+        "get-attribute": [],
+        "get-attribute-role": ["name", "exact", "case_sensitive", "include_hidden"],
+        "get-text": [],
+        "get-text-role": ["name", "exact", "case_sensitive", "include_hidden"],
+        "get-value": [],
+        "get-value-role": ["name", "exact", "case_sensitive"],
+        "hover": [],
+        "hover-role": ["name", "exact", "case_sensitive"],
+        "inspect": ["include_html", "max_html_chars", "reveal_sensitive_values"],
+        "interactive-only-snapshot": ["include_hidden", "max_nodes"],
+        "interactive-snapshot": ["include_hidden", "max_nodes"],
+        "link-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "include_empty",
+            "same_origin_only",
+        ],
+        "list-snapshot": ["selector", "include_hidden", "max_nodes", "max_items"],
+        "outline-snapshot": ["selector", "include_hidden", "max_nodes"],
+        "page-info": [],
+        "performance-snapshot": [
+            "max_resources",
+            "initiator_type",
+            "min_duration_ms",
+        ],
+        "press": [],
+        "press-key": ["code", "alt_key", "ctrl_key", "meta_key", "shift_key"],
+        "press-role": ["name", "exact", "case_sensitive"],
+        "query": ["include_hidden", "max_nodes"],
+        "right-click": [],
+        "right-click-role": ["name", "exact", "case_sensitive"],
+        "scroll": ["selector", "x", "y", "behavior"],
+        "scroll-into-view": ["block", "inline", "behavior"],
+        "scroll-into-view-role": [
+            "name",
+            "block",
+            "inline",
+            "behavior",
+            "exact",
+            "case_sensitive",
+        ],
+        "select-label": ["value", "option_label", "exact", "case_sensitive"],
+        "select-option": [],
+        "select-role": [
+            "name",
+            "value",
+            "option_label",
+            "exact",
+            "case_sensitive",
+        ],
+        "set-file-input": ["max_bytes", "no_events"],
+        "set-value": ["no_events"],
+        "storage-clear": ["area", "prefix"],
+        "storage-get": ["area", "key", "prefix", "max_items"],
+        "storage-remove": ["area"],
+        "storage-set": ["area"],
+        "submit": ["skip_validation"],
+        "table-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_rows",
+            "max_cells",
+        ],
+        "text-snapshot": ["selector", "include_hidden", "max_nodes", "max_chars"],
+        "uncheck": [],
+        "uncheck-label": ["exact", "case_sensitive"],
+        "uncheck-role": ["name", "exact", "case_sensitive"],
+        "wait-attribute": [
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "case_sensitive",
+        ],
+        "wait-attribute-role": [
+            "name",
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "exact",
+            "case_sensitive",
+            "include_hidden",
+        ],
+        "wait-count": ["comparison", "timeout_ms", "poll_ms", "include_hidden"],
+        "wait-cookie": [
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "case_sensitive",
+        ],
+        "wait-dialog": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_controls",
+            "max_chars",
+            "text",
+            "match",
+            "case_sensitive",
+            "modal_only",
+            "timeout_ms",
+            "poll_ms",
+        ],
+        "wait-frame": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_chars",
+            "url",
+            "url_match",
+            "text",
+            "text_match",
+            "case_sensitive",
+            "readable_only",
+            "same_origin_only",
+            "timeout_ms",
+            "poll_ms",
+        ],
+        "wait-load-state": ["state", "timeout_ms", "poll_ms"],
+        "wait-network-idle": ["idle_ms", "timeout_ms", "poll_ms", "max_inflight"],
+        "wait-role": [
+            "name",
+            "exact",
+            "case_sensitive",
+            "timeout_ms",
+            "poll_ms",
+            "include_hidden",
+        ],
+        "wait-state": ["timeout_ms", "poll_ms"],
+        "wait-state-role": [
+            "name",
+            "timeout_ms",
+            "poll_ms",
+            "exact",
+            "case_sensitive",
+            "include_hidden",
+        ],
+        "wait-title": [
+            "match",
+            "case_sensitive",
+            "timeout_ms",
+            "poll_ms",
+        ],
+        "wait-url": ["match", "timeout_ms", "poll_ms"],
+        "wait-value": ["match", "timeout_ms", "poll_ms", "case_sensitive"],
+        "wait-value-role": [
+            "name",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "exact",
+            "case_sensitive",
+        ],
+        "wait-storage": [
+            "area",
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "case_sensitive",
+        ],
+        "wait-text": [
+            "selector",
+            "state",
+            "exact",
+            "case_sensitive",
+            "timeout_ms",
+            "poll_ms",
+            "include_hidden",
+        ],
+    }
+    required_one_of: dict[str, list[list[str]]] = {
+        "select-label": [["value", "option_label"]],
+        "select-role": [["value", "option_label"]],
+    }
+    result_fields: dict[str, list[str]] = {
+        "open-url": ["url", "title", "status"],
+        "wait-selector": ["selector", "state", "text", "url"],
+        "click": ["selector", "clicked", "url"],
+        "type": ["selector", "typed", "press_enter", "url"],
+        "screenshot": ["path", "full_page", "url"],
+        "eval": ["expression", "value", "url"],
+        "snapshot": ["url", "title", "html", "text"],
+        "accessibility-snapshot": ["nodes", "node_count", "url", "title"],
+        "blur": ["selector", "found", "blurred", "focused", "url"],
+        "blur-role": [
+            "found",
+            "role_found",
+            "blurred",
+            "role",
+            "name",
+            "url",
+        ],
+        "bounding-box": [
+            "selector",
+            "found",
+            "visible",
+            "in_viewport",
+            "bounding_box",
+            "center",
+            "url",
+        ],
+        "bounding-box-role": [
+            "found",
+            "role_found",
+            "visible",
+            "in_viewport",
+            "bounding_box",
+            "center",
+            "role",
+            "name",
+            "url",
+        ],
+        "check": ["selector", "found", "checkable", "checked", "url"],
+        "check-label": [
+            "found",
+            "checkable",
+            "label",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
+            "url",
+        ],
+        "check-role": [
+            "found",
+            "role_found",
+            "checkable",
+            "role",
+            "name",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
+            "url",
+        ],
+        "clear": [
+            "selector",
+            "found",
+            "clearable",
+            "cleared",
+            "value",
+            "value_masked",
+            "url",
+        ],
+        "clear-role": [
+            "found",
+            "role_found",
+            "clearable",
+            "cleared",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "url",
+        ],
+        "click-index": [
+            "selector",
+            "index",
+            "include_hidden",
+            "found",
+            "clicked",
+            "count",
+            "total_count",
+            "visible_count",
+            "element",
+            "candidates",
+            "url",
+        ],
+        "click-role": ["found", "clicked", "role", "name", "element", "url"],
+        "click-text": ["found", "clicked", "text", "element", "url"],
+        "cookie-clear": [
+            "document_cookie_scope",
+            "prefix",
+            "cleared",
+            "cleared_count",
+            "matched_count",
+            "remaining_count",
+            "url",
+        ],
+        "cookie-delete": [
+            "document_cookie_scope",
+            "name",
+            "deleted",
+            "had_cookie",
+            "found",
+            "previous_value",
+            "path",
+            "domain",
+            "url",
+        ],
+        "cookie-get": [
+            "document_cookie_scope",
+            "name",
+            "prefix",
+            "found",
+            "value",
+            "raw_value",
+            "count",
+            "item_count",
+            "items",
+            "url",
+        ],
+        "cookie-set": [
+            "document_cookie_scope",
+            "name",
+            "set",
+            "found",
+            "previous_value",
+            "value",
+            "path",
+            "domain",
+            "max_age",
+            "same_site",
+            "secure",
+            "url",
+        ],
+        "count": ["selector", "count", "total_count", "visible_count", "url"],
+        "dialog-snapshot": [
+            "dialogs",
+            "dialog_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "dispatch-event": [
+            "selector",
+            "found",
+            "dispatched",
+            "requested_events",
+            "events",
+            "focused",
+            "url",
+        ],
+        "double-click": ["found", "double_clicked", "events", "element", "url"],
+        "double-click-role": [
+            "found",
+            "role_found",
+            "double_clicked",
+            "role",
+            "name",
+            "events",
+            "element",
+            "url",
+        ],
+        "exists": ["selector", "exists", "url"],
+        "exists-role": [
+            "found",
+            "exists",
+            "role_found",
+            "role",
+            "name",
+            "url",
+        ],
+        "fill-label": [
+            "found",
+            "filled",
+            "label",
+            "value",
+            "value_masked",
+            "element",
+            "url",
+        ],
+        "fill-role": [
+            "found",
+            "filled",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "element",
+            "url",
+        ],
+        "focus": ["selector", "found", "focused", "prevent_scroll", "url"],
+        "focus-role": [
+            "found",
+            "role_found",
+            "focused",
+            "prevent_scroll",
+            "role",
+            "name",
+            "url",
+        ],
+        "frame-snapshot": [
+            "frames",
+            "frame_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "form-snapshot": ["fields", "field_count", "node_count", "url", "title"],
+        "get-attribute": [
+            "selector",
+            "found",
+            "name",
+            "value",
+            "attribute_value",
+            "property_value",
+            "url",
+        ],
+        "get-attribute-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "attribute",
+            "value",
+            "attribute_value",
+            "url",
+        ],
+        "get-text": ["selector", "found", "text", "url"],
+        "get-text-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "text",
+            "text_length",
+            "url",
+        ],
+        "get-value": [
+            "selector",
+            "found",
+            "readable",
+            "value",
+            "value_masked",
+            "url",
+        ],
+        "get-value-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "url",
+        ],
+        "hover": ["selector", "found", "hovered", "url"],
+        "hover-role": [
+            "found",
+            "role_found",
+            "hovered",
+            "role",
+            "name",
+            "url",
+        ],
+        "inspect": [
+            "selector",
+            "found",
+            "attributes",
+            "state",
+            "value",
+            "value_masked",
+            "bounding_box",
+            "html_truncated",
+            "url",
+        ],
+        "interactive-only-snapshot": ["nodes", "node_count", "url", "title"],
+        "interactive-snapshot": ["nodes", "node_count", "url", "title"],
+        "link-snapshot": [
+            "links",
+            "link_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "list-snapshot": [
+            "lists",
+            "list_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "outline-snapshot": [
+            "headings",
+            "landmarks",
+            "outline_count",
+            "heading_count",
+            "landmark_count",
+            "url",
+            "title",
+        ],
+        "page-info": [
+            "url",
+            "title",
+            "ready_state",
+            "visibility_state",
+            "viewport",
+            "scroll",
+        ],
+        "performance-snapshot": [
+            "navigation",
+            "resources",
+            "resource_count",
+            "total_count",
+            "initiator_types",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "press": [
+            "selector",
+            "found",
+            "focused",
+            "key",
+            "pressed",
+            "keydown_accepted",
+            "url",
+        ],
+        "press-key": [
+            "key",
+            "code",
+            "pressed",
+            "target",
+            "target_info",
+            "modifiers",
+            "events",
+            "keydown_accepted",
+            "url",
+        ],
+        "press-role": [
+            "found",
+            "role_found",
+            "focused",
+            "key",
+            "pressed",
+            "keydown_accepted",
+            "role",
+            "name",
+            "url",
+        ],
+        "query": [
+            "selector",
+            "count",
+            "total_count",
+            "visible_count",
+            "node_count",
+            "truncated",
+            "nodes",
+            "url",
+        ],
+        "right-click": [
+            "found",
+            "right_clicked",
+            "context_menu",
+            "events",
+            "element",
+            "url",
+        ],
+        "right-click-role": [
+            "found",
+            "role_found",
+            "right_clicked",
+            "context_menu",
+            "role",
+            "name",
+            "events",
+            "element",
+            "url",
+        ],
+        "scroll": [
+            "selector",
+            "found",
+            "scrolled",
+            "x",
+            "y",
+            "scroll_x",
+            "scroll_y",
+            "url",
+        ],
+        "scroll-into-view": [
+            "selector",
+            "found",
+            "scrolled",
+            "block",
+            "inline",
+            "behavior",
+            "in_viewport",
+            "url",
+        ],
+        "scroll-into-view-role": [
+            "found",
+            "role_found",
+            "scrolled",
+            "role",
+            "name",
+            "block",
+            "inline",
+            "behavior",
+            "in_viewport",
+            "url",
+        ],
+        "select-label": [
+            "found",
+            "selectable",
+            "selected",
+            "label",
+            "requested_value",
+            "requested_option_label",
+            "value",
+            "option_label",
+            "changed",
+            "url",
+        ],
+        "select-option": [
+            "selector",
+            "found",
+            "selected",
+            "value",
+            "requested_value",
+            "previous_value",
+            "url",
+        ],
+        "select-role": [
+            "found",
+            "role_found",
+            "selectable",
+            "selected",
+            "role",
+            "name",
+            "requested_value",
+            "requested_option_label",
+            "value",
+            "option_label",
+            "changed",
+            "url",
+        ],
+        "set-file-input": [
+            "selector",
+            "found",
+            "file_input",
+            "set",
+            "multiple",
+            "requested_count",
+            "requested_files",
+            "previous_count",
+            "file_count",
+            "files",
+            "value",
+            "value_masked",
+            "dispatched_events",
+            "element",
+            "url",
+        ],
+        "set-value": [
+            "selector",
+            "found",
+            "writable",
+            "set",
+            "value",
+            "value_masked",
+            "requested_value",
+            "requested_value_masked",
+            "dispatched_events",
+            "url",
+        ],
+        "storage-clear": [
+            "area",
+            "prefix",
+            "cleared",
+            "cleared_count",
+            "keys",
+            "url",
+        ],
+        "storage-get": [
+            "area",
+            "key",
+            "prefix",
+            "found",
+            "value",
+            "value_length",
+            "count",
+            "item_count",
+            "items",
+            "url",
+        ],
+        "storage-remove": [
+            "area",
+            "key",
+            "removed",
+            "had_key",
+            "found",
+            "previous_value",
+            "url",
+        ],
+        "storage-set": [
+            "area",
+            "key",
+            "set",
+            "found",
+            "previous_value",
+            "value",
+            "value_length",
+            "url",
+        ],
+        "submit": [
+            "selector",
+            "found",
+            "form_found",
+            "submitted",
+            "skip_validation",
+            "used_request_submit",
+            "url",
+        ],
+        "table-snapshot": [
+            "tables",
+            "table_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "text-snapshot": [
+            "texts",
+            "text_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
+        "uncheck": ["selector", "found", "checkable", "checked", "url"],
+        "uncheck-label": [
+            "found",
+            "checkable",
+            "label",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
+            "url",
+        ],
+        "uncheck-role": [
+            "found",
+            "role_found",
+            "checkable",
+            "role",
+            "name",
+            "requested_checked",
+            "previous_checked",
+            "checked",
+            "changed",
+            "url",
+        ],
+        "wait-attribute": [
+            "selector",
+            "name",
+            "found",
+            "state",
+            "attribute_found",
+            "value",
+            "requested_value",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-attribute-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "attribute",
+            "state",
+            "attribute_found",
+            "value",
+            "requested_value",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-count": [
+            "selector",
+            "found",
+            "count",
+            "requested_count",
+            "comparison",
+            "waited_ms",
+            "url",
+        ],
+        "wait-cookie": [
+            "document_cookie_scope",
+            "name",
+            "found",
+            "state",
+            "exists",
+            "value",
+            "raw_value",
+            "requested_value",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-dialog": [
+            "found",
+            "matched",
+            "timed_out",
+            "requested_text",
+            "match",
+            "modal_only",
+            "dialog_count",
+            "total_dialog_count",
+            "dialog",
+            "dialogs",
+            "waited_ms",
+            "url",
+        ],
+        "wait-frame": [
+            "found",
+            "matched",
+            "timed_out",
+            "requested_url",
+            "url_match",
+            "requested_text",
+            "text_match",
+            "readable_only",
+            "same_origin_only",
+            "frame_count",
+            "total_frame_count",
+            "frame",
+            "frames",
+            "waited_ms",
+            "url",
+        ],
+        "wait-load-state": [
+            "found",
+            "state",
+            "requested_state",
+            "target_state",
+            "waited_ms",
+            "url",
+        ],
+        "wait-network-idle": [
+            "network_idle",
+            "quiet_ms",
+            "waited_ms",
+            "pending_requests",
+            "max_inflight",
+            "url",
+        ],
+        "wait-role": [
+            "found",
+            "role",
+            "name",
+            "include_hidden",
+            "waited_ms",
+            "timeout_ms",
+            "poll_ms",
+            "candidate_count",
+            "total_candidate_count",
+            "element",
+            "candidates",
+            "url",
+        ],
+        "wait-state": [
+            "selector",
+            "state",
+            "found",
+            "matched",
+            "state_values",
+            "waited_ms",
+            "url",
+        ],
+        "wait-state-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "state",
+            "matched",
+            "state_values",
+            "waited_ms",
+            "url",
+        ],
+        "wait-title": [
+            "found",
+            "title",
+            "requested_title",
+            "match",
+            "case_sensitive",
+            "waited_ms",
+            "url",
+        ],
+        "wait-url": ["found", "url", "requested_url", "match", "waited_ms"],
+        "wait-value": [
+            "selector",
+            "found",
+            "value",
+            "value_masked",
+            "requested_value",
+            "requested_value_masked",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-value-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "requested_value",
+            "requested_value_masked",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-storage": [
+            "area",
+            "key",
+            "found",
+            "state",
+            "exists",
+            "value",
+            "requested_value",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-text": ["found", "text", "selector", "waited_ms", "url"],
+    }
+    examples: dict[str, dict[str, Any]] = {
+        "open-url": {
+            "action": "open-url",
+            "url": "https://example.com",
+            "wait_until": "load",
+        },
+        "wait-selector": {
+            "action": "wait-selector",
+            "selector": "main",
+            "state": "visible",
+        },
+        "click": {"action": "click", "selector": "button[type=submit]"},
+        "type": {"action": "type", "selector": "input[name=q]", "text": "hello"},
+        "screenshot": {
+            "action": "screenshot",
+            "output": "page.png",
+            "full_page": True,
+        },
+        "eval": {"action": "eval", "expression": "() => document.title"},
+        "snapshot": {
+            "action": "snapshot",
+            "max_chars": 2000,
+            "output": "snapshot.json",
+        },
+        "accessibility-snapshot": {
+            "action": "accessibility-snapshot",
+            "max_nodes": 120,
+        },
+        "blur": {"action": "blur", "selector": "input[name=email]"},
+        "blur-role": {"action": "blur-role", "role": "textbox", "name": "Email"},
+        "bounding-box": {"action": "bounding-box", "selector": "button[type=submit]"},
+        "bounding-box-role": {
+            "action": "bounding-box-role",
+            "role": "button",
+            "name": "Submit",
+        },
+        "check": {"action": "check", "selector": "input[name=agree]"},
+        "check-label": {"action": "check-label", "label": "I agree"},
+        "check-role": {"action": "check-role", "role": "checkbox", "name": "I agree"},
+        "clear": {"action": "clear", "selector": "input[name=email]"},
+        "clear-role": {"action": "clear-role", "role": "textbox", "name": "Email"},
+        "click-index": {
+            "action": "click-index",
+            "selector": ".result button",
+            "index": 0,
+        },
+        "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
+        "click-text": {"action": "click-text", "text": "Submit"},
+        "cookie-clear": {"action": "cookie-clear", "prefix": "tmp:"},
+        "cookie-delete": {"action": "cookie-delete", "name": "consent"},
+        "cookie-get": {"action": "cookie-get", "name": "consent"},
+        "cookie-set": {"action": "cookie-set", "name": "consent", "value": "yes"},
+        "count": {"action": "count", "selector": ".result"},
+        "dialog-snapshot": {"action": "dialog-snapshot"},
+        "dispatch-event": {
+            "action": "dispatch-event",
+            "selector": "input[name=q]",
+            "event": ["input", "change"],
+        },
+        "double-click": {"action": "double-click", "selector": ".item"},
+        "double-click-role": {
+            "action": "double-click-role",
+            "role": "button",
+            "name": "Edit",
+        },
+        "exists": {"action": "exists", "selector": ".toast"},
+        "exists-role": {"action": "exists-role", "role": "alert", "name": "Saved"},
+        "fill-label": {
+            "action": "fill-label",
+            "label": "Email",
+            "text": "me@example.com",
+        },
+        "fill-role": {
+            "action": "fill-role",
+            "role": "textbox",
+            "name": "Email",
+            "text": "me@example.com",
+        },
+        "focus": {"action": "focus", "selector": "input[name=email]"},
+        "focus-role": {"action": "focus-role", "role": "textbox", "name": "Email"},
+        "frame-snapshot": {"action": "frame-snapshot", "selector": "iframe"},
+        "form-snapshot": {"action": "form-snapshot", "selector": "form"},
+        "get-attribute": {
+            "action": "get-attribute",
+            "selector": "button[type=submit]",
+            "name": "disabled",
+        },
+        "get-attribute-role": {
+            "action": "get-attribute-role",
+            "role": "button",
+            "name": "Submit",
+            "attribute": "disabled",
+        },
+        "get-value": {"action": "get-value", "selector": "input[name=email]"},
+        "get-value-role": {
+            "action": "get-value-role",
+            "role": "textbox",
+            "name": "Email",
+        },
+        "get-text": {"action": "get-text", "selector": ".status"},
+        "get-text-role": {"action": "get-text-role", "role": "alert", "name": "Saved"},
+        "hover": {"action": "hover", "selector": ".menu-button"},
+        "hover-role": {"action": "hover-role", "role": "button", "name": "Menu"},
+        "inspect": {"action": "inspect", "selector": "button[type=submit]"},
+        "interactive-only-snapshot": {
+            "action": "interactive-only-snapshot",
+            "max_nodes": 80,
+        },
+        "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
+        "link-snapshot": {"action": "link-snapshot", "selector": "main"},
+        "list-snapshot": {"action": "list-snapshot", "selector": "main"},
+        "outline-snapshot": {"action": "outline-snapshot", "selector": "main"},
+        "page-info": {"action": "page-info"},
+        "performance-snapshot": {"action": "performance-snapshot"},
+        "press": {"action": "press", "selector": "input[name=q]", "key": "Enter"},
+        "press-key": {"action": "press-key", "key": "Escape"},
+        "press-role": {
+            "action": "press-role",
+            "role": "textbox",
+            "name": "Search",
+            "key": "Enter",
+        },
+        "query": {"action": "query", "selector": ".result", "max_nodes": 10},
+        "right-click": {"action": "right-click", "selector": ".item"},
+        "right-click-role": {
+            "action": "right-click-role",
+            "role": "row",
+            "name": "Invoice",
+        },
+        "scroll": {"action": "scroll", "y": 600},
+        "scroll-into-view": {"action": "scroll-into-view", "selector": "#details"},
+        "scroll-into-view-role": {
+            "action": "scroll-into-view-role",
+            "role": "button",
+            "name": "Save",
+        },
+        "select-label": {
+            "action": "select-label",
+            "label": "Plan",
+            "option_label": "Pro",
+        },
+        "select-option": {
+            "action": "select-option",
+            "selector": "select[name=plan]",
+            "value": "pro",
+        },
+        "select-role": {
+            "action": "select-role",
+            "role": "combobox",
+            "name": "Plan",
+            "option_label": "Pro",
+        },
+        "set-file-input": {
+            "action": "set-file-input",
+            "selector": "input[type=file]",
+            "file": "./upload.txt",
+        },
+        "set-value": {
+            "action": "set-value",
+            "selector": "input[name=email]",
+            "value": "me@example.com",
+        },
+        "storage-clear": {"action": "storage-clear", "area": "session"},
+        "storage-get": {
+            "action": "storage-get",
+            "area": "local",
+            "key": "featureFlag",
+        },
+        "storage-remove": {
+            "action": "storage-remove",
+            "area": "session",
+            "key": "draft",
+        },
+        "storage-set": {
+            "action": "storage-set",
+            "area": "local",
+            "key": "seenIntro",
+            "value": "true",
+        },
+        "submit": {"action": "submit", "selector": "form"},
+        "table-snapshot": {"action": "table-snapshot", "selector": "table"},
+        "text-snapshot": {"action": "text-snapshot", "selector": "main"},
+        "uncheck": {"action": "uncheck", "selector": "input[name=subscribe]"},
+        "uncheck-label": {"action": "uncheck-label", "label": "Subscribe"},
+        "uncheck-role": {
+            "action": "uncheck-role",
+            "role": "checkbox",
+            "name": "Subscribe",
+        },
+        "wait-attribute": {
+            "action": "wait-attribute",
+            "selector": "button[type=submit]",
+            "name": "disabled",
+            "state": "absent",
+        },
+        "wait-attribute-role": {
+            "action": "wait-attribute-role",
+            "role": "button",
+            "name": "Submit",
+            "attribute": "disabled",
+            "state": "absent",
+        },
+        "wait-count": {
+            "action": "wait-count",
+            "selector": ".result",
+            "count": 1,
+            "comparison": "gte",
+        },
+        "wait-cookie": {
+            "action": "wait-cookie",
+            "name": "consent",
+            "value": "yes",
+            "match": "exact",
+        },
+        "wait-dialog": {
+            "action": "wait-dialog",
+            "text": "Confirm",
+            "modal_only": True,
+        },
+        "wait-frame": {
+            "action": "wait-frame",
+            "url": "/checkout",
+            "url_match": "contains",
+            "readable_only": True,
+        },
+        "wait-load-state": {"action": "wait-load-state", "state": "complete"},
+        "wait-network-idle": {"action": "wait-network-idle", "idle_ms": 500},
+        "wait-role": {
+            "action": "wait-role",
+            "role": "button",
+            "name": "Submit",
+        },
+        "wait-state": {
+            "action": "wait-state",
+            "selector": "button[type=submit]",
+            "state": "enabled",
+        },
+        "wait-state-role": {
+            "action": "wait-state-role",
+            "role": "button",
+            "name": "Submit",
+            "state": "enabled",
+        },
+        "wait-title": {
+            "action": "wait-title",
+            "title": "Dashboard",
+            "match": "contains",
+        },
+        "wait-url": {"action": "wait-url", "url": "/dashboard"},
+        "wait-value": {
+            "action": "wait-value",
+            "selector": "input[name=email]",
+            "value": "me@example.com",
+        },
+        "wait-value-role": {
+            "action": "wait-value-role",
+            "role": "textbox",
+            "name": "Email",
+            "value": "me@example.com",
+        },
+        "wait-storage": {
+            "action": "wait-storage",
+            "area": "local",
+            "key": "seenIntro",
+            "value": "true",
+            "match": "exact",
+        },
+        "wait-text": {"action": "wait-text", "text": "Saved"},
+    }
+    return {
+        action: {
+            "required_fields": list(BROWSER_CLI_REQUIRED_CASE_FIELDS.get(action, ())),
+            "required_one_of": required_one_of.get(action, []),
+            "optional_fields": optional_fields.get(action, []),
+            "result_fields": result_fields.get(action, []),
+            "example_step": examples.get(action, {"action": action}),
+        }
+        for action in sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS)
+    }
+
+
+def cmd_case_schema(args: argparse.Namespace) -> None:
+    command = "case.schema"
+    actions = _case_action_schema()
+    top_level = {
+        "required_fields": ["steps"],
+        "optional_fields": [
+            "name",
+            "description",
+            "run_id",
+            "close_created_session",
+            "target",
+            "session",
+        ],
+        "target_options": {
+            "target.session_id": "Use an existing Lexmount browser session.",
+            "target.connect_url": "Use an explicit CDP websocket URL.",
+            "target.direct_url": "Use a direct URL derived from local env credentials.",
+            "session.create": "Create a temporary Lexmount browser session for the case.",
+        },
+        "session_fields": [
+            "create",
+            "context_id",
+            "create_context",
+            "context_mode",
+            "browser_mode",
+            "metadata",
+        ],
+        "step_options": {
+            "expect": (
+                "Map result field/path to an expected JSON value; mismatches "
+                "mark the step ok=false and make case run exit non-zero."
+            ),
+        },
+    }
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "supported_actions": sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
+        "action_count": len(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
+        "required_fields": {
+            action: list(fields)
+            for action, fields in sorted(BROWSER_CLI_REQUIRED_CASE_FIELDS.items())
+        },
+        "actions": actions,
+        "top_level": top_level,
+        "workflow": {
+            "inspect": "browser-cli case schema",
+            "scaffold": "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+            "validate": "browser-cli case validate --file case.yaml",
+            "run": "browser-cli case run --file case.yaml --close-created-session",
+        },
+        "notes": [
+            "Use case scaffold for common starter files before hand-writing YAML.",
+            "Use the enhanced semantic case actions for repeatable form, text, and interactive targeting smoke tests.",
+            "Use action commands directly when a browser task needs actions outside this case runner schema.",
+            "Run case validate before case run.",
+        ],
+    }
+    if args.action:
+        action = str(args.action)
+        if action not in actions:
+            _failure(
+                command,
+                "unknown_case_action",
+                f"Unknown case action: {action}",
+                action=action,
+                available_actions=sorted(actions),
+                fix=_doctor_fix(
+                    "inspect_available_case_actions",
+                    commands=[
+                        "browser-cli case schema",
+                        "browser-cli case schema --names-only",
+                    ],
+                    guidance=[
+                        "Choose one of available_actions, then rerun case schema with that --action value."
+                    ],
+                ),
+            )
+        _success(
+            command,
+            schema_version=payload["schema_version"],
+            action=action,
+            supported_actions=payload["supported_actions"],
+            action_schema=actions[action],
+            top_level=top_level,
+        )
+    if args.names_only:
+        _success(
+            command,
+            schema_version=payload["schema_version"],
+            action_count=payload["action_count"],
+            supported_actions=payload["supported_actions"],
+        )
+    _success(command, **payload)
+
+
+def cmd_case_scaffold(args: argparse.Namespace) -> None:
+    command = "case.scaffold"
+    spec = _case_scaffold_spec(args)
+    errors = _validate_browser_cli_case_spec(spec)
+    content = _serialize_case_spec(
+        command=command,
+        spec=spec,
+        output_format=args.output_format,
+    )
+    output_path: Path | None = None
+    if args.output:
+        output_path = Path(args.output).expanduser()
+        if output_path.exists() and not args.overwrite:
+            _failure(
+                command,
+                "file_exists",
+                "Output file already exists. Pass --overwrite to replace it.",
+                exit_code=2,
+                output=str(output_path),
+            )
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            _failure(
+                command,
+                "file_write_error",
+                str(exc),
+                exit_code=2,
+                output=str(output_path),
+            )
+
+    _success(
+        command,
+        template=args.template,
+        output_format=args.output_format,
+        output=str(output_path) if output_path is not None else None,
+        wrote_file=output_path is not None,
+        valid=not errors,
+        errors=errors,
+        step_count=len(spec.get("steps", [])),
+        supported_actions=sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
+        safe_to_paste_in_chat=True,
+        next_commands=_case_scaffold_next_commands(
+            str(output_path) if output_path is not None else None
+        ),
+        case=spec,
+        content=content,
+    )
+
+
+def _case_step_bool(
+    step: dict[str, Any],
+    name: str,
+    *,
+    default: bool = False,
+) -> bool:
+    return bool(step.get(name, default))
+
+
+def _case_step_int(step: dict[str, Any], name: str, *, default: int) -> int:
+    try:
+        return int(step.get(name, default))
+    except (TypeError, ValueError) as exc:
+        raise BrowserConfigError(f"{name} must be an integer") from exc
+
+
+def _case_step_float(step: dict[str, Any], name: str, *, default: float) -> float:
+    try:
+        return float(step.get(name, default))
+    except (TypeError, ValueError) as exc:
+        raise BrowserConfigError(f"{name} must be a number") from exc
+
+
+def _case_step_string_list(step: dict[str, Any], name: str) -> list[str]:
+    value = step[name]
+    values = value if isinstance(value, list) else [value]
+    return [str(item) for item in values]
+
+
+def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
+    if isinstance(result, dict):
+        payload = dict(result)
+    else:
+        payload = {"value": result}
+    payload.setdefault("url", page.url)
+    return payload
+
+
+def _case_eval_expression(page: Any, expression: str) -> dict[str, Any]:
+    return _case_step_result(page, page.evaluate(expression))
+
+
+def _case_result_path(result: Any, path: str) -> tuple[bool, Any]:
+    current = result
+    for part in path.split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+            continue
+        if isinstance(current, list) and part.isdigit():
+            index = int(part)
+            if 0 <= index < len(current):
+                current = current[index]
+                continue
+        return False, None
+    return True, current
+
+
+def _case_expectation_value(value: Any) -> str:
+    safe_value = _sanitize_failure_value(value)
+    return json.dumps(safe_value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _case_expectation_failures(
+    step: dict[str, Any],
+    result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    expect = step.get("expect")
+    if expect is None:
+        return []
+    if not isinstance(expect, dict):
+        return [
+            {
+                "path": "expect",
+                "reason": "invalid_expect",
+                "expected": "object",
+                "actual": type(expect).__name__,
+            }
+        ]
+
+    failures: list[dict[str, Any]] = []
+    for path, expected in expect.items():
+        path_text = str(path)
+        found, actual = _case_result_path(result, path_text)
+        if not found:
+            failures.append(
+                {
+                    "path": path_text,
+                    "reason": "missing",
+                    "expected": expected,
+                    "actual": None,
+                }
+            )
+            continue
+        if actual != expected:
+            failures.append(
+                {
+                    "path": path_text,
+                    "reason": "mismatch",
+                    "expected": expected,
+                    "actual": actual,
+                }
+            )
+    return failures
+
+
+def _case_expectation_message(failures: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for failure in failures[:3]:
+        path = failure["path"]
+        reason = failure["reason"]
+        expected = _case_expectation_value(failure.get("expected"))
+        actual = _case_expectation_value(failure.get("actual"))
+        if reason == "missing":
+            parts.append(f"{path} missing; expected {expected}")
+        else:
+            parts.append(f"{path} expected {expected}, got {actual}")
+    if len(failures) > 3:
+        parts.append(f"{len(failures) - 3} more mismatch(es)")
+    return "Case expectation failed: " + "; ".join(parts)
+
+
+def _accessibility_snapshot_expression(
+    *,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const root = document.body || document.documentElement;
+  const elements = root ? [...root.querySelectorAll("*")] : [];
+  const interesting = elements.filter((element) => {{
+    if (!visible(element)) return false;
+    const info = nodeInfo(element);
+    return Boolean(info.role || info.name || info.text);
+  }});
+  const nodes = limited(interesting).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "dom-accessibility",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && interesting.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+
+
+def _interactive_snapshot_expression(
+    *,
+    include_hidden: bool,
+    max_nodes: int,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden, max_nodes=max_nodes)}
+  const elements = [...document.querySelectorAll(interactiveSelector)].filter(visible);
+  const nodes = limited(elements).map(nodeInfo);
+  return {{
+    url: location.href,
+    title: document.title,
+    kind: "interactive",
+    include_hidden: includeHidden,
+    node_count: nodes.length,
+    truncated: maxNodes !== null && elements.length > nodes.length,
+    nodes
+  }};
+}}
+""".strip()
+
+
+def _run_browser_cli_case_step(
+    page: Any,
+    step: dict[str, Any],
+    artifacts_dir: Path,
+    index: int,
+) -> dict[str, Any]:
+    action = step["action"]
+    if action in SUPPORTED_CASE_ACTIONS:
+        return _runtime_run_case_step(page, step, artifacts_dir, index)
+
+    exact = _case_step_bool(step, "exact")
+    case_sensitive = _case_step_bool(step, "case_sensitive")
+
+    if action == "blur":
+        return _case_eval_expression(page, _blur_expression(str(step["selector"])))
+    if action == "blur-role":
+        return _case_eval_expression(
+            page,
+            _blur_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "bounding-box":
+        return _case_eval_expression(
+            page,
+            _bounding_box_expression(str(step["selector"])),
+        )
+    if action == "bounding-box-role":
+        return _case_eval_expression(
+            page,
+            _bounding_box_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "click-role":
+        return _case_eval_expression(
+            page,
+            _click_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "clear":
+        return _case_eval_expression(page, _clear_expression(str(step["selector"])))
+    if action == "clear-role":
+        return _case_eval_expression(
+            page,
+            _clear_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "check":
+        return _case_eval_expression(
+            page,
+            _checkbox_action_expression(selector=str(step["selector"]), checked=True),
+        )
+    if action == "check-label":
+        return _case_eval_expression(
+            page,
+            _check_label_expression(
+                label=str(step["label"]),
+                checked=True,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "check-role":
+        return _case_eval_expression(
+            page,
+            _check_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                checked=True,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "count":
+        return _case_eval_expression(
+            page,
+            _count_expression(
+                selector=str(step["selector"]),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "dialog-snapshot":
+        return _case_eval_expression(
+            page,
+            _dialog_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_controls=_case_step_int(step, "max_controls", default=30),
+                max_chars=_case_step_int(step, "max_chars", default=1000),
+            ),
+        )
+    if action == "dispatch-event":
+        return _case_eval_expression(
+            page,
+            _dispatch_event_expression(
+                selector=str(step["selector"]),
+                events=_case_step_string_list(step, "event"),
+                bubbles=not _case_step_bool(step, "no_bubbles"),
+                cancelable=_case_step_bool(step, "cancelable"),
+            ),
+        )
+    if action == "accessibility-snapshot":
+        return _case_eval_expression(
+            page,
+            _accessibility_snapshot_expression(
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=120),
+            ),
+        )
+    if action == "click-text":
+        return _case_eval_expression(
+            page,
+            _click_text_expression(
+                text=str(step["text"]),
+                selector=str(step["selector"]) if step.get("selector") else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "click-index":
+        return _case_eval_expression(
+            page,
+            _click_index_expression(
+                selector=str(step["selector"]),
+                index=_case_step_int(step, "index", default=0),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "cookie-clear":
+        return _case_eval_expression(
+            page,
+            _cookie_clear_expression(
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+                path=str(step["path"]) if step.get("path") is not None else None,
+                domain=str(step["domain"]) if step.get("domain") is not None else None,
+            ),
+        )
+    if action == "cookie-delete":
+        return _case_eval_expression(
+            page,
+            _cookie_delete_expression(
+                name=str(step["name"]),
+                path=str(step["path"]) if step.get("path") is not None else None,
+                domain=str(step["domain"]) if step.get("domain") is not None else None,
+            ),
+        )
+    if action == "cookie-get":
+        return _case_eval_expression(
+            page,
+            _cookie_get_expression(
+                name=str(step["name"]) if step.get("name") is not None else None,
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+                max_items=_case_step_int(step, "max_items", default=50),
+            ),
+        )
+    if action == "cookie-set":
+        return _case_eval_expression(
+            page,
+            _cookie_set_expression(
+                name=str(step["name"]),
+                value=str(step["value"]),
+                path=str(step["path"]) if step.get("path") is not None else None,
+                domain=str(step["domain"]) if step.get("domain") is not None else None,
+                max_age=(
+                    _case_step_int(step, "max_age", default=0)
+                    if step.get("max_age") is not None
+                    else None
+                ),
+                expires=(
+                    str(step["expires"]) if step.get("expires") is not None else None
+                ),
+                same_site=(
+                    str(step["same_site"])
+                    if step.get("same_site") is not None
+                    else None
+                ),
+                secure=_case_step_bool(step, "secure"),
+            ),
+        )
+    if action == "double-click":
+        return _case_eval_expression(
+            page,
+            _mouse_action_expression(
+                selector=str(step["selector"]),
+                action="double-click",
+                result_field="double_clicked",
+            ),
+        )
+    if action == "double-click-role":
+        return _case_eval_expression(
+            page,
+            _mouse_action_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                action="double-click",
+                result_field="double_clicked",
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "exists":
+        return _case_eval_expression(page, _exists_expression(str(step["selector"])))
+    if action == "exists-role":
+        return _case_eval_expression(
+            page,
+            _exists_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "fill-label":
+        return _case_eval_expression(
+            page,
+            _fill_label_expression(
+                label=str(step["label"]),
+                text=str(step["text"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "fill-role":
+        return _case_eval_expression(
+            page,
+            _fill_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                text=str(step["text"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "focus":
+        return _case_eval_expression(
+            page,
+            _focus_expression(
+                selector=str(step["selector"]),
+                prevent_scroll=_case_step_bool(step, "prevent_scroll"),
+            ),
+        )
+    if action == "focus-role":
+        return _case_eval_expression(
+            page,
+            _focus_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                prevent_scroll=_case_step_bool(step, "prevent_scroll"),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "frame-snapshot":
+        return _case_eval_expression(
+            page,
+            _frame_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_chars=_case_step_int(step, "max_chars", default=500),
+            ),
+        )
+    if action == "form-snapshot":
+        return _case_eval_expression(
+            page,
+            _form_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=80),
+                reveal_sensitive_values=_case_step_bool(
+                    step, "reveal_sensitive_values"
+                ),
+            ),
+        )
+    if action == "get-attribute":
+        return _case_eval_expression(
+            page,
+            _get_attribute_expression(
+                selector=str(step["selector"]),
+                name=str(step["name"]),
+            ),
+        )
+    if action == "get-attribute-role":
+        return _case_eval_expression(
+            page,
+            _get_attribute_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                attribute=str(step["attribute"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "get-text":
+        return _case_eval_expression(page, _get_text_expression(str(step["selector"])))
+    if action == "get-text-role":
+        return _case_eval_expression(
+            page,
+            _get_text_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "get-value":
+        return _case_eval_expression(
+            page,
+            _get_value_expression(str(step["selector"])),
+        )
+    if action == "get-value-role":
+        return _case_eval_expression(
+            page,
+            _get_value_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "inspect":
+        return _case_eval_expression(
+            page,
+            _inspect_expression(
+                selector=str(step["selector"]),
+                include_html=_case_step_bool(step, "include_html"),
+                max_html_chars=_case_step_int(
+                    step,
+                    "max_html_chars",
+                    default=2000,
+                ),
+                reveal_sensitive_values=_case_step_bool(
+                    step,
+                    "reveal_sensitive_values",
+                ),
+            ),
+        )
+    if action == "hover":
+        return _case_eval_expression(page, _hover_expression(str(step["selector"])))
+    if action == "hover-role":
+        return _case_eval_expression(
+            page,
+            _hover_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action in {"interactive-snapshot", "interactive-only-snapshot"}:
+        return _case_eval_expression(
+            page,
+            _interactive_snapshot_expression(
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=80),
+            ),
+        )
+    if action == "link-snapshot":
+        return _case_eval_expression(
+            page,
+            _link_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                include_empty=_case_step_bool(step, "include_empty"),
+                same_origin_only=_case_step_bool(step, "same_origin_only"),
+            ),
+        )
+    if action == "list-snapshot":
+        return _case_eval_expression(
+            page,
+            _list_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_items=_case_step_int(step, "max_items", default=50),
+            ),
+        )
+    if action == "outline-snapshot":
+        return _case_eval_expression(
+            page,
+            _outline_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+            ),
+        )
+    if action == "page-info":
+        return _case_eval_expression(page, _page_info_expression())
+    if action == "performance-snapshot":
+        return _case_eval_expression(
+            page,
+            _performance_snapshot_expression(
+                max_resources=_case_step_int(step, "max_resources", default=50),
+                initiator_type=(
+                    str(step["initiator_type"])
+                    if step.get("initiator_type") is not None
+                    else None
+                ),
+                min_duration_ms=_case_step_float(
+                    step,
+                    "min_duration_ms",
+                    default=0,
+                ),
+            ),
+        )
+    if action == "press":
+        return _case_eval_expression(
+            page,
+            _press_expression(selector=str(step["selector"]), key=str(step["key"])),
+        )
+    if action == "press-key":
+        return _case_eval_expression(
+            page,
+            _press_key_expression(
+                key=str(step["key"]),
+                code=str(step["code"]) if step.get("code") is not None else None,
+                alt_key=_case_step_bool(step, "alt_key"),
+                ctrl_key=_case_step_bool(step, "ctrl_key"),
+                meta_key=_case_step_bool(step, "meta_key"),
+                shift_key=_case_step_bool(step, "shift_key"),
+            ),
+        )
+    if action == "press-role":
+        return _case_eval_expression(
+            page,
+            _press_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                key=str(step["key"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "query":
+        return _case_eval_expression(
+            page,
+            _query_expression(
+                selector=str(step["selector"]),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=20),
+            ),
+        )
+    if action == "right-click":
+        return _case_eval_expression(
+            page,
+            _mouse_action_expression(
+                selector=str(step["selector"]),
+                action="right-click",
+                result_field="right_clicked",
+            ),
+        )
+    if action == "right-click-role":
+        return _case_eval_expression(
+            page,
+            _mouse_action_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                action="right-click",
+                result_field="right_clicked",
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "scroll":
+        return _case_eval_expression(
+            page,
+            _scroll_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                x=_case_step_float(step, "x", default=0),
+                y=_case_step_float(step, "y", default=600),
+                behavior=str(step.get("behavior", "auto")),
+            ),
+        )
+    if action == "scroll-into-view":
+        return _case_eval_expression(
+            page,
+            _scroll_into_view_expression(
+                selector=str(step["selector"]),
+                block=str(step.get("block", "center")),
+                inline=str(step.get("inline", "nearest")),
+                behavior=str(step.get("behavior", "auto")),
+            ),
+        )
+    if action == "scroll-into-view-role":
+        return _case_eval_expression(
+            page,
+            _scroll_into_view_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                block=str(step.get("block", "center")),
+                inline=str(step.get("inline", "nearest")),
+                behavior=str(step.get("behavior", "auto")),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "select-label":
+        return _case_eval_expression(
+            page,
+            _select_label_expression(
+                label=str(step["label"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                option_label=(
+                    str(step["option_label"])
+                    if step.get("option_label") is not None
+                    else None
+                ),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "select-option":
+        return _case_eval_expression(
+            page,
+            _select_option_expression(
+                selector=str(step["selector"]),
+                value=str(step["value"]),
+            ),
+        )
+    if action == "select-role":
+        return _case_eval_expression(
+            page,
+            _select_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                value=str(step["value"]) if step.get("value") is not None else None,
+                option_label=(
+                    str(step["option_label"])
+                    if step.get("option_label") is not None
+                    else None
+                ),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "set-file-input":
+        files = _read_file_input_payloads(
+            command="case.run",
+            files=_case_step_string_list(step, "file"),
+            max_bytes=_case_step_int(
+                step,
+                "max_bytes",
+                default=DEFAULT_FILE_INPUT_MAX_BYTES,
+            ),
+        )
+        return _case_eval_expression(
+            page,
+            _set_file_input_expression(
+                selector=str(step["selector"]),
+                files=files,
+                dispatch_events=not _case_step_bool(step, "no_events"),
+            ),
+        )
+    if action == "set-value":
+        return _case_eval_expression(
+            page,
+            _set_value_expression(
+                str(step["selector"]),
+                str(step["value"]),
+                dispatch_events=not _case_step_bool(step, "no_events"),
+            ),
+        )
+    if action == "storage-clear":
+        return _case_eval_expression(
+            page,
+            _storage_clear_expression(
+                area=str(step.get("area", "local")),
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+            ),
+        )
+    if action == "storage-get":
+        return _case_eval_expression(
+            page,
+            _storage_get_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]) if step.get("key") is not None else None,
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+                max_items=_case_step_int(step, "max_items", default=50),
+            ),
+        )
+    if action == "storage-remove":
+        return _case_eval_expression(
+            page,
+            _storage_remove_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]),
+            ),
+        )
+    if action == "storage-set":
+        return _case_eval_expression(
+            page,
+            _storage_set_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]),
+                value=str(step["value"]),
+            ),
+        )
+    if action == "submit":
+        return _case_eval_expression(
+            page,
+            _submit_expression(
+                selector=str(step["selector"]),
+                skip_validation=_case_step_bool(step, "skip_validation"),
+            ),
+        )
+    if action == "table-snapshot":
+        return _case_eval_expression(
+            page,
+            _table_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_rows=_case_step_int(step, "max_rows", default=50),
+                max_cells=_case_step_int(step, "max_cells", default=20),
+            ),
+        )
+    if action == "text-snapshot":
+        return _case_eval_expression(
+            page,
+            _text_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_chars=_case_step_int(step, "max_chars", default=500),
+            ),
+        )
+    if action == "uncheck":
+        return _case_eval_expression(
+            page,
+            _checkbox_action_expression(selector=str(step["selector"]), checked=False),
+        )
+    if action == "uncheck-label":
+        return _case_eval_expression(
+            page,
+            _check_label_expression(
+                label=str(step["label"]),
+                checked=False,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "uncheck-role":
+        return _case_eval_expression(
+            page,
+            _check_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                checked=False,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-attribute":
+        return _case_eval_expression(
+            page,
+            _wait_attribute_expression(
+                selector=str(step["selector"]),
+                name=str(step["name"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-attribute-role":
+        return _case_eval_expression(
+            page,
+            _wait_attribute_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                attribute=str(step["attribute"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "wait-count":
+        return _case_eval_expression(
+            page,
+            _wait_count_expression(
+                selector=str(step["selector"]),
+                count=_case_step_int(step, "count", default=1),
+                comparison=str(step.get("comparison", "eq")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "wait-cookie":
+        return _case_eval_expression(
+            page,
+            _wait_cookie_expression(
+                name=str(step["name"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-dialog":
+        return _case_eval_expression(
+            page,
+            _wait_dialog_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_controls=_case_step_int(step, "max_controls", default=30),
+                max_chars=_case_step_int(step, "max_chars", default=1000),
+                text=str(step["text"]) if step.get("text") is not None else None,
+                match=str(step.get("match", "contains")),
+                case_sensitive=case_sensitive,
+                modal_only=_case_step_bool(step, "modal_only"),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
+            ),
+        )
+    if action == "wait-frame":
+        return _case_eval_expression(
+            page,
+            _wait_frame_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_chars=_case_step_int(step, "max_chars", default=500),
+                url=str(step["url"]) if step.get("url") is not None else None,
+                url_match=str(step.get("url_match", "contains")),
+                text=str(step["text"]) if step.get("text") is not None else None,
+                text_match=str(step.get("text_match", "contains")),
+                case_sensitive=case_sensitive,
+                readable_only=_case_step_bool(step, "readable_only"),
+                same_origin_only=_case_step_bool(step, "same_origin_only"),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
+            ),
+        )
+    if action == "wait-load-state":
+        return _case_eval_expression(
+            page,
+            _wait_load_state_expression(
+                state=str(step.get("state", "complete")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-network-idle":
+        return _case_eval_expression(
+            page,
+            _wait_network_idle_expression(
+                idle_ms=_case_step_float(step, "idle_ms", default=500),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
+                max_inflight=_case_step_int(step, "max_inflight", default=0),
+            ),
+        )
+    if action == "wait-role":
+        return _case_eval_expression(
+            page,
+            _wait_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "wait-state":
+        return _case_eval_expression(
+            page,
+            _wait_state_expression(
+                selector=str(step["selector"]),
+                state=str(step["state"]),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-state-role":
+        return _case_eval_expression(
+            page,
+            _wait_state_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                state=str(step["state"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "wait-title":
+        return _case_eval_expression(
+            page,
+            _wait_title_expression(
+                title=str(step["title"]),
+                match=str(step.get("match", "contains")),
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-url":
+        return _case_eval_expression(
+            page,
+            _wait_url_expression(
+                url=str(step["url"]),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-value":
+        return _case_eval_expression(
+            page,
+            _wait_value_expression(
+                selector=str(step["selector"]),
+                value=str(step["value"]),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-value-role":
+        return _case_eval_expression(
+            page,
+            _wait_value_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                value=str(step["value"]),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-storage":
+        return _case_eval_expression(
+            page,
+            _wait_storage_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-text":
+        return _case_eval_expression(
+            page,
+            _wait_text_expression(
+                text=str(step["text"]),
+                selector=str(step["selector"]) if step.get("selector") else None,
+                state=str(step.get("state", "present")),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+
+    raise ValueError(f"Unsupported action: {action}")
+
+
+def _safe_case_payload(value: Any) -> Any:
+    return _sanitize_failure_value(value)
+
+
+def _case_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def run_browser_cli_case_file(
+    *,
+    file: str | Path,
+    run_id: str | None = None,
+    artifacts_dir: str | Path | None = None,
+    stop_on_error: bool = False,
+    close_created_session: bool = False,
+) -> CaseRunSummary:
+    spec = load_case_file(file)
+    errors = _validate_browser_cli_case_spec(spec)
+    if errors:
+        raise BrowserConfigError(f"Case validation failed: {errors}")
+
+    admin = LexmountBrowserAdmin()
+    target = resolve_case_target(admin, spec)
+    resolved_run_id = (
+        run_id or spec.get("run_id") or f"case-{_case_now()}-{time.time_ns()}"
+    )
+    resolved_artifacts_dir = Path(
+        artifacts_dir or f"/tmp/lexmount-runs/{resolved_run_id}"
+    )
+    resolved_artifacts_dir.mkdir(parents=True, exist_ok=True)
+    event_log = resolved_artifacts_dir / "events.jsonl"
+
+    safe_connect_url = _safe_case_payload(target.connect_url)
+    safe_session = _safe_case_payload(target.session)
+    append_event(
+        event_log,
+        "case_started",
+        run_id=resolved_run_id,
+        file=str(file),
+        artifacts_dir=str(resolved_artifacts_dir),
+    )
+    append_event(
+        event_log,
+        "session_resolved",
+        run_id=resolved_run_id,
+        created_session=target.created_session,
+        session=safe_session,
+        connect_url=safe_connect_url,
+    )
+
+    results: list[CaseStepRunResult] = []
+    created_session_id = target.session.get("session_id") if target.session else None
+    should_close_created = close_created_session or bool(
+        spec.get("close_created_session")
+    )
+
+    try:
+        try:
+            from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
+        except Exception as exc:
+            raise BrowserConfigError(
+                "Failed to import Playwright. Install lex-browser-runtime[browser] "
+                "or provide an environment that already includes playwright."
+            ) from exc
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.connect_over_cdp(target.connect_url)
+            try:
+                context = (
+                    browser.contexts[0] if browser.contexts else browser.new_context()
+                )
+                page = get_or_create_page(context)
+                for index, step in enumerate(spec["steps"]):
+                    started_at = time.time()
+                    append_event(
+                        event_log,
+                        "step_started",
+                        run_id=resolved_run_id,
+                        index=index,
+                        action=step.get("action"),
+                        step=_safe_case_payload(step),
+                    )
+                    try:
+                        result = _run_browser_cli_case_step(
+                            page, step, resolved_artifacts_dir, index
+                        )
+                        duration_ms = round((time.time() - started_at) * 1000, 2)
+                        safe_result = _safe_case_payload(result)
+                        assert isinstance(safe_result, dict)
+                        expectation_failures = _case_expectation_failures(step, result)
+                        if expectation_failures:
+                            safe_expectation_failures = _safe_case_payload(
+                                expectation_failures
+                            )
+                            safe_result["expectation_failures"] = (
+                                safe_expectation_failures
+                            )
+                            message = _case_expectation_message(expectation_failures)
+                            step_result = CaseStepRunResult(
+                                index=index,
+                                action=step["action"],
+                                ok=False,
+                                duration_ms=duration_ms,
+                                result=safe_result,
+                                error="case_expectation_failed",
+                                message=message,
+                            )
+                            results.append(step_result)
+                            append_event(
+                                event_log,
+                                "step_finished",
+                                run_id=resolved_run_id,
+                                index=index,
+                                action=step["action"],
+                                ok=False,
+                                duration_ms=duration_ms,
+                                result=safe_result,
+                                error="case_expectation_failed",
+                                message=message,
+                            )
+                            if stop_on_error:
+                                break
+                            continue
+                        step_result = CaseStepRunResult(
+                            index=index,
+                            action=step["action"],
+                            ok=True,
+                            duration_ms=duration_ms,
+                            result=safe_result,
+                        )
+                        results.append(step_result)
+                        append_event(
+                            event_log,
+                            "step_finished",
+                            run_id=resolved_run_id,
+                            index=index,
+                            action=step["action"],
+                            ok=True,
+                            duration_ms=duration_ms,
+                            result=safe_result,
+                        )
+                    except Exception as exc:
+                        duration_ms = round((time.time() - started_at) * 1000, 2)
+                        step_result = CaseStepRunResult(
+                            index=index,
+                            action=step.get("action"),
+                            ok=False,
+                            duration_ms=duration_ms,
+                            error=exc.__class__.__name__,
+                            message=_mask_sensitive_text(str(exc)),
+                        )
+                        results.append(step_result)
+                        append_event(
+                            event_log,
+                            "step_finished",
+                            run_id=resolved_run_id,
+                            index=index,
+                            action=step.get("action"),
+                            ok=False,
+                            duration_ms=duration_ms,
+                            error=exc.__class__.__name__,
+                            message=_mask_sensitive_text(str(exc)),
+                        )
+                        if stop_on_error:
+                            break
+            finally:
+                browser.close()
+                append_event(event_log, "browser_closed", run_id=resolved_run_id)
+    finally:
+        if target.created_session and created_session_id and should_close_created:
+            try:
+                admin.close_session(str(created_session_id))
+                if safe_session is not None:
+                    safe_session["closed_after_run"] = True
+                append_event(
+                    event_log,
+                    "session_closed",
+                    run_id=resolved_run_id,
+                    session_id=created_session_id,
+                    ok=True,
+                )
+            except Exception as exc:
+                if safe_session is not None:
+                    safe_session["close_after_run_error"] = _mask_sensitive_text(
+                        str(exc)
+                    )
+                append_event(
+                    event_log,
+                    "session_closed",
+                    run_id=resolved_run_id,
+                    session_id=created_session_id,
+                    ok=False,
+                    error=exc.__class__.__name__,
+                    message=_mask_sensitive_text(str(exc)),
+                )
+
+    summary = CaseRunSummary(
+        ok=all(item.ok for item in results),
+        file=str(file),
+        run_id=resolved_run_id,
+        artifacts_dir=str(resolved_artifacts_dir),
+        events_path=str(event_log),
+        connect_url=str(safe_connect_url),
+        session=safe_session,
+        steps=results,
+    )
+    (resolved_artifacts_dir / "summary.json").write_text(
+        json.dumps(summary.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    append_event(
+        event_log,
+        "case_finished",
+        run_id=resolved_run_id,
+        ok=summary.ok,
+        steps_total=len(results),
+        steps_ok=sum(1 for item in results if item.ok),
+        steps_failed=sum(1 for item in results if not item.ok),
+    )
+    return summary
+
+
 def cmd_case_validate(args: argparse.Namespace) -> None:
     command = "case.validate"
     try:
-        result = validate_case_file(args.file)
+        result = validate_browser_cli_case_file(args.file)
     except Exception as exc:
         _failure_from_exception(command, exc)
     _success(command, **result.model_dump(mode="json"))
@@ -4675,7 +21261,7 @@ def cmd_case_validate(args: argparse.Namespace) -> None:
 def cmd_case_run(args: argparse.Namespace) -> None:
     command = "case.run"
     try:
-        summary = run_case_file(
+        summary = run_browser_cli_case_file(
             file=args.file,
             run_id=args.run_id,
             artifacts_dir=args.artifacts_dir,
@@ -4684,7 +21270,13 @@ def cmd_case_run(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _json_dump(summary.model_dump(mode="json"), exit_code=0 if summary.ok else 1)
+    raw_payload = summary.model_dump(mode="json")
+    payload = _safe_case_payload(raw_payload)
+    assert isinstance(payload, dict)
+    payload["connect_url_masked"] = payload.get("connect_url") != raw_payload.get(
+        "connect_url"
+    )
+    _json_dump(payload, exit_code=0 if summary.ok else 1)
 
 
 def _add_session_target_args(parser: argparse.ArgumentParser) -> None:
@@ -4754,6 +21346,15 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=20,
         help="Maximum contexts to inspect while picking a reusable context.",
+    )
+    parser.add_argument(
+        "--context-selection",
+        choices=CONTEXT_SELECTION_STRATEGIES,
+        default="first",
+        help=(
+            "Reusable context selection strategy when multiple contexts match. "
+            "Default is first."
+        ),
     )
 
 
@@ -4855,6 +21456,15 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     context_pick.add_argument("--limit", type=int, default=20)
     context_pick.add_argument(
+        "--selection",
+        choices=CONTEXT_SELECTION_STRATEGIES,
+        default="first",
+        help=(
+            "Reusable context selection strategy when multiple contexts match. "
+            "Default is first."
+        ),
+    )
+    context_pick.add_argument(
         "--metadata-json",
         dest="metadata_filter",
         type=_parse_filter_metadata_json,
@@ -4866,6 +21476,11 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         action="store_true",
         help="Create a context with the metadata filter when none is reusable.",
     )
+    context_pick.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Only inspect candidates and report whether a context would be selected or created.",
+    )
     context_pick.set_defaults(func=cmd_context_pick)
 
     context_delete = context_subparsers.add_parser("delete", help="Delete context")
@@ -4876,6 +21491,21 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action = subparsers.add_parser("action", help="Run browser actions")
     action_subparsers = action.add_subparsers(dest="action_command", required=True)
+
+    action_guide = action_subparsers.add_parser(
+        "guide",
+        help="Show machine-readable action selection guidance for agents",
+    )
+    action_guide.add_argument(
+        "--task",
+        help="Action task guide to inspect, such as form_interaction, file_upload, dialog_frame_handling, interactive_targeting, navigation_flow, link_navigation, visual_capture, semantic_waits, menu_keyboard_flow, mouse_interaction, content_extraction, browser_state_management, state_waits, or page_diagnostics.",
+    )
+    action_guide.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Only list available action guide task ids.",
+    )
+    action_guide.set_defaults(func=cmd_action_guide)
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)
@@ -4927,6 +21557,39 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_screenshot.add_argument("--timeout-ms", type=float, default=30000)
     action_screenshot.set_defaults(func=cmd_action_screenshot)
 
+    action_screenshot_selector = action_subparsers.add_parser(
+        "screenshot-selector",
+        help="Capture a screenshot of one selector match",
+    )
+    _add_session_target_args(action_screenshot_selector)
+    action_screenshot_selector.add_argument("--selector", required=True)
+    action_screenshot_selector.add_argument("--output")
+    action_screenshot_selector.add_argument("--index", type=int, default=0)
+    action_screenshot_selector.add_argument("--timeout-ms", type=float, default=30000)
+    action_screenshot_selector.set_defaults(func=cmd_action_screenshot_selector)
+
+    action_screenshot_role = action_subparsers.add_parser(
+        "screenshot-role",
+        help="Capture a screenshot of one element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_screenshot_role)
+    action_screenshot_role.add_argument("--role", required=True)
+    action_screenshot_role.add_argument("--name")
+    action_screenshot_role.add_argument("--output")
+    action_screenshot_role.add_argument("--index", type=int, default=0)
+    action_screenshot_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_screenshot_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden accessibility nodes when matching role/name.",
+    )
+    action_screenshot_role.add_argument(
+        "--exact",
+        action="store_true",
+        help="Match the accessible name exactly.",
+    )
+    action_screenshot_role.set_defaults(func=cmd_action_screenshot_role)
+
     action_eval = action_subparsers.add_parser(
         "eval",
         help="Run a JavaScript expression",
@@ -4943,6 +21606,22 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_snapshot.add_argument("--timeout-ms", type=float, default=30000)
     action_snapshot.add_argument("--max-chars", type=int, default=8000)
     action_snapshot.set_defaults(func=cmd_action_snapshot)
+
+    action_page_info = action_subparsers.add_parser(
+        "page-info",
+        help="Read page URL, title, ready state, viewport, and text/html lengths",
+    )
+    _add_session_target_args(action_page_info)
+    action_page_info.set_defaults(func=cmd_action_page_info)
+
+    action_set_viewport = action_subparsers.add_parser(
+        "set-viewport",
+        help="Set the current page viewport width and height",
+    )
+    _add_session_target_args(action_set_viewport)
+    action_set_viewport.add_argument("--width", type=int, required=True)
+    action_set_viewport.add_argument("--height", type=int, required=True)
+    action_set_viewport.set_defaults(func=cmd_action_set_viewport)
 
     action_reload = action_subparsers.add_parser(
         "reload",
@@ -4979,6 +21658,26 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_wait_url.add_argument("--timeout-ms", type=float, default=30000)
     action_wait_url.add_argument("--poll-ms", type=float, default=250)
     action_wait_url.set_defaults(func=cmd_action_wait_url)
+
+    action_wait_title = action_subparsers.add_parser(
+        "wait-title",
+        help="Wait until document.title matches text or a regex",
+    )
+    _add_session_target_args(action_wait_title)
+    action_wait_title.add_argument("--title", required=True)
+    action_wait_title.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+    )
+    action_wait_title.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_title.add_argument("--poll-ms", type=float, default=250)
+    action_wait_title.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match the title case-sensitively.",
+    )
+    action_wait_title.set_defaults(func=cmd_action_wait_title)
 
     action_wait_load_state = action_subparsers.add_parser(
         "wait-load-state",
@@ -5024,6 +21723,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_get_text.add_argument("--selector", required=True)
     action_get_text.set_defaults(func=cmd_action_get_text)
 
+    action_get_text_role = action_subparsers.add_parser(
+        "get-text-role",
+        help="Read text from an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_get_text_role)
+    action_get_text_role.add_argument("--role", required=True)
+    action_get_text_role.add_argument("--name")
+    action_get_text_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_get_text_role)
+    action_get_text_role.set_defaults(func=cmd_action_get_text_role)
+
     action_exists = action_subparsers.add_parser(
         "exists",
         help="Check whether a selector exists",
@@ -5031,6 +21745,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_exists)
     action_exists.add_argument("--selector", required=True)
     action_exists.set_defaults(func=cmd_action_exists)
+
+    action_exists_role = action_subparsers.add_parser(
+        "exists-role",
+        help="Check whether an element matched by role and optional accessible name exists",
+    )
+    _add_session_target_args(action_exists_role)
+    action_exists_role.add_argument("--role", required=True)
+    action_exists_role.add_argument("--name")
+    action_exists_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_exists_role)
+    action_exists_role.set_defaults(func=cmd_action_exists_role)
 
     action_count = action_subparsers.add_parser(
         "count",
@@ -5066,6 +21795,43 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Include hidden DOM nodes in the count.",
     )
     action_wait_count.set_defaults(func=cmd_action_wait_count)
+
+    action_wait_state = action_subparsers.add_parser(
+        "wait-state",
+        help="Wait until a selector reaches a common DOM state",
+    )
+    _add_session_target_args(action_wait_state)
+    action_wait_state.add_argument("--selector", required=True)
+    action_wait_state.add_argument(
+        "--state",
+        required=True,
+        choices=COMMON_DOM_STATE_CHOICES,
+    )
+    action_wait_state.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_state.add_argument("--poll-ms", type=float, default=250)
+    action_wait_state.set_defaults(func=cmd_action_wait_state)
+
+    action_wait_state_role = action_subparsers.add_parser(
+        "wait-state-role",
+        help="Wait until an element matched by role/name reaches a common DOM state",
+    )
+    _add_session_target_args(action_wait_state_role)
+    action_wait_state_role.add_argument("--role", required=True)
+    action_wait_state_role.add_argument("--name")
+    action_wait_state_role.add_argument(
+        "--state",
+        required=True,
+        choices=COMMON_DOM_STATE_CHOICES,
+    )
+    action_wait_state_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_state_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_state_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_wait_state_role)
+    action_wait_state_role.set_defaults(func=cmd_action_wait_state_role)
 
     action_query = action_subparsers.add_parser(
         "query",
@@ -5104,6 +21870,22 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_get_attribute.add_argument("--name", required=True)
     action_get_attribute.set_defaults(func=cmd_action_get_attribute)
 
+    action_get_attribute_role = action_subparsers.add_parser(
+        "get-attribute-role",
+        help="Read an attribute from an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_get_attribute_role)
+    action_get_attribute_role.add_argument("--role", required=True)
+    action_get_attribute_role.add_argument("--name")
+    action_get_attribute_role.add_argument("--attribute", required=True)
+    action_get_attribute_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_get_attribute_role)
+    action_get_attribute_role.set_defaults(func=cmd_action_get_attribute_role)
+
     action_wait_attribute = action_subparsers.add_parser(
         "wait-attribute",
         help="Wait until an attribute reaches a state or value",
@@ -5133,6 +21915,37 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_wait_attribute.set_defaults(func=cmd_action_wait_attribute)
 
+    action_wait_attribute_role = action_subparsers.add_parser(
+        "wait-attribute-role",
+        help="Wait until an attribute on an element matched by role/name reaches a state or value",
+    )
+    _add_session_target_args(action_wait_attribute_role)
+    action_wait_attribute_role.add_argument("--role", required=True)
+    action_wait_attribute_role.add_argument("--name")
+    action_wait_attribute_role.add_argument("--attribute", required=True)
+    action_wait_attribute_role.add_argument("--value")
+    action_wait_attribute_role.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Attribute presence state to wait for. When --value is set, present also waits for the value match.",
+    )
+    action_wait_attribute_role.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match --value.",
+    )
+    action_wait_attribute_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_attribute_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_attribute_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_wait_attribute_role)
+    action_wait_attribute_role.set_defaults(func=cmd_action_wait_attribute_role)
+
     action_wait_text = action_subparsers.add_parser(
         "wait-text",
         help="Wait until text appears in the page or an optional selector",
@@ -5146,12 +21959,35 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_wait_text.add_argument("--timeout-ms", type=float, default=30000)
     action_wait_text.add_argument("--poll-ms", type=float, default=250)
     action_wait_text.add_argument(
+        "--state",
+        choices=["present", "absent"],
+        default="present",
+        help="Text state to wait for.",
+    )
+    action_wait_text.add_argument(
         "--include-hidden",
         action="store_true",
         help="Include hidden DOM nodes while waiting.",
     )
     _add_text_match_args(action_wait_text)
     action_wait_text.set_defaults(func=cmd_action_wait_text)
+
+    action_wait_role = action_subparsers.add_parser(
+        "wait-role",
+        help="Wait until an interactive element with role and optional name appears",
+    )
+    _add_session_target_args(action_wait_role)
+    action_wait_role.add_argument("--role", required=True)
+    action_wait_role.add_argument("--name")
+    action_wait_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes while waiting.",
+    )
+    _add_text_match_args(action_wait_role)
+    action_wait_role.set_defaults(func=cmd_action_wait_role)
 
     action_focus = action_subparsers.add_parser(
         "focus",
@@ -5166,6 +22002,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_focus.set_defaults(func=cmd_action_focus)
 
+    action_focus_role = action_subparsers.add_parser(
+        "focus-role",
+        help="Focus an interactive element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_focus_role)
+    action_focus_role.add_argument("--role", required=True)
+    action_focus_role.add_argument("--name")
+    action_focus_role.add_argument(
+        "--prevent-scroll",
+        action="store_true",
+        help="Focus without scrolling the element into view.",
+    )
+    _add_text_match_args(action_focus_role)
+    action_focus_role.set_defaults(func=cmd_action_focus_role)
+
     action_get_value = action_subparsers.add_parser(
         "get-value",
         help="Read the value, checked state, or selected options from a form field",
@@ -5173,6 +22024,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_get_value)
     action_get_value.add_argument("--selector", required=True)
     action_get_value.set_defaults(func=cmd_action_get_value)
+
+    action_get_value_role = action_subparsers.add_parser(
+        "get-value-role",
+        help="Read a form field value from an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_get_value_role)
+    action_get_value_role.add_argument("--role", required=True)
+    action_get_value_role.add_argument("--name")
+    _add_text_match_args(action_get_value_role)
+    action_get_value_role.set_defaults(func=cmd_action_get_value_role)
 
     action_wait_value = action_subparsers.add_parser(
         "wait-value",
@@ -5196,6 +22057,34 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_wait_value.set_defaults(func=cmd_action_wait_value)
 
+    action_wait_value_role = action_subparsers.add_parser(
+        "wait-value-role",
+        help="Wait until a role/name form field value matches text",
+    )
+    _add_session_target_args(action_wait_value_role)
+    action_wait_value_role.add_argument("--role", required=True)
+    action_wait_value_role.add_argument("--name")
+    action_wait_value_role.add_argument("--value", required=True)
+    action_wait_value_role.add_argument(
+        "--exact",
+        action="store_true",
+        help="Match the role accessible name exactly.",
+    )
+    action_wait_value_role.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How to match the current value.",
+    )
+    action_wait_value_role.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_value_role.add_argument("--poll-ms", type=float, default=250)
+    action_wait_value_role.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Match values case-sensitively.",
+    )
+    action_wait_value_role.set_defaults(func=cmd_action_wait_value_role)
+
     action_blur = action_subparsers.add_parser(
         "blur",
         help="Blur a selector to trigger focusout/change validation",
@@ -5203,6 +22092,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_blur)
     action_blur.add_argument("--selector", required=True)
     action_blur.set_defaults(func=cmd_action_blur)
+
+    action_blur_role = action_subparsers.add_parser(
+        "blur-role",
+        help="Blur an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_blur_role)
+    action_blur_role.add_argument("--role", required=True)
+    action_blur_role.add_argument("--name")
+    _add_text_match_args(action_blur_role)
+    action_blur_role.set_defaults(func=cmd_action_blur_role)
 
     action_storage_get = action_subparsers.add_parser(
         "storage-get",
@@ -5411,6 +22310,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_clear.add_argument("--selector", required=True)
     action_clear.set_defaults(func=cmd_action_clear)
 
+    action_clear_role = action_subparsers.add_parser(
+        "clear-role",
+        help="Clear a form field or editable element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_clear_role)
+    action_clear_role.add_argument("--role", required=True)
+    action_clear_role.add_argument("--name")
+    _add_text_match_args(action_clear_role)
+    action_clear_role.set_defaults(func=cmd_action_clear_role)
+
     action_set_value = action_subparsers.add_parser(
         "set-value",
         help="Set a form field or editable element value and dispatch input/change",
@@ -5424,6 +22333,31 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Do not dispatch input/change after setting the value.",
     )
     action_set_value.set_defaults(func=cmd_action_set_value)
+
+    action_set_file_input = action_subparsers.add_parser(
+        "set-file-input",
+        help="Set local files on an input[type=file] without opening a file picker",
+    )
+    _add_session_target_args(action_set_file_input)
+    action_set_file_input.add_argument("--selector", required=True)
+    action_set_file_input.add_argument(
+        "--file",
+        action="append",
+        required=True,
+        help="Local file path to attach. May be repeated for multiple file inputs.",
+    )
+    action_set_file_input.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_FILE_INPUT_MAX_BYTES,
+        help="Maximum total bytes to embed in the browser action payload.",
+    )
+    action_set_file_input.add_argument(
+        "--no-events",
+        action="store_true",
+        help="Do not dispatch input/change after setting files.",
+    )
+    action_set_file_input.set_defaults(func=cmd_action_set_file_input)
 
     action_dispatch_event = action_subparsers.add_parser(
         "dispatch-event",
@@ -5486,6 +22420,21 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_bounding_box.add_argument("--selector", required=True)
     action_bounding_box.set_defaults(func=cmd_action_bounding_box)
 
+    action_bounding_box_role = action_subparsers.add_parser(
+        "bounding-box-role",
+        help="Read geometry for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_bounding_box_role)
+    action_bounding_box_role.add_argument("--role", required=True)
+    action_bounding_box_role.add_argument("--name")
+    action_bounding_box_role.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes when matching role/name.",
+    )
+    _add_text_match_args(action_bounding_box_role)
+    action_bounding_box_role.set_defaults(func=cmd_action_bounding_box_role)
+
     action_scroll_into_view = action_subparsers.add_parser(
         "scroll-into-view",
         help="Scroll one selector into the viewport",
@@ -5511,6 +22460,33 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_scroll_into_view.set_defaults(func=cmd_action_scroll_into_view)
 
+    action_scroll_into_view_role = action_subparsers.add_parser(
+        "scroll-into-view-role",
+        help="Scroll an interactive element matched by role and optional accessible name into the viewport",
+    )
+    _add_session_target_args(action_scroll_into_view_role)
+    action_scroll_into_view_role.add_argument("--role", required=True)
+    action_scroll_into_view_role.add_argument("--name")
+    action_scroll_into_view_role.add_argument(
+        "--block",
+        choices=["start", "center", "end", "nearest"],
+        default="center",
+        help="Vertical alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view_role.add_argument(
+        "--inline",
+        choices=["start", "center", "end", "nearest"],
+        default="nearest",
+        help="Horizontal alignment passed to element.scrollIntoView().",
+    )
+    action_scroll_into_view_role.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+    )
+    _add_text_match_args(action_scroll_into_view_role)
+    action_scroll_into_view_role.set_defaults(func=cmd_action_scroll_into_view_role)
+
     action_select_option = action_subparsers.add_parser(
         "select-option",
         help="Set the value of a select-like element",
@@ -5531,6 +22507,19 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     select_label_value.add_argument("--option-label")
     _add_text_match_args(action_select_label)
     action_select_label.set_defaults(func=cmd_action_select_label)
+
+    action_select_role = action_subparsers.add_parser(
+        "select-role",
+        help="Select an option in a native select matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_select_role)
+    action_select_role.add_argument("--role", required=True)
+    action_select_role.add_argument("--name")
+    select_role_value = action_select_role.add_mutually_exclusive_group(required=True)
+    select_role_value.add_argument("--value")
+    select_role_value.add_argument("--option-label")
+    _add_text_match_args(action_select_role)
+    action_select_role.set_defaults(func=cmd_action_select_role)
 
     action_check = action_subparsers.add_parser(
         "check",
@@ -5557,6 +22546,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_text_match_args(action_check_label)
     action_check_label.set_defaults(func=cmd_action_check_label)
 
+    action_check_role = action_subparsers.add_parser(
+        "check-role",
+        help="Check a checkbox, radio, or switch matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_check_role)
+    action_check_role.add_argument("--role", required=True)
+    action_check_role.add_argument("--name")
+    _add_text_match_args(action_check_role)
+    action_check_role.set_defaults(func=cmd_action_check_role)
+
     action_uncheck_label = action_subparsers.add_parser(
         "uncheck-label",
         help="Uncheck a checkbox or switch matched by label or accessible name",
@@ -5566,6 +22565,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_text_match_args(action_uncheck_label)
     action_uncheck_label.set_defaults(func=cmd_action_uncheck_label)
 
+    action_uncheck_role = action_subparsers.add_parser(
+        "uncheck-role",
+        help="Uncheck a checkbox or switch matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_uncheck_role)
+    action_uncheck_role.add_argument("--role", required=True)
+    action_uncheck_role.add_argument("--name")
+    _add_text_match_args(action_uncheck_role)
+    action_uncheck_role.set_defaults(func=cmd_action_uncheck_role)
+
     action_hover = action_subparsers.add_parser(
         "hover",
         help="Dispatch hover events for a selector",
@@ -5573,6 +22582,16 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     _add_session_target_args(action_hover)
     action_hover.add_argument("--selector", required=True)
     action_hover.set_defaults(func=cmd_action_hover)
+
+    action_hover_role = action_subparsers.add_parser(
+        "hover-role",
+        help="Dispatch hover events for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_hover_role)
+    action_hover_role.add_argument("--role", required=True)
+    action_hover_role.add_argument("--name")
+    _add_text_match_args(action_hover_role)
+    action_hover_role.set_defaults(func=cmd_action_hover_role)
 
     action_press = action_subparsers.add_parser(
         "press",
@@ -5582,6 +22601,33 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_press.add_argument("--selector", required=True)
     action_press.add_argument("--key", required=True)
     action_press.set_defaults(func=cmd_action_press)
+
+    action_press_role = action_subparsers.add_parser(
+        "press-role",
+        help="Focus an element matched by role/name and dispatch key events",
+    )
+    _add_session_target_args(action_press_role)
+    action_press_role.add_argument("--role", required=True)
+    action_press_role.add_argument("--name")
+    action_press_role.add_argument("--key", required=True)
+    _add_text_match_args(action_press_role)
+    action_press_role.set_defaults(func=cmd_action_press_role)
+
+    action_press_key = action_subparsers.add_parser(
+        "press-key",
+        help="Dispatch key events to the active element or page",
+    )
+    _add_session_target_args(action_press_key)
+    action_press_key.add_argument("--key", required=True)
+    action_press_key.add_argument(
+        "--code",
+        help="KeyboardEvent.code value. Defaults to --key.",
+    )
+    action_press_key.add_argument("--alt-key", action="store_true")
+    action_press_key.add_argument("--ctrl-key", action="store_true")
+    action_press_key.add_argument("--meta-key", action="store_true")
+    action_press_key.add_argument("--shift-key", action="store_true")
+    action_press_key.set_defaults(func=cmd_action_press_key)
 
     action_click_text = action_subparsers.add_parser(
         "click-text",
@@ -5620,6 +22666,42 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_click_index.set_defaults(func=cmd_action_click_index)
 
+    action_double_click = action_subparsers.add_parser(
+        "double-click",
+        help="Dispatch a double-click mouse sequence for a selector",
+    )
+    _add_session_target_args(action_double_click)
+    action_double_click.add_argument("--selector", required=True)
+    action_double_click.set_defaults(func=cmd_action_double_click)
+
+    action_double_click_role = action_subparsers.add_parser(
+        "double-click-role",
+        help="Dispatch a double-click mouse sequence for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_double_click_role)
+    action_double_click_role.add_argument("--role", required=True)
+    action_double_click_role.add_argument("--name")
+    _add_text_match_args(action_double_click_role)
+    action_double_click_role.set_defaults(func=cmd_action_double_click_role)
+
+    action_right_click = action_subparsers.add_parser(
+        "right-click",
+        help="Dispatch a right-click/contextmenu mouse sequence for a selector",
+    )
+    _add_session_target_args(action_right_click)
+    action_right_click.add_argument("--selector", required=True)
+    action_right_click.set_defaults(func=cmd_action_right_click)
+
+    action_right_click_role = action_subparsers.add_parser(
+        "right-click-role",
+        help="Dispatch a right-click/contextmenu mouse sequence for an element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_right_click_role)
+    action_right_click_role.add_argument("--role", required=True)
+    action_right_click_role.add_argument("--name")
+    _add_text_match_args(action_right_click_role)
+    action_right_click_role.set_defaults(func=cmd_action_right_click_role)
+
     action_fill_label = action_subparsers.add_parser(
         "fill-label",
         help="Fill a form field matched by label, aria-label, or placeholder",
@@ -5629,6 +22711,17 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_fill_label.add_argument("--text", required=True)
     _add_text_match_args(action_fill_label)
     action_fill_label.set_defaults(func=cmd_action_fill_label)
+
+    action_fill_role = action_subparsers.add_parser(
+        "fill-role",
+        help="Fill a writable element matched by role and optional accessible name",
+    )
+    _add_session_target_args(action_fill_role)
+    action_fill_role.add_argument("--role", required=True)
+    action_fill_role.add_argument("--name")
+    action_fill_role.add_argument("--text", required=True)
+    _add_text_match_args(action_fill_role)
+    action_fill_role.set_defaults(func=cmd_action_fill_role)
 
     action_form_snapshot = action_subparsers.add_parser(
         "form-snapshot",
@@ -5647,6 +22740,413 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     action_form_snapshot.set_defaults(func=cmd_action_form_snapshot)
 
+    action_link_snapshot = action_subparsers.add_parser(
+        "link-snapshot",
+        help="Capture page links with text, href, absolute URL, and target metadata",
+    )
+    _add_session_target_args(action_link_snapshot)
+    action_link_snapshot.add_argument(
+        "--selector",
+        help="Optional link or container selector used to scope links.",
+    )
+    _add_snapshot_filter_args(action_link_snapshot)
+    action_link_snapshot.add_argument(
+        "--include-empty",
+        action="store_true",
+        help="Include links without visible text or accessible name.",
+    )
+    action_link_snapshot.add_argument(
+        "--same-origin-only",
+        action="store_true",
+        help="Only return links whose resolved URL has the same origin as the current page.",
+    )
+    action_link_snapshot.set_defaults(func=cmd_action_link_snapshot)
+
+    action_table_snapshot = action_subparsers.add_parser(
+        "table-snapshot",
+        help="Capture page tables with headers, rows, cells, and cell links",
+    )
+    _add_session_target_args(action_table_snapshot)
+    action_table_snapshot.add_argument(
+        "--selector",
+        help="Optional table or container selector used to scope tables.",
+    )
+    _add_snapshot_filter_args(action_table_snapshot)
+    action_table_snapshot.add_argument(
+        "--max-rows",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum rows to return per table.",
+    )
+    action_table_snapshot.add_argument(
+        "--max-cells",
+        type=_non_negative_int,
+        default=20,
+        help="Maximum cells to return per row.",
+    )
+    action_table_snapshot.set_defaults(func=cmd_action_table_snapshot)
+
+    action_list_snapshot = action_subparsers.add_parser(
+        "list-snapshot",
+        help="Capture native and ARIA lists, menus, listboxes, and tree items",
+    )
+    _add_session_target_args(action_list_snapshot)
+    action_list_snapshot.add_argument(
+        "--selector",
+        help="Optional list or container selector used to scope lists.",
+    )
+    _add_snapshot_filter_args(action_list_snapshot)
+    action_list_snapshot.add_argument(
+        "--max-items",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum items to return per list.",
+    )
+    action_list_snapshot.set_defaults(func=cmd_action_list_snapshot)
+
+    action_text_snapshot = action_subparsers.add_parser(
+        "text-snapshot",
+        help="Capture bounded readable text blocks, headings, and live regions",
+    )
+    _add_session_target_args(action_text_snapshot)
+    action_text_snapshot.add_argument(
+        "--selector",
+        help="Optional text block or container selector used to scope text.",
+    )
+    _add_snapshot_filter_args(action_text_snapshot)
+    action_text_snapshot.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=500,
+        help="Maximum characters to return per text block.",
+    )
+    action_text_snapshot.set_defaults(func=cmd_action_text_snapshot)
+
+    action_dialog_snapshot = action_subparsers.add_parser(
+        "dialog-snapshot",
+        help="Capture modal/dialog structure, readable text, and controls",
+    )
+    _add_session_target_args(action_dialog_snapshot)
+    action_dialog_snapshot.add_argument(
+        "--selector",
+        help="Optional dialog or container selector used to scope dialogs.",
+    )
+    _add_snapshot_filter_args(action_dialog_snapshot)
+    action_dialog_snapshot.add_argument(
+        "--max-controls",
+        type=_non_negative_int,
+        default=30,
+        help="Maximum interactive controls to return per dialog.",
+    )
+    action_dialog_snapshot.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters to return per dialog text body.",
+    )
+    action_dialog_snapshot.set_defaults(func=cmd_action_dialog_snapshot)
+
+    action_wait_dialog = action_subparsers.add_parser(
+        "wait-dialog",
+        help="Wait for a modal/dialog entry and return its structure and controls",
+    )
+    _add_session_target_args(action_wait_dialog)
+    action_wait_dialog.add_argument(
+        "--selector",
+        help="Optional dialog or container selector used to scope dialogs.",
+    )
+    _add_snapshot_filter_args(action_wait_dialog)
+    action_wait_dialog.add_argument(
+        "--max-controls",
+        type=_non_negative_int,
+        default=30,
+        help="Maximum interactive controls to return per dialog.",
+    )
+    action_wait_dialog.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters to return per dialog text body.",
+    )
+    action_wait_dialog.add_argument(
+        "--text",
+        help="Optional text to match against dialog title, description, body, or controls.",
+    )
+    action_wait_dialog.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --text should match dialog text.",
+    )
+    action_wait_dialog.add_argument(
+        "--modal-only",
+        action="store_true",
+        help="Only match dialogs that report modal=true.",
+    )
+    action_wait_dialog.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_dialog.add_argument("--poll-ms", type=float, default=100)
+    action_wait_dialog.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make text matching case-sensitive.",
+    )
+    action_wait_dialog.set_defaults(func=cmd_action_wait_dialog)
+
+    action_frame_snapshot = action_subparsers.add_parser(
+        "frame-snapshot",
+        help="Capture iframe/frame metadata, URLs, geometry, and readable same-origin text",
+    )
+    _add_session_target_args(action_frame_snapshot)
+    action_frame_snapshot.add_argument(
+        "--selector",
+        help="Optional iframe/frame or container selector used to scope frames.",
+    )
+    _add_snapshot_filter_args(action_frame_snapshot)
+    action_frame_snapshot.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=500,
+        help="Maximum readable body text characters to return for same-origin frames.",
+    )
+    action_frame_snapshot.set_defaults(func=cmd_action_frame_snapshot)
+
+    action_wait_frame = action_subparsers.add_parser(
+        "wait-frame",
+        help="Wait for an iframe/frame entry and return matching frame metadata",
+    )
+    _add_session_target_args(action_wait_frame)
+    action_wait_frame.add_argument(
+        "--selector",
+        help="Optional iframe/frame or container selector used to scope frames.",
+    )
+    _add_snapshot_filter_args(action_wait_frame)
+    action_wait_frame.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=500,
+        help="Maximum readable body text characters to return for same-origin frames.",
+    )
+    action_wait_frame.add_argument(
+        "--url",
+        help="Optional URL text to match against src, absolute_url, or readable frame_url.",
+    )
+    action_wait_frame.add_argument(
+        "--url-match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --url should match frame URLs.",
+    )
+    action_wait_frame.add_argument(
+        "--text",
+        help="Optional text to match against frame name, title, or readable body text.",
+    )
+    action_wait_frame.add_argument(
+        "--text-match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --text should match frame text.",
+    )
+    action_wait_frame.add_argument(
+        "--readable-only",
+        action="store_true",
+        help="Only match frames whose document is same-origin readable.",
+    )
+    action_wait_frame.add_argument(
+        "--same-origin-only",
+        action="store_true",
+        help="Only match frames whose src or readable document is same-origin.",
+    )
+    action_wait_frame.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_frame.add_argument("--poll-ms", type=float, default=100)
+    action_wait_frame.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make URL and text matching case-sensitive.",
+    )
+    action_wait_frame.set_defaults(func=cmd_action_wait_frame)
+
+    action_performance_snapshot = action_subparsers.add_parser(
+        "performance-snapshot",
+        help="Capture navigation and resource timing entries with masked URLs",
+    )
+    _add_session_target_args(action_performance_snapshot)
+    action_performance_snapshot.add_argument(
+        "--max-resources",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum resource timing entries to return.",
+    )
+    action_performance_snapshot.add_argument(
+        "--initiator-type",
+        help="Only return resource entries with this initiatorType, such as fetch, xmlhttprequest, script, css, img, or iframe.",
+    )
+    action_performance_snapshot.add_argument(
+        "--min-duration-ms",
+        type=float,
+        default=0,
+        help="Only return resource entries whose duration is at least this many milliseconds.",
+    )
+    action_performance_snapshot.set_defaults(func=cmd_action_performance_snapshot)
+
+    action_network_snapshot = action_subparsers.add_parser(
+        "network-snapshot",
+        help="Install and read a fetch/XHR network event buffer with masked URLs",
+    )
+    _add_session_target_args(action_network_snapshot)
+    action_network_snapshot.add_argument(
+        "--max-entries",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum buffered network entries to return.",
+    )
+    action_network_snapshot.add_argument(
+        "--source",
+        choices=["fetch", "xhr"],
+        help="Only return entries captured from this network source.",
+    )
+    action_network_snapshot.add_argument(
+        "--method",
+        help="Only return entries with this HTTP method, such as GET or POST.",
+    )
+    action_network_snapshot.add_argument(
+        "--failed-only",
+        action="store_true",
+        help="Only return entries whose request failed before an HTTP response.",
+    )
+    action_network_snapshot.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear the page network event buffer after reading it.",
+    )
+    action_network_snapshot.add_argument(
+        "--install-only",
+        action="store_true",
+        help="Install the fetch/XHR network listener without returning buffered entries.",
+    )
+    action_network_snapshot.set_defaults(func=cmd_action_network_snapshot)
+
+    action_wait_network = action_subparsers.add_parser(
+        "wait-network",
+        help="Wait for a buffered or future fetch/XHR network entry",
+    )
+    _add_session_target_args(action_wait_network)
+    action_wait_network.add_argument(
+        "--url",
+        help="Optional text to match against the masked absolute request URL.",
+    )
+    action_wait_network.add_argument(
+        "--url-match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --url should match network entry URLs.",
+    )
+    action_wait_network.add_argument(
+        "--source",
+        choices=["fetch", "xhr"],
+        help="Only match entries captured from this network source.",
+    )
+    action_wait_network.add_argument(
+        "--method",
+        help="Only match entries with this HTTP method, such as GET or POST.",
+    )
+    action_wait_network.add_argument(
+        "--status",
+        type=_non_negative_int,
+        help="Only match entries with this HTTP response status.",
+    )
+    action_wait_network.add_argument(
+        "--failed-only",
+        action="store_true",
+        help="Only match entries whose request failed before an HTTP response.",
+    )
+    action_wait_network.add_argument(
+        "--after-index",
+        type=_non_negative_int,
+        help="Only match entries whose network buffer index is greater than this value.",
+    )
+    action_wait_network.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_network.add_argument("--poll-ms", type=float, default=100)
+    action_wait_network.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make URL matching case-sensitive.",
+    )
+    action_wait_network.set_defaults(func=cmd_action_wait_network)
+
+    action_console_snapshot = action_subparsers.add_parser(
+        "console-snapshot",
+        help="Install and read a page console/error buffer with masked values",
+    )
+    _add_session_target_args(action_console_snapshot)
+    action_console_snapshot.add_argument(
+        "--max-entries",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum buffered console/error entries to return.",
+    )
+    action_console_snapshot.add_argument(
+        "--clear",
+        action="store_true",
+        help="Clear the page console/error buffer after reading it.",
+    )
+    action_console_snapshot.add_argument(
+        "--install-only",
+        action="store_true",
+        help="Install the page console/error listener without returning buffered entries.",
+    )
+    action_console_snapshot.set_defaults(func=cmd_action_console_snapshot)
+
+    action_wait_console = action_subparsers.add_parser(
+        "wait-console",
+        help="Wait for a buffered or future console/page error entry",
+    )
+    _add_session_target_args(action_wait_console)
+    action_wait_console.add_argument(
+        "--text",
+        help="Optional text to match against the masked console entry text.",
+    )
+    action_wait_console.add_argument(
+        "--match",
+        choices=["contains", "exact", "regex"],
+        default="contains",
+        help="How --text should match console entry text.",
+    )
+    action_wait_console.add_argument(
+        "--source",
+        choices=["console", "pageerror", "unhandledrejection"],
+        help="Only match entries from this source.",
+    )
+    action_wait_console.add_argument(
+        "--level",
+        choices=["debug", "info", "warn", "error"],
+        help="Only match entries with this normalized level.",
+    )
+    action_wait_console.add_argument(
+        "--after-index",
+        type=_non_negative_int,
+        help="Only match entries whose console buffer index is greater than this value.",
+    )
+    action_wait_console.add_argument("--timeout-ms", type=float, default=30000)
+    action_wait_console.add_argument("--poll-ms", type=float, default=100)
+    action_wait_console.add_argument(
+        "--case-sensitive",
+        action="store_true",
+        help="Make text matching case-sensitive.",
+    )
+    action_wait_console.set_defaults(func=cmd_action_wait_console)
+
+    action_outline_snapshot = action_subparsers.add_parser(
+        "outline-snapshot",
+        help="Capture page headings and landmark regions for navigation",
+    )
+    _add_session_target_args(action_outline_snapshot)
+    action_outline_snapshot.add_argument(
+        "--selector",
+        help="Optional section or container selector used to scope the outline.",
+    )
+    _add_snapshot_filter_args(action_outline_snapshot)
+    action_outline_snapshot.set_defaults(func=cmd_action_outline_snapshot)
+
     action_accessibility_snapshot = action_subparsers.add_parser(
         "accessibility-snapshot",
         help="Capture a DOM-backed accessibility-like snapshot",
@@ -5661,12 +23161,98 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     _add_session_target_args(action_interactive_snapshot)
     _add_snapshot_filter_args(action_interactive_snapshot)
-    action_interactive_snapshot.set_defaults(func=cmd_action_interactive_snapshot)
+    action_interactive_snapshot.set_defaults(
+        func=cmd_action_interactive_snapshot,
+        action_command_name="action.interactive-snapshot",
+    )
+
+    action_interactive_only_snapshot = action_subparsers.add_parser(
+        "interactive-only-snapshot",
+        help="Alias for interactive-snapshot; capture visible interactive elements",
+    )
+    _add_session_target_args(action_interactive_only_snapshot)
+    _add_snapshot_filter_args(action_interactive_only_snapshot)
+    action_interactive_only_snapshot.set_defaults(
+        func=cmd_action_interactive_snapshot,
+        action_command_name="action.interactive-only-snapshot",
+    )
 
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case = subparsers.add_parser("case", help="Validate or run a browser case file")
     case_subparsers = case.add_subparsers(dest="case_command", required=True)
+
+    case_schema = case_subparsers.add_parser(
+        "schema",
+        help="Describe the supported browser case file schema",
+    )
+    case_schema.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Only return supported case action names.",
+    )
+    case_schema.add_argument(
+        "--action",
+        help="Return schema details for one supported case action.",
+    )
+    case_schema.set_defaults(func=cmd_case_schema)
+
+    case_scaffold = case_subparsers.add_parser(
+        "scaffold",
+        help="Generate a valid starter browser case file",
+    )
+    case_scaffold.add_argument(
+        "--template",
+        choices=CASE_SCAFFOLD_TEMPLATES,
+        default="page-inspection",
+        help="Case template to generate.",
+    )
+    case_scaffold.add_argument(
+        "--name",
+        help="Optional case name. Defaults to the selected template id.",
+    )
+    case_scaffold.add_argument(
+        "--url",
+        help=("URL for the page-inspection template. Defaults to https://example.com."),
+    )
+    case_scaffold.add_argument(
+        "--selector",
+        help="Selector to wait for in the page-inspection template. Defaults to body.",
+    )
+    case_scaffold.add_argument(
+        "--text",
+        default="lexmount browser",
+        help="Text used by the form-fill template.",
+    )
+    case_scaffold.add_argument(
+        "--browser-mode",
+        type=_normalize_browser_mode,
+        default="light",
+        help="Browser mode to place under session.browser_mode.",
+    )
+    case_scaffold.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=2000,
+        help="Snapshot max_chars for the page-inspection template.",
+    )
+    case_scaffold.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("yaml", "json"),
+        default="yaml",
+        help="Serialized case format included in JSON output and written to --output.",
+    )
+    case_scaffold.add_argument(
+        "--output",
+        help="Optional .yaml/.yml/.json file path to write.",
+    )
+    case_scaffold.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow replacing an existing --output file.",
+    )
+    case_scaffold.set_defaults(func=cmd_case_scaffold)
 
     case_validate = case_subparsers.add_parser("validate", help="Validate a case file")
     case_validate.add_argument(
@@ -5698,7 +23284,125 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "status",
         help="Show local Lexmount credential environment status without secrets",
     )
+    auth_status.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
     auth_status.set_defaults(func=cmd_auth_status)
+
+    auth_scopes = auth_subparsers.add_parser(
+        "scopes",
+        help="List known Connect from Codex credential scopes and permissions",
+    )
+    auth_scopes.add_argument(
+        "--scope",
+        action="append",
+        help=(
+            "Scope to inspect. May be repeated; defaults to all known browser "
+            "credential scopes."
+        ),
+    )
+    auth_scopes.add_argument(
+        "--project-id",
+        help=(
+            "Project ID to include when --include-site-contract is used. "
+            "Defaults to LEXMOUNT_PROJECT_ID when set."
+        ),
+    )
+    auth_scopes.add_argument(
+        "--expires-in",
+        default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
+    )
+    auth_scopes.add_argument(
+        "--include-site-contract",
+        action="store_true",
+        help="Include browser.lexmount.cn /connect/codex UI and query contract fields.",
+    )
+    auth_scopes.set_defaults(func=cmd_auth_scopes)
+
+    auth_token_info = auth_subparsers.add_parser(
+        "token-info",
+        help="Inspect local device-token metadata without revealing token values",
+    )
+    auth_token_info.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
+    auth_token_info.add_argument(
+        "--required-scope",
+        action="append",
+        help="Scope that should be present in the local device token. May be repeated.",
+    )
+    auth_token_info.set_defaults(func=cmd_auth_token_info)
+
+    auth_refresh = auth_subparsers.add_parser(
+        "refresh",
+        help="Inspect local device-token refresh state without revealing token values",
+    )
+    auth_refresh.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
+    auth_refresh.add_argument(
+        "--force",
+        action="store_true",
+        help="Request refresh even when local metadata does not need it.",
+    )
+    auth_refresh.add_argument(
+        "--token-base-url",
+        help=(
+            "Base URL for token lifecycle endpoints. Defaults to "
+            f"{TOKEN_LIFECYCLE_BASE_URL_ENV}, then {DEVICE_CODE_BASE_URL_ENV}, when set."
+        ),
+    )
+    auth_refresh.add_argument(
+        "--http-timeout-seconds",
+        type=float,
+        default=10,
+        help="HTTP timeout for token refresh endpoint requests.",
+    )
+    auth_refresh.set_defaults(func=cmd_auth_refresh)
+
+    auth_logout = auth_subparsers.add_parser(
+        "logout",
+        help="Remove local device-token metadata without touching env credentials",
+    )
+    auth_logout.add_argument(
+        "--credentials-file",
+        help=(
+            "Remove local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
+    auth_logout.add_argument(
+        "--revoke",
+        action="store_true",
+        help="Request remote revoke when a token lifecycle endpoint is configured.",
+    )
+    auth_logout.add_argument(
+        "--token-base-url",
+        help=(
+            "Base URL for token lifecycle endpoints. Defaults to "
+            f"{TOKEN_LIFECYCLE_BASE_URL_ENV}, then {DEVICE_CODE_BASE_URL_ENV}, when set."
+        ),
+    )
+    auth_logout.add_argument(
+        "--http-timeout-seconds",
+        type=float,
+        default=10,
+        help="HTTP timeout for token revoke endpoint requests.",
+    )
+    auth_logout.set_defaults(func=cmd_auth_logout)
 
     auth_export_env = auth_subparsers.add_parser(
         "export-env",
@@ -5732,6 +23436,32 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     auth_export_env.set_defaults(func=cmd_auth_export_env)
 
+    auth_connect_requirements = auth_subparsers.add_parser(
+        "connect-requirements",
+        help="Print browser.lexmount.cn Connect from Codex implementation requirements",
+    )
+    auth_connect_requirements.add_argument(
+        "--project-id",
+        help=(
+            "Project ID to include in the Connect from Codex URLs. "
+            "Defaults to LEXMOUNT_PROJECT_ID when set."
+        ),
+    )
+    auth_connect_requirements.add_argument(
+        "--scope",
+        action="append",
+        help=(
+            "Requested Connect from Codex credential scope. May be repeated; "
+            "defaults to browser session, context, and action scopes."
+        ),
+    )
+    auth_connect_requirements.add_argument(
+        "--expires-in",
+        default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
+    )
+    auth_connect_requirements.set_defaults(func=cmd_auth_connect_requirements)
+
     auth_login = auth_subparsers.add_parser(
         "login",
         help="Show browser.lexmount.cn login and environment setup guidance",
@@ -5756,6 +23486,56 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         default=DEFAULT_CODEX_CONNECT_EXPIRES_IN,
         help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
     )
+    auth_login.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the Connect from Codex URL in the default browser.",
+    )
+    auth_login.add_argument(
+        "--device-code",
+        action="store_true",
+        help=(
+            "Request device-code login. Defaults to structured fallback unless "
+            "a device-code base URL is configured."
+        ),
+    )
+    auth_login.add_argument(
+        "--device-code-base-url",
+        help=(
+            "Base URL for device-code endpoints. Defaults to "
+            f"{DEVICE_CODE_BASE_URL_ENV} when set."
+        ),
+    )
+    auth_login.add_argument(
+        "--wait",
+        dest="device_code_wait",
+        action="store_true",
+        help="Poll the token endpoint until approval, denial, expiration, or timeout.",
+    )
+    auth_login.add_argument(
+        "--device-code-timeout-seconds",
+        type=float,
+        default=600,
+        help="Maximum polling time when --wait is used.",
+    )
+    auth_login.add_argument(
+        "--device-code-http-timeout-seconds",
+        type=float,
+        default=10,
+        help="HTTP timeout for device-code endpoint requests.",
+    )
+    auth_login.add_argument(
+        "--device-name",
+        default="Codex workstation",
+        help="Device name shown in the browser approval UI.",
+    )
+    auth_login.add_argument(
+        "--credentials-file",
+        help=(
+            "Write approved local device-token metadata to this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
     auth_login.set_defaults(func=cmd_auth_login)
 
 
@@ -5765,16 +23545,146 @@ def _add_doctor_command(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Check browser-cli install, credentials, direct URL, and API connectivity",
     )
     doctor.add_argument(
+        "--json",
+        action="store_true",
+        help="Accepted for compatibility; browser-cli output is always JSON.",
+    )
+    doctor.add_argument(
         "--skip-api",
         action="store_true",
         help="Skip the live Lexmount API connectivity check.",
+    )
+    doctor.add_argument(
+        "--smoke-session",
+        action="store_true",
+        help="Create and close a temporary browser session after API connectivity passes.",
     )
     doctor.add_argument(
         "--reveal-connect-url",
         action="store_true",
         help="Print the full direct URL including api_key. Default output masks secrets.",
     )
+    doctor.add_argument(
+        "--credentials-file",
+        help=(
+            "Read local device-token metadata from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
     doctor.set_defaults(func=cmd_doctor)
+
+
+def _add_commands_command(subparsers: argparse._SubParsersAction[Any]) -> None:
+    commands = subparsers.add_parser(
+        "commands",
+        help="Print a machine-readable browser-cli command catalog",
+    )
+    commands.add_argument(
+        "--group",
+        help="Only include commands from one group, such as action, auth, or session.",
+    )
+    output = commands.add_mutually_exclusive_group()
+    output.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Return only command names for compact agent discovery.",
+    )
+    output.add_argument(
+        "--workflows-only",
+        action="store_true",
+        help="Return only structured agent workflows for compact agent setup.",
+    )
+    output.add_argument(
+        "--workflow",
+        help="Return a single structured agent workflow by id.",
+    )
+    commands.set_defaults(func=cmd_commands)
+
+
+def _add_reference_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    reference = subparsers.add_parser(
+        "reference",
+        help="Inspect packaged agent reference docs",
+    )
+    reference_subparsers = reference.add_subparsers(
+        dest="reference_command",
+        required=True,
+    )
+
+    reference_list = reference_subparsers.add_parser(
+        "list",
+        help="List packaged agent references",
+    )
+    reference_list.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Return only reference ids for compact agent discovery.",
+    )
+    reference_list.set_defaults(func=cmd_reference_list)
+
+    reference_get = reference_subparsers.add_parser(
+        "get",
+        help="Read one packaged agent reference",
+    )
+    reference_get.add_argument(
+        "--id",
+        dest="reference_id",
+        required=True,
+        help="Reference id from browser-cli reference list.",
+    )
+    reference_get.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Return reference metadata without markdown content.",
+    )
+    reference_get.set_defaults(func=cmd_reference_get)
+
+
+def _add_example_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    example = subparsers.add_parser(
+        "example",
+        help="Inspect packaged agent examples and case files",
+    )
+    example_subparsers = example.add_subparsers(
+        dest="example_command",
+        required=True,
+    )
+
+    example_list = example_subparsers.add_parser(
+        "list",
+        help="List packaged agent examples",
+    )
+    example_list.add_argument(
+        "--names-only",
+        action="store_true",
+        help="Return only example ids for compact agent discovery.",
+    )
+    example_list.set_defaults(func=cmd_example_list)
+
+    example_get = example_subparsers.add_parser(
+        "get",
+        help="Read one packaged agent example",
+    )
+    example_get.add_argument(
+        "--id",
+        dest="example_id",
+        required=True,
+        help="Example id from browser-cli example list.",
+    )
+    example_get.add_argument(
+        "--metadata-only",
+        action="store_true",
+        help="Return example metadata without content.",
+    )
+    example_get.set_defaults(func=cmd_example_get)
+
+
+def _add_version_command(subparsers: argparse._SubParsersAction[Any]) -> None:
+    version_parser = subparsers.add_parser(
+        "version",
+        help="Print browser-cli and runtime versions as JSON",
+    )
+    version_parser.set_defaults(func=cmd_version)
 
 
 def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
@@ -5819,15 +23729,31 @@ def build_parser() -> argparse.ArgumentParser:
         description="Lexmount browser operation CLI",
         prog="browser-cli",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Accepted for compatibility; browser-cli output is always JSON.",
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        dest="show_version",
+        help="Print browser-cli and runtime versions as JSON.",
+    )
+    subparsers = parser.add_subparsers(dest="command")
 
+    _add_version_command(subparsers)
     _add_session_commands(subparsers)
     _add_context_commands(subparsers)
     _add_action_commands(subparsers)
     _add_case_commands(subparsers)
     _add_auth_commands(subparsers)
     _add_doctor_command(subparsers)
+    _add_commands_command(subparsers)
+    _add_reference_commands(subparsers)
+    _add_example_commands(subparsers)
     _add_alias_commands(subparsers)
+    _add_json_compatibility_flag(parser)
 
     return parser
 
@@ -5837,6 +23763,10 @@ def main(argv: list[str] | None = None) -> None:
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "show_version", False):
+        cmd_version(args)
+    if not hasattr(args, "func"):
+        parser.error("the following arguments are required: command")
     args.func(args)
 
 
