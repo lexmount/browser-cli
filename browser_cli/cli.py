@@ -18276,6 +18276,17 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
             if field in step and step[field] not in choices:
                 choices_text = "', '".join(sorted(choices))
                 errors.append(f"steps[{index}].{field} must be one of '{choices_text}'")
+        if "expect" in step:
+            expect = step["expect"]
+            if not isinstance(expect, dict):
+                errors.append(f"steps[{index}].expect must be an object")
+            else:
+                for path in expect:
+                    if not isinstance(path, str) or not path:
+                        errors.append(
+                            f"steps[{index}].expect keys must be non-empty strings"
+                        )
+                        break
         if action in {"select-label", "select-role"}:
             has_value = "value" in step
             has_option_label = "option_label" in step
@@ -19518,6 +19529,12 @@ def cmd_case_schema(args: argparse.Namespace) -> None:
             "browser_mode",
             "metadata",
         ],
+        "step_options": {
+            "expect": (
+                "Map result field/path to an expected JSON value; mismatches "
+                "mark the step ok=false and make case run exit non-zero."
+            ),
+        },
     }
     payload: dict[str, Any] = {
         "schema_version": 1,
@@ -19665,6 +19682,85 @@ def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
 
 def _case_eval_expression(page: Any, expression: str) -> dict[str, Any]:
     return _case_step_result(page, page.evaluate(expression))
+
+
+def _case_result_path(result: Any, path: str) -> tuple[bool, Any]:
+    current = result
+    for part in path.split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+            continue
+        if isinstance(current, list) and part.isdigit():
+            index = int(part)
+            if 0 <= index < len(current):
+                current = current[index]
+                continue
+        return False, None
+    return True, current
+
+
+def _case_expectation_value(value: Any) -> str:
+    safe_value = _sanitize_failure_value(value)
+    return json.dumps(safe_value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _case_expectation_failures(
+    step: dict[str, Any],
+    result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    expect = step.get("expect")
+    if expect is None:
+        return []
+    if not isinstance(expect, dict):
+        return [
+            {
+                "path": "expect",
+                "reason": "invalid_expect",
+                "expected": "object",
+                "actual": type(expect).__name__,
+            }
+        ]
+
+    failures: list[dict[str, Any]] = []
+    for path, expected in expect.items():
+        path_text = str(path)
+        found, actual = _case_result_path(result, path_text)
+        if not found:
+            failures.append(
+                {
+                    "path": path_text,
+                    "reason": "missing",
+                    "expected": expected,
+                    "actual": None,
+                }
+            )
+            continue
+        if actual != expected:
+            failures.append(
+                {
+                    "path": path_text,
+                    "reason": "mismatch",
+                    "expected": expected,
+                    "actual": actual,
+                }
+            )
+    return failures
+
+
+def _case_expectation_message(failures: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for failure in failures[:3]:
+        path = failure["path"]
+        reason = failure["reason"]
+        expected = _case_expectation_value(failure.get("expected"))
+        actual = _case_expectation_value(failure.get("actual"))
+        if reason == "missing":
+            parts.append(f"{path} missing; expected {expected}")
+        else:
+            parts.append(f"{path} expected {expected}, got {actual}")
+    if len(failures) > 3:
+        parts.append(f"{len(failures) - 3} more mismatch(es)")
+    return "Case expectation failed: " + "; ".join(parts)
 
 
 def _accessibility_snapshot_expression(
@@ -20529,6 +20625,41 @@ def run_browser_cli_case_file(
                         )
                         duration_ms = round((time.time() - started_at) * 1000, 2)
                         safe_result = _safe_case_payload(result)
+                        assert isinstance(safe_result, dict)
+                        expectation_failures = _case_expectation_failures(step, result)
+                        if expectation_failures:
+                            safe_expectation_failures = _safe_case_payload(
+                                expectation_failures
+                            )
+                            safe_result["expectation_failures"] = (
+                                safe_expectation_failures
+                            )
+                            message = _case_expectation_message(expectation_failures)
+                            step_result = CaseStepRunResult(
+                                index=index,
+                                action=step["action"],
+                                ok=False,
+                                duration_ms=duration_ms,
+                                result=safe_result,
+                                error="case_expectation_failed",
+                                message=message,
+                            )
+                            results.append(step_result)
+                            append_event(
+                                event_log,
+                                "step_finished",
+                                run_id=resolved_run_id,
+                                index=index,
+                                action=step["action"],
+                                ok=False,
+                                duration_ms=duration_ms,
+                                result=safe_result,
+                                error="case_expectation_failed",
+                                message=message,
+                            )
+                            if stop_on_error:
+                                break
+                            continue
                         step_result = CaseStepRunResult(
                             index=index,
                             action=step["action"],

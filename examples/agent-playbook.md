@@ -400,6 +400,9 @@ checks such as `page-info`, `wait-url`, `wait-title`, `wait-load-state`, and
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
 `cookie-set`, `cookie-delete`, `cookie-clear`, and `wait-cookie`; use those
 before falling back to case-level `eval`.
+Add `expect` to steps that must fail the case when structured result fields do
+not match, for example `expect: {found: true}` after `wait-text`, `wait-storage`,
+or `wait-cookie`.
 Read `valid`, `errors`, `step_count`, `next_commands`, `events_path`,
 `artifacts_dir`, `session`, and `steps`.
 

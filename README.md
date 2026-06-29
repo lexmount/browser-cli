@@ -879,6 +879,22 @@ browser state checks such as `storage-get`, `storage-set`, `storage-remove`,
 `cookie-clear`, and `wait-cookie`, so agents can encode common smoke tests
 without dropping into custom browser scripts.
 
+Add `expect` to any case step when a structured result must make the run fail
+instead of merely being reported. For example:
+
+```yaml
+- action: wait-text
+  text: Saved
+  expect:
+    found: true
+- action: wait-storage
+  key: seenIntro
+  value: "true"
+  match: exact
+  expect:
+    found: true
+```
+
 Common agent recipes:
 
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,

@@ -2864,6 +2864,7 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "scrolled" in payload["actions"]["scroll-into-view-role"]["result_fields"]
     assert "steps" in payload["top_level"]["required_fields"]
     assert "session.create" in payload["top_level"]["target_options"]
+    assert "field/path" in payload["top_level"]["step_options"]["expect"]
     assert payload["workflow"]["validate"] == (
         "browser-cli case validate --file case.yaml"
     )
@@ -3171,6 +3172,63 @@ def test_case_validate_browser_state_actions_reject_invalid_choices(
     assert "steps[1].state must be one of 'absent', 'present'" in result.errors
     assert "steps[2].match must be one of 'contains', 'exact', 'regex'" in result.errors
     assert "steps[3].same_site must be one of 'lax', 'none', 'strict'" in result.errors
+
+
+def test_case_validate_expect_requires_object_with_string_paths() -> None:
+    errors = cli_module._validate_browser_cli_case_spec(
+        {
+            "steps": [
+                {"action": "wait-text", "text": "Saved", "expect": ["found"]},
+                {"action": "wait-text", "text": "Saved", "expect": {"": True}},
+                {"action": "wait-text", "text": "Saved", "expect": {1: True}},
+            ]
+        }
+    )
+
+    assert "steps[0].expect must be an object" in errors
+    assert "steps[1].expect keys must be non-empty strings" in errors
+    assert "steps[2].expect keys must be non-empty strings" in errors
+
+
+def test_case_expectation_failures_support_nested_paths() -> None:
+    failures = cli_module._case_expectation_failures(
+        {
+            "expect": {
+                "found": True,
+                "items.0.key": "first",
+                "items.1.key": "second",
+                "missing.path": "value",
+            }
+        },
+        {
+            "found": False,
+            "items": [{"key": "first"}],
+        },
+    )
+
+    assert failures == [
+        {
+            "path": "found",
+            "reason": "mismatch",
+            "expected": True,
+            "actual": False,
+        },
+        {
+            "path": "items.1.key",
+            "reason": "missing",
+            "expected": "second",
+            "actual": None,
+        },
+        {
+            "path": "missing.path",
+            "reason": "missing",
+            "expected": "value",
+            "actual": None,
+        },
+    ]
+    assert cli_module._case_expectation_message(failures).startswith(
+        "Case expectation failed: found expected true, got false"
+    )
 
 
 def test_extended_case_step_uses_semantic_action_expression(tmp_path: Any) -> None:
@@ -3581,6 +3639,94 @@ def test_extended_case_step_uses_browser_state_expressions(
     assert result["found"] is True
     assert result["url"] == "https://example.test/state"
     assert expression_snippet in page.expressions[0]
+
+
+def test_case_run_expectation_failure_marks_summary_failed(
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import playwright.sync_api as sync_api
+
+    case_file = tmp_path / "expectation-case.json"
+    case_file.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {
+                        "action": "wait-text",
+                        "text": "Saved",
+                        "expect": {"found": True},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeBrowser:
+        contexts = [object()]
+
+        def close(self) -> None:
+            pass
+
+    class FakeChromium:
+        def connect_over_cdp(self, connect_url: str) -> FakeBrowser:
+            assert connect_url == "wss://browser.example.test/devtools?api_key=secret"
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        def __enter__(self) -> "FakePlaywright":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    class FakePage:
+        url = "https://example.test"
+
+    monkeypatch.setattr(sync_api, "sync_playwright", lambda: FakePlaywright())
+    monkeypatch.setattr(cli_module, "LexmountBrowserAdmin", lambda: object())
+    monkeypatch.setattr(cli_module, "get_or_create_page", lambda _: FakePage())
+    monkeypatch.setattr(
+        cli_module,
+        "resolve_case_target",
+        lambda *_: SimpleNamespace(
+            connect_url="wss://browser.example.test/devtools?api_key=secret",
+            session={"session_id": "s1"},
+            created_session=False,
+        ),
+    )
+    monkeypatch.setattr(
+        cli_module,
+        "_run_browser_cli_case_step",
+        lambda *_: {"found": False, "url": "https://example.test"},
+    )
+
+    summary = cli_module.run_browser_cli_case_file(
+        file=case_file,
+        artifacts_dir=tmp_path / "artifacts",
+    )
+
+    assert summary.ok is False
+    assert summary.steps[0].ok is False
+    assert summary.steps[0].error == "case_expectation_failed"
+    assert summary.steps[0].message == (
+        "Case expectation failed: found expected true, got false"
+    )
+    assert summary.steps[0].result == {
+        "found": False,
+        "url": "https://example.test",
+        "expectation_failures": [
+            {
+                "path": "found",
+                "reason": "mismatch",
+                "expected": True,
+                "actual": False,
+            }
+        ],
+    }
 
 
 def test_case_run_masks_connect_url_stdout(
