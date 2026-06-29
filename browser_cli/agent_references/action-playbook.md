@@ -60,6 +60,7 @@ browser-cli action open-url --session-id <session_id> --url https://example.com
 browser-cli action wait-selector --session-id <session_id> --selector "main"
 browser-cli action click --session-id <session_id> --selector "button"
 browser-cli action type --session-id <session_id> --selector "input[name=q]" --text "query"
+browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli action screenshot-selector --session-id <session_id> --selector "main" --output /tmp/main.png
 browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/submit.png
@@ -184,7 +185,7 @@ Prefer built-in actions over writing custom JavaScript. `page-info`, `set-viewpo
 `wait-value-role`, `blur`, `blur-role`, `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
 `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `clear`, `clear-role`,
-`set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
+`fill`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
 `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `select-option`, `select-label`, `select-role`, `check`,
 `uncheck`, `check-label`, `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, and `press-key`
 plus `click-label`, `click-text`, `click-role`, `click-index`, `double-click`, `double-click-role`, `right-click`, `right-click-role`, `fill-label`, `fill-role`, `link-snapshot`,
@@ -269,7 +270,7 @@ console/page error entries and the reported page URL.
    `check-label`, `check-role`, or `uncheck-role` for checkbox or switch controls.
 3. Use selector actions when a stable selector is known: `exists`, `count`,
    `wait-count`, `wait-state`, `query`, `inspect`, `get-attribute`,
-   `wait-attribute`, `wait-text`, `get-text`, `wait-selector`, `click`, `type`,
+   `wait-attribute`, `wait-text`, `get-text`, `wait-selector`, `click`, `type`, `fill`,
    `focus`, `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `clear`, `set-value`,
    `dispatch-event`, `submit`, `select-option`, `check`, and `uncheck`.
 4. Use `page-info`, `reload`, `go-back`, `go-forward`, `wait-url`,
@@ -299,7 +300,7 @@ console/page error entries and the reported page URL.
    form_interaction` and `browser-cli action guide --task form_interaction`,
    then run `form-snapshot` or `interactive-snapshot`, use `fill-label` for
    labeled fields, `fill-role` for accessible role/name textboxes,
-   `set-value` for stable selectors, and `set-file-input` for upload controls;
+   `fill` or `set-value` for stable selectors, and `set-file-input` for upload controls;
    `clear-role` or `clear` before replacement text when needed, use
    `get-value-role`, `wait-value-role`, `get-value`, or `wait-value` to confirm form state, use `blur-role` or `blur` for
    focus-driven validation, use `select-label` or `select-role` for selects,

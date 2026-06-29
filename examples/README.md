@@ -11,7 +11,7 @@ browser-cli case scaffold --template page-inspection --url https://example.com -
 browser-cli case scaffold --template form-fill --output form-case.yaml
 ```
 
-Case files can use semantic actions such as `fill-label`, `click-role`,
+Case files can use semantic actions such as `fill`, `fill-label`, `click-role`,
 `wait-text`, `get-value-role`, `interactive-snapshot`, and
 `accessibility-snapshot`.
 

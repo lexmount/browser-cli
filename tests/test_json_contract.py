@@ -402,6 +402,7 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "click-index",
         "focus",
         "focus-role",
+        "fill",
         "fill-label",
         "fill-role",
         "get-value",

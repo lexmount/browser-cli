@@ -238,7 +238,7 @@ browser-cli commands --workflow case_file_task
 Run `browser-cli case schema` before hand-writing a case file. Generate starters with
 `browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template form-fill`,
 validate, then run with `--close-created-session`. Read `supported_actions`, `required_fields`, `step_options.expect`,
-semantic/navigation/state actions such as `fill-label`, `click-label`, `click-role`,
+semantic/navigation/state actions such as `fill-label`, `fill`, `click-label`, `click-role`,
 `select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-network`, `wait-console`, `wait-role`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,
 `events_path`, `artifacts_dir`, `session`, and `steps`.
 
@@ -441,7 +441,7 @@ Core action rules:
   selectors when the page provides visible labels or accessibility names.
 - Use selector actions such as `exists`, `count`, `wait-state`, `query`,
   `inspect`, `get-attribute`, `wait-text`, `get-text`, `click`, `type`,
-  `set-value`, `select-option`, `check`, and `uncheck` only when a stable
+  `fill`, `set-value`, `select-option`, `check`, and `uncheck` only when a stable
   selector is known.
 - For page failures, run `browser-cli commands --workflow page_diagnostics`;
   install console/network capture before reproducing the issue; use

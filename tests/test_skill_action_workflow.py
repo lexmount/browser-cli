@@ -472,6 +472,7 @@ def test_skill_lists_selector_and_input_actions() -> None:
         "`outline-snapshot`",
         "`form-snapshot`",
         "`click-index`",
+        "`fill`",
         "`fill-role`",
     ):
         assert action in normalized
@@ -686,7 +687,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "use `outline-snapshot` for page structure" in normalized
     assert "`fill-label` for labeled fields" in normalized
     assert "`fill-role` for accessible role/name textboxes" in normalized
-    assert "`set-value` for stable selectors" in normalized
+    assert "`fill` or `set-value` for stable selectors" in normalized
     assert "`set-file-input` for upload controls" in normalized
     assert "`clear-role` or `clear` before replacement text" in normalized
     assert (

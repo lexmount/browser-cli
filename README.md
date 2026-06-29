@@ -597,6 +597,7 @@ browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
+browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
@@ -636,7 +637,7 @@ the boundary for custom JavaScript.
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
 `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-label`, `click-text`, `click-role`,
 `double-click`, `double-click-role`, `right-click`, `right-click-role`,
-`click-index`, `fill-label`, `fill-role`,
+`click-index`, `fill`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
 runtime action surface catches up. They are intended to reduce agent-written
@@ -891,7 +892,7 @@ browser-cli session close --session-id <session_id>
 ```
 
 `case schema` supports repeatable semantic form and targeting steps such as
-`fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
+`fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `form-snapshot`,
@@ -931,7 +932,7 @@ instead of merely being reported. For example:
 
 Common agent recipes:
 
-- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label` or `fill-role`,
+- Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`, `fill-role`, or `fill`,
   `set-value`, `set-file-input`, `clear-role`, or `clear` -> `wait-value-role`, `get-value-role`,
   `wait-value`, or `get-value` ->
   `blur-role` or `blur` if validation is focus-driven -> `select-label`, `select-role`, or `select-option`,

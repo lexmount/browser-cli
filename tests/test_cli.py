@@ -972,6 +972,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.field_count" in form_steps[1]["read"]
     assert "result.filled" in form_steps[2]["read"]
     assert "browser-cli action fill-role" in form_steps[2]["alternative_commands"][0]
+    assert (
+        "browser-cli action fill --session-id"
+        in form_steps[2]["alternative_commands"][1]
+    )
     assert form_steps[3]["optional"] is True
     assert "result.option_found" in form_steps[3]["read"]
     assert form_steps[4]["optional"] is True
@@ -1341,6 +1345,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.check-role",
         "action.uncheck-label",
         "action.uncheck-role",
+        "action.fill",
         "action.fill-label",
         "action.fill-role",
         "action.get-value",
@@ -1445,6 +1450,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "--role" in fill_role["required_options"]
     assert "--text" in fill_role["required_options"]
     assert any("--name" in option["flags"] for option in fill_role["options"])
+    fill = commands["action.fill"]
+    assert fill["required_options"] == ["--selector", "--text"]
+    assert fill["browser_target"] == open_url["browser_target"]
     get_value_role = commands["action.get-value-role"]
     assert get_value_role["required_options"] == ["--role"]
     assert any("--name" in option["flags"] for option in get_value_role["options"])
@@ -1863,6 +1871,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert "fill-role" in payload["guide"]["selection_order"]
+    assert "fill" in payload["guide"]["selection_order"]
     assert "clear-role" in payload["guide"]["selection_order"]
     assert "select-role" in payload["guide"]["selection_order"]
     assert "check-role" in payload["guide"]["selection_order"]
@@ -1870,6 +1879,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "wait-state-role" in payload["guide"]["selection_order"]
     assert any(
         "browser-cli action fill-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action fill --session-id" in command
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
@@ -2780,6 +2793,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "eval",
         "exists",
         "exists-role",
+        "fill",
         "fill-label",
         "fill-role",
         "focus",
@@ -2853,6 +2867,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "wait-value-role",
     ]
     assert payload["required_fields"]["type"] == ["selector", "text"]
+    assert payload["required_fields"]["fill"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
     assert payload["required_fields"]["click-index"] == ["selector", "index"]
     assert payload["required_fields"]["click-label"] == ["label"]
@@ -2906,6 +2921,11 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
     assert "wait_until" in payload["actions"]["open-url"]["optional_fields"]
+    assert payload["actions"]["fill"]["example_step"] == {
+        "action": "fill",
+        "selector": "input[name=email]",
+        "text": "me@example.com",
+    }
     assert payload["actions"]["fill-label"]["example_step"] == {
         "action": "fill-label",
         "label": "Email",
@@ -2927,6 +2947,8 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "attribute_found" in payload["actions"]["wait-attribute"]["result_fields"]
     assert "requested_count" in payload["actions"]["wait-count"]["result_fields"]
     assert "value_masked" in payload["actions"]["get-value"]["result_fields"]
+    assert "filled" in payload["actions"]["fill"]["result_fields"]
+    assert "text_masked" in payload["actions"]["fill"]["result_fields"]
     assert "attributes" in payload["actions"]["inspect"]["result_fields"]
     assert "bounding_box" in payload["actions"]["bounding-box"]["result_fields"]
     assert "set" in payload["actions"]["set-value"]["result_fields"]
@@ -2984,7 +3006,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 99,
+        "action_count": 100,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -3014,6 +3036,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "eval",
             "exists",
             "exists-role",
+            "fill",
             "fill-label",
             "fill-role",
             "focus",
@@ -3597,6 +3620,7 @@ def test_extended_case_step_uses_navigation_status_expressions(
             {"action": "exists-role", "role": "alert", "name": "Saved"},
             "exists: true",
         ),
+        ({"action": "fill", "selector": "input", "text": "hello"}, "filled"),
         ({"action": "get-text", "selector": ".status"}, "innerText"),
         (
             {"action": "get-text-role", "role": "alert", "name": "Saved"},
@@ -4145,6 +4169,10 @@ def test_commands_catalog_returns_form_interaction_workflow(
     assert (
         "browser-cli action fill-role"
         in payload["workflow"]["steps"][2]["alternative_commands"][0]
+    )
+    assert (
+        "browser-cli action fill --session-id"
+        in payload["workflow"]["steps"][2]["alternative_commands"][1]
     )
     assert payload["workflow"]["steps"][5]["id"] == "click_labeled_control"
     assert "browser-cli action click-label" in payload["workflow"]["steps"][5][
@@ -5176,6 +5204,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.right-click-role",
         "action.focus",
         "action.focus-role",
+        "action.fill",
         "action.fill-label",
         "action.fill-role",
         "action.get-value",
@@ -5225,8 +5254,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 99
-    assert checks["case_schema"]["supported_action_count"] == 99
+    assert checks["case_schema"]["action_count"] == 100
+    assert checks["case_schema"]["supported_action_count"] == 100
     for case_action in (
         "fill-label",
         "click-label",
@@ -5488,6 +5517,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "action.wait-value",
         "action.blur",
         "action.clear",
+        "action.fill",
         "action.set-value",
         "action.dispatch-event",
         "action.submit",
@@ -5627,6 +5657,7 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
         "blur",
         "blur-role",
     ]
+    assert "fill" in case_schema["missing_required_case_actions"]
     assert "fill-label" in case_schema["missing_required_case_actions"]
     assert "network-snapshot" in case_schema["missing_required_case_actions"]
     assert "wait-console" in case_schema["missing_required_case_actions"]
@@ -11896,6 +11927,19 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
         (
             [
                 "action",
+                "fill",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=password]",
+                "--text",
+                "fake-secret",
+            ],
+            ["text_masked", "previous_value_masked", "value_masked"],
+        ),
+        (
+            [
+                "action",
                 "fill-label",
                 "--session-id",
                 "s1",
@@ -13093,6 +13137,36 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "behavior": "auto",
                 "in_viewport": True,
                 "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "fill",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=email]",
+                "--text",
+                "user@example.test",
+            ],
+            "action.fill",
+            {
+                "selector": "input[name=email]",
+                "found": True,
+                "filled": True,
+                "writable": True,
+                "value": "user@example.test",
+                "value_masked": False,
+            },
+            {
+                "selector": "input[name=email]",
+                "found": True,
+                "filled": True,
+                "writable": True,
+                "value": "user@example.test",
+                "value_masked": False,
                 "url": "https://example.test",
             },
         ),
@@ -14636,6 +14710,79 @@ def test_second_batch_eval_backed_action_commands_emit_structured_results(
         "connect_url_masked": True,
         "result": expected_result,
     }
+
+
+def test_action_fill_expression_sets_selector_value_with_masking(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://api.lexmount.cn/connection?project_id=project&api_key=secret",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        observed["connect_url"] = connect_url
+        observed["action"] = action
+        observed["expression"] = request.expression
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test",
+                "value": {
+                    "selector": "input[name=password]",
+                    "found": True,
+                    "filled": True,
+                    "writable": True,
+                    "text": "***",
+                    "text_masked": True,
+                    "text_length": 6,
+                    "value": "***",
+                    "value_masked": True,
+                    "value_length": 6,
+                },
+            }
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "fill",
+                "--session-id",
+                "s1",
+                "--selector",
+                "input[name=password]",
+                "--text",
+                "secret",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert observed["action"] == "eval"
+    expression = observed["expression"]
+    assert 'const selector = "input[name=password]"' in expression
+    assert 'const text = "secret"' in expression
+    assert "selectorSuggestsSensitive" in expression
+    assert "element.focus?.()" in expression
+    assert 'new Event("input", { bubbles: true })' in expression
+    assert 'new Event("change", { bubbles: true })' in expression
+    assert 'error: "not_writable"' in expression
+    assert "text_masked" in expression
+    assert "value_masked" in expression
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["result"]["text"] == "***"
+    assert payload["result"]["text_masked"] is True
+    assert payload["result"]["value_masked"] is True
 
 
 @pytest.mark.parametrize(

@@ -151,6 +151,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli action form-snapshot" in text
     assert "browser-cli action fill-label" in text
     assert "browser-cli action fill-role" in text
+    assert "browser-cli action fill --session-id" in text
     assert "browser-cli action clear-role" in text
     assert "browser-cli action wait-state-role" in text
     assert "browser-cli action set-viewport" in text

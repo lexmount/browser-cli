@@ -168,6 +168,7 @@ browser-cli action form-snapshot --session-id <session_id> --selector form
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
+browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
 browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
@@ -393,7 +394,7 @@ browser-cli case run --file examples/cases/page-inspection.yaml --close-created-
 
 Case files are good for smoke tests, regression checks, and demos because they
 produce structured JSON summaries and event logs. `case schema` includes
-semantic form and targeting steps such as `fill-label`, `click-label`, `click-role`,
+semantic form and targeting steps such as `fill`, `fill-label`, `click-label`, `click-role`,
 `wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `interactive-snapshot`,

@@ -212,6 +212,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.right-click-role",
     "action.focus",
     "action.focus-role",
+    "action.fill",
     "action.fill-label",
     "action.fill-role",
     "action.get-value",
@@ -286,6 +287,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "eval",
     "exists",
     "exists-role",
+    "fill",
     "fill-label",
     "fill-role",
     "focus",
@@ -384,6 +386,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "example get",
     "action guide",
     "click-label",
+    "fill before custom JavaScript",
     "custom JavaScript",
     "case schema",
     "scaffold/validate/run case files",
@@ -1370,6 +1373,7 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"',
                 'browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
+                'browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"',
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"',
                 'browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"',
                 'browser-cli action click-label --session-id <session_id> --label "Remember me"',
@@ -3071,6 +3075,7 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                         "alternative_commands": [
                             'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
+                            'browser-cli action fill --session-id <session_id> --selector "<selector>" --text "<text>"',
                         ],
                     },
                     {
@@ -8780,6 +8785,71 @@ def _fill_role_expression(
       ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
       : null,
     candidate_count: roleMatches.length,
+    element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _fill_expression(*, selector: str, text: str) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+  const selector = {_js_literal(selector)};
+  const text = {_js_literal(text)};
+  const selectorSuggestsSensitive = sensitiveText(selector);
+  const selectorSafeText = selectorSuggestsSensitive && text !== "" ? "***" : text;
+  const element = document.querySelector(selector);
+  if (!element) {{
+    return {{
+      selector,
+      found: false,
+      filled: false,
+      text: selectorSafeText,
+      text_masked: selectorSafeText !== text,
+      text_length: selectorSafeText !== text ? String(text ?? "").length : null
+    }};
+  }}
+  const writable = element.isContentEditable || "value" in element;
+  if (!writable) {{
+    return {{
+      selector,
+      found: true,
+      filled: false,
+      writable: false,
+      text: maskValue(element, text),
+      text_masked: shouldMaskValue(element, text),
+      text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+      element: nodeInfo(element),
+      error: "not_writable",
+      message: "Matched element does not expose a writable value or contenteditable surface."
+    }};
+  }}
+  const previousValue = element.isContentEditable ? element.textContent : element.value;
+  element.focus?.();
+  if (element.isContentEditable) {{
+    element.textContent = text;
+  }} else {{
+    element.value = text;
+  }}
+  element.dispatchEvent(new Event("input", {{ bubbles: true }}));
+  element.dispatchEvent(new Event("change", {{ bubbles: true }}));
+  const value = element.isContentEditable ? element.textContent : element.value;
+  return {{
+    selector,
+    found: true,
+    filled: value === text,
+    writable: true,
+    text: maskValue(element, text),
+    text_masked: shouldMaskValue(element, text),
+    text_length: shouldMaskValue(element, text) ? String(text ?? "").length : null,
+    previous_value: maskValue(element, previousValue),
+    previous_value_masked: shouldMaskValue(element, previousValue),
+    value: maskValue(element, value),
+    value_masked: shouldMaskValue(element, value),
+    value_length: shouldMaskValue(element, value)
+      ? String(value ?? "").length
+      : null,
     element: nodeInfo(element)
   }};
 }}
@@ -15319,6 +15389,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "form-snapshot",
                 "fill-label",
                 "fill-role",
+                "fill",
                 "clear-role",
                 "select-label",
                 "select-role",
@@ -15339,6 +15410,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "preferred_commands": [
                 'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "<accessible name>" --text "<text>"',
+                'browser-cli action fill --session-id <session_id> --selector "<selector>" --text "<text>"',
                 'browser-cli action select-label --session-id <session_id> --label "<label>" --option-label "<option>"',
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
                 'browser-cli action check-label --session-id <session_id> --label "<label>"',
@@ -15368,6 +15440,10 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "read_fields": [
                 "result.fields",
                 "result.filled",
+                "result.selector",
+                "result.writable",
+                "result.text_masked",
+                "result.value_masked",
                 "result.role",
                 "result.name",
                 "result.role_found",
@@ -17053,6 +17129,14 @@ def cmd_action_set_value(args: argparse.Namespace) -> None:
             args.value,
             dispatch_events=not args.no_events,
         ),
+    )
+
+
+def cmd_action_fill(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.fill",
+        _fill_expression(selector=args.selector, text=args.text),
     )
 
 
@@ -19449,6 +19533,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "double-click-role": ("role",),
     "exists": ("selector",),
     "exists-role": ("role",),
+    "fill": ("selector", "text"),
     "fill-label": ("label", "text"),
     "fill-role": ("role", "text"),
     "focus": ("selector",),
@@ -20290,6 +20375,20 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "url",
         ],
+        "fill": [
+            "selector",
+            "found",
+            "filled",
+            "writable",
+            "text",
+            "text_masked",
+            "value",
+            "value_masked",
+            "previous_value",
+            "previous_value_masked",
+            "element",
+            "url",
+        ],
         "fill-label": [
             "found",
             "filled",
@@ -20984,6 +21083,11 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "exists": {"action": "exists", "selector": ".toast"},
         "exists-role": {"action": "exists-role", "role": "alert", "name": "Saved"},
+        "fill": {
+            "action": "fill",
+            "selector": "input[name=email]",
+            "text": "me@example.com",
+        },
         "fill-label": {
             "action": "fill-label",
             "label": "Email",
@@ -21770,6 +21874,14 @@ def _run_browser_cli_case_step(
                 exact=exact,
                 case_sensitive=case_sensitive,
                 include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "fill":
+        return _case_eval_expression(
+            page,
+            _fill_expression(
+                selector=str(step["selector"]),
+                text=str(step["text"]),
             ),
         )
     if action == "fill-label":
@@ -23797,6 +23909,15 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_clear_role.add_argument("--name")
     _add_text_match_args(action_clear_role)
     action_clear_role.set_defaults(func=cmd_action_clear_role)
+
+    action_fill = action_subparsers.add_parser(
+        "fill",
+        help="Fill a form field or editable element matched by selector",
+    )
+    _add_session_target_args(action_fill)
+    action_fill.add_argument("--selector", required=True)
+    action_fill.add_argument("--text", required=True)
+    action_fill.set_defaults(func=cmd_action_fill)
 
     action_set_value = action_subparsers.add_parser(
         "set-value",
