@@ -104,11 +104,12 @@ without exposing token values.
 The Connect from Codex site requirements workflow includes
 `auth scopes --include-site-contract`, `auth connect-requirements`,
 `browser_site_contract.scope_ui_fields`,
+`browser_site_contract.browser_site_acceptance_tests`,
 `connect_from_codex.site_capability_status.missing`,
 `required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, `required_runtime_auth`, `setup_blocks`, and
-verification commands so agents can coordinate browser.lexmount.cn changes
-without pretending a user is logging in.
+`required_token_lifecycle`, `required_runtime_auth`, `setup_blocks`,
+`browser_site_acceptance_tests`, and verification commands so agents can
+coordinate browser.lexmount.cn changes without pretending a user is logging in.
 The device-code auth workflow includes `auth login --device-code`,
 `device_code.required_endpoints`, `device_code.required_browser_site_support`,
 `connect_from_codex.site_capability_status.missing`, and `fallback_handoff`
@@ -236,8 +237,9 @@ Default behavior:
   `permission_count`, `risk`, `destructive`, `unknown_scopes`, and the
   repeatable `scope` query parameter. With `--include-site-contract`, it also
   reports `browser_site_contract.url`, `device_code_url`, `scope_ui_fields`,
-  `required_query_parameters`, `site_capability_status`, and token lifecycle
-  requirements for browser.lexmount.cn.
+  `required_query_parameters`, `site_capability_status`,
+  `browser_site_acceptance_tests`, and token lifecycle requirements for
+  browser.lexmount.cn.
 - `auth login` reports top-level `flow`, `selected_flow`, `available`,
   `manual_env_available`, and `device_code_available` so agents can choose the
   currently usable setup path without inferring it from nested flow metadata.
@@ -251,7 +253,8 @@ Default behavior:
   `connect_from_codex.device_code_url`, `site_capabilities`,
   `site_capability_status`, `required_device_code_endpoints`,
   `required_api_contract`, `required_token_lifecycle`,
-  `required_runtime_auth`, `setup_blocks`, and verification commands.
+  `required_runtime_auth`, `setup_blocks`, `browser_site_acceptance_tests`, and
+  verification commands.
 - `auth login` nested `connect_from_codex` output may also include
   `required_runtime_auth` so agents can report browser.lexmount.cn, SDK, and
   gateway gaps from either the login handoff or the standalone requirements

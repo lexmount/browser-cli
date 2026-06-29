@@ -321,6 +321,7 @@ def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:
     assert "`auth scopes`" in text
     assert "`known_scopes`" in text
     assert "`scope_ui_fields`" in text
+    assert "`browser_site_acceptance_tests`" in text
     assert "`auth connect-requirements`" in text
     assert "`connect_from_codex.device_code_url`" in text
     assert "`unusable_exports`" in text

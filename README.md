@@ -389,8 +389,9 @@ implementation contract without requiring credentials or opening a browser. It
 includes `connect_from_codex.url`, `connect_from_codex.device_code_url`,
 `site_capabilities`/`site_capability_status`, `setup_blocks`,
 `required_device_code_endpoints`, `required_api_contract`,
-`required_token_lifecycle`, `required_runtime_auth`, and verification commands for
-`browser-cli auth status`, `browser-cli auth login`, device-code fallback, and
+`required_token_lifecycle`, `required_runtime_auth`,
+`browser_site_acceptance_tests`, and verification commands for `browser-cli auth
+status`, `browser-cli auth login`, device-code fallback, and
 `browser-cli doctor --json`.
 
 `auth login` returns top-level `flow`, `selected_flow`, `available`,
@@ -402,8 +403,9 @@ verification command. `connect_from_codex` includes the planned
 `https://browser.lexmount.cn/connect/codex` URL, optional `project_id`,
 repeated `scope` query parameters, requested `expires_in`,
 expected outputs, structured `setup_blocks`, `requested_scope_details`,
-`site_capabilities`/`site_capability_status`, and the browser site requirements
-needed before device-code or scoped-token login can be marked available.
+`site_capabilities`/`site_capability_status`, `browser_site_acceptance_tests`,
+and the browser site requirements needed before device-code or scoped-token
+login can be marked available.
 `setup_blocks` groups install, Connect, local env, and verification commands
 with secret placeholder and chat-safety metadata so browser.lexmount.cn can
 render copy buttons without guessing which commands are local-shell-only.

@@ -563,11 +563,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli auth scopes --include-site-contract"
     )
     assert "browser_site_contract.scope_ui_fields" in site_steps[0]["read"]
+    assert "browser_site_contract.browser_site_acceptance_tests" in site_steps[0][
+        "read"
+    ]
     assert site_steps[1]["command"] == "browser-cli auth connect-requirements"
     assert "connect_from_codex.device_code_url" in site_steps[1]["read"]
     assert "required_device_code_endpoints" in site_steps[1]["read"]
     assert "required_token_lifecycle" in site_steps[1]["read"]
     assert "required_runtime_auth" in site_steps[1]["read"]
+    assert "browser_site_acceptance_tests" in site_steps[1]["read"]
     assert site_steps[2]["optional"] is True
     assert "connect_from_codex.required_runtime_auth" in site_steps[2]["read"]
     assert site_steps[3]["command"] == "browser-cli auth login --device-code"
@@ -7756,6 +7760,18 @@ def test_auth_scopes_filters_unknown_scopes_and_reports_site_contract(
         "api_accepts_bearer_token",
         "browser_gateway_accepts_bearer_token",
     ]
+    assert [item["id"] for item in contract["browser_site_acceptance_tests"]] == [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert (
+        contract["browser_site_acceptance_tests"][0]["capability"]
+        == "project_id_display"
+    )
     assert contract["required_runtime_auth"][0]["required"] is True
     assert contract["site_capability_status"]["missing_count"] == 6
     assert any(
@@ -7850,6 +7866,23 @@ def test_auth_connect_requirements_reports_browser_site_contract(
         "access_token",
         "refresh_token",
     ]
+    acceptance_ids = [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert [item["id"] for item in payload["browser_site_acceptance_tests"]] == (
+        acceptance_ids
+    )
+    assert payload["browser_site_acceptance_tests"][2]["capability"] == (
+        "copy_install_and_env"
+    )
+    assert "setup_blocks.local_env.local_shell_only" in payload[
+        "browser_site_acceptance_tests"
+    ][2]["source_fields"]
     assert payload["verification"]["workflow_command"] == (
         "browser-cli commands --workflow connect_from_codex_site_requirements"
     )
@@ -7866,6 +7899,9 @@ def test_auth_connect_requirements_reports_browser_site_contract(
     assert connect["requested_scopes"] == ["browser:actions"]
     assert connect["setup_blocks"] == payload["setup_blocks"]
     assert connect["required_runtime_auth"] == payload["required_runtime_auth"]
+    assert connect["browser_site_acceptance_tests"] == payload[
+        "browser_site_acceptance_tests"
+    ]
     assert connect["supported_response_modes"] == ["env", "device_code"]
     assert "response=env|device_code" in connect["required_query_parameters"]
     capability_ids = [
@@ -8016,6 +8052,17 @@ def test_auth_login_guides_manual_browser_flow(
     }
     assert [item["id"] for item in connect["site_capabilities"]] == capability_ids
     assert all(item["available"] is False for item in connect["site_capabilities"])
+    assert [item["id"] for item in connect["browser_site_acceptance_tests"]] == [
+        "project_identity_visible",
+        "scope_review",
+        "copy_local_env_safely",
+        "doctor_verification",
+        "credential_lifecycle_controls",
+        "device_code_contract",
+    ]
+    assert connect["browser_site_acceptance_tests"][3]["capability"] == (
+        "doctor_verification"
+    )
     lifecycle = next(
         item
         for item in connect["site_capabilities"]

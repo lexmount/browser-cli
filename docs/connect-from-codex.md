@@ -137,7 +137,7 @@ Expected behavior after the website page exists:
   `connect_from_codex.site_capability_status.missing`,
   `required_device_code_endpoints`, `required_api_contract`,
   `required_token_lifecycle`, `setup_blocks`, and
-  `verification.doctor_command`.
+  `browser_site_acceptance_tests` plus `verification.doctor_command`.
 - `browser-cli auth login` prints
   `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
   opens it in the local default browser and reports `open_result`.
@@ -148,6 +148,11 @@ Expected behavior after the website page exists:
   `site_capability_status` so agents can report structured browser site gaps:
   `project_id_display`, `scoped_api_key`, `copy_install_and_env`,
   `doctor_verification`, `scoped_key_lifecycle`, and `device_code_oauth`.
+- `browser-cli auth login`, `auth scopes --include-site-contract`, and
+  `auth connect-requirements` include `browser_site_acceptance_tests` so
+  browser.lexmount.cn can verify Project ID display, scope review, local env
+  copy safety, doctor verification, credential lifecycle controls, and
+  device-code behavior before marking Connect from Codex available.
 - `browser-cli auth login` includes `setup_blocks` for install, Connect, local
   env, and verification copy sections. Each block reports commands,
   `contains_secret_values`, `contains_secret_placeholders`,

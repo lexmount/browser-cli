@@ -29,6 +29,7 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "open_result" in text
     assert "site_capabilities" in text
     assert "site_capability_status" in text
+    assert "browser_site_acceptance_tests" in text
     assert "setup_blocks" in text
     assert "required_device_code_endpoints" in text
     assert "required_api_contract" in text

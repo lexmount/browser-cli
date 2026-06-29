@@ -1580,6 +1580,7 @@ def _command_catalog() -> dict[str, Any]:
                             "browser_site_contract.required_query_parameters",
                             "browser_site_contract.scope_ui_fields",
                             "browser_site_contract.site_capability_status.missing",
+                            "browser_site_contract.browser_site_acceptance_tests",
                         ],
                     },
                     {
@@ -1596,6 +1597,7 @@ def _command_catalog() -> dict[str, Any]:
                             "required_runtime_auth",
                             "setup_blocks",
                             "verification.doctor_command",
+                            "browser_site_acceptance_tests",
                         ],
                     },
                     {
@@ -6199,6 +6201,69 @@ def _connect_from_codex_browser_site_requirements() -> list[str]:
     ]
 
 
+def _connect_from_codex_browser_site_acceptance_tests() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "project_identity_visible",
+            "capability": "project_id_display",
+            "source_fields": [
+                "project_id",
+                "project_id_source",
+                "connect_from_codex.url",
+            ],
+            "expected": "The page shows the selected Project ID before issuing credentials.",
+        },
+        {
+            "id": "scope_review",
+            "capability": "scoped_api_key",
+            "source_fields": [
+                "requested_scopes",
+                "requested_scope_details",
+                "scope_ui_fields",
+            ],
+            "expected": "The page renders scope labels, permissions, risk, and destructive markers for every requested scope.",
+        },
+        {
+            "id": "copy_local_env_safely",
+            "capability": "copy_install_and_env",
+            "source_fields": [
+                "setup_blocks",
+                "setup_blocks.local_env.safe_to_paste_in_chat",
+                "setup_blocks.local_env.local_shell_only",
+            ],
+            "expected": "Local env commands are copyable only as local-shell commands and never shown as safe chat text.",
+        },
+        {
+            "id": "doctor_verification",
+            "capability": "doctor_verification",
+            "source_fields": [
+                "verification.doctor_command",
+                "setup_blocks.verify.commands",
+            ],
+            "expected": "The page shows browser-cli doctor --json as the post-setup verification command.",
+        },
+        {
+            "id": "credential_lifecycle_controls",
+            "capability": "scoped_key_lifecycle",
+            "source_fields": [
+                "required_token_lifecycle",
+                "site_capabilities.scoped_key_lifecycle",
+            ],
+            "expected": "The page exposes expiration, masked preview, revoke, and rotation controls for agent credentials.",
+        },
+        {
+            "id": "device_code_contract",
+            "capability": "device_code_oauth",
+            "source_fields": [
+                "device_code_url",
+                "required_device_code_endpoints",
+                "required_api_contract.device_code",
+            ],
+            "expected": "The page can start device-code approval and return verification_uri_complete plus pollable token results.",
+        },
+    ]
+
+
 def _connect_from_codex_required_token_lifecycle() -> list[dict[str, Any]]:
     return [
         {
@@ -6737,6 +6802,7 @@ def _doctor_connect_from_codex_fix() -> dict[str, Any]:
         "requested_expires_in": expires_in,
         "site_capability_status": site_capability_status,
         "site_capabilities": site_capabilities,
+        "browser_site_acceptance_tests": _connect_from_codex_browser_site_acceptance_tests(),
         "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
         "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
         "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
@@ -17909,6 +17975,7 @@ def cmd_auth_scopes(args: argparse.Namespace) -> None:
             ],
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "browser_site_acceptance_tests": _connect_from_codex_browser_site_acceptance_tests(),
             "required_token_lifecycle": _connect_from_codex_required_token_lifecycle(),
             "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
@@ -18331,6 +18398,9 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
     site_capability_status = _connect_from_codex_site_capability_status(
         site_capabilities
     )
+    browser_site_acceptance_tests = (
+        _connect_from_codex_browser_site_acceptance_tests()
+    )
     _success(
         command,
         available=False,
@@ -18372,11 +18442,13 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
             "setup_blocks": setup_blocks,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "browser_site_acceptance_tests": browser_site_acceptance_tests,
             "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "browser_site_requirements": _connect_from_codex_browser_site_requirements(),
         },
         setup_blocks=setup_blocks,
         required_browser_site_support=_connect_from_codex_browser_site_requirements(),
+        browser_site_acceptance_tests=browser_site_acceptance_tests,
         required_device_code_endpoints=_device_code_required_endpoints(),
         required_device_code_support=_device_code_required_browser_site_support(),
         required_api_contract=_connect_from_codex_required_api_contract(),
@@ -18466,6 +18538,9 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
     site_capabilities = _connect_from_codex_site_capabilities()
     site_capability_status = _connect_from_codex_site_capability_status(
         site_capabilities
+    )
+    browser_site_acceptance_tests = (
+        _connect_from_codex_browser_site_acceptance_tests()
     )
     scope_details = _scope_details(scopes)
     setup_blocks = handoff["setup_blocks"]
@@ -18562,6 +18637,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                     "requested_scope_details": scope_details,
                     "site_capability_status": site_capability_status,
                     "site_capabilities": site_capabilities,
+                    "browser_site_acceptance_tests": browser_site_acceptance_tests,
                     "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
                     "verification_uri": device_code.get("verification_uri"),
                     "verification_uri_complete": device_code.get(
@@ -18624,6 +18700,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
                 "setup_blocks": setup_blocks,
                 "site_capability_status": site_capability_status,
                 "site_capabilities": site_capabilities,
+                "browser_site_acceptance_tests": browser_site_acceptance_tests,
                 "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
                 "fallback": "Use the manual_env steps until browser.lexmount.cn supports device-code login.",
             },
@@ -18675,6 +18752,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             "setup_blocks": setup_blocks,
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
+            "browser_site_acceptance_tests": browser_site_acceptance_tests,
             "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
             "expected_outputs": [
                 "Project ID for the selected project",
