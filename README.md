@@ -211,7 +211,11 @@ browser-cli auth export-env --from-current
 `--from-current`, it reuses current environment values but still masks
 `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly passed in a trusted
 local terminal. Read top-level `usable` and `unusable_exports` before treating
-the returned `commands` as directly runnable.
+the returned `commands` as directly runnable. Also read
+`safe_to_paste_in_chat`, `local_shell_only`, `contains_secret_values`,
+`contains_secret_placeholders`, `safety`, `setup_block`, and `verification` so
+agents know whether the output belongs only in a local shell and which
+`auth status`/`doctor` commands prove the setup worked.
 `auth status` and `auth token-info` report local device-token metadata from
 `~/.config/lexmount/browser-cli/credentials.json`,
 `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or `--credentials-file` without printing

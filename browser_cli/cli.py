@@ -18102,9 +18102,30 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
         and api_key_source == "env"
         and api_key not in {"<api-key>", "<redacted-api-key>"}
     )
+    contains_secret_placeholders = any(
+        bool(entry.get("secret"))
+        and str(entry.get("value")) in {"<api-key>", "<redacted-api-key>"}
+        for entry in entries
+    )
     unusable_exports = [
         str(entry["name"]) for entry in entries if not bool(entry.get("usable"))
     ]
+    local_shell_safety = {
+        "contains_secret_values": secrets_revealed,
+        "contains_secret_placeholders": contains_secret_placeholders,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+        "secret_env": [
+            str(entry["name"]) for entry in entries if bool(entry.get("secret"))
+        ],
+    }
+    verification = {
+        "status_command": "browser-cli auth status",
+        "doctor_command": AGENT_DOCTOR_COMMAND,
+        "success_condition": (
+            "auth status reports configured=true and doctor reports ok=true"
+        ),
+    }
     next_steps = [
         "Run the export commands in the local shell."
         if not unusable_exports
@@ -18118,6 +18139,21 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
         secrets_revealed=secrets_revealed,
         usable=not unusable_exports,
         unusable_exports=unusable_exports,
+        contains_secret_values=local_shell_safety["contains_secret_values"],
+        contains_secret_placeholders=local_shell_safety[
+            "contains_secret_placeholders"
+        ],
+        safe_to_paste_in_chat=local_shell_safety["safe_to_paste_in_chat"],
+        local_shell_only=local_shell_safety["local_shell_only"],
+        secret_env=local_shell_safety["secret_env"],
+        safety=local_shell_safety,
+        setup_block={
+            "id": "local_env",
+            "label": "Configure local shell",
+            "commands": commands,
+            **local_shell_safety,
+        },
+        verification=verification,
         warnings=warnings,
         exports=entries,
         commands=commands,

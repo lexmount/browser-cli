@@ -7401,6 +7401,38 @@ def test_auth_export_env_emits_safe_placeholders(
         "LEXMOUNT_API_KEY",
         "LEXMOUNT_PROJECT_ID",
     ]
+    assert payload["contains_secret_values"] is False
+    assert payload["contains_secret_placeholders"] is True
+    assert payload["safe_to_paste_in_chat"] is False
+    assert payload["local_shell_only"] is True
+    assert payload["secret_env"] == ["LEXMOUNT_API_KEY"]
+    assert payload["safety"] == {
+        "contains_secret_values": False,
+        "contains_secret_placeholders": True,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+        "secret_env": ["LEXMOUNT_API_KEY"],
+    }
+    assert payload["setup_block"] == {
+        "id": "local_env",
+        "label": "Configure local shell",
+        "commands": [
+            "export LEXMOUNT_API_KEY='<api-key>'",
+            "export LEXMOUNT_PROJECT_ID='<project-id>'",
+        ],
+        "contains_secret_values": False,
+        "contains_secret_placeholders": True,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+        "secret_env": ["LEXMOUNT_API_KEY"],
+    }
+    assert payload["verification"] == {
+        "status_command": "browser-cli auth status",
+        "doctor_command": "browser-cli doctor --json",
+        "success_condition": (
+            "auth status reports configured=true and doctor reports ok=true"
+        ),
+    }
     assert payload["warnings"] == []
     assert payload["commands"] == [
         "export LEXMOUNT_API_KEY='<api-key>'",
@@ -7447,6 +7479,12 @@ def test_auth_export_env_from_current_masks_api_key_by_default(
     assert payload["warnings"]
     assert payload["usable"] is False
     assert payload["unusable_exports"] == ["LEXMOUNT_API_KEY"]
+    assert payload["contains_secret_values"] is False
+    assert payload["contains_secret_placeholders"] is True
+    assert payload["safe_to_paste_in_chat"] is False
+    assert payload["local_shell_only"] is True
+    assert payload["safety"]["secret_env"] == ["LEXMOUNT_API_KEY"]
+    assert payload["setup_block"]["commands"] == payload["commands"]
     assert "Replace placeholder or redacted export values" in payload["next_steps"][0]
     assert payload["exports"][0]["source"] == "env"
     assert payload["exports"][0]["usable"] is False
@@ -7469,6 +7507,13 @@ def test_auth_export_env_can_reveal_current_secret_explicitly(
     assert payload["secrets_revealed"] is True
     assert payload["usable"] is True
     assert payload["unusable_exports"] == []
+    assert payload["contains_secret_values"] is True
+    assert payload["contains_secret_placeholders"] is False
+    assert payload["safe_to_paste_in_chat"] is False
+    assert payload["local_shell_only"] is True
+    assert payload["safety"]["contains_secret_values"] is True
+    assert payload["safety"]["contains_secret_placeholders"] is False
+    assert payload["setup_block"]["commands"] == payload["commands"]
     assert payload["next_steps"][0] == "Run the export commands in the local shell."
     assert payload["warnings"] == []
     assert "local-secret" in payload["script"]

@@ -300,9 +300,12 @@ Default behavior:
   `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-console`,
   `wait-storage`, and `wait-cookie` routes so agents can avoid sleeps and
   custom JavaScript for common asynchronous state transitions.
-- `auth export-env` reports top-level `usable` and `unusable_exports` so agents
-  can distinguish directly runnable export commands from placeholder or masked
-  commands.
+- `auth export-env` reports top-level `usable`, `unusable_exports`,
+  `contains_secret_values`, `contains_secret_placeholders`,
+  `safe_to_paste_in_chat`, `local_shell_only`, `secret_env`, `safety`,
+  `setup_block`, and `verification` so agents can distinguish directly
+  runnable local-shell export commands from placeholder, masked, or secret
+  output before copying or running them.
 - `auth refresh` may report `refresh_needed`, `has_refresh_token`,
   `refresh_available`, `refreshed`, `reason`,
   `token_lifecycle_base_url_source`, `refresh_endpoint`, `remote_refresh`, and
