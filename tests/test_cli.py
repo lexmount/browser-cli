@@ -6420,6 +6420,7 @@ def test_doctor_smoke_session_creates_and_closes_temp_session(
         "closed": True,
         "session_id": "smoke-1",
     }
+    assert payload["browser_smoke_session"] == checks["browser_smoke_session"]
     assert calls == [
         ("list_sessions", {"status": None}),
         (
@@ -6465,6 +6466,7 @@ def test_doctor_smoke_session_is_skipped_with_skip_api(
     assert "browser-cli doctor --smoke-session" in payload["repair_plan"]["commands"]
     checks = _checks_by_name(payload)
     assert checks["browser_smoke_session"]["status"] == "skipped"
+    assert payload["browser_smoke_session"] == checks["browser_smoke_session"]
     assert checks["browser_smoke_session"]["fix"]["code"] == (
         "run_browser_smoke_session"
     )
@@ -6513,6 +6515,7 @@ def test_doctor_smoke_session_close_failure_is_masked_and_actionable(
     assert checks["browser_smoke_session"]["created"] is True
     assert checks["browser_smoke_session"]["closed"] is False
     assert checks["browser_smoke_session"]["session_id"] == "smoke-1"
+    assert payload["browser_smoke_session"] == checks["browser_smoke_session"]
     assert checks["browser_smoke_session"]["fix"]["commands"][0] == (
         "browser-cli session close --session-id smoke-1"
     )

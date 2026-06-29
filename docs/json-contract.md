@@ -92,7 +92,8 @@ The setup workflow includes `auth status`, `doctor --json`, and optional
 `doctor --smoke-session` steps; the smoke step reads
 `browser_smoke_session.status`, `browser_smoke_session.created`, and
 `browser_smoke_session.closed` so agents can verify a temporary session can be
-created and cleaned up.
+created and cleaned up. The same smoke result is also present in
+`checks[]` with `name=browser_smoke_session` for generic doctor check parsers.
 `doctor --json` also includes an `agent_prompt` check for the packaged
 `browser_cli.agent_metadata:openai.yaml` prompt metadata. It reports
 `display_name`, `short_description`, whether `default_prompt` is present,
@@ -356,8 +357,9 @@ Default behavior:
   `--overwrite`, and reports `next_commands` for validate/run.
 - `case run` masks direct `connect_url` values in stdout and its event log by
   default when they contain `api_key` or the current local API key.
-- `doctor --smoke-session` may report a temporary `session_id` and cleanup
-  status, but must not print direct connect URLs or token values.
+- `doctor --smoke-session` reports `browser_smoke_session` at the top level and
+  in `checks[]`; it may include a temporary `session_id` and cleanup status,
+  but must not print direct connect URLs or token values.
 - `doctor` reports `browser_cli.version_source` to show whether the browser-cli
   version came from installed package metadata or the package fallback.
 - `doctor` reports an `agent_references` check with `required_references`,
