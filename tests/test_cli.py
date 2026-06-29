@@ -317,6 +317,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         "browser-cli auth connect-requirements" in payload["agent_entrypoints"]["setup"]
     )
+    assert "browser-cli reference list" in payload["agent_entrypoints"]["setup"]
+    assert (
+        "browser-cli reference get --id usable_status --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli reference get --id usable_status"
+        in payload["agent_entrypoints"]["setup"]
+    )
     assert "browser-cli auth scopes" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]

@@ -1306,6 +1306,9 @@ def _command_catalog() -> dict[str, Any]:
         "agent_examples": _agent_examples(),
         "agent_entrypoints": {
             "setup": [
+                "browser-cli reference list",
+                "browser-cli reference get --id usable_status --metadata-only",
+                "browser-cli reference get --id usable_status",
                 "browser-cli auth status",
                 "browser-cli auth scopes",
                 "browser-cli auth refresh",
