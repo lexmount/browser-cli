@@ -230,6 +230,10 @@ Persistent context metadata created by this CLI is also cached locally at
 `LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE` to override that path for tests or
 isolated workspaces. Use metadata for labels such as `purpose`; do not put API
 keys, passwords, or session secrets in context metadata.
+`browser-cli doctor --json` includes a `context_registry` check with the path,
+path source, creatability/writability, context counts, scope-matched counts, and
+redacted metadata diagnostics so agents can repair local persistent-login reuse
+before creating sessions.
 Use `auth token-info --required-scope <scope>` to check scoped-token coverage.
 Use `auth refresh --credentials-file <path>` to inspect whether local
 device-token metadata needs refresh. Without a token lifecycle endpoint it

@@ -197,7 +197,7 @@ drive the next decision.
 
 If setup is uncertain, run `browser-cli commands --workflow setup_and_verify`,
 then `browser-cli auth status` and `browser-cli doctor --json` before creating a
-session. If credentials are missing, run
+session. Inspect doctor `context_registry` before persistent login reuse; warnings identify invalid JSON, non-file paths, or unwritable locations and include `repair_context_registry`. If credentials are missing, run
 `browser-cli commands --workflow connect_from_codex_auth`, then
 `browser-cli auth login` and guide the user to set local environment variables.
 If the task is to coordinate browser.lexmount.cn changes, run

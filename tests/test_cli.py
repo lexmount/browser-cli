@@ -5213,6 +5213,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checked_examples["page_inspection_case"]["case_errors"] == []
     assert checked_examples["form_fill_case"]["case_valid"] is True
     assert checked_examples["form_fill_case"]["case_errors"] == []
+    assert checks["context_registry"]["status"] == "pass"
+    assert checks["context_registry"]["path_source"] == "env"
+    assert checks["context_registry"]["exists"] is False
+    assert checks["context_registry"]["writable"] is True
+    assert checks["context_registry"]["schema_version"] == 1
+    assert checks["context_registry"]["context_count"] == 0
+    assert checks["context_registry"]["scoped_context_count"] == 0
+    assert checks["context_registry"]["metadata_context_count"] == 0
+    assert checks["context_registry"]["metadata_values_redacted"] is True
     assert checks["env.LEXMOUNT_API_KEY"]["status"] == "pass"
     assert checks["env.LEXMOUNT_PROJECT_ID"]["status"] == "pass"
     assert checks["direct_url"]["status"] == "pass"
@@ -5224,6 +5233,55 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "message": "Lexmount API is reachable",
         "session_count": 2,
         "status_filter": None,
+    }
+
+
+def test_doctor_warns_when_context_registry_json_is_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    registry_path = tmp_path / "bad-context-registry.json"
+    registry_path.write_text("{", encoding="utf-8")
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv("LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE", str(registry_path))
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert payload["failed_checks"] == []
+    assert "context_registry" in payload["warning_checks"]
+    assert "secret" not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    registry = checks["context_registry"]
+    assert registry["status"] == "warn"
+    assert registry["error"] == "registry_invalid_json"
+    assert registry["exists"] is True
+    assert registry["path"] == str(registry_path)
+    assert registry["path_source"] == "env"
+    assert registry["readable"] is True
+    assert registry["writable"] is True
+    assert registry["metadata_values_redacted"] is True
+    assert registry["fix"]["code"] == "repair_context_registry"
+    assert "LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE" in registry["fix"]["env"]
+    assert any(
+        "context pick --metadata-json" in command
+        for command in registry["fix"]["commands"]
+    )
+    repair = payload["repair_plan"]
+    assert repair["required"] is False
+    assert "repair_context_registry" in {
+        item["code"] for item in repair["fixes"] if item["check"] == "context_registry"
     }
 
 
