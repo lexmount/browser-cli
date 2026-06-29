@@ -306,6 +306,9 @@ Default behavior:
   `setup_block`, and `verification` so agents can distinguish directly
   runnable local-shell export commands from placeholder, masked, or secret
   output before copying or running them.
+- `doctor` includes an `auth_export_env_contract` check so missing or invalid
+  `auth export-env` safety metadata becomes an actionable warning instead of an
+  agent-side guess.
 - `auth refresh` may report `refresh_needed`, `has_refresh_token`,
   `refresh_available`, `refreshed`, `reason`,
   `token_lifecycle_base_url_source`, `refresh_endpoint`, `remote_refresh`, and

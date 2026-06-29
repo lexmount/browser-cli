@@ -69,6 +69,18 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
+DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
+    "usable",
+    "unusable_exports",
+    "contains_secret_values",
+    "contains_secret_placeholders",
+    "safe_to_paste_in_chat",
+    "local_shell_only",
+    "secret_env",
+    "safety",
+    "setup_block",
+    "verification",
+)
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
@@ -3914,6 +3926,132 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         missing_supported_actions=[],
         missing_action_schemas=[],
         invalid_action_schemas=[],
+    )
+
+
+def _doctor_auth_export_env_contract_check() -> dict[str, Any]:
+    try:
+        payload = _auth_export_env_payload(
+            argparse.Namespace(
+                shell="posix",
+                from_current=False,
+                reveal_secrets=False,
+                include_base_url=False,
+                include_region=False,
+            )
+        )
+    except Exception as exc:
+        return _doctor_check(
+            "auth_export_env_contract",
+            "warn",
+            "auth export-env contract could not be built.",
+            error=exc.__class__.__name__,
+            required_fields=list(DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS),
+            fix=_doctor_fix(
+                "repair_auth_export_env_contract",
+                commands=[
+                    "browser-cli auth export-env",
+                    "browser-cli doctor --json",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents rely on auth export-env safety metadata before copying shell commands.",
+                    "Upgrade or reinstall browser-cli if auth export-env cannot produce JSON.",
+                ],
+            ),
+        )
+
+    missing_fields = [
+        field
+        for field in DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS
+        if field not in payload
+    ]
+    invalid_fields: list[str] = []
+
+    safety = payload.get("safety")
+    setup_block = payload.get("setup_block")
+    verification = payload.get("verification")
+    if not isinstance(safety, dict):
+        invalid_fields.append("safety")
+        safety = {}
+    if not isinstance(setup_block, dict):
+        invalid_fields.append("setup_block")
+        setup_block = {}
+    if not isinstance(verification, dict):
+        invalid_fields.append("verification")
+        verification = {}
+
+    expected_values = {
+        "usable": False,
+        "contains_secret_values": False,
+        "contains_secret_placeholders": True,
+        "safe_to_paste_in_chat": False,
+        "local_shell_only": True,
+    }
+    for field, expected in expected_values.items():
+        if payload.get(field) is not expected:
+            invalid_fields.append(field)
+        if safety.get(field) is not expected and field in {
+            "contains_secret_values",
+            "contains_secret_placeholders",
+            "safe_to_paste_in_chat",
+            "local_shell_only",
+        }:
+            invalid_fields.append(f"safety.{field}")
+
+    if "LEXMOUNT_API_KEY" not in payload.get("secret_env", []):
+        invalid_fields.append("secret_env")
+    if safety.get("secret_env") != payload.get("secret_env"):
+        invalid_fields.append("safety.secret_env")
+    if setup_block.get("id") != "local_env":
+        invalid_fields.append("setup_block.id")
+    if setup_block.get("commands") != payload.get("commands"):
+        invalid_fields.append("setup_block.commands")
+    if verification.get("doctor_command") != AGENT_DOCTOR_COMMAND:
+        invalid_fields.append("verification.doctor_command")
+    if verification.get("status_command") != "browser-cli auth status":
+        invalid_fields.append("verification.status_command")
+
+    invalid_fields = _dedupe_preserving_order(invalid_fields)
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "required_fields": list(DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS),
+        "missing_fields": missing_fields,
+        "invalid_fields": invalid_fields,
+        "safe_to_paste_in_chat": payload.get("safe_to_paste_in_chat"),
+        "local_shell_only": payload.get("local_shell_only"),
+        "contains_secret_values": payload.get("contains_secret_values"),
+        "contains_secret_placeholders": payload.get("contains_secret_placeholders"),
+        "secret_env": payload.get("secret_env"),
+        "verification": verification,
+    }
+
+    if missing_fields or invalid_fields:
+        return _doctor_check(
+            "auth_export_env_contract",
+            "warn",
+            "auth export-env safety metadata is missing or invalid.",
+            fix=_doctor_fix(
+                "repair_auth_export_env_contract",
+                commands=[
+                    "browser-cli auth export-env",
+                    "browser-cli auth export-env --from-current",
+                    "browser-cli doctor --json",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents should read safe_to_paste_in_chat, local_shell_only, safety, setup_block, and verification before using export commands.",
+                    "Keep auth export-env output, README, and docs/json-contract.md in sync.",
+                ],
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "auth_export_env_contract",
+        "pass",
+        "auth export-env exposes safe local-shell metadata for agents.",
+        **common_details,
     )
 
 
@@ -17335,6 +17473,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
 
     checks.append(_doctor_command_catalog_check())
     checks.append(_doctor_case_schema_check())
+    checks.append(_doctor_auth_export_env_contract_check())
     checks.append(_doctor_agent_prompt_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())
@@ -18019,8 +18158,7 @@ def cmd_auth_logout(args: argparse.Namespace) -> None:
     )
 
 
-def cmd_auth_export_env(args: argparse.Namespace) -> None:
-    command = "auth.export-env"
+def _auth_export_env_payload(args: argparse.Namespace) -> dict[str, Any]:
     warnings: list[str] = []
 
     api_key = "<api-key>"
@@ -18132,34 +18270,37 @@ def cmd_auth_export_env(args: argparse.Namespace) -> None:
         else "Replace placeholder or redacted export values before running the commands in the local shell.",
         f"Run `{AGENT_DOCTOR_COMMAND}` to verify credentials.",
     ]
-    _success(
-        command,
-        shell=args.shell,
-        from_current=args.from_current,
-        secrets_revealed=secrets_revealed,
-        usable=not unusable_exports,
-        unusable_exports=unusable_exports,
-        contains_secret_values=local_shell_safety["contains_secret_values"],
-        contains_secret_placeholders=local_shell_safety[
+    return {
+        "shell": args.shell,
+        "from_current": args.from_current,
+        "secrets_revealed": secrets_revealed,
+        "usable": not unusable_exports,
+        "unusable_exports": unusable_exports,
+        "contains_secret_values": local_shell_safety["contains_secret_values"],
+        "contains_secret_placeholders": local_shell_safety[
             "contains_secret_placeholders"
         ],
-        safe_to_paste_in_chat=local_shell_safety["safe_to_paste_in_chat"],
-        local_shell_only=local_shell_safety["local_shell_only"],
-        secret_env=local_shell_safety["secret_env"],
-        safety=local_shell_safety,
-        setup_block={
+        "safe_to_paste_in_chat": local_shell_safety["safe_to_paste_in_chat"],
+        "local_shell_only": local_shell_safety["local_shell_only"],
+        "secret_env": local_shell_safety["secret_env"],
+        "safety": local_shell_safety,
+        "setup_block": {
             "id": "local_env",
             "label": "Configure local shell",
             "commands": commands,
             **local_shell_safety,
         },
-        verification=verification,
-        warnings=warnings,
-        exports=entries,
-        commands=commands,
-        script="\n".join(commands),
-        next_steps=next_steps,
-    )
+        "verification": verification,
+        "warnings": warnings,
+        "exports": entries,
+        "commands": commands,
+        "script": "\n".join(commands),
+        "next_steps": next_steps,
+    }
+
+
+def cmd_auth_export_env(args: argparse.Namespace) -> None:
+    _success("auth.export-env", **_auth_export_env_payload(args))
 
 
 def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:

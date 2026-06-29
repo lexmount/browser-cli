@@ -4836,7 +4836,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "guidance": [],
         "fixes": [],
     }
-    assert "secret" not in json.dumps(payload)
+    assert '"secret"' not in json.dumps(payload)
 
     checks = _checks_by_name(payload)
     assert checks["python_runtime"]["status"] == "pass"
@@ -5194,6 +5194,33 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["case_schema"]["missing_supported_actions"] == []
     assert checks["case_schema"]["missing_action_schemas"] == []
     assert checks["case_schema"]["invalid_action_schemas"] == []
+    assert checks["auth_export_env_contract"]["status"] == "pass"
+    assert checks["auth_export_env_contract"]["required_fields"] == [
+        "usable",
+        "unusable_exports",
+        "contains_secret_values",
+        "contains_secret_placeholders",
+        "safe_to_paste_in_chat",
+        "local_shell_only",
+        "secret_env",
+        "safety",
+        "setup_block",
+        "verification",
+    ]
+    assert checks["auth_export_env_contract"]["missing_fields"] == []
+    assert checks["auth_export_env_contract"]["invalid_fields"] == []
+    assert checks["auth_export_env_contract"]["safe_to_paste_in_chat"] is False
+    assert checks["auth_export_env_contract"]["local_shell_only"] is True
+    assert checks["auth_export_env_contract"]["contains_secret_values"] is False
+    assert checks["auth_export_env_contract"]["contains_secret_placeholders"] is True
+    assert checks["auth_export_env_contract"]["secret_env"] == ["LEXMOUNT_API_KEY"]
+    assert checks["auth_export_env_contract"]["verification"] == {
+        "status_command": "browser-cli auth status",
+        "doctor_command": "browser-cli doctor --json",
+        "success_condition": (
+            "auth status reports configured=true and doctor reports ok=true"
+        ),
+    }
     assert checks["agent_prompt"]["status"] == "pass"
     assert checks["agent_prompt"]["metadata_id"] == "openai"
     assert checks["agent_prompt"]["package_resource"] == (
@@ -5294,7 +5321,7 @@ def test_doctor_warns_when_context_registry_json_is_invalid(
     assert payload["status"] == "warning"
     assert payload["failed_checks"] == []
     assert "context_registry" in payload["warning_checks"]
-    assert "secret" not in json.dumps(payload)
+    assert '"secret"' not in json.dumps(payload)
 
     checks = _checks_by_name(payload)
     registry = checks["context_registry"]
@@ -5540,6 +5567,63 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
         "browser-cli case schema --action network-snapshot"
         in payload["repair_plan"]["commands"]
     )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_auth_export_env_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._auth_export_env_payload",
+        lambda args: {
+            "usable": False,
+            "safe_to_paste_in_chat": True,
+            "local_shell_only": False,
+            "contains_secret_values": False,
+            "contains_secret_placeholders": False,
+            "secret_env": [],
+            "safety": {},
+            "setup_block": {"id": "wrong", "commands": []},
+            "verification": {"doctor_command": "browser-cli doctor"},
+            "commands": ["export LEXMOUNT_API_KEY='<api-key>'"],
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "auth_export_env_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["auth_export_env_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_fields"] == ["unusable_exports"]
+    assert "safe_to_paste_in_chat" in contract["invalid_fields"]
+    assert "local_shell_only" in contract["invalid_fields"]
+    assert "contains_secret_placeholders" in contract["invalid_fields"]
+    assert "secret_env" in contract["invalid_fields"]
+    assert "safety.secret_env" in contract["invalid_fields"]
+    assert "setup_block.id" in contract["invalid_fields"]
+    assert "verification.doctor_command" in contract["invalid_fields"]
+    assert "verification.status_command" in contract["invalid_fields"]
+    assert contract["fix"]["code"] == "repair_auth_export_env_contract"
+    assert "browser-cli auth export-env" in payload["repair_plan"]["commands"]
+    assert "browser-cli auth export-env --from-current" in payload["repair_plan"][
+        "commands"
+    ]
     assert "api_connectivity" in payload["skipped_checks"]
 
 
