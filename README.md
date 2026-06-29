@@ -465,7 +465,7 @@ Session management:
 browser-cli session create
 browser-cli session create --create-context
 browser-cli session create --context-id <context_id> --context-mode read_write
-browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing
 browser-cli session list --status active
 browser-cli session get --session-id <session_id>
 browser-cli session close --session-id <session_id>
@@ -481,8 +481,8 @@ browser-cli context list --limit 20
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing --dry-run
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing --dry-run
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing
 browser-cli context delete --context-id <context_id>
 ```
 
@@ -1039,18 +1039,18 @@ Common agent recipes:
   closing the session unless it should stay open.
 
 Use `session create --context-metadata-json '{"purpose":"codex-login"}'
---create-context-if-missing --context-mode read_write` when login state or
-cookies should survive between sessions. The command picks the first reusable
-matching context, creates one if requested, then returns `context_reuse` with
+--context-selection newest --create-context-if-missing --context-mode read_write`
+when login state or cookies should survive between sessions. The command picks
+a reusable matching context, creates one if requested, then returns `context_reuse` with
 candidate contexts, `created`, `selected`, `normalized_status`, `availability`,
-top-level `reusable`, `locked`, `reuse_reason`, `selection_summary`, and
-locked/reusable details. Treat
+top-level `reusable`, `locked`, `reuse_reason`, `selection_strategy`,
+`selection_summary`, and locked/reusable details. Treat
 `availability: "available"` as reusable, `availability: "locked"` as busy, and
 `availability: "unavailable"` as a state that needs a different context. Use
 `context status --context-id <context_id>` before reusing a known context id. Use
-`context pick --metadata-json '{"purpose":"codex-login"}' --dry-run` when you
-need to inspect or report candidates before creating a session; read
-`selection_summary.recommended_next_action`, `decision_reason`,
+`context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --dry-run`
+when you need to inspect or report candidates before creating a session; read
+`selection_strategy`, `selection_summary.recommended_next_action`, `decision_reason`,
 `locked_matches`, `metadata_mismatches`, `reusable_matches`, and `would_create`
 before deciding whether to reuse, create, wait, or adjust filters. Candidate
 `metadata_diagnostics` reports matched, missing, and different metadata keys

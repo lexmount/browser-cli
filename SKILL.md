@@ -281,15 +281,15 @@ Then use the returned context-selection steps, typically:
 browser-cli context create
 browser-cli context status --context-id <context_id>
 browser-cli session create --context-id <context_id> --context-mode read_write
-browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing --dry-run
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing --context-mode read_write
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing --dry-run
 ```
 
 Use `read_write` for login/setup work that should update cookies or storage. Use `read_only` when inspecting an existing logged-in state. Before deleting a context, confirm that the task no longer needs its login state.
 
 Parse `context_reuse` from the session result. Reuse only when
 `context_reuse.selected` is true. Read top-level `availability`, `reusable`,
-`locked`, `normalized_status`, and `reuse_reason`. Prefer `availability` over
+`locked`, `normalized_status`, `selection_strategy`, and `reuse_reason`. Prefer `availability` over
 raw status strings: `available` can be reused, `locked` means busy, and
 `unavailable` needs a different context. If candidates include `locked: true`,
 report that a busy context was skipped. Inspect `selection_summary` for
@@ -301,7 +301,7 @@ metadata mismatches; values are redacted. If `metadata_source` is
 `local_registry`, browser-cli matched metadata recorded locally when it created
 the context. Never put API keys, passwords, or session secrets in context
 metadata. Use
-`context pick --metadata-json <json> --dry-run` before creating a session when
+`context pick --metadata-json <json> --selection newest --dry-run` before creating a session when
 you need to explain context reuse or avoid mutating persistent login state. Use
 the workflow's optional `context status --context-id <context_id>` step before
 reuse whenever a specific context id came from older notes, user input, or a
@@ -409,8 +409,8 @@ browser-cli context list
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing --dry-run
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing --dry-run
+browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing
 browser-cli context delete --context-id <context_id>
 ```
 

@@ -685,19 +685,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "go-back",
         "go-forward",
     ]
-    assert "browser-cli action open-url" in navigation_steps[2][
-        "preferred_commands"
-    ][0]
+    assert "browser-cli action open-url" in navigation_steps[2]["preferred_commands"][0]
     assert "browser-cli action reload" in navigation_steps[2]["preferred_commands"][1]
     assert navigation_steps[3]["agent_action"] is True
     assert "result.navigation_requested" in navigation_steps[3]["read"]
     assert "result.waited_ms" in navigation_steps[3]["read"]
-    assert "browser-cli action wait-load-state" in navigation_steps[4][
-        "fallback_commands"
-    ][0]
-    assert "browser-cli action wait-title" in navigation_steps[4][
-        "fallback_commands"
-    ][2]
+    assert (
+        "browser-cli action wait-load-state"
+        in navigation_steps[4]["fallback_commands"][0]
+    )
+    assert (
+        "browser-cli action wait-title" in navigation_steps[4]["fallback_commands"][2]
+    )
     link_steps = workflows["link_navigation"]["steps"]
     assert [step["id"] for step in link_steps] == [
         "inspect_action_guide",
@@ -722,7 +721,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "run_mouse_action",
         "verify_result",
     ]
-    assert mouse_steps[0]["command"] == "browser-cli action guide --task mouse_interaction"
+    assert (
+        mouse_steps[0]["command"] == "browser-cli action guide --task mouse_interaction"
+    )
     assert "double-click-role" in mouse_steps[2]["selection_order"]
     assert "right-click-role" in mouse_steps[2]["selection_order"]
     assert "result.double_clicked" in mouse_steps[3]["read"]
@@ -753,16 +754,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "screenshot-selector",
         "screenshot",
     ]
-    assert "browser-cli action screenshot-role" in visual_steps[3][
-        "preferred_commands"
-    ][0]
+    assert (
+        "browser-cli action screenshot-role" in visual_steps[3]["preferred_commands"][0]
+    )
     assert visual_steps[4]["agent_action"] is True
     assert "result.screenshot" in visual_steps[4]["read"]
     assert "result.path" in visual_steps[4]["read"]
     assert "result.bounding_box" in visual_steps[4]["read"]
-    assert "browser-cli action text-snapshot" in visual_steps[5][
-        "fallback_commands"
-    ][1]
+    assert "browser-cli action text-snapshot" in visual_steps[5]["fallback_commands"][1]
     semantic_wait_steps = workflows["semantic_waits"]["steps"]
     assert [step["id"] for step in semantic_wait_steps] == [
         "inspect_action_guide",
@@ -786,19 +785,22 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "wait-state-role",
         "wait-attribute-role",
     ]
-    assert "browser-cli action wait-role" in semantic_wait_steps[2][
-        "preferred_commands"
-    ][0]
+    assert (
+        "browser-cli action wait-role"
+        in semantic_wait_steps[2]["preferred_commands"][0]
+    )
     assert semantic_wait_steps[3]["agent_action"] is True
     assert "result.waited_ms" in semantic_wait_steps[3]["read"]
     assert "result.state_values" in semantic_wait_steps[3]["read"]
-    assert "browser-cli action wait-selector" in semantic_wait_steps[3][
-        "fallback_commands"
-    ][0]
+    assert (
+        "browser-cli action wait-selector"
+        in semantic_wait_steps[3]["fallback_commands"][0]
+    )
     assert "result.exists" in semantic_wait_steps[4]["read"]
-    assert "browser-cli action get-text-role" in semantic_wait_steps[4][
-        "fallback_commands"
-    ][0]
+    assert (
+        "browser-cli action get-text-role"
+        in semantic_wait_steps[4]["fallback_commands"][0]
+    )
     case_steps = workflows["case_file_task"]["steps"]
     assert [step["id"] for step in case_steps] == [
         "inspect_case_commands",
@@ -847,6 +849,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "reusable" in context_steps[0]["read"]
     assert "locked" in context_steps[0]["read"]
     assert "reuse_reason" in context_steps[0]["read"]
+    assert "selection_strategy" in context_steps[0]["read"]
     assert "selection_summary.recommended_next_action" in context_steps[0]["read"]
     assert "selection_summary.reusable_matches" in context_steps[0]["read"]
     assert "selection_summary.metadata_mismatches" in context_steps[0]["read"]
@@ -864,6 +867,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "context_reuse.reusable" in context_steps[2]["read"]
     assert "context_reuse.locked" in context_steps[2]["read"]
     assert "context_reuse.reuse_reason" in context_steps[2]["read"]
+    assert "context_reuse.selection_strategy" in context_steps[2]["read"]
     assert (
         "context_reuse.selection_summary.recommended_next_action"
         in (context_steps[2]["read"])
@@ -959,9 +963,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.requested_files" in upload_steps[2]["read"]
     assert "result.file_count" in upload_steps[2]["read"]
     assert "result.dispatched_events" in upload_steps[2]["read"]
-    assert "browser-cli action set-file-input" in upload_steps[2][
-        "alternative_commands"
-    ][0]
+    assert (
+        "browser-cli action set-file-input"
+        in upload_steps[2]["alternative_commands"][0]
+    )
     assert "result.file_input" in upload_steps[3]["read"]
     assert "browser-cli action wait-text" in upload_steps[3]["fallback_commands"][0]
     assert upload_steps[4]["optional"] is True
@@ -988,26 +993,26 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser-cli action wait-dialog" in dialog_steps[2]["command"]
     assert "result.controls" in dialog_steps[2]["read"]
     assert "result.control_count" in dialog_steps[2]["read"]
-    assert "browser-cli action dialog-snapshot" in dialog_steps[2][
-        "alternative_commands"
-    ][0]
+    assert (
+        "browser-cli action dialog-snapshot"
+        in dialog_steps[2]["alternative_commands"][0]
+    )
     assert dialog_steps[3]["optional"] is True
     assert dialog_steps[3]["agent_action"] is True
     assert "result.clicked" in dialog_steps[3]["read"]
-    assert "browser-cli action click-text" in dialog_steps[3][
-        "alternative_commands"
-    ][0]
+    assert "browser-cli action click-text" in dialog_steps[3]["alternative_commands"][0]
     assert dialog_steps[4]["optional"] is True
     assert "browser-cli action wait-frame" in dialog_steps[4]["command"]
     assert "result.readable" in dialog_steps[4]["read"]
     assert "result.same_origin" in dialog_steps[4]["read"]
     assert "result.read_error" in dialog_steps[4]["read"]
-    assert "browser-cli action frame-snapshot" in dialog_steps[4][
-        "alternative_commands"
-    ][0]
-    assert "browser-cli action dialog-snapshot" in dialog_steps[5][
-        "fallback_commands"
-    ][0]
+    assert (
+        "browser-cli action frame-snapshot"
+        in dialog_steps[4]["alternative_commands"][0]
+    )
+    assert (
+        "browser-cli action dialog-snapshot" in dialog_steps[5]["fallback_commands"][0]
+    )
     targeting_steps = workflows["interactive_targeting"]["steps"]
     assert [step["id"] for step in targeting_steps] == [
         "inspect_action_guide",
@@ -1094,9 +1099,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
     )
     assert "result.nodes" in menu_steps[1]["read"]
-    assert "browser-cli action accessibility-snapshot" in menu_steps[1][
-        "fallback_commands"
-    ][0]
+    assert (
+        "browser-cli action accessibility-snapshot"
+        in menu_steps[1]["fallback_commands"][0]
+    )
     assert menu_steps[2]["agent_action"] is True
     assert "browser-cli action hover-role" in menu_steps[2]["command"]
     assert "result.hovered" in menu_steps[2]["read"]
@@ -1150,10 +1156,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert extraction_steps[3]["agent_action"] is True
     assert "result.tables" in extraction_steps[3]["read"]
     assert "result.headings" in extraction_steps[3]["read"]
-    assert (
-        "browser-cli action snapshot"
-        in extraction_steps[3]["fallback_commands"][0]
-    )
+    assert "browser-cli action snapshot" in extraction_steps[3]["fallback_commands"][0]
     assert extraction_steps[4]["agent_action"] is True
     assert "result.truncated" in extraction_steps[4]["read"]
     state_steps = workflows["state_waits"]["steps"]
@@ -1184,15 +1187,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "wait-storage",
         "wait-cookie",
     ]
-    assert (
-        "browser-cli action wait-network"
-        in state_steps[2]["preferred_commands"][7]
-    )
+    assert "browser-cli action wait-network" in state_steps[2]["preferred_commands"][7]
     assert state_steps[3]["agent_action"] is True
     assert "result.matched" in state_steps[3]["read"]
     assert (
-        "browser-cli action wait-network-idle"
-        in state_steps[3]["fallback_commands"][0]
+        "browser-cli action wait-network-idle" in state_steps[3]["fallback_commands"][0]
     )
     assert "visibility_state" in state_steps[4]["read"]
     diagnostics_steps = workflows["page_diagnostics"]["steps"]
@@ -2032,9 +2031,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["next_commands"][0] == (
         "browser-cli commands --workflow browser_state_management"
     )
-    assert "browser-cli commands --workflow persistent_login_state" in payload[
-        "next_commands"
-    ]
+    assert (
+        "browser-cli commands --workflow persistent_login_state"
+        in payload["next_commands"]
+    )
     assert "browser-cli commands --workflow state_waits" in payload["next_commands"]
 
     with pytest.raises(SystemExit) as exc_info:
@@ -2093,10 +2093,10 @@ def test_action_guide_fails_unknown_task_as_json(
         "file_upload",
         "form_interaction",
         "interactive_targeting",
-            "link_navigation",
-            "menu_keyboard_flow",
-            "mouse_interaction",
-            "navigation_flow",
+        "link_navigation",
+        "menu_keyboard_flow",
+        "mouse_interaction",
+        "navigation_flow",
         "page_diagnostics",
         "semantic_waits",
         "state_waits",
@@ -2321,9 +2321,10 @@ def test_commands_catalog_returns_navigation_flow_workflow(
     assert "result.navigation_requested" in steps[3]["read"]
     assert steps[-1]["id"] == "verify_navigation_result"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][1]
-    assert "browser-cli action guide --task navigation_flow" in payload[
-        "agent_entrypoints"
-    ]["navigation_flow"][0]
+    assert (
+        "browser-cli action guide --task navigation_flow"
+        in payload["agent_entrypoints"]["navigation_flow"][0]
+    )
 
 
 def test_commands_catalog_returns_link_navigation_workflow(
@@ -2361,9 +2362,10 @@ def test_commands_catalog_returns_link_navigation_workflow(
     assert steps[3]["secret_handling"].startswith("Do not copy href")
     assert "result.navigation_requested" in steps[4]["read"]
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
-    assert "browser-cli action guide --task link_navigation" in payload[
-        "agent_entrypoints"
-    ]["link_navigation"][0]
+    assert (
+        "browser-cli action guide --task link_navigation"
+        in payload["agent_entrypoints"]["link_navigation"][0]
+    )
 
 
 def test_commands_catalog_returns_mouse_interaction_workflow(
@@ -2401,9 +2403,10 @@ def test_commands_catalog_returns_mouse_interaction_workflow(
     assert "result.double_clicked" in steps[3]["read"]
     assert "result.context_menu" in steps[3]["read"]
     assert "browser-cli action wait-text" in steps[-1]["fallback_commands"][0]
-    assert "browser-cli action guide --task mouse_interaction" in payload[
-        "agent_entrypoints"
-    ]["mouse_interaction"][0]
+    assert (
+        "browser-cli action guide --task mouse_interaction"
+        in payload["agent_entrypoints"]["mouse_interaction"][0]
+    )
 
 
 def test_commands_catalog_returns_visual_capture_workflow(
@@ -2444,9 +2447,10 @@ def test_commands_catalog_returns_visual_capture_workflow(
     assert "result.screenshot" in steps[4]["read"]
     assert "result.path" in steps[4]["read"]
     assert "browser-cli action text-snapshot" in steps[-1]["fallback_commands"][1]
-    assert "browser-cli action guide --task visual_capture" in payload[
-        "agent_entrypoints"
-    ]["visual_capture"][0]
+    assert (
+        "browser-cli action guide --task visual_capture"
+        in payload["agent_entrypoints"]["visual_capture"][0]
+    )
 
 
 def test_commands_catalog_returns_semantic_waits_workflow(
@@ -2483,9 +2487,10 @@ def test_commands_catalog_returns_semantic_waits_workflow(
     assert "result.attribute_found" in steps[3]["read"]
     assert "browser-cli action wait-selector" in steps[3]["fallback_commands"][0]
     assert "result.exists" in steps[-1]["read"]
-    assert "browser-cli action guide --task semantic_waits" in payload[
-        "agent_entrypoints"
-    ]["semantic_waits"][0]
+    assert (
+        "browser-cli action guide --task semantic_waits"
+        in payload["agent_entrypoints"]["semantic_waits"][0]
+    )
 
 
 def test_reference_list_returns_packaged_agent_references(
@@ -2771,18 +2776,12 @@ def test_case_schema_returns_supported_actions_and_fields(
         "selector": "input[name=q]",
         "text": "hello",
     }
-    assert "double_clicked" in payload["actions"]["double-click-role"][
-        "result_fields"
-    ]
-    assert "context_menu" in payload["actions"]["right-click-role"][
-        "result_fields"
-    ]
+    assert "double_clicked" in payload["actions"]["double-click-role"]["result_fields"]
+    assert "context_menu" in payload["actions"]["right-click-role"]["result_fields"]
     assert "ready_state" in payload["actions"]["page-info"]["result_fields"]
     assert "requested_url" in payload["actions"]["wait-url"]["result_fields"]
     assert "requested_title" in payload["actions"]["wait-title"]["result_fields"]
-    assert "requested_state" in payload["actions"]["wait-load-state"][
-        "result_fields"
-    ]
+    assert "requested_state" in payload["actions"]["wait-load-state"]["result_fields"]
     assert "hovered" in payload["actions"]["hover-role"]["result_fields"]
     assert "pressed" in payload["actions"]["press-role"]["result_fields"]
     assert "selected" in payload["actions"]["select-label"]["result_fields"]
@@ -2998,10 +2997,7 @@ def test_case_validate_select_actions_require_value_or_option_label(
 
     missing_result = validate_case_file(missing)
     assert missing_result.valid is False
-    assert (
-        "steps[0] missing one of 'value' or 'option_label'"
-        in missing_result.errors
-    )
+    assert "steps[0] missing one of 'value' or 'option_label'" in missing_result.errors
 
     both = tmp_path / "both-select-targets.json"
     both.write_text(
@@ -3022,10 +3018,7 @@ def test_case_validate_select_actions_require_value_or_option_label(
 
     both_result = validate_case_file(both)
     assert both_result.valid is False
-    assert (
-        "steps[0] must not set both 'value' and 'option_label'"
-        in both_result.errors
-    )
+    assert "steps[0] must not set both 'value' and 'option_label'" in both_result.errors
 
 
 def test_extended_case_step_uses_semantic_action_expression(tmp_path: Any) -> None:
@@ -3441,9 +3434,10 @@ def test_commands_catalog_returns_dialog_frame_handling_workflow(
     assert "browser-cli action wait-frame" in steps[4]["command"]
     assert "result.same_origin" in steps[4]["read"]
     assert "result.read_error" in steps[4]["read"]
-    assert "browser-cli action guide --task dialog_frame_handling" in payload[
-        "agent_entrypoints"
-    ]["dialog_frame_handling"][0]
+    assert (
+        "browser-cli action guide --task dialog_frame_handling"
+        in payload["agent_entrypoints"]["dialog_frame_handling"][0]
+    )
 
 
 def test_commands_catalog_returns_device_code_auth_workflow(
@@ -3730,9 +3724,10 @@ def test_commands_catalog_returns_menu_keyboard_flow_workflow(
     assert "result.keydown_accepted" in steps[5]["read"]
     assert steps[-1]["id"] == "verify_result"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
-    assert "browser-cli action guide --task menu_keyboard_flow" in payload[
-        "agent_entrypoints"
-    ]["menu_keyboard_flow"][0]
+    assert (
+        "browser-cli action guide --task menu_keyboard_flow"
+        in payload["agent_entrypoints"]["menu_keyboard_flow"][0]
+    )
 
 
 def test_commands_catalog_returns_state_waits_workflow(
@@ -3798,9 +3793,7 @@ def test_commands_catalog_returns_content_extraction_workflow(
         "extract_content",
         "verify_extraction_bounds",
     ]
-    assert steps[0]["command"] == (
-        "browser-cli action guide --task content_extraction"
-    )
+    assert steps[0]["command"] == ("browser-cli action guide --task content_extraction")
     assert "guide.read_fields" in steps[0]["read"]
     assert steps[1]["command"] == (
         "browser-cli action page-info --session-id <session_id>"
@@ -4181,18 +4174,14 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "find_targets",
         "close_session",
     ]
-    assert checks["command_catalog"]["required_workflow_steps"][
-        "navigation_flow"
-    ] == [
+    assert checks["command_catalog"]["required_workflow_steps"]["navigation_flow"] == [
         "inspect_action_guide",
         "inspect_current_page",
         "choose_navigation_action",
         "run_navigation_action",
         "verify_navigation_result",
     ]
-    assert checks["command_catalog"]["required_workflow_steps"][
-        "link_navigation"
-    ] == [
+    assert checks["command_catalog"]["required_workflow_steps"]["link_navigation"] == [
         "inspect_action_guide",
         "inspect_current_page",
         "inspect_links",
@@ -7812,6 +7801,79 @@ def test_session_create_reuses_context_metadata_from_local_registry(
     ]
 
 
+def test_session_create_can_select_oldest_matching_context(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            calls.append(("list_contexts", {"status": status, "limit": limit}))
+            return DummyModel(
+                {
+                    "count": 2,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-new",
+                            "status": "available",
+                            "metadata": {"purpose": "codex-login"},
+                            "updated_at": "2026-01-02T00:00:00Z",
+                        },
+                        {
+                            "context_id": "ctx-old",
+                            "status": "available",
+                            "metadata": {"purpose": "codex-login"},
+                            "updated_at": "2026-01-01T00:00:00Z",
+                        },
+                    ],
+                }
+            )
+
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            calls.append(("create_session", {"context_id": context_id}))
+            return DummyModel(
+                {"context_id": context_id, "session": {"session_id": "s1"}}
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "create",
+                "--context-metadata-json",
+                '{"purpose":"codex-login"}',
+                "--context-selection",
+                "oldest",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["context_id"] == "ctx-old"
+    assert payload["context_reuse"]["context_id"] == "ctx-old"
+    assert payload["context_reuse"]["selection_strategy"] == "oldest"
+    assert calls == [
+        ("list_contexts", {"status": None, "limit": 20}),
+        ("create_session", {"context_id": "ctx-old"}),
+    ]
+
+
 def test_session_create_can_create_context_when_no_reusable_metadata_match(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -8345,6 +8407,66 @@ def test_context_pick_selects_first_available_metadata_match(
             "reason": "status_reusable",
         },
     ]
+
+
+def test_context_pick_can_select_newest_matching_context(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def list_contexts(
+            self,
+            *,
+            status: str | None,
+            limit: int,
+        ) -> DummyModel:
+            return DummyModel(
+                {
+                    "count": 3,
+                    "contexts": [
+                        {
+                            "context_id": "ctx-old",
+                            "status": "available",
+                            "metadata": {"purpose": "codex"},
+                            "updated_at": "2026-01-01T00:00:00Z",
+                        },
+                        {
+                            "context_id": "ctx-new",
+                            "status": "available",
+                            "metadata": {"purpose": "codex"},
+                            "updated_at": "2026-01-02T00:00:00Z",
+                        },
+                        {
+                            "context_id": "ctx-locked-newer",
+                            "status": "locked",
+                            "metadata": {"purpose": "codex"},
+                            "updated_at": "2026-01-03T00:00:00Z",
+                        },
+                    ],
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "pick",
+                "--metadata-json",
+                '{"purpose":"codex"}',
+                "--selection",
+                "newest",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["selected"] is True
+    assert payload["context_id"] == "ctx-new"
+    assert payload["selection_strategy"] == "newest"
+    assert payload["selection_summary"]["reusable_matches"] == 2
+    assert payload["selection_summary"]["locked_matches"] == 1
 
 
 def test_context_pick_uses_local_registry_when_api_metadata_is_empty(

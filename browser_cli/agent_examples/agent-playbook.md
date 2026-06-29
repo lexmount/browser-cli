@@ -351,9 +351,9 @@ When reusing persistent login state by metadata, prefer:
 
 ```bash
 browser-cli context status --context-id <context_id>
-browser-cli context pick --metadata-json '{"purpose":"login"}' --create-if-missing --dry-run
-browser-cli context pick --metadata-json '{"purpose":"login"}' --create-if-missing
-browser-cli session create --context-metadata-json '{"purpose":"login"}' --create-context-if-missing --context-mode read_write
+browser-cli context pick --metadata-json '{"purpose":"login"}' --selection newest --create-if-missing --dry-run
+browser-cli context pick --metadata-json '{"purpose":"login"}' --selection newest --create-if-missing
+browser-cli session create --context-metadata-json '{"purpose":"login"}' --context-selection newest --create-context-if-missing --context-mode read_write
 ```
 
 Do not reuse a context whose `availability` is `locked` or `unavailable` for a
@@ -363,7 +363,7 @@ input, or a previous run.
 Use the dry-run output to read
 `selection_summary.recommended_next_action` first, then explain
 `selection_summary.decision_reason`, `selection_summary.locked_matches`,
-`selection_summary.reusable_matches`, and `would_create` before mutating
+`selection_summary.reusable_matches`, `selection_strategy`, and `would_create` before mutating
 persistent login state. When metadata filters do not match, inspect each
 candidate's `metadata_diagnostics.missing_keys` and
 `metadata_diagnostics.different_keys`; values are intentionally redacted.

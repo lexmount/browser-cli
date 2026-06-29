@@ -129,7 +129,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "repair_plan.commands" in text
     assert (
         "browser-cli context pick --metadata-json "
-        '\'{"purpose":"login"}\' --create-if-missing --dry-run'
+        '\'{"purpose":"login"}\' --selection newest --create-if-missing --dry-run'
     ) in text
     assert "browser-cli context status --context-id <context_id>" in text
     assert "browser-cli session create --context-metadata-json" in text

@@ -249,7 +249,7 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "Parse `context_reuse` from the session result" in normalized
     assert "`context_reuse.selected` is true" in normalized
     assert "Read top-level `availability`, `reusable`" in normalized
-    assert "`normalized_status`, and `reuse_reason`" in normalized
+    assert "`normalized_status`, `selection_strategy`, and `reuse_reason`" in normalized
     assert "Prefer `availability` over raw status strings" in normalized
     assert "`available` can be reused" in normalized
     assert "`locked` means busy" in normalized
@@ -269,7 +269,7 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "`local_registry`" in normalized
     assert "Never put API keys, passwords, or session secrets" in normalized
     assert (
-        "`context pick --metadata-json <json> --dry-run` before creating a session"
+        "`context pick --metadata-json <json> --selection newest --dry-run` before creating a session"
         in normalized
     )
     assert (
@@ -304,8 +304,7 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "`page-info`, `wait-url`, `wait-title`, `wait-load-state`" in normalized
     assert (
         "`select-label`, `check-role`, `hover-role`, `press-role`, "
-        "`scroll-into-view-role`"
-        in normalized
+        "`scroll-into-view-role`" in normalized
     )
     assert (
         "`next_commands`, `events_path`, `artifacts_dir`, `session`, and `steps`"

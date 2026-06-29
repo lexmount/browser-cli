@@ -465,6 +465,13 @@ CONTEXT_UNAVAILABLE_STATUSES = {
     "terminated",
     "stopped",
 }
+CONTEXT_SELECTION_STRATEGIES = ("first", "last", "newest", "oldest")
+CONTEXT_SELECTION_TIMESTAMP_FIELDS = (
+    "last_used_at",
+    "last_active_at",
+    "updated_at",
+    "created_at",
+)
 SENSITIVE_PAYLOAD_KEYS = {
     "api_key",
     "apikey",
@@ -994,9 +1001,9 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
             "persistent_login_state": [
-                'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
+                'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                 "browser-cli context status --context-id <context_id>",
-                'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
+                'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
             ],
             "browser_state_management": [
                 "browser-cli action guide --task browser_state_management",
@@ -2229,7 +2236,7 @@ def _command_catalog() -> dict[str, Any]:
                         "fallback_commands": [
                             'browser-cli action wait-selector --session-id <session_id> --selector "<selector>" --state visible',
                             'browser-cli action wait-count --session-id <session_id> --selector "<selector>" --count 1 --comparison ge',
-                            'browser-cli action wait-load-state --session-id <session_id> --state networkidle',
+                            "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
                         ],
                     },
                     {
@@ -2316,7 +2323,7 @@ def _command_catalog() -> dict[str, Any]:
                             "result.candidate_count",
                         ],
                         "alternative_commands": [
-                            'browser-cli action wait-role --session-id <session_id> --role menu',
+                            "browser-cli action wait-role --session-id <session_id> --role menu",
                             'browser-cli action wait-text --session-id <session_id> --text "<menu item>"',
                         ],
                     },
@@ -2491,12 +2498,13 @@ def _command_catalog() -> dict[str, Any]:
                 "steps": [
                     {
                         "id": "dry_run_context_pick",
-                        "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --create-if-missing --dry-run',
+                        "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                         "read": [
                             "availability",
                             "reusable",
                             "locked",
                             "reuse_reason",
+                            "selection_strategy",
                             "selection_summary.recommended_next_action",
                             "selection_summary.decision_reason",
                             "selection_summary.locked_matches",
@@ -2526,11 +2534,12 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "create_session_with_context",
-                        "command": 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --create-context-if-missing --context-mode read_write',
+                        "command": 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
                         "read": [
                             "session_id",
                             "context_reuse.selected",
                             "context_reuse.created",
+                            "context_reuse.selection_strategy",
                             "context_reuse.availability",
                             "context_reuse.reusable",
                             "context_reuse.locked",
@@ -4073,6 +4082,74 @@ def _context_pick_candidate(
     }
 
 
+def _parse_context_timestamp(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    normalized = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _context_selection_timestamp(context: dict[str, Any]) -> float | None:
+    for field in CONTEXT_SELECTION_TIMESTAMP_FIELDS:
+        parsed = _parse_context_timestamp(context.get(field))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _select_reusable_context(
+    contexts: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    *,
+    selection_strategy: str,
+) -> dict[str, Any] | None:
+    reusable_pairs = [
+        (index, context)
+        for index, (context, candidate) in enumerate(zip(contexts, candidates))
+        if candidate.get("metadata_match") and candidate.get("reusable")
+    ]
+    if not reusable_pairs:
+        return None
+    if selection_strategy == "last":
+        return reusable_pairs[-1][1]
+    if selection_strategy in {"newest", "oldest"}:
+        timestamped = [
+            (index, context, timestamp)
+            for index, context in reusable_pairs
+            if (timestamp := _context_selection_timestamp(context)) is not None
+        ]
+        if not timestamped:
+            return (
+                reusable_pairs[-1][1]
+                if selection_strategy == "newest"
+                else reusable_pairs[0][1]
+            )
+        return sorted(
+            timestamped,
+            key=lambda pair: (pair[2], pair[0]),
+            reverse=selection_strategy == "newest",
+        )[0][1]
+    return reusable_pairs[0][1]
+
+
 def _context_selection_decision(
     candidates: list[dict[str, Any]],
     *,
@@ -4171,6 +4248,7 @@ def _select_or_create_context_for_session(
     metadata_filter: dict[str, Any],
     status: str | None,
     limit: int,
+    selection_strategy: str,
     create_if_missing: bool,
 ) -> dict[str, Any]:
     try:
@@ -4187,33 +4265,38 @@ def _select_or_create_context_for_session(
         _context_pick_candidate(context, metadata_filter, registry)
         for context in contexts
     ]
+    selected_context = _select_reusable_context(
+        contexts,
+        candidates,
+        selection_strategy=selection_strategy,
+    )
 
-    for context, candidate in zip(contexts, candidates, strict=True):
-        if candidate["metadata_match"] and candidate["reusable"]:
-            context_id = context.get("context_id")
-            reuse = _context_reuse_state(context)
-            return {
-                "selected": True,
-                "created": False,
-                "context_id": context_id,
-                "context": context,
-                "normalized_status": reuse["normalized_status"],
-                "availability": reuse["availability"],
-                "reusable": reuse["reusable"],
-                "locked": reuse["locked"],
-                "reuse_reason": reuse["reason"],
-                "reuse": reuse,
-                "checked": len(contexts),
-                "candidates": candidates,
-                "selection_summary": _context_selection_summary(
-                    candidates,
-                    selected_context_id=context_id,
-                    create_if_missing=create_if_missing,
-                ),
-                "metadata_filter": metadata_filter,
-                "status_filter": status,
-                "limit": limit,
-            }
+    if selected_context is not None:
+        context_id = selected_context.get("context_id")
+        reuse = _context_reuse_state(selected_context)
+        return {
+            "selected": True,
+            "created": False,
+            "context_id": context_id,
+            "context": selected_context,
+            "normalized_status": reuse["normalized_status"],
+            "availability": reuse["availability"],
+            "reusable": reuse["reusable"],
+            "locked": reuse["locked"],
+            "reuse_reason": reuse["reason"],
+            "reuse": reuse,
+            "checked": len(contexts),
+            "candidates": candidates,
+            "selection_strategy": selection_strategy,
+            "selection_summary": _context_selection_summary(
+                candidates,
+                selected_context_id=context_id,
+                create_if_missing=create_if_missing,
+            ),
+            "metadata_filter": metadata_filter,
+            "status_filter": status,
+            "limit": limit,
+        }
 
     if create_if_missing:
         try:
@@ -4236,6 +4319,7 @@ def _select_or_create_context_for_session(
             "reuse": reuse,
             "checked": len(contexts),
             "candidates": candidates,
+            "selection_strategy": selection_strategy,
             "selection_summary": _context_selection_summary(
                 candidates,
                 selected_context_id=created_context.get("context_id"),
@@ -4255,6 +4339,7 @@ def _select_or_create_context_for_session(
         created=False,
         checked=len(contexts),
         candidates=candidates,
+        selection_strategy=selection_strategy,
         selection_summary=_context_selection_summary(
             candidates,
             create_if_missing=create_if_missing,
@@ -5892,6 +5977,7 @@ def cmd_session_create(args: argparse.Namespace) -> None:
                 metadata_filter=context_metadata_filter,
                 status=args.context_status,
                 limit=args.context_limit,
+                selection_strategy=args.context_selection,
                 create_if_missing=args.create_context_if_missing,
             )
             context_id = context_reuse.get("context_id")
@@ -6032,11 +6118,11 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
         _context_pick_candidate(context, metadata_filter, registry)
         for context in contexts
     ]
-    selected_context: dict[str, Any] | None = None
-    for context, candidate in zip(contexts, candidates, strict=True):
-        if candidate["metadata_match"] and candidate["reusable"]:
-            selected_context = context
-            break
+    selected_context = _select_reusable_context(
+        contexts,
+        candidates,
+        selection_strategy=args.selection,
+    )
     selected_context_id = (
         selected_context.get("context_id") if selected_context is not None else None
     )
@@ -6064,6 +6150,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             reuse=reuse,
             checked=len(contexts),
             candidates=candidates,
+            selection_strategy=args.selection,
             selection_summary=selection_summary,
             metadata_filter=metadata_filter,
         )
@@ -6080,6 +6167,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             reuse=None,
             checked=len(contexts),
             candidates=candidates,
+            selection_strategy=args.selection,
             selection_summary=selection_summary,
             metadata_filter=metadata_filter,
             message=(
@@ -6114,6 +6202,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
             reuse=reuse,
             checked=len(contexts),
             candidates=candidates,
+            selection_strategy=args.selection,
             selection_summary=_context_selection_summary(
                 candidates,
                 selected_context_id=created_context_id,
@@ -6132,6 +6221,7 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
         dry_run=False,
         checked=len(contexts),
         candidates=candidates,
+        selection_strategy=args.selection,
         selection_summary=selection_summary,
         metadata_filter=metadata_filter,
     )
@@ -19675,6 +19765,15 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         default=20,
         help="Maximum contexts to inspect while picking a reusable context.",
     )
+    parser.add_argument(
+        "--context-selection",
+        choices=CONTEXT_SELECTION_STRATEGIES,
+        default="first",
+        help=(
+            "Reusable context selection strategy when multiple contexts match. "
+            "Default is first."
+        ),
+    )
 
 
 def _add_text_match_args(parser: argparse.ArgumentParser) -> None:
@@ -19774,6 +19873,15 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Optional server-side status filter before local reusable checks",
     )
     context_pick.add_argument("--limit", type=int, default=20)
+    context_pick.add_argument(
+        "--selection",
+        choices=CONTEXT_SELECTION_STRATEGIES,
+        default="first",
+        help=(
+            "Reusable context selection strategy when multiple contexts match. "
+            "Default is first."
+        ),
+    )
     context_pick.add_argument(
         "--metadata-json",
         dest="metadata_filter",
