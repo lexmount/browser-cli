@@ -69,6 +69,10 @@ DEFAULT_CODEX_CONNECT_SCOPES = (
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
 AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
+AGENT_USABLE_STATUS_METADATA_COMMAND = (
+    "browser-cli reference get --id usable_status --metadata-only"
+)
+AGENT_USABLE_STATUS_COMMAND = "browser-cli reference get --id usable_status"
 DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
     "usable",
     "unusable_exports",
@@ -7070,6 +7074,8 @@ def _auth_login_setup_blocks(project_id: str | None) -> list[dict[str, Any]]:
                 "uv tool install git+https://github.com/lexmount/browser-cli.git",
                 "browser-cli --help",
                 "browser-cli --version",
+                AGENT_USABLE_STATUS_METADATA_COMMAND,
+                AGENT_USABLE_STATUS_COMMAND,
             ],
             "contains_secret_values": False,
             "contains_secret_placeholders": False,
@@ -7135,6 +7141,8 @@ def _auth_login_handoff(
         "install_command": "uv tool install git+https://github.com/lexmount/browser-cli.git",
         "setup_blocks": _auth_login_setup_blocks(project_id),
         "copyable_commands": [
+            AGENT_USABLE_STATUS_METADATA_COMMAND,
+            AGENT_USABLE_STATUS_COMMAND,
             "browser-cli auth status",
             "browser-cli auth login",
             "browser-cli auth export-env",
@@ -7487,6 +7495,8 @@ def _credential_doctor_fix(*env: str) -> dict[str, Any]:
         "configure_credentials",
         env=list(env),
         commands=[
+            AGENT_USABLE_STATUS_METADATA_COMMAND,
+            AGENT_USABLE_STATUS_COMMAND,
             "browser-cli auth login",
             "browser-cli auth export-env",
             "browser-cli auth status",
@@ -19990,6 +20000,8 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             f"Run `{AGENT_DOCTOR_COMMAND}` to verify the setup.",
         ],
         commands=[
+            AGENT_USABLE_STATUS_METADATA_COMMAND,
+            AGENT_USABLE_STATUS_COMMAND,
             "browser-cli auth export-env",
             "browser-cli auth status",
             AGENT_DOCTOR_COMMAND,
