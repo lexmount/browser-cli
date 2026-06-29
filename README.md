@@ -8,6 +8,13 @@ ergonomics. Browser lifecycle and page action behavior stay in
 `lex-browser-runtime`, so this project does not maintain a second copy of the
 runtime implementation.
 
+## MVP Quickstart
+
+If you need a usable version now, start with
+[docs/mvp-quickstart.md](docs/mvp-quickstart.md). It covers branch install,
+local credential setup, `doctor` verification, the first browser task,
+persistent context reuse, and the agent command discovery flow.
+
 ## Codex Install Prompt
 
 Copy this prompt into Codex when you want Codex to install and configure the
