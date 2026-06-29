@@ -167,6 +167,8 @@ warning with `fix.code=repair_context_registry`.
 - Successful commands exit with code `0`.
 - Failed runtime/configuration commands exit with a non-zero code.
 - Agents should still parse stdout JSON for error details.
+- If stdout is closed by a downstream pipe, the CLI exits with code `141`
+  without printing a Python traceback.
 
 ## Secret Handling
 

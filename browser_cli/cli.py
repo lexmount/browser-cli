@@ -580,13 +580,39 @@ SENSITIVE_PAYLOAD_KEYS = {
     "secret",
     "token",
 }
+BROKEN_PIPE_EXIT_CODE = 141
 
 
 def _json_dump(payload: dict[str, Any], exit_code: int = 0) -> NoReturn:
-    print(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=str)
-    )
+    try:
+        print(
+            json.dumps(
+                payload, ensure_ascii=False, indent=2, sort_keys=True, default=str
+            )
+        )
+    except BrokenPipeError:
+        _exit_broken_pipe()
     raise SystemExit(exit_code)
+
+
+def _exit_broken_pipe() -> NoReturn:
+    try:
+        stdout_fd = sys.stdout.fileno()
+    except (AttributeError, OSError):
+        raise SystemExit(BROKEN_PIPE_EXIT_CODE)
+
+    try:
+        devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    except OSError:
+        raise SystemExit(BROKEN_PIPE_EXIT_CODE)
+
+    try:
+        os.dup2(devnull_fd, stdout_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(devnull_fd)
+    raise SystemExit(BROKEN_PIPE_EXIT_CODE)
 
 
 def _success(command: str, **payload: Any) -> NoReturn:

@@ -85,6 +85,25 @@ def test_version_command_falls_back_to_package_constant(
     assert payload["lex_browser_runtime_version_known"] is False
 
 
+def test_json_dump_handles_broken_pipe_without_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken_print(*_args: Any, **_kwargs: Any) -> None:
+        raise BrokenPipeError
+
+    monkeypatch.setattr("builtins.print", broken_print)
+    monkeypatch.setattr(
+        cli_module.sys,
+        "stdout",
+        SimpleNamespace(fileno=lambda: (_ for _ in ()).throw(OSError)),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_module._json_dump({"ok": True})
+
+    assert exc_info.value.code == 141
+
+
 def test_direct_url_masks_secret_by_default(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
