@@ -11,7 +11,7 @@ runtime implementation.
 ## Quickstart
 
 If you need a usable version now, start with
-[docs/quickstart.md](docs/quickstart.md). It covers branch install,
+[docs/quickstart.md](docs/quickstart.md). It covers default-branch install,
 local credential setup, `doctor` verification, the first browser task,
 persistent context reuse, and the agent command discovery flow.
 
