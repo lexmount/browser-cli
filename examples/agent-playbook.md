@@ -392,8 +392,11 @@ semantic form and targeting steps such as `fill-label`, `click-role`,
 `wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `scroll-into-view-role`, `interactive-snapshot`, and `accessibility-snapshot`,
-plus navigation/status checks such as `page-info`, `wait-url`, `wait-title`,
-and `wait-load-state`; use those before falling back to case-level `eval`.
+selector state/value checks such as `query`, `inspect`, `count`, `wait-count`,
+`wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`,
+`bounding-box`, `clear`, `set-value`, and `submit`, plus navigation/status
+checks such as `page-info`, `wait-url`, `wait-title`, `wait-load-state`, and
+`wait-network-idle`; use those before falling back to case-level `eval`.
 Read `valid`, `errors`, `step_count`, `next_commands`, `events_path`,
 `artifacts_dir`, `session`, and `steps`.
 

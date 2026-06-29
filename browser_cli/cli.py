@@ -6887,6 +6887,25 @@ def _exists_expression(selector: str) -> str:
 """.strip()
 
 
+def _count_expression(*, selector: str, include_hidden: bool) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression(include_hidden=include_hidden)}
+  const selector = {_js_literal(selector)};
+  const all = [...document.querySelectorAll(selector)];
+  const visibleNodes = all.filter(visible);
+  const matched = includeHidden ? all : visibleNodes;
+  return {{
+    selector,
+    include_hidden: includeHidden,
+    count: matched.length,
+    total_count: all.length,
+    visible_count: visibleNodes.length
+  }};
+}}
+""".strip()
+
+
 def _scroll_expression(
     *,
     selector: str | None,
@@ -11120,6 +11139,32 @@ def _wait_attribute_expression(
   check();
 }})
 """.strip()
+
+
+def _get_attribute_expression(*, selector: str, name: str) -> str:
+    attribute = _js_literal(name)
+    return _selector_expression(
+        selector,
+        f"""
+  const name = {attribute};
+  const attributeValue = element.getAttribute(name);
+  let propertyValue = null;
+  if (name in element) {{
+    const raw = element[name];
+    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
+      ? raw
+      : String(raw);
+  }}
+  return {{
+    selector,
+    found: true,
+    name,
+    value: attributeValue,
+    attribute_value: attributeValue,
+    property_value: propertyValue
+  }};
+""".rstrip(),
+    )
 
 
 def _get_attribute_role_expression(
@@ -15369,23 +15414,11 @@ def cmd_action_exists_role(args: argparse.Namespace) -> None:
 
 
 def cmd_action_count(args: argparse.Namespace) -> None:
-    expression = f"""
-() => {{
-{_dom_helpers_expression(include_hidden=args.include_hidden)}
-  const selector = {_js_literal(args.selector)};
-  const all = [...document.querySelectorAll(selector)];
-  const visibleNodes = all.filter(visible);
-  const matched = includeHidden ? all : visibleNodes;
-  return {{
-    selector,
-    include_hidden: includeHidden,
-    count: matched.length,
-    total_count: all.length,
-    visible_count: visibleNodes.length
-  }};
-}}
-""".strip()
-    _run_eval_backed_action_command(args, "action.count", expression)
+    _run_eval_backed_action_command(
+        args,
+        "action.count",
+        _count_expression(selector=args.selector, include_hidden=args.include_hidden),
+    )
 
 
 def cmd_action_wait_count(args: argparse.Namespace) -> None:
@@ -15459,32 +15492,10 @@ def cmd_action_inspect(args: argparse.Namespace) -> None:
 
 
 def cmd_action_get_attribute(args: argparse.Namespace) -> None:
-    attribute = _js_literal(args.name)
     _run_eval_backed_action_command(
         args,
         "action.get-attribute",
-        _selector_expression(
-            args.selector,
-            f"""
-  const name = {attribute};
-  const attributeValue = element.getAttribute(name);
-  let propertyValue = null;
-  if (name in element) {{
-    const raw = element[name];
-    propertyValue = raw == null || ["string", "number", "boolean"].includes(typeof raw)
-      ? raw
-      : String(raw);
-  }}
-  return {{
-    selector,
-    found: true,
-    name,
-    value: attributeValue,
-    attribute_value: attributeValue,
-    property_value: propertyValue
-  }};
-""".rstrip(),
-        ),
+        _get_attribute_expression(selector=args.selector, name=args.name),
     )
 
 
@@ -18139,27 +18150,43 @@ CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill")
 
 EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "accessibility-snapshot": tuple(),
+    "blur": ("selector",),
+    "blur-role": ("role",),
+    "bounding-box": ("selector",),
+    "bounding-box-role": ("role",),
     "check": ("selector",),
     "check-label": ("label",),
     "check-role": ("role",),
+    "clear": ("selector",),
+    "clear-role": ("role",),
     "click-role": ("role",),
     "click-text": ("text",),
+    "count": ("selector",),
     "double-click": ("selector",),
     "double-click-role": ("role",),
     "exists": ("selector",),
     "exists-role": ("role",),
     "fill-label": ("label", "text"),
     "fill-role": ("role", "text"),
+    "focus": ("selector",),
+    "focus-role": ("role",),
     "form-snapshot": tuple(),
+    "get-attribute": ("selector", "name"),
+    "get-attribute-role": ("role", "attribute"),
     "get-text": ("selector",),
     "get-text-role": ("role",),
+    "get-value": ("selector",),
     "get-value-role": ("role",),
     "hover": ("selector",),
     "hover-role": ("role",),
+    "inspect": ("selector",),
+    "interactive-only-snapshot": tuple(),
     "interactive-snapshot": tuple(),
+    "outline-snapshot": tuple(),
     "page-info": tuple(),
     "press": ("selector", "key"),
     "press-role": ("role", "key"),
+    "query": ("selector",),
     "right-click": ("selector",),
     "right-click-role": ("role",),
     "scroll": tuple(),
@@ -18168,12 +18195,22 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "select-label": ("label",),
     "select-option": ("selector", "value"),
     "select-role": ("role",),
+    "set-value": ("selector", "value"),
+    "submit": ("selector",),
     "uncheck": ("selector",),
     "uncheck-label": ("label",),
     "uncheck-role": ("role",),
+    "wait-attribute": ("selector", "name"),
+    "wait-attribute-role": ("role", "attribute"),
+    "wait-count": ("selector", "count"),
     "wait-load-state": tuple(),
+    "wait-network-idle": tuple(),
+    "wait-state": ("selector", "state"),
+    "wait-state-role": ("role", "state"),
     "wait-title": ("title",),
     "wait-url": ("url",),
+    "wait-value": ("selector", "value"),
+    "wait-value-role": ("role", "value"),
     "wait-text": ("text",),
 }
 BROWSER_CLI_SUPPORTED_CASE_ACTIONS = frozenset(
@@ -18430,32 +18467,48 @@ def _case_action_schema() -> dict[str, Any]:
         "eval": [],
         "snapshot": ["max_chars", "output", "timeout_ms"],
         "accessibility-snapshot": ["include_hidden", "max_nodes"],
+        "blur": [],
+        "blur-role": ["name", "exact", "case_sensitive"],
+        "bounding-box": [],
+        "bounding-box-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "check": [],
         "check-label": ["exact", "case_sensitive"],
         "check-role": ["name", "exact", "case_sensitive"],
+        "clear": [],
+        "clear-role": ["name", "exact", "case_sensitive"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
+        "count": ["include_hidden"],
         "double-click": [],
         "double-click-role": ["name", "exact", "case_sensitive"],
         "exists": [],
         "exists-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "fill-label": ["exact", "case_sensitive"],
         "fill-role": ["name", "exact", "case_sensitive"],
+        "focus": ["prevent_scroll"],
+        "focus-role": ["name", "prevent_scroll", "exact", "case_sensitive"],
         "form-snapshot": [
             "selector",
             "include_hidden",
             "max_nodes",
             "reveal_sensitive_values",
         ],
+        "get-attribute": [],
+        "get-attribute-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "get-text": [],
         "get-text-role": ["name", "exact", "case_sensitive", "include_hidden"],
+        "get-value": [],
         "get-value-role": ["name", "exact", "case_sensitive"],
         "hover": [],
         "hover-role": ["name", "exact", "case_sensitive"],
+        "inspect": ["include_html", "max_html_chars", "reveal_sensitive_values"],
+        "interactive-only-snapshot": ["include_hidden", "max_nodes"],
         "interactive-snapshot": ["include_hidden", "max_nodes"],
+        "outline-snapshot": ["selector", "include_hidden", "max_nodes"],
         "page-info": [],
         "press": [],
         "press-role": ["name", "exact", "case_sensitive"],
+        "query": ["include_hidden", "max_nodes"],
         "right-click": [],
         "right-click-role": ["name", "exact", "case_sensitive"],
         "scroll": ["selector", "x", "y", "behavior"],
@@ -18477,10 +18530,42 @@ def _case_action_schema() -> dict[str, Any]:
             "exact",
             "case_sensitive",
         ],
+        "set-value": ["no_events"],
+        "submit": ["skip_validation"],
         "uncheck": [],
         "uncheck-label": ["exact", "case_sensitive"],
         "uncheck-role": ["name", "exact", "case_sensitive"],
+        "wait-attribute": [
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "case_sensitive",
+        ],
+        "wait-attribute-role": [
+            "name",
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "exact",
+            "case_sensitive",
+            "include_hidden",
+        ],
+        "wait-count": ["comparison", "timeout_ms", "poll_ms", "include_hidden"],
         "wait-load-state": ["state", "timeout_ms", "poll_ms"],
+        "wait-network-idle": ["idle_ms", "timeout_ms", "poll_ms", "max_inflight"],
+        "wait-state": ["timeout_ms", "poll_ms"],
+        "wait-state-role": [
+            "name",
+            "timeout_ms",
+            "poll_ms",
+            "exact",
+            "case_sensitive",
+            "include_hidden",
+        ],
         "wait-title": [
             "match",
             "case_sensitive",
@@ -18488,6 +18573,15 @@ def _case_action_schema() -> dict[str, Any]:
             "poll_ms",
         ],
         "wait-url": ["match", "timeout_ms", "poll_ms"],
+        "wait-value": ["match", "timeout_ms", "poll_ms", "case_sensitive"],
+        "wait-value-role": [
+            "name",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "exact",
+            "case_sensitive",
+        ],
         "wait-text": [
             "selector",
             "state",
@@ -18511,6 +18605,35 @@ def _case_action_schema() -> dict[str, Any]:
         "eval": ["expression", "value", "url"],
         "snapshot": ["url", "title", "html", "text"],
         "accessibility-snapshot": ["nodes", "node_count", "url", "title"],
+        "blur": ["selector", "found", "blurred", "focused", "url"],
+        "blur-role": [
+            "found",
+            "role_found",
+            "blurred",
+            "role",
+            "name",
+            "url",
+        ],
+        "bounding-box": [
+            "selector",
+            "found",
+            "visible",
+            "in_viewport",
+            "bounding_box",
+            "center",
+            "url",
+        ],
+        "bounding-box-role": [
+            "found",
+            "role_found",
+            "visible",
+            "in_viewport",
+            "bounding_box",
+            "center",
+            "role",
+            "name",
+            "url",
+        ],
         "check": ["selector", "found", "checkable", "checked", "url"],
         "check-label": [
             "found",
@@ -18534,8 +18657,29 @@ def _case_action_schema() -> dict[str, Any]:
             "changed",
             "url",
         ],
+        "clear": [
+            "selector",
+            "found",
+            "clearable",
+            "cleared",
+            "value",
+            "value_masked",
+            "url",
+        ],
+        "clear-role": [
+            "found",
+            "role_found",
+            "clearable",
+            "cleared",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "url",
+        ],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
         "click-text": ["found", "clicked", "text", "element", "url"],
+        "count": ["selector", "count", "total_count", "visible_count", "url"],
         "double-click": ["found", "double_clicked", "events", "element", "url"],
         "double-click-role": [
             "found",
@@ -18575,7 +18719,36 @@ def _case_action_schema() -> dict[str, Any]:
             "element",
             "url",
         ],
+        "focus": ["selector", "found", "focused", "prevent_scroll", "url"],
+        "focus-role": [
+            "found",
+            "role_found",
+            "focused",
+            "prevent_scroll",
+            "role",
+            "name",
+            "url",
+        ],
         "form-snapshot": ["fields", "field_count", "node_count", "url", "title"],
+        "get-attribute": [
+            "selector",
+            "found",
+            "name",
+            "value",
+            "attribute_value",
+            "property_value",
+            "url",
+        ],
+        "get-attribute-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "attribute",
+            "value",
+            "attribute_value",
+            "url",
+        ],
         "get-text": ["selector", "found", "text", "url"],
         "get-text-role": [
             "found",
@@ -18584,6 +18757,14 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "text",
             "text_length",
+            "url",
+        ],
+        "get-value": [
+            "selector",
+            "found",
+            "readable",
+            "value",
+            "value_masked",
             "url",
         ],
         "get-value-role": [
@@ -18604,7 +18785,28 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "url",
         ],
+        "inspect": [
+            "selector",
+            "found",
+            "attributes",
+            "state",
+            "value",
+            "value_masked",
+            "bounding_box",
+            "html_truncated",
+            "url",
+        ],
+        "interactive-only-snapshot": ["nodes", "node_count", "url", "title"],
         "interactive-snapshot": ["nodes", "node_count", "url", "title"],
+        "outline-snapshot": [
+            "headings",
+            "landmarks",
+            "outline_count",
+            "heading_count",
+            "landmark_count",
+            "url",
+            "title",
+        ],
         "page-info": [
             "url",
             "title",
@@ -18631,6 +18833,16 @@ def _case_action_schema() -> dict[str, Any]:
             "keydown_accepted",
             "role",
             "name",
+            "url",
+        ],
+        "query": [
+            "selector",
+            "count",
+            "total_count",
+            "visible_count",
+            "node_count",
+            "truncated",
+            "nodes",
             "url",
         ],
         "right-click": [
@@ -18719,6 +18931,27 @@ def _case_action_schema() -> dict[str, Any]:
             "changed",
             "url",
         ],
+        "set-value": [
+            "selector",
+            "found",
+            "writable",
+            "set",
+            "value",
+            "value_masked",
+            "requested_value",
+            "requested_value_masked",
+            "dispatched_events",
+            "url",
+        ],
+        "submit": [
+            "selector",
+            "found",
+            "form_found",
+            "submitted",
+            "skip_validation",
+            "used_request_submit",
+            "url",
+        ],
         "uncheck": ["selector", "found", "checkable", "checked", "url"],
         "uncheck-label": [
             "found",
@@ -18742,11 +18975,74 @@ def _case_action_schema() -> dict[str, Any]:
             "changed",
             "url",
         ],
+        "wait-attribute": [
+            "selector",
+            "name",
+            "found",
+            "state",
+            "attribute_found",
+            "value",
+            "requested_value",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-attribute-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "attribute",
+            "state",
+            "attribute_found",
+            "value",
+            "requested_value",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-count": [
+            "selector",
+            "found",
+            "count",
+            "requested_count",
+            "comparison",
+            "waited_ms",
+            "url",
+        ],
         "wait-load-state": [
             "found",
             "state",
             "requested_state",
             "target_state",
+            "waited_ms",
+            "url",
+        ],
+        "wait-network-idle": [
+            "network_idle",
+            "quiet_ms",
+            "waited_ms",
+            "pending_requests",
+            "max_inflight",
+            "url",
+        ],
+        "wait-state": [
+            "selector",
+            "state",
+            "found",
+            "matched",
+            "state_values",
+            "waited_ms",
+            "url",
+        ],
+        "wait-state-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "state",
+            "matched",
+            "state_values",
             "waited_ms",
             "url",
         ],
@@ -18760,6 +19056,30 @@ def _case_action_schema() -> dict[str, Any]:
             "url",
         ],
         "wait-url": ["found", "url", "requested_url", "match", "waited_ms"],
+        "wait-value": [
+            "selector",
+            "found",
+            "value",
+            "value_masked",
+            "requested_value",
+            "requested_value_masked",
+            "match",
+            "waited_ms",
+            "url",
+        ],
+        "wait-value-role": [
+            "found",
+            "role_found",
+            "role",
+            "name",
+            "value",
+            "value_masked",
+            "requested_value",
+            "requested_value_masked",
+            "match",
+            "waited_ms",
+            "url",
+        ],
         "wait-text": ["found", "text", "selector", "waited_ms", "url"],
     }
     examples: dict[str, dict[str, Any]] = {
@@ -18790,11 +19110,22 @@ def _case_action_schema() -> dict[str, Any]:
             "action": "accessibility-snapshot",
             "max_nodes": 120,
         },
+        "blur": {"action": "blur", "selector": "input[name=email]"},
+        "blur-role": {"action": "blur-role", "role": "textbox", "name": "Email"},
+        "bounding-box": {"action": "bounding-box", "selector": "button[type=submit]"},
+        "bounding-box-role": {
+            "action": "bounding-box-role",
+            "role": "button",
+            "name": "Submit",
+        },
         "check": {"action": "check", "selector": "input[name=agree]"},
         "check-label": {"action": "check-label", "label": "I agree"},
         "check-role": {"action": "check-role", "role": "checkbox", "name": "I agree"},
+        "clear": {"action": "clear", "selector": "input[name=email]"},
+        "clear-role": {"action": "clear-role", "role": "textbox", "name": "Email"},
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
+        "count": {"action": "count", "selector": ".result"},
         "double-click": {"action": "double-click", "selector": ".item"},
         "double-click-role": {
             "action": "double-click-role",
@@ -18814,7 +19145,21 @@ def _case_action_schema() -> dict[str, Any]:
             "name": "Email",
             "text": "me@example.com",
         },
+        "focus": {"action": "focus", "selector": "input[name=email]"},
+        "focus-role": {"action": "focus-role", "role": "textbox", "name": "Email"},
         "form-snapshot": {"action": "form-snapshot", "selector": "form"},
+        "get-attribute": {
+            "action": "get-attribute",
+            "selector": "button[type=submit]",
+            "name": "disabled",
+        },
+        "get-attribute-role": {
+            "action": "get-attribute-role",
+            "role": "button",
+            "name": "Submit",
+            "attribute": "disabled",
+        },
+        "get-value": {"action": "get-value", "selector": "input[name=email]"},
         "get-value-role": {
             "action": "get-value-role",
             "role": "textbox",
@@ -18824,7 +19169,13 @@ def _case_action_schema() -> dict[str, Any]:
         "get-text-role": {"action": "get-text-role", "role": "alert", "name": "Saved"},
         "hover": {"action": "hover", "selector": ".menu-button"},
         "hover-role": {"action": "hover-role", "role": "button", "name": "Menu"},
+        "inspect": {"action": "inspect", "selector": "button[type=submit]"},
+        "interactive-only-snapshot": {
+            "action": "interactive-only-snapshot",
+            "max_nodes": 80,
+        },
         "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
+        "outline-snapshot": {"action": "outline-snapshot", "selector": "main"},
         "page-info": {"action": "page-info"},
         "press": {"action": "press", "selector": "input[name=q]", "key": "Enter"},
         "press-role": {
@@ -18833,6 +19184,7 @@ def _case_action_schema() -> dict[str, Any]:
             "name": "Search",
             "key": "Enter",
         },
+        "query": {"action": "query", "selector": ".result", "max_nodes": 10},
         "right-click": {"action": "right-click", "selector": ".item"},
         "right-click-role": {
             "action": "right-click-role",
@@ -18862,6 +19214,12 @@ def _case_action_schema() -> dict[str, Any]:
             "name": "Plan",
             "option_label": "Pro",
         },
+        "set-value": {
+            "action": "set-value",
+            "selector": "input[name=email]",
+            "value": "me@example.com",
+        },
+        "submit": {"action": "submit", "selector": "form"},
         "uncheck": {"action": "uncheck", "selector": "input[name=subscribe]"},
         "uncheck-label": {"action": "uncheck-label", "label": "Subscribe"},
         "uncheck-role": {
@@ -18869,13 +19227,55 @@ def _case_action_schema() -> dict[str, Any]:
             "role": "checkbox",
             "name": "Subscribe",
         },
+        "wait-attribute": {
+            "action": "wait-attribute",
+            "selector": "button[type=submit]",
+            "name": "disabled",
+            "state": "absent",
+        },
+        "wait-attribute-role": {
+            "action": "wait-attribute-role",
+            "role": "button",
+            "name": "Submit",
+            "attribute": "disabled",
+            "state": "absent",
+        },
+        "wait-count": {
+            "action": "wait-count",
+            "selector": ".result",
+            "count": 1,
+            "comparison": "gte",
+        },
         "wait-load-state": {"action": "wait-load-state", "state": "complete"},
+        "wait-network-idle": {"action": "wait-network-idle", "idle_ms": 500},
+        "wait-state": {
+            "action": "wait-state",
+            "selector": "button[type=submit]",
+            "state": "enabled",
+        },
+        "wait-state-role": {
+            "action": "wait-state-role",
+            "role": "button",
+            "name": "Submit",
+            "state": "enabled",
+        },
         "wait-title": {
             "action": "wait-title",
             "title": "Dashboard",
             "match": "contains",
         },
         "wait-url": {"action": "wait-url", "url": "/dashboard"},
+        "wait-value": {
+            "action": "wait-value",
+            "selector": "input[name=email]",
+            "value": "me@example.com",
+        },
+        "wait-value-role": {
+            "action": "wait-value-role",
+            "role": "textbox",
+            "name": "Email",
+            "value": "me@example.com",
+        },
         "wait-text": {"action": "wait-text", "text": "Saved"},
     }
     return {
@@ -19131,10 +19531,50 @@ def _run_browser_cli_case_step(
     exact = _case_step_bool(step, "exact")
     case_sensitive = _case_step_bool(step, "case_sensitive")
 
+    if action == "blur":
+        return _case_eval_expression(page, _blur_expression(str(step["selector"])))
+    if action == "blur-role":
+        return _case_eval_expression(
+            page,
+            _blur_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "bounding-box":
+        return _case_eval_expression(
+            page,
+            _bounding_box_expression(str(step["selector"])),
+        )
+    if action == "bounding-box-role":
+        return _case_eval_expression(
+            page,
+            _bounding_box_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
     if action == "click-role":
         return _case_eval_expression(
             page,
             _click_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "clear":
+        return _case_eval_expression(page, _clear_expression(str(step["selector"])))
+    if action == "clear-role":
+        return _case_eval_expression(
+            page,
+            _clear_role_expression(
                 role=str(step["role"]),
                 name=str(step["name"]) if step.get("name") is not None else None,
                 exact=exact,
@@ -19165,6 +19605,14 @@ def _run_browser_cli_case_step(
                 checked=True,
                 exact=exact,
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "count":
+        return _case_eval_expression(
+            page,
+            _count_expression(
+                selector=str(step["selector"]),
+                include_hidden=_case_step_bool(step, "include_hidden"),
             ),
         )
     if action == "accessibility-snapshot":
@@ -19240,6 +19688,25 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "focus":
+        return _case_eval_expression(
+            page,
+            _focus_expression(
+                selector=str(step["selector"]),
+                prevent_scroll=_case_step_bool(step, "prevent_scroll"),
+            ),
+        )
+    if action == "focus-role":
+        return _case_eval_expression(
+            page,
+            _focus_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                prevent_scroll=_case_step_bool(step, "prevent_scroll"),
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
     if action == "form-snapshot":
         return _case_eval_expression(
             page,
@@ -19250,6 +19717,26 @@ def _run_browser_cli_case_step(
                 reveal_sensitive_values=_case_step_bool(
                     step, "reveal_sensitive_values"
                 ),
+            ),
+        )
+    if action == "get-attribute":
+        return _case_eval_expression(
+            page,
+            _get_attribute_expression(
+                selector=str(step["selector"]),
+                name=str(step["name"]),
+            ),
+        )
+    if action == "get-attribute-role":
+        return _case_eval_expression(
+            page,
+            _get_attribute_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                attribute=str(step["attribute"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                include_hidden=_case_step_bool(step, "include_hidden"),
             ),
         )
     if action == "get-text":
@@ -19265,6 +19752,11 @@ def _run_browser_cli_case_step(
                 include_hidden=_case_step_bool(step, "include_hidden"),
             ),
         )
+    if action == "get-value":
+        return _case_eval_expression(
+            page,
+            _get_value_expression(str(step["selector"])),
+        )
     if action == "get-value-role":
         return _case_eval_expression(
             page,
@@ -19273,6 +19765,23 @@ def _run_browser_cli_case_step(
                 name=str(step["name"]) if step.get("name") is not None else None,
                 exact=exact,
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "inspect":
+        return _case_eval_expression(
+            page,
+            _inspect_expression(
+                selector=str(step["selector"]),
+                include_html=_case_step_bool(step, "include_html"),
+                max_html_chars=_case_step_int(
+                    step,
+                    "max_html_chars",
+                    default=2000,
+                ),
+                reveal_sensitive_values=_case_step_bool(
+                    step,
+                    "reveal_sensitive_values",
+                ),
             ),
         )
     if action == "hover":
@@ -19287,12 +19796,21 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
-    if action == "interactive-snapshot":
+    if action in {"interactive-snapshot", "interactive-only-snapshot"}:
         return _case_eval_expression(
             page,
             _interactive_snapshot_expression(
                 include_hidden=_case_step_bool(step, "include_hidden"),
                 max_nodes=_case_step_int(step, "max_nodes", default=80),
+            ),
+        )
+    if action == "outline-snapshot":
+        return _case_eval_expression(
+            page,
+            _outline_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
             ),
         )
     if action == "page-info":
@@ -19311,6 +19829,15 @@ def _run_browser_cli_case_step(
                 key=str(step["key"]),
                 exact=exact,
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "query":
+        return _case_eval_expression(
+            page,
+            _query_expression(
+                selector=str(step["selector"]),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=20),
             ),
         )
     if action == "right-click":
@@ -19406,6 +19933,23 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "set-value":
+        return _case_eval_expression(
+            page,
+            _set_value_expression(
+                str(step["selector"]),
+                str(step["value"]),
+                dispatch_events=not _case_step_bool(step, "no_events"),
+            ),
+        )
+    if action == "submit":
+        return _case_eval_expression(
+            page,
+            _submit_expression(
+                selector=str(step["selector"]),
+                skip_validation=_case_step_bool(step, "skip_validation"),
+            ),
+        )
     if action == "uncheck":
         return _case_eval_expression(
             page,
@@ -19432,6 +19976,49 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "wait-attribute":
+        return _case_eval_expression(
+            page,
+            _wait_attribute_expression(
+                selector=str(step["selector"]),
+                name=str(step["name"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-attribute-role":
+        return _case_eval_expression(
+            page,
+            _wait_attribute_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                attribute=str(step["attribute"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "wait-count":
+        return _case_eval_expression(
+            page,
+            _wait_count_expression(
+                selector=str(step["selector"]),
+                count=_case_step_int(step, "count", default=1),
+                comparison=str(step.get("comparison", "eq")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
     if action == "wait-load-state":
         return _case_eval_expression(
             page,
@@ -19439,6 +20026,40 @@ def _run_browser_cli_case_step(
                 state=str(step.get("state", "complete")),
                 timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
                 poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-network-idle":
+        return _case_eval_expression(
+            page,
+            _wait_network_idle_expression(
+                idle_ms=_case_step_float(step, "idle_ms", default=500),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
+                max_inflight=_case_step_int(step, "max_inflight", default=0),
+            ),
+        )
+    if action == "wait-state":
+        return _case_eval_expression(
+            page,
+            _wait_state_expression(
+                selector=str(step["selector"]),
+                state=str(step["state"]),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-state-role":
+        return _case_eval_expression(
+            page,
+            _wait_state_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                state=str(step["state"]),
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
             ),
         )
     if action == "wait-title":
@@ -19460,6 +20081,32 @@ def _run_browser_cli_case_step(
                 match=str(step.get("match", "contains")),
                 timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
                 poll_ms=_case_step_float(step, "poll_ms", default=250),
+            ),
+        )
+    if action == "wait-value":
+        return _case_eval_expression(
+            page,
+            _wait_value_expression(
+                selector=str(step["selector"]),
+                value=str(step["value"]),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-value-role":
+        return _case_eval_expression(
+            page,
+            _wait_value_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                value=str(step["value"]),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                exact=exact,
+                case_sensitive=case_sensitive,
             ),
         )
     if action == "wait-text":

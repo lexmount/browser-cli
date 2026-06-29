@@ -869,9 +869,12 @@ browser-cli session close --session-id <session_id>
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `scroll-into-view-role`, `form-snapshot`, `interactive-snapshot`, and
-`accessibility-snapshot`, plus navigation/status checks such as `page-info`,
-`wait-url`, `wait-title`, and `wait-load-state`, so agents can encode common
-smoke tests without dropping into custom browser scripts.
+`accessibility-snapshot`; selector state/value checks such as `query`,
+`inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`,
+`get-attribute`, `get-value`, `wait-value`, `bounding-box`, `clear`,
+`set-value`, and `submit`; plus navigation/status checks such as `page-info`,
+`wait-url`, `wait-title`, `wait-load-state`, and `wait-network-idle`, so agents
+can encode common smoke tests without dropping into custom browser scripts.
 
 Common agent recipes:
 

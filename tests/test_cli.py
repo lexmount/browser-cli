@@ -2699,12 +2699,19 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["schema_version"] == 1
     assert payload["supported_actions"] == [
         "accessibility-snapshot",
+        "blur",
+        "blur-role",
+        "bounding-box",
+        "bounding-box-role",
         "check",
         "check-label",
         "check-role",
+        "clear",
+        "clear-role",
         "click",
         "click-role",
         "click-text",
+        "count",
         "double-click",
         "double-click-role",
         "eval",
@@ -2712,17 +2719,26 @@ def test_case_schema_returns_supported_actions_and_fields(
         "exists-role",
         "fill-label",
         "fill-role",
+        "focus",
+        "focus-role",
         "form-snapshot",
+        "get-attribute",
+        "get-attribute-role",
         "get-text",
         "get-text-role",
+        "get-value",
         "get-value-role",
         "hover",
         "hover-role",
+        "inspect",
+        "interactive-only-snapshot",
         "interactive-snapshot",
         "open-url",
+        "outline-snapshot",
         "page-info",
         "press",
         "press-role",
+        "query",
         "right-click",
         "right-click-role",
         "screenshot",
@@ -2732,16 +2748,26 @@ def test_case_schema_returns_supported_actions_and_fields(
         "select-label",
         "select-option",
         "select-role",
+        "set-value",
         "snapshot",
+        "submit",
         "type",
         "uncheck",
         "uncheck-label",
         "uncheck-role",
+        "wait-attribute",
+        "wait-attribute-role",
+        "wait-count",
         "wait-load-state",
+        "wait-network-idle",
         "wait-selector",
+        "wait-state",
+        "wait-state-role",
         "wait-text",
         "wait-title",
         "wait-url",
+        "wait-value",
+        "wait-value-role",
     ]
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
@@ -2759,6 +2785,15 @@ def test_case_schema_returns_supported_actions_and_fields(
         ["value", "option_label"]
     ]
     assert payload["required_fields"]["wait-load-state"] == []
+    assert payload["required_fields"]["wait-state"] == ["selector", "state"]
+    assert payload["required_fields"]["wait-state-role"] == ["role", "state"]
+    assert payload["required_fields"]["wait-count"] == ["selector", "count"]
+    assert payload["required_fields"]["get-attribute"] == ["selector", "name"]
+    assert payload["required_fields"]["get-attribute-role"] == [
+        "role",
+        "attribute",
+    ]
+    assert payload["required_fields"]["set-value"] == ["selector", "value"]
     assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["wait-title"] == ["title"]
     assert payload["required_fields"]["wait-url"] == ["url"]
@@ -2782,6 +2817,15 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "requested_url" in payload["actions"]["wait-url"]["result_fields"]
     assert "requested_title" in payload["actions"]["wait-title"]["result_fields"]
     assert "requested_state" in payload["actions"]["wait-load-state"]["result_fields"]
+    assert "matched" in payload["actions"]["wait-state-role"]["result_fields"]
+    assert "attribute_found" in payload["actions"]["wait-attribute"]["result_fields"]
+    assert "requested_count" in payload["actions"]["wait-count"]["result_fields"]
+    assert "value_masked" in payload["actions"]["get-value"]["result_fields"]
+    assert "attributes" in payload["actions"]["inspect"]["result_fields"]
+    assert "bounding_box" in payload["actions"]["bounding-box"]["result_fields"]
+    assert "set" in payload["actions"]["set-value"]["result_fields"]
+    assert "submitted" in payload["actions"]["submit"]["result_fields"]
+    assert "network_idle" in payload["actions"]["wait-network-idle"]["result_fields"]
     assert "hovered" in payload["actions"]["hover-role"]["result_fields"]
     assert "pressed" in payload["actions"]["press-role"]["result_fields"]
     assert "selected" in payload["actions"]["select-label"]["result_fields"]
@@ -2806,15 +2850,22 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 44,
+        "action_count": 70,
         "supported_actions": [
             "accessibility-snapshot",
+            "blur",
+            "blur-role",
+            "bounding-box",
+            "bounding-box-role",
             "check",
             "check-label",
             "check-role",
+            "clear",
+            "clear-role",
             "click",
             "click-role",
             "click-text",
+            "count",
             "double-click",
             "double-click-role",
             "eval",
@@ -2822,17 +2873,26 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "exists-role",
             "fill-label",
             "fill-role",
+            "focus",
+            "focus-role",
             "form-snapshot",
+            "get-attribute",
+            "get-attribute-role",
             "get-text",
             "get-text-role",
+            "get-value",
             "get-value-role",
             "hover",
             "hover-role",
+            "inspect",
+            "interactive-only-snapshot",
             "interactive-snapshot",
             "open-url",
+            "outline-snapshot",
             "page-info",
             "press",
             "press-role",
+            "query",
             "right-click",
             "right-click-role",
             "screenshot",
@@ -2842,16 +2902,26 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "select-label",
             "select-option",
             "select-role",
+            "set-value",
             "snapshot",
+            "submit",
             "type",
             "uncheck",
             "uncheck-label",
             "uncheck-role",
+            "wait-attribute",
+            "wait-attribute-role",
+            "wait-count",
             "wait-load-state",
+            "wait-network-idle",
             "wait-selector",
+            "wait-state",
+            "wait-state-role",
             "wait-text",
             "wait-title",
             "wait-url",
+            "wait-value",
+            "wait-value-role",
         ],
     }
 
@@ -3246,6 +3316,108 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
 
     assert result["found"] is True
     assert result["url"] == "https://example.test/form"
+    assert expression_snippet in page.expressions[0]
+
+
+@pytest.mark.parametrize(
+    ("step", "expression_snippet"),
+    [
+        ({"action": "blur", "selector": "input"}, "element.blur"),
+        (
+            {"action": "blur-role", "role": "textbox", "name": "Email"},
+            "blurred",
+        ),
+        ({"action": "bounding-box", "selector": "button"}, "bounding_box"),
+        (
+            {"action": "bounding-box-role", "role": "button", "name": "Submit"},
+            "bounding_box",
+        ),
+        ({"action": "clear", "selector": "input"}, "clearable"),
+        (
+            {"action": "clear-role", "role": "textbox", "name": "Email"},
+            "clearable",
+        ),
+        ({"action": "count", "selector": ".item"}, "visible_count"),
+        ({"action": "focus", "selector": "input"}, "preventScroll"),
+        (
+            {"action": "focus-role", "role": "textbox", "name": "Email"},
+            "preventScroll",
+        ),
+        (
+            {"action": "get-attribute", "selector": "button", "name": "disabled"},
+            "attribute_value",
+        ),
+        (
+            {
+                "action": "get-attribute-role",
+                "role": "button",
+                "name": "Submit",
+                "attribute": "disabled",
+            },
+            "attribute_value",
+        ),
+        ({"action": "get-value", "selector": "input"}, "readFormValue"),
+        ({"action": "inspect", "selector": "button"}, "selected_options"),
+        ({"action": "interactive-only-snapshot"}, 'kind: "interactive"'),
+        ({"action": "outline-snapshot", "selector": "main"}, "heading_count"),
+        ({"action": "query", "selector": ".item"}, 'kind: "query"'),
+        (
+            {"action": "set-value", "selector": "input", "value": "hello"},
+            "requestedValue",
+        ),
+        ({"action": "submit", "selector": "form"}, "requestSubmit"),
+        (
+            {"action": "wait-attribute", "selector": "button", "name": "disabled"},
+            "requestedState",
+        ),
+        (
+            {
+                "action": "wait-attribute-role",
+                "role": "button",
+                "attribute": "disabled",
+            },
+            "requestedState",
+        ),
+        ({"action": "wait-count", "selector": ".item", "count": 2}, "requestedCount"),
+        ({"action": "wait-network-idle"}, "network_idle"),
+        (
+            {"action": "wait-state", "selector": "button", "state": "enabled"},
+            "state_values",
+        ),
+        (
+            {"action": "wait-state-role", "role": "button", "state": "enabled"},
+            "state_values",
+        ),
+        (
+            {"action": "wait-value", "selector": "input", "value": "hello"},
+            "requested_value",
+        ),
+        (
+            {"action": "wait-value-role", "role": "textbox", "value": "hello"},
+            "requested_value",
+        ),
+    ],
+)
+def test_extended_case_step_uses_selector_state_and_value_expressions(
+    tmp_path: Any,
+    step: dict[str, Any],
+    expression_snippet: str,
+) -> None:
+    class FakePage:
+        url = "https://example.test/state"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(page, step, tmp_path, 0)
+
+    assert result["found"] is True
+    assert result["url"] == "https://example.test/state"
     assert expression_snippet in page.expressions[0]
 
 
