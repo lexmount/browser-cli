@@ -206,6 +206,11 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "manual env fallback" in normalized
     assert "`auth export-env` prints placeholders by default" in normalized
     assert "Check top-level `usable` and `unusable_exports`" in normalized
+    assert "`safe_to_paste_in_chat`, `local_shell_only`" in normalized
+    assert "`contains_secret_values`" in normalized
+    assert "`contains_secret_placeholders`" in normalized
+    assert "`verification.doctor_command`" in normalized
+    assert "`auth_export_env_contract`" in normalized
     assert (
         "`auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`"
         in normalized

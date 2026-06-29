@@ -63,8 +63,12 @@ If credentials are missing, parse the `auth login` JSON and guide the user
 through `handoff.connect_from_codex_url`, `handoff.copyable_commands`, and
 `verification.doctor_command`; use
 `browser-cli commands --workflow connect_from_codex_auth` as the machine-readable
-auth setup path. Keep `LEXMOUNT_API_KEY`, revealed export output, and full
-direct browser URLs out of chat.
+auth setup path. When reading `auth export-env`, require `usable`,
+`unusable_exports`, `safe_to_paste_in_chat`, `local_shell_only`,
+`contains_secret_values`, `contains_secret_placeholders`, `safety`,
+`setup_block`, and `verification.doctor_command` before treating commands as
+runnable. Keep `LEXMOUNT_API_KEY`, revealed export output, and full direct
+browser URLs out of chat.
 
 If the task is to improve browser.lexmount.cn, read
 `browser-cli commands --workflow connect_from_codex_site_requirements` and run

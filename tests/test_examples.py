@@ -105,6 +105,11 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli auth login" in text
     assert "browser-cli auth connect-requirements" in text
     assert "browser-cli auth export-env" in text
+    assert "safe_to_paste_in_chat" in text
+    assert "local_shell_only" in text
+    assert "contains_secret_values" in text
+    assert "contains_secret_placeholders" in text
+    assert "setup_block" in text
     assert "scope_check.missing_scopes" in text
     assert "refresh_available" in text
     assert "revoke_available" in text

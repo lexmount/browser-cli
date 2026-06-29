@@ -1545,6 +1545,13 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "usable",
                             "unusable_exports",
+                            "safe_to_paste_in_chat",
+                            "local_shell_only",
+                            "contains_secret_values",
+                            "contains_secret_placeholders",
+                            "safety",
+                            "setup_block",
+                            "verification.doctor_command",
                         ],
                         "secret_handling": "Do not paste revealed API keys into chat, logs, docs, or commits.",
                     },

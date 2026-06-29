@@ -67,6 +67,9 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "state_waits" in prompt
     assert "page_diagnostics" in prompt
     assert "workflow read arrays" in prompt
+    assert "auth export-env" in prompt
+    assert "safe_to_paste_in_chat/local_shell_only/safety/setup_block/verification" in prompt
+    assert "before using env commands" in prompt
     assert "required_runtime_auth" in prompt
     assert "before treating scoped-token or device-code auth as usable" in prompt
     assert "reference get" in prompt

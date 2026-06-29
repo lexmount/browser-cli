@@ -587,6 +587,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "connect_from_codex.required_runtime_auth" in auth_steps[2]["read"]
     assert "usable" in auth_steps[3]["read"]
     assert "unusable_exports" in auth_steps[3]["read"]
+    assert "safe_to_paste_in_chat" in auth_steps[3]["read"]
+    assert "local_shell_only" in auth_steps[3]["read"]
+    assert "contains_secret_values" in auth_steps[3]["read"]
+    assert "contains_secret_placeholders" in auth_steps[3]["read"]
+    assert "safety" in auth_steps[3]["read"]
+    assert "setup_block" in auth_steps[3]["read"]
+    assert "verification.doctor_command" in auth_steps[3]["read"]
     assert auth_steps[3]["local_shell_only"] is True
     device_steps = workflows["device_code_auth"]["steps"]
     assert [step["id"] for step in device_steps] == [

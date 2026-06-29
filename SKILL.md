@@ -93,10 +93,7 @@ raw device-code values. Prefer
 `browser-cli commands --workflow device_code_auth` when the task is to inspect
 or explain the device-code authorization path.
 
-`auth export-env` prints placeholders by default. With `--from-current`, it
-still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in
-a trusted local terminal. Check top-level `usable` and `unusable_exports` before
-treating returned `commands` as directly runnable.
+`auth export-env` prints placeholders by default. With `--from-current`, it still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in a trusted local terminal. Check top-level `usable` and `unusable_exports`, plus `safe_to_paste_in_chat`, `local_shell_only`, `contains_secret_values`, `contains_secret_placeholders`, `safety`, `setup_block`, and `verification.doctor_command` before treating returned `commands` as runnable; only run local-shell setup blocks in the user's local terminal, never in chat.
 
 `auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`, and
 safe `device_token` metadata. Read `runtime_auth.usable`,
@@ -490,8 +487,7 @@ URL is configured. For `auth logout`, report `deleted`, `present_before`,
 `present_after`, `revoke_requested`, `revoke_available`, `revoked`,
 `remote_revoke`, and `warnings`; it does not unset env vars. Do not start
 browser actions from a device token while `runtime_auth.usable` is false.
-For `auth export-env`, use placeholders or masked commands unless the user
-explicitly asked to reveal secrets locally.
+For `auth export-env`, use placeholders or masked commands unless the user explicitly asked to reveal secrets locally. If `doctor` reports `auth_export_env_contract`, use that check to decide whether export-env safety metadata is trustworthy before copying commands.
 For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
 `warning_checks`, `skipped_checks`, and `repair_plan` first. Report warning
 check names without revealing API keys. If `browser_smoke_session` exists,
