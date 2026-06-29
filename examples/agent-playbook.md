@@ -391,17 +391,20 @@ produce structured JSON summaries and event logs. `case schema` includes
 semantic form and targeting steps such as `fill-label`, `click-role`,
 `wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
-`scroll-into-view-role`, `interactive-snapshot`, and `accessibility-snapshot`,
-selector state/value checks such as `query`, `inspect`, `count`, `wait-count`,
+`press-key`, `scroll-into-view-role`, `click-index`, `interactive-snapshot`,
+and `accessibility-snapshot`; selector state/value checks such as `query`,
+`inspect`, `count`, `wait-count`,
 `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`,
-`bounding-box`, `clear`, `set-value`, and `submit`, plus navigation/status
-checks such as `page-info`, `wait-url`, `wait-title`, `wait-load-state`, and
-`wait-network-idle`, plus browser state checks such as `storage-get`,
+`bounding-box`, `clear`, `set-value`, `set-file-input`, `dispatch-event`, and
+`submit`, plus navigation/status checks such as `page-info`, `wait-url`,
+`wait-title`, `wait-load-state`, and `wait-network-idle`, plus browser state
+checks such as `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
 `cookie-set`, `cookie-delete`, `cookie-clear`, and `wait-cookie`; add
 `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
-`dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, and
-`performance-snapshot` before falling back to case-level `eval`.
+`dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`,
+`wait-role`, and `performance-snapshot` before falling back to case-level
+`eval`.
 Add `expect` to steps that must fail the case when structured result fields do
 not match, for example `expect: {found: true}` after `wait-text`, `wait-storage`,
 or `wait-cookie`.

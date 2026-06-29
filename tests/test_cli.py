@@ -2709,6 +2709,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "clear",
         "clear-role",
         "click",
+        "click-index",
         "click-role",
         "click-text",
         "cookie-clear",
@@ -2717,6 +2718,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "cookie-set",
         "count",
         "dialog-snapshot",
+        "dispatch-event",
         "double-click",
         "double-click-role",
         "eval",
@@ -2746,6 +2748,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "page-info",
         "performance-snapshot",
         "press",
+        "press-key",
         "press-role",
         "query",
         "right-click",
@@ -2757,6 +2760,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "select-label",
         "select-option",
         "select-role",
+        "set-file-input",
         "set-value",
         "snapshot",
         "storage-clear",
@@ -2778,6 +2782,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "wait-frame",
         "wait-load-state",
         "wait-network-idle",
+        "wait-role",
         "wait-selector",
         "wait-state",
         "wait-state-role",
@@ -2791,6 +2796,7 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
     assert payload["required_fields"]["click-role"] == ["role"]
+    assert payload["required_fields"]["click-index"] == ["selector", "index"]
     assert payload["required_fields"]["double-click"] == ["selector"]
     assert payload["required_fields"]["double-click-role"] == ["role"]
     assert payload["required_fields"]["right-click"] == ["selector"]
@@ -2818,6 +2824,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "attribute",
     ]
     assert payload["required_fields"]["set-value"] == ["selector", "value"]
+    assert payload["required_fields"]["set-file-input"] == ["selector", "file"]
     assert payload["required_fields"]["storage-get"] == []
     assert payload["required_fields"]["storage-set"] == ["key", "value"]
     assert payload["required_fields"]["storage-remove"] == ["key"]
@@ -2831,6 +2838,7 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["wait-title"] == ["title"]
     assert payload["required_fields"]["wait-url"] == ["url"]
+    assert payload["required_fields"]["wait-role"] == ["role"]
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
     assert "wait_until" in payload["actions"]["open-url"]["optional_fields"]
@@ -2858,6 +2866,11 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "attributes" in payload["actions"]["inspect"]["result_fields"]
     assert "bounding_box" in payload["actions"]["bounding-box"]["result_fields"]
     assert "set" in payload["actions"]["set-value"]["result_fields"]
+    assert "set" in payload["actions"]["set-file-input"]["result_fields"]
+    assert "dispatched" in payload["actions"]["dispatch-event"]["result_fields"]
+    assert "pressed" in payload["actions"]["press-key"]["result_fields"]
+    assert "clicked" in payload["actions"]["click-index"]["result_fields"]
+    assert "candidate_count" in payload["actions"]["wait-role"]["result_fields"]
     assert "area" in payload["actions"]["storage-get"]["optional_fields"]
     assert "value" in payload["actions"]["storage-get"]["result_fields"]
     assert "cleared_count" in payload["actions"]["storage-clear"]["result_fields"]
@@ -2903,7 +2916,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 89,
+        "action_count": 94,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -2916,6 +2929,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "clear",
             "clear-role",
             "click",
+            "click-index",
             "click-role",
             "click-text",
             "cookie-clear",
@@ -2924,6 +2938,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "cookie-set",
             "count",
             "dialog-snapshot",
+            "dispatch-event",
             "double-click",
             "double-click-role",
             "eval",
@@ -2953,6 +2968,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "page-info",
             "performance-snapshot",
             "press",
+            "press-key",
             "press-role",
             "query",
             "right-click",
@@ -2964,6 +2980,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "select-label",
             "select-option",
             "select-role",
+            "set-file-input",
             "set-value",
             "snapshot",
             "storage-clear",
@@ -2985,6 +3002,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "wait-frame",
             "wait-load-state",
             "wait-network-idle",
+            "wait-role",
             "wait-selector",
             "wait-state",
             "wait-state-role",
@@ -3191,6 +3209,7 @@ def test_case_validate_browser_state_actions_reject_invalid_choices(
                         "value": "yes",
                         "same_site": "wide",
                     },
+                    {"action": "wait-cookie", "name": "consent", "state": ["present"]},
                 ]
             }
         ),
@@ -3204,6 +3223,7 @@ def test_case_validate_browser_state_actions_reject_invalid_choices(
     assert "steps[1].state must be one of 'absent', 'present'" in result.errors
     assert "steps[2].match must be one of 'contains', 'exact', 'regex'" in result.errors
     assert "steps[3].same_site must be one of 'lax', 'none', 'strict'" in result.errors
+    assert "steps[4].state must be one of 'absent', 'present'" in result.errors
 
 
 def test_case_validate_diagnostic_wait_actions_reject_invalid_match_modes(
@@ -3237,6 +3257,35 @@ def test_case_validate_diagnostic_wait_actions_reject_invalid_match_modes(
     assert (
         "steps[1].text_match must be one of 'contains', 'exact', 'regex'"
         in result.errors
+    )
+
+
+def test_case_validate_dispatch_event_rejects_unknown_events(tmp_path: Any) -> None:
+    invalid = tmp_path / "invalid-dispatch-events.json"
+    invalid.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {"action": "dispatch-event", "selector": "input", "event": "tap"},
+                    {
+                        "action": "dispatch-event",
+                        "selector": "input",
+                        "event": ["input", "magic"],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_case_file(invalid)
+
+    assert result.valid is False
+    assert any(
+        error.startswith("steps[0].event must be one of") for error in result.errors
+    )
+    assert any(
+        error.startswith("steps[1].event must be one of") for error in result.errors
     )
 
 
@@ -3545,6 +3594,10 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
         ),
         ({"action": "count", "selector": ".item"}, "visible_count"),
         ({"action": "dialog-snapshot"}, 'kind: "dialogs"'),
+        (
+            {"action": "dispatch-event", "selector": "input", "event": ["input"]},
+            "requestedEvents",
+        ),
         ({"action": "focus", "selector": "input"}, "preventScroll"),
         (
             {"action": "focus-role", "role": "textbox", "name": "Email"},
@@ -3579,6 +3632,10 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
         ),
         ({"action": "query", "selector": ".item"}, 'kind: "query"'),
         (
+            {"action": "click-index", "selector": ".item", "index": 1},
+            "candidates[index]",
+        ),
+        (
             {"action": "set-value", "selector": "input", "value": "hello"},
             "requestedValue",
         ),
@@ -3598,6 +3655,7 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
             "requestedState",
         ),
         ({"action": "wait-count", "selector": ".item", "count": 2}, "requestedCount"),
+        ({"action": "press-key", "key": "Escape"}, "targetKind"),
         (
             {
                 "action": "wait-dialog",
@@ -3617,6 +3675,7 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
             'kind: "frame_wait"',
         ),
         ({"action": "wait-network-idle"}, "network_idle"),
+        ({"action": "wait-role", "role": "button"}, "requestedRole"),
         (
             {"action": "wait-state", "selector": "button", "state": "enabled"},
             "state_values",
@@ -3656,6 +3715,38 @@ def test_extended_case_step_uses_selector_state_and_value_expressions(
     assert result["found"] is True
     assert result["url"] == "https://example.test/state"
     assert expression_snippet in page.expressions[0]
+
+
+def test_extended_case_step_uses_set_file_input_expression(tmp_path: Any) -> None:
+    upload = tmp_path / "upload.txt"
+    upload.write_text("hello from case file", encoding="utf-8")
+
+    class FakePage:
+        url = "https://example.test/upload"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True, "file_input": True, "set": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "set-file-input",
+            "selector": "input[type=file]",
+            "file": str(upload),
+        },
+        tmp_path,
+        0,
+    )
+
+    assert result["set"] is True
+    assert result["url"] == "https://example.test/upload"
+    assert "requestedFiles" in page.expressions[0]
+    assert "upload.txt" in page.expressions[0]
 
 
 @pytest.mark.parametrize(

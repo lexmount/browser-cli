@@ -868,19 +868,22 @@ browser-cli session close --session-id <session_id>
 `fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
-`scroll-into-view-role`, `form-snapshot`, `interactive-snapshot`, and
-`accessibility-snapshot`; selector state/value checks such as `query`,
+`press-key`, `scroll-into-view-role`, `click-index`, `form-snapshot`,
+`interactive-snapshot`, and `accessibility-snapshot`; selector state/value
+checks such as `query`,
 `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`,
 `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `clear`,
-`set-value`, and `submit`; plus navigation/status checks such as `page-info`,
+`set-value`, `set-file-input`, `dispatch-event`, and `submit`; plus
+navigation/status checks such as `page-info`,
 `wait-url`, `wait-title`, `wait-load-state`, and `wait-network-idle`; and
 browser state checks such as `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, and `wait-cookie`; plus content extraction snapshots such as
 `text-snapshot`, `link-snapshot`, `table-snapshot`, and `list-snapshot`, plus
 diagnostic surfaces such as `dialog-snapshot`, `wait-dialog`,
-`frame-snapshot`, `wait-frame`, and `performance-snapshot`, so agents can
-encode common smoke tests without dropping into custom browser scripts.
+`frame-snapshot`, `wait-frame`, `wait-role`, and `performance-snapshot`, so
+agents can encode common smoke tests without dropping into custom browser
+scripts.
 
 Add `expect` to any case step when a structured result must make the run fail
 instead of merely being reported. For example:

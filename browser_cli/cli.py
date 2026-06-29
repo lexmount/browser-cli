@@ -18159,6 +18159,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "check-role": ("role",),
     "clear": ("selector",),
     "clear-role": ("role",),
+    "click-index": ("selector", "index"),
     "click-role": ("role",),
     "click-text": ("text",),
     "cookie-clear": tuple(),
@@ -18167,6 +18168,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "cookie-set": ("name", "value"),
     "count": ("selector",),
     "dialog-snapshot": tuple(),
+    "dispatch-event": ("selector", "event"),
     "double-click": ("selector",),
     "double-click-role": ("role",),
     "exists": ("selector",),
@@ -18194,6 +18196,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "page-info": tuple(),
     "performance-snapshot": tuple(),
     "press": ("selector", "key"),
+    "press-key": ("key",),
     "press-role": ("role", "key"),
     "query": ("selector",),
     "right-click": ("selector",),
@@ -18204,6 +18207,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "select-label": ("label",),
     "select-option": ("selector", "value"),
     "select-role": ("role",),
+    "set-file-input": ("selector", "file"),
     "set-value": ("selector", "value"),
     "storage-clear": tuple(),
     "storage-get": tuple(),
@@ -18223,6 +18227,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "wait-frame": tuple(),
     "wait-load-state": tuple(),
     "wait-network-idle": tuple(),
+    "wait-role": ("role",),
     "wait-state": ("selector", "state"),
     "wait-state-role": ("role", "state"),
     "wait-title": ("title",),
@@ -18250,6 +18255,7 @@ BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
         "match": frozenset({"contains", "exact", "regex"}),
     },
     "wait-dialog": {"match": frozenset({"contains", "exact", "regex"})},
+    "dispatch-event": {"event": frozenset(COMMON_DOM_EVENT_NAMES)},
     "wait-frame": {
         "url_match": frozenset({"contains", "exact", "regex"}),
         "text_match": frozenset({"contains", "exact", "regex"}),
@@ -18287,7 +18293,20 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
         for field, choices in BROWSER_CLI_CASE_FIELD_CHOICES.get(
             str(action), {}
         ).items():
-            if field in step and step[field] not in choices:
+            if field not in step:
+                continue
+            allow_list = str(action) == "dispatch-event" and field == "event"
+            raw_values = (
+                step[field]
+                if allow_list and isinstance(step[field], list)
+                else [step[field]]
+            )
+            invalid_values = [
+                value
+                for value in raw_values
+                if not isinstance(value, str) or value not in choices
+            ]
+            if invalid_values:
                 choices_text = "', '".join(sorted(choices))
                 errors.append(f"steps[{index}].{field} must be one of '{choices_text}'")
         if "expect" in step:
@@ -18533,6 +18552,7 @@ def _case_action_schema() -> dict[str, Any]:
         "check-role": ["name", "exact", "case_sensitive"],
         "clear": [],
         "clear-role": ["name", "exact", "case_sensitive"],
+        "click-index": ["include_hidden"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
         "cookie-clear": ["prefix", "path", "domain"],
@@ -18547,6 +18567,7 @@ def _case_action_schema() -> dict[str, Any]:
             "max_controls",
             "max_chars",
         ],
+        "dispatch-event": ["no_bubbles", "cancelable"],
         "double-click": [],
         "double-click-role": ["name", "exact", "case_sensitive"],
         "exists": [],
@@ -18589,6 +18610,7 @@ def _case_action_schema() -> dict[str, Any]:
             "min_duration_ms",
         ],
         "press": [],
+        "press-key": ["code", "alt_key", "ctrl_key", "meta_key", "shift_key"],
         "press-role": ["name", "exact", "case_sensitive"],
         "query": ["include_hidden", "max_nodes"],
         "right-click": [],
@@ -18612,6 +18634,7 @@ def _case_action_schema() -> dict[str, Any]:
             "exact",
             "case_sensitive",
         ],
+        "set-file-input": ["max_bytes", "no_events"],
         "set-value": ["no_events"],
         "storage-clear": ["area", "prefix"],
         "storage-get": ["area", "key", "prefix", "max_items"],
@@ -18687,6 +18710,14 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "wait-load-state": ["state", "timeout_ms", "poll_ms"],
         "wait-network-idle": ["idle_ms", "timeout_ms", "poll_ms", "max_inflight"],
+        "wait-role": [
+            "name",
+            "exact",
+            "case_sensitive",
+            "timeout_ms",
+            "poll_ms",
+            "include_hidden",
+        ],
         "wait-state": ["timeout_ms", "poll_ms"],
         "wait-state-role": [
             "name",
@@ -18816,6 +18847,19 @@ def _case_action_schema() -> dict[str, Any]:
             "value_masked",
             "url",
         ],
+        "click-index": [
+            "selector",
+            "index",
+            "include_hidden",
+            "found",
+            "clicked",
+            "count",
+            "total_count",
+            "visible_count",
+            "element",
+            "candidates",
+            "url",
+        ],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
         "click-text": ["found", "clicked", "text", "element", "url"],
         "cookie-clear": [
@@ -18874,6 +18918,15 @@ def _case_action_schema() -> dict[str, Any]:
             "truncated",
             "url",
             "title",
+        ],
+        "dispatch-event": [
+            "selector",
+            "found",
+            "dispatched",
+            "requested_events",
+            "events",
+            "focused",
+            "url",
         ],
         "double-click": ["found", "double_clicked", "events", "element", "url"],
         "double-click-role": [
@@ -19059,6 +19112,17 @@ def _case_action_schema() -> dict[str, Any]:
             "keydown_accepted",
             "url",
         ],
+        "press-key": [
+            "key",
+            "code",
+            "pressed",
+            "target",
+            "target_info",
+            "modifiers",
+            "events",
+            "keydown_accepted",
+            "url",
+        ],
         "press-role": [
             "found",
             "role_found",
@@ -19164,6 +19228,23 @@ def _case_action_schema() -> dict[str, Any]:
             "value",
             "option_label",
             "changed",
+            "url",
+        ],
+        "set-file-input": [
+            "selector",
+            "found",
+            "file_input",
+            "set",
+            "multiple",
+            "requested_count",
+            "requested_files",
+            "previous_count",
+            "file_count",
+            "files",
+            "value",
+            "value_masked",
+            "dispatched_events",
+            "element",
             "url",
         ],
         "set-value": [
@@ -19364,6 +19445,20 @@ def _case_action_schema() -> dict[str, Any]:
             "max_inflight",
             "url",
         ],
+        "wait-role": [
+            "found",
+            "role",
+            "name",
+            "include_hidden",
+            "waited_ms",
+            "timeout_ms",
+            "poll_ms",
+            "candidate_count",
+            "total_candidate_count",
+            "element",
+            "candidates",
+            "url",
+        ],
         "wait-state": [
             "selector",
             "state",
@@ -19473,6 +19568,11 @@ def _case_action_schema() -> dict[str, Any]:
         "check-role": {"action": "check-role", "role": "checkbox", "name": "I agree"},
         "clear": {"action": "clear", "selector": "input[name=email]"},
         "clear-role": {"action": "clear-role", "role": "textbox", "name": "Email"},
+        "click-index": {
+            "action": "click-index",
+            "selector": ".result button",
+            "index": 0,
+        },
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
         "cookie-clear": {"action": "cookie-clear", "prefix": "tmp:"},
@@ -19481,6 +19581,11 @@ def _case_action_schema() -> dict[str, Any]:
         "cookie-set": {"action": "cookie-set", "name": "consent", "value": "yes"},
         "count": {"action": "count", "selector": ".result"},
         "dialog-snapshot": {"action": "dialog-snapshot"},
+        "dispatch-event": {
+            "action": "dispatch-event",
+            "selector": "input[name=q]",
+            "event": ["input", "change"],
+        },
         "double-click": {"action": "double-click", "selector": ".item"},
         "double-click-role": {
             "action": "double-click-role",
@@ -19537,6 +19642,7 @@ def _case_action_schema() -> dict[str, Any]:
         "page-info": {"action": "page-info"},
         "performance-snapshot": {"action": "performance-snapshot"},
         "press": {"action": "press", "selector": "input[name=q]", "key": "Enter"},
+        "press-key": {"action": "press-key", "key": "Escape"},
         "press-role": {
             "action": "press-role",
             "role": "textbox",
@@ -19572,6 +19678,11 @@ def _case_action_schema() -> dict[str, Any]:
             "role": "combobox",
             "name": "Plan",
             "option_label": "Pro",
+        },
+        "set-file-input": {
+            "action": "set-file-input",
+            "selector": "input[type=file]",
+            "file": "./upload.txt",
         },
         "set-value": {
             "action": "set-value",
@@ -19643,6 +19754,11 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "wait-load-state": {"action": "wait-load-state", "state": "complete"},
         "wait-network-idle": {"action": "wait-network-idle", "idle_ms": 500},
+        "wait-role": {
+            "action": "wait-role",
+            "role": "button",
+            "name": "Submit",
+        },
         "wait-state": {
             "action": "wait-state",
             "selector": "button[type=submit]",
@@ -19859,6 +19975,12 @@ def _case_step_float(step: dict[str, Any], name: str, *, default: float) -> floa
         return float(step.get(name, default))
     except (TypeError, ValueError) as exc:
         raise BrowserConfigError(f"{name} must be a number") from exc
+
+
+def _case_step_string_list(step: dict[str, Any], name: str) -> list[str]:
+    value = step[name]
+    values = value if isinstance(value, list) else [value]
+    return [str(item) for item in values]
 
 
 def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
@@ -20113,6 +20235,16 @@ def _run_browser_cli_case_step(
                 max_chars=_case_step_int(step, "max_chars", default=1000),
             ),
         )
+    if action == "dispatch-event":
+        return _case_eval_expression(
+            page,
+            _dispatch_event_expression(
+                selector=str(step["selector"]),
+                events=_case_step_string_list(step, "event"),
+                bubbles=not _case_step_bool(step, "no_bubbles"),
+                cancelable=_case_step_bool(step, "cancelable"),
+            ),
+        )
     if action == "accessibility-snapshot":
         return _case_eval_expression(
             page,
@@ -20129,6 +20261,15 @@ def _run_browser_cli_case_step(
                 selector=str(step["selector"]) if step.get("selector") else None,
                 exact=exact,
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "click-index":
+        return _case_eval_expression(
+            page,
+            _click_index_expression(
+                selector=str(step["selector"]),
+                index=_case_step_int(step, "index", default=0),
+                include_hidden=_case_step_bool(step, "include_hidden"),
             ),
         )
     if action == "cookie-clear":
@@ -20417,6 +20558,18 @@ def _run_browser_cli_case_step(
             page,
             _press_expression(selector=str(step["selector"]), key=str(step["key"])),
         )
+    if action == "press-key":
+        return _case_eval_expression(
+            page,
+            _press_key_expression(
+                key=str(step["key"]),
+                code=str(step["code"]) if step.get("code") is not None else None,
+                alt_key=_case_step_bool(step, "alt_key"),
+                ctrl_key=_case_step_bool(step, "ctrl_key"),
+                meta_key=_case_step_bool(step, "meta_key"),
+                shift_key=_case_step_bool(step, "shift_key"),
+            ),
+        )
     if action == "press-role":
         return _case_eval_expression(
             page,
@@ -20528,6 +20681,24 @@ def _run_browser_cli_case_step(
                 ),
                 exact=exact,
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "set-file-input":
+        files = _read_file_input_payloads(
+            command="case.run",
+            files=_case_step_string_list(step, "file"),
+            max_bytes=_case_step_int(
+                step,
+                "max_bytes",
+                default=DEFAULT_FILE_INPUT_MAX_BYTES,
+            ),
+        )
+        return _case_eval_expression(
+            page,
+            _set_file_input_expression(
+                selector=str(step["selector"]),
+                files=files,
+                dispatch_events=not _case_step_bool(step, "no_events"),
             ),
         )
     if action == "set-value":
@@ -20738,6 +20909,19 @@ def _run_browser_cli_case_step(
                 timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
                 poll_ms=_case_step_float(step, "poll_ms", default=100),
                 max_inflight=_case_step_int(step, "max_inflight", default=0),
+            ),
+        )
+    if action == "wait-role":
+        return _case_eval_expression(
+            page,
+            _wait_role_expression(
+                role=str(step["role"]),
+                name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                include_hidden=_case_step_bool(step, "include_hidden"),
             ),
         )
     if action == "wait-state":
