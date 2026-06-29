@@ -875,13 +875,15 @@ checks such as `query`,
 `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `clear`,
 `set-value`, `set-file-input`, `dispatch-event`, and `submit`; plus
 navigation/status checks such as `page-info`,
-`wait-url`, `wait-title`, `wait-load-state`, and `wait-network-idle`; and
+`wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`,
+`wait-network`, and `wait-console`; and
 browser state checks such as `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, and `wait-cookie`; plus content extraction snapshots such as
 `text-snapshot`, `link-snapshot`, `table-snapshot`, and `list-snapshot`, plus
 diagnostic surfaces such as `dialog-snapshot`, `wait-dialog`,
-`frame-snapshot`, `wait-frame`, `wait-role`, and `performance-snapshot`, so
+`frame-snapshot`, `wait-frame`, `wait-role`, `performance-snapshot`,
+`network-snapshot`, and `console-snapshot`, so
 agents can encode common smoke tests without dropping into custom browser
 scripts.
 

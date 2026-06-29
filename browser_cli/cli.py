@@ -18162,6 +18162,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "click-index": ("selector", "index"),
     "click-role": ("role",),
     "click-text": ("text",),
+    "console-snapshot": tuple(),
     "cookie-clear": tuple(),
     "cookie-delete": ("name",),
     "cookie-get": tuple(),
@@ -18192,6 +18193,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "interactive-snapshot": tuple(),
     "link-snapshot": tuple(),
     "list-snapshot": tuple(),
+    "network-snapshot": tuple(),
     "outline-snapshot": tuple(),
     "page-info": tuple(),
     "performance-snapshot": tuple(),
@@ -18226,6 +18228,8 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "wait-dialog": tuple(),
     "wait-frame": tuple(),
     "wait-load-state": tuple(),
+    "wait-console": tuple(),
+    "wait-network": tuple(),
     "wait-network-idle": tuple(),
     "wait-role": ("role",),
     "wait-state": ("selector", "state"),
@@ -18254,11 +18258,21 @@ BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
         "state": frozenset({"present", "absent"}),
         "match": frozenset({"contains", "exact", "regex"}),
     },
+    "network-snapshot": {"source": frozenset({"fetch", "xhr"})},
+    "wait-console": {
+        "match": frozenset({"contains", "exact", "regex"}),
+        "source": frozenset({"console", "pageerror", "unhandledrejection"}),
+        "level": frozenset({"debug", "info", "warn", "error"}),
+    },
     "wait-dialog": {"match": frozenset({"contains", "exact", "regex"})},
     "dispatch-event": {"event": frozenset(COMMON_DOM_EVENT_NAMES)},
     "wait-frame": {
         "url_match": frozenset({"contains", "exact", "regex"}),
         "text_match": frozenset({"contains", "exact", "regex"}),
+    },
+    "wait-network": {
+        "url_match": frozenset({"contains", "exact", "regex"}),
+        "source": frozenset({"fetch", "xhr"}),
     },
     "wait-storage": {
         "area": frozenset({"local", "session"}),
@@ -18555,6 +18569,7 @@ def _case_action_schema() -> dict[str, Any]:
         "click-index": ["include_hidden"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
+        "console-snapshot": ["max_entries", "clear", "install_only"],
         "cookie-clear": ["prefix", "path", "domain"],
         "cookie-delete": ["path", "domain"],
         "cookie-get": ["name", "prefix", "max_items"],
@@ -18602,6 +18617,14 @@ def _case_action_schema() -> dict[str, Any]:
             "same_origin_only",
         ],
         "list-snapshot": ["selector", "include_hidden", "max_nodes", "max_items"],
+        "network-snapshot": [
+            "max_entries",
+            "clear",
+            "install_only",
+            "source",
+            "method",
+            "failed_only",
+        ],
         "outline-snapshot": ["selector", "include_hidden", "max_nodes"],
         "page-info": [],
         "performance-snapshot": [
@@ -18709,6 +18732,28 @@ def _case_action_schema() -> dict[str, Any]:
             "poll_ms",
         ],
         "wait-load-state": ["state", "timeout_ms", "poll_ms"],
+        "wait-console": [
+            "text",
+            "match",
+            "source",
+            "level",
+            "after_index",
+            "timeout_ms",
+            "poll_ms",
+            "case_sensitive",
+        ],
+        "wait-network": [
+            "url",
+            "url_match",
+            "source",
+            "method",
+            "status",
+            "failed_only",
+            "after_index",
+            "timeout_ms",
+            "poll_ms",
+            "case_sensitive",
+        ],
         "wait-network-idle": ["idle_ms", "timeout_ms", "poll_ms", "max_inflight"],
         "wait-role": [
             "name",
@@ -18862,6 +18907,18 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
         "click-text": ["found", "clicked", "text", "element", "url"],
+        "console-snapshot": [
+            "installed",
+            "newly_installed",
+            "install_only",
+            "entry_count",
+            "buffered_count",
+            "buffered_count_after",
+            "truncated",
+            "entries",
+            "url",
+            "title",
+        ],
         "cookie-clear": [
             "document_cookie_scope",
             "prefix",
@@ -19073,6 +19130,22 @@ def _case_action_schema() -> dict[str, Any]:
             "total_count",
             "visible_count",
             "truncated",
+            "url",
+            "title",
+        ],
+        "network-snapshot": [
+            "installed",
+            "newly_installed",
+            "install_only",
+            "requested_source",
+            "requested_method",
+            "failed_only",
+            "entry_count",
+            "matched_count",
+            "buffered_count",
+            "buffered_count_after",
+            "truncated",
+            "entries",
             "url",
             "title",
         ],
@@ -19437,6 +19510,36 @@ def _case_action_schema() -> dict[str, Any]:
             "waited_ms",
             "url",
         ],
+        "wait-console": [
+            "found",
+            "matched",
+            "timed_out",
+            "requested_text",
+            "match",
+            "requested_source",
+            "requested_level",
+            "entry_count",
+            "buffered_count",
+            "entry",
+            "entries",
+            "url",
+        ],
+        "wait-network": [
+            "found",
+            "matched",
+            "timed_out",
+            "requested_url",
+            "url_match",
+            "requested_source",
+            "requested_method",
+            "requested_status",
+            "failed_only",
+            "entry_count",
+            "buffered_count",
+            "entry",
+            "entries",
+            "url",
+        ],
         "wait-network-idle": [
             "network_idle",
             "quiet_ms",
@@ -19575,6 +19678,7 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
+        "console-snapshot": {"action": "console-snapshot", "max_entries": 50},
         "cookie-clear": {"action": "cookie-clear", "prefix": "tmp:"},
         "cookie-delete": {"action": "cookie-delete", "name": "consent"},
         "cookie-get": {"action": "cookie-get", "name": "consent"},
@@ -19638,6 +19742,11 @@ def _case_action_schema() -> dict[str, Any]:
         "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
         "link-snapshot": {"action": "link-snapshot", "selector": "main"},
         "list-snapshot": {"action": "list-snapshot", "selector": "main"},
+        "network-snapshot": {
+            "action": "network-snapshot",
+            "max_entries": 50,
+            "source": "fetch",
+        },
         "outline-snapshot": {"action": "outline-snapshot", "selector": "main"},
         "page-info": {"action": "page-info"},
         "performance-snapshot": {"action": "performance-snapshot"},
@@ -19753,6 +19862,17 @@ def _case_action_schema() -> dict[str, Any]:
             "readable_only": True,
         },
         "wait-load-state": {"action": "wait-load-state", "state": "complete"},
+        "wait-console": {
+            "action": "wait-console",
+            "source": "pageerror",
+            "level": "error",
+        },
+        "wait-network": {
+            "action": "wait-network",
+            "url": "/api/save",
+            "method": "POST",
+            "status": 201,
+        },
         "wait-network-idle": {"action": "wait-network-idle", "idle_ms": 500},
         "wait-role": {
             "action": "wait-role",
@@ -20551,6 +20671,69 @@ def _run_browser_cli_case_step(
                     "min_duration_ms",
                     default=0,
                 ),
+            ),
+        )
+    if action == "network-snapshot":
+        return _case_eval_expression(
+            page,
+            _network_snapshot_expression(
+                max_entries=_case_step_int(step, "max_entries", default=50),
+                clear=_case_step_bool(step, "clear"),
+                install_only=_case_step_bool(step, "install_only"),
+                source=str(step["source"]) if step.get("source") is not None else None,
+                method=str(step["method"]) if step.get("method") is not None else None,
+                failed_only=_case_step_bool(step, "failed_only"),
+            ),
+        )
+    if action == "wait-network":
+        return _case_eval_expression(
+            page,
+            _wait_network_expression(
+                url=str(step["url"]) if step.get("url") is not None else None,
+                url_match=str(step.get("url_match", "contains")),
+                source=str(step["source"]) if step.get("source") is not None else None,
+                method=str(step["method"]) if step.get("method") is not None else None,
+                status=(
+                    _case_step_int(step, "status", default=0)
+                    if step.get("status") is not None
+                    else None
+                ),
+                failed_only=_case_step_bool(step, "failed_only"),
+                case_sensitive=case_sensitive,
+                after_index=(
+                    _case_step_int(step, "after_index", default=0)
+                    if step.get("after_index") is not None
+                    else None
+                ),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
+            ),
+        )
+    if action == "console-snapshot":
+        return _case_eval_expression(
+            page,
+            _console_snapshot_expression(
+                max_entries=_case_step_int(step, "max_entries", default=50),
+                clear=_case_step_bool(step, "clear"),
+                install_only=_case_step_bool(step, "install_only"),
+            ),
+        )
+    if action == "wait-console":
+        return _case_eval_expression(
+            page,
+            _wait_console_expression(
+                text=str(step["text"]) if step.get("text") is not None else None,
+                match=str(step.get("match", "contains")),
+                source=str(step["source"]) if step.get("source") is not None else None,
+                level=str(step["level"]) if step.get("level") is not None else None,
+                case_sensitive=case_sensitive,
+                after_index=(
+                    _case_step_int(step, "after_index", default=0)
+                    if step.get("after_index") is not None
+                    else None
+                ),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
             ),
         )
     if action == "press":

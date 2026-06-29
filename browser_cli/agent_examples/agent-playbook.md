@@ -397,14 +397,15 @@ and `accessibility-snapshot`; selector state/value checks such as `query`,
 `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`,
 `bounding-box`, `clear`, `set-value`, `set-file-input`, `dispatch-event`, and
 `submit`, plus navigation/status checks such as `page-info`, `wait-url`,
-`wait-title`, `wait-load-state`, and `wait-network-idle`, plus browser state
+`wait-title`, `wait-load-state`, `wait-network-idle`, `wait-network`, and
+`wait-console`, plus browser state
 checks such as `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
 `cookie-set`, `cookie-delete`, `cookie-clear`, and `wait-cookie`; add
 `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
 `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`,
-`wait-role`, and `performance-snapshot` before falling back to case-level
-`eval`.
+`wait-role`, `performance-snapshot`, `network-snapshot`, and
+`console-snapshot` before falling back to case-level `eval`.
 Add `expect` to steps that must fail the case when structured result fields do
 not match, for example `expect: {found: true}` after `wait-text`, `wait-storage`,
 or `wait-cookie`.

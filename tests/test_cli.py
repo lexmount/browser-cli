@@ -2712,6 +2712,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "click-index",
         "click-role",
         "click-text",
+        "console-snapshot",
         "cookie-clear",
         "cookie-delete",
         "cookie-get",
@@ -2743,6 +2744,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "interactive-snapshot",
         "link-snapshot",
         "list-snapshot",
+        "network-snapshot",
         "open-url",
         "outline-snapshot",
         "page-info",
@@ -2776,11 +2778,13 @@ def test_case_schema_returns_supported_actions_and_fields(
         "uncheck-role",
         "wait-attribute",
         "wait-attribute-role",
+        "wait-console",
         "wait-cookie",
         "wait-count",
         "wait-dialog",
         "wait-frame",
         "wait-load-state",
+        "wait-network",
         "wait-network-idle",
         "wait-role",
         "wait-selector",
@@ -2818,6 +2822,10 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["frame-snapshot"] == []
     assert payload["required_fields"]["wait-frame"] == []
     assert payload["required_fields"]["performance-snapshot"] == []
+    assert payload["required_fields"]["network-snapshot"] == []
+    assert payload["required_fields"]["wait-network"] == []
+    assert payload["required_fields"]["console-snapshot"] == []
+    assert payload["required_fields"]["wait-console"] == []
     assert payload["required_fields"]["get-attribute"] == ["selector", "name"]
     assert payload["required_fields"]["get-attribute-role"] == [
         "role",
@@ -2898,6 +2906,10 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "frames" in payload["actions"]["frame-snapshot"]["result_fields"]
     assert "frame" in payload["actions"]["wait-frame"]["result_fields"]
     assert "resources" in payload["actions"]["performance-snapshot"]["result_fields"]
+    assert "entries" in payload["actions"]["network-snapshot"]["result_fields"]
+    assert "entry" in payload["actions"]["wait-network"]["result_fields"]
+    assert "entries" in payload["actions"]["console-snapshot"]["result_fields"]
+    assert "entry" in payload["actions"]["wait-console"]["result_fields"]
     assert "steps" in payload["top_level"]["required_fields"]
     assert "session.create" in payload["top_level"]["target_options"]
     assert "field/path" in payload["top_level"]["step_options"]["expect"]
@@ -2916,7 +2928,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 94,
+        "action_count": 98,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -2932,6 +2944,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "click-index",
             "click-role",
             "click-text",
+            "console-snapshot",
             "cookie-clear",
             "cookie-delete",
             "cookie-get",
@@ -2963,6 +2976,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "interactive-snapshot",
             "link-snapshot",
             "list-snapshot",
+            "network-snapshot",
             "open-url",
             "outline-snapshot",
             "page-info",
@@ -2996,11 +3010,13 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "uncheck-role",
             "wait-attribute",
             "wait-attribute-role",
+            "wait-console",
             "wait-cookie",
             "wait-count",
             "wait-dialog",
             "wait-frame",
             "wait-load-state",
+            "wait-network",
             "wait-network-idle",
             "wait-role",
             "wait-selector",
@@ -3234,6 +3250,18 @@ def test_case_validate_diagnostic_wait_actions_reject_invalid_match_modes(
         json.dumps(
             {
                 "steps": [
+                    {"action": "network-snapshot", "source": "beacon"},
+                    {
+                        "action": "wait-network",
+                        "url_match": "glob",
+                        "source": "resource",
+                    },
+                    {
+                        "action": "wait-console",
+                        "match": "wildcard",
+                        "source": "stderr",
+                        "level": "fatal",
+                    },
                     {"action": "wait-dialog", "match": "glob"},
                     {
                         "action": "wait-frame",
@@ -3249,13 +3277,27 @@ def test_case_validate_diagnostic_wait_actions_reject_invalid_match_modes(
     result = validate_case_file(invalid)
 
     assert result.valid is False
-    assert "steps[0].match must be one of 'contains', 'exact', 'regex'" in result.errors
+    assert "steps[0].source must be one of 'fetch', 'xhr'" in result.errors
     assert (
         "steps[1].url_match must be one of 'contains', 'exact', 'regex'"
         in result.errors
     )
+    assert "steps[1].source must be one of 'fetch', 'xhr'" in result.errors
+    assert "steps[2].match must be one of 'contains', 'exact', 'regex'" in result.errors
     assert (
-        "steps[1].text_match must be one of 'contains', 'exact', 'regex'"
+        "steps[2].source must be one of 'console', 'pageerror', 'unhandledrejection'"
+    ) in result.errors
+    assert (
+        "steps[2].level must be one of 'debug', 'error', 'info', 'warn'"
+        in result.errors
+    )
+    assert "steps[3].match must be one of 'contains', 'exact', 'regex'" in result.errors
+    assert (
+        "steps[4].url_match must be one of 'contains', 'exact', 'regex'"
+        in result.errors
+    )
+    assert (
+        "steps[4].text_match must be one of 'contains', 'exact', 'regex'"
         in result.errors
     )
 
@@ -3629,6 +3671,37 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
         (
             {"action": "performance-snapshot", "max_resources": 5},
             'kind: "performance"',
+        ),
+        (
+            {"action": "network-snapshot", "source": "fetch", "method": "post"},
+            "__browserCliNetworkSnapshot",
+        ),
+        (
+            {
+                "action": "wait-network",
+                "url": "/save",
+                "url_match": "regex",
+                "source": "fetch",
+                "method": "post",
+                "status": 201,
+                "after_index": 1,
+            },
+            'kind: "network_wait"',
+        ),
+        (
+            {"action": "console-snapshot", "max_entries": 5},
+            "__browserCliConsoleSnapshot",
+        ),
+        (
+            {
+                "action": "wait-console",
+                "text": "Boom",
+                "match": "regex",
+                "source": "pageerror",
+                "level": "error",
+                "after_index": 1,
+            },
+            'kind: "console_wait"',
         ),
         ({"action": "query", "selector": ".item"}, 'kind: "query"'),
         (
