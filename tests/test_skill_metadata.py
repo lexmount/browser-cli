@@ -75,6 +75,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "reference get" in prompt
     assert "example get" in prompt
     assert "action guide" in prompt
+    assert "click-label" in prompt
     assert "custom JavaScript" in prompt
     assert "status-check/dry-run" in prompt
     assert "persistent contexts" in prompt

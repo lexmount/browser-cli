@@ -5791,6 +5791,7 @@ def test_doctor_warns_when_agent_prompt_metadata_is_incomplete(
     assert agent_prompt["missing_fields"] == []
     assert "doctor --json" in agent_prompt["missing_patterns"]
     assert "commands --workflow" in agent_prompt["missing_patterns"]
+    assert "click-label" in agent_prompt["missing_patterns"]
     assert agent_prompt["fix"]["code"] == "repair_packaged_agent_prompt"
     assert (
         "browser-cli commands --workflow setup_and_verify"

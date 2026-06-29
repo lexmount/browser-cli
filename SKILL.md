@@ -70,7 +70,8 @@ When the task is to inspect or explain what browser.lexmount.cn must implement,
 run `browser-cli auth scopes --include-site-contract`,
 `browser-cli auth connect-requirements`, or
 `browser-cli commands --workflow connect_from_codex_site_requirements` first.
-Read `browser_site_contract.scope_ui_fields`, `known_scopes`,
+Read `browser_site_contract.scope_ui_fields`,
+`browser_site_contract.browser_site_acceptance_tests`, `known_scopes`,
 `default_scopes`, `connect_from_codex.site_capability_status.missing`,
 `required_device_code_endpoints`, `required_api_contract`, `required_token_lifecycle`,
 `required_runtime_auth`, `setup_blocks`, and `verification.doctor_command`.
@@ -237,7 +238,7 @@ browser-cli commands --workflow case_file_task
 Run `browser-cli case schema` before hand-writing a case file. Generate starters with
 `browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template form-fill`,
 validate, then run with `--close-created-session`. Read `supported_actions`, `required_fields`, `step_options.expect`,
-semantic/navigation/state actions such as `fill-label`, `click-role`,
+semantic/navigation/state actions such as `fill-label`, `click-label`, `click-role`,
 `select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-network`, `wait-console`, `wait-role`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,
 `events_path`, `artifacts_dir`, `session`, and `steps`.
 
@@ -247,9 +248,9 @@ For form tasks, prefer the more specific form workflow:
 browser-cli commands --workflow form_interaction
 browser-cli action guide --task form_interaction
 ```
-Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`, and `custom_js_boundary`, then follow workflow `read` fields for `form-snapshot`, semantic fill/select/check commands, `wait-role`, `wait-state-role`, `click-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before custom JavaScript.
+Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`, and `custom_js_boundary`, then follow workflow `read` fields for `form-snapshot`, semantic fill/select/check/click commands, `click-label`, `wait-role`, `wait-state-role`, `click-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before custom JavaScript.
 
-For visible buttons, links, menus, double-clicks, right-click context menus, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, `double-click`, or `right-click`; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
+For visible labeled controls, buttons, links, menus, double-clicks, right-click context menus, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, `double-click`, or `right-click`; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions such as `click-label`, `click-role`, and `click-text` before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
 For page content extraction, prefer `browser-cli commands --workflow content_extraction` and `browser-cli action guide --task content_extraction`; choose outline/text/link/table/list/accessibility snapshots before bounded `snapshot` or custom JS.
 For browser state setup or cleanup, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands for local/session storage and document.cookie-visible cookies before custom JS.
 For file uploads, prefer `browser-cli commands --workflow file_upload` and `browser-cli action guide --task file_upload`; inspect controls, then use `set-file-input` before custom JS or OS file picker workarounds.
@@ -433,7 +434,7 @@ Core action rules:
   `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
 - Prefer semantic actions such as `wait-role`, `wait-state-role`, `get-attribute-role`,
   `wait-attribute-role`, `exists-role`, `get-text-role`,
-  `bounding-box-role`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
+  `bounding-box-role`, `click-label`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
   `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`,
   `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
   and `scroll-into-view-role` before raw

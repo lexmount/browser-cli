@@ -383,6 +383,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "reference get",
     "example get",
     "action guide",
+    "click-label",
     "custom JavaScript",
     "case schema",
     "scaffold/validate/run case files",

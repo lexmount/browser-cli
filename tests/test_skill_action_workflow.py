@@ -186,6 +186,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`required_token_lifecycle`" in normalized
     assert "`required_runtime_auth`" in normalized
     assert "`browser_site_contract.scope_ui_fields`" in normalized
+    assert "`browser_site_contract.browser_site_acceptance_tests`" in normalized
     assert (
         "When `auth login` returns `handoff`, use it as the setup contract"
         in normalized
@@ -324,16 +325,17 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     )
     assert "then follow workflow `read` fields for `form-snapshot`" in normalized
     assert (
-        "For visible buttons, links, menus, double-clicks, right-click context menus,"
+        "For visible labeled controls, buttons, links, menus, double-clicks,"
         in normalized
     )
+    assert "choose semantic actions such as `click-label`, `click-role`, and `click-text`" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "for mouse gestures use `mouse_interaction`" in normalized
     assert (
         "`double-click-role`, `right-click-role`, `double-click`, or `right-click`"
         in normalized
     )
-    assert "choose semantic actions before selectors" in normalized
+    assert "and `click-text` before selectors" in normalized
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
