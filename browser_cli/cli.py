@@ -18161,6 +18161,10 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "clear-role": ("role",),
     "click-role": ("role",),
     "click-text": ("text",),
+    "cookie-clear": tuple(),
+    "cookie-delete": ("name",),
+    "cookie-get": tuple(),
+    "cookie-set": ("name", "value"),
     "count": ("selector",),
     "double-click": ("selector",),
     "double-click-role": ("role",),
@@ -18196,6 +18200,10 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "select-option": ("selector", "value"),
     "select-role": ("role",),
     "set-value": ("selector", "value"),
+    "storage-clear": tuple(),
+    "storage-get": tuple(),
+    "storage-remove": ("key",),
+    "storage-set": ("key", "value"),
     "submit": ("selector",),
     "uncheck": ("selector",),
     "uncheck-label": ("label",),
@@ -18203,6 +18211,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "wait-attribute": ("selector", "name"),
     "wait-attribute-role": ("role", "attribute"),
     "wait-count": ("selector", "count"),
+    "wait-cookie": ("name",),
     "wait-load-state": tuple(),
     "wait-network-idle": tuple(),
     "wait-state": ("selector", "state"),
@@ -18211,6 +18220,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "wait-url": ("url",),
     "wait-value": ("selector", "value"),
     "wait-value-role": ("role", "value"),
+    "wait-storage": ("key",),
     "wait-text": ("text",),
 }
 BROWSER_CLI_SUPPORTED_CASE_ACTIONS = frozenset(
@@ -18219,6 +18229,22 @@ BROWSER_CLI_SUPPORTED_CASE_ACTIONS = frozenset(
 BROWSER_CLI_REQUIRED_CASE_FIELDS: dict[str, tuple[str, ...]] = {
     **{action: tuple(fields) for action, fields in REQUIRED_CASE_FIELDS.items()},
     **EXTENDED_CASE_REQUIRED_FIELDS,
+}
+BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
+    "cookie-set": {"same_site": frozenset({"lax", "strict", "none"})},
+    "storage-clear": {"area": frozenset({"local", "session"})},
+    "storage-get": {"area": frozenset({"local", "session"})},
+    "storage-remove": {"area": frozenset({"local", "session"})},
+    "storage-set": {"area": frozenset({"local", "session"})},
+    "wait-cookie": {
+        "state": frozenset({"present", "absent"}),
+        "match": frozenset({"contains", "exact", "regex"}),
+    },
+    "wait-storage": {
+        "area": frozenset({"local", "session"}),
+        "state": frozenset({"present", "absent"}),
+        "match": frozenset({"contains", "exact", "regex"}),
+    },
 }
 
 
@@ -18244,6 +18270,12 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
         for field in BROWSER_CLI_REQUIRED_CASE_FIELDS[str(action)]:
             if field not in step:
                 errors.append(f"steps[{index}] missing required field '{field}'")
+        for field, choices in BROWSER_CLI_CASE_FIELD_CHOICES.get(
+            str(action), {}
+        ).items():
+            if field in step and step[field] not in choices:
+                choices_text = "', '".join(sorted(choices))
+                errors.append(f"steps[{index}].{field} must be one of '{choices_text}'")
         if action in {"select-label", "select-role"}:
             has_value = "value" in step
             has_option_label = "option_label" in step
@@ -18478,6 +18510,10 @@ def _case_action_schema() -> dict[str, Any]:
         "clear-role": ["name", "exact", "case_sensitive"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
+        "cookie-clear": ["prefix", "path", "domain"],
+        "cookie-delete": ["path", "domain"],
+        "cookie-get": ["name", "prefix", "max_items"],
+        "cookie-set": ["path", "domain", "max_age", "expires", "same_site", "secure"],
         "count": ["include_hidden"],
         "double-click": [],
         "double-click-role": ["name", "exact", "case_sensitive"],
@@ -18531,6 +18567,10 @@ def _case_action_schema() -> dict[str, Any]:
             "case_sensitive",
         ],
         "set-value": ["no_events"],
+        "storage-clear": ["area", "prefix"],
+        "storage-get": ["area", "key", "prefix", "max_items"],
+        "storage-remove": ["area"],
+        "storage-set": ["area"],
         "submit": ["skip_validation"],
         "uncheck": [],
         "uncheck-label": ["exact", "case_sensitive"],
@@ -18555,6 +18595,14 @@ def _case_action_schema() -> dict[str, Any]:
             "include_hidden",
         ],
         "wait-count": ["comparison", "timeout_ms", "poll_ms", "include_hidden"],
+        "wait-cookie": [
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
+            "case_sensitive",
+        ],
         "wait-load-state": ["state", "timeout_ms", "poll_ms"],
         "wait-network-idle": ["idle_ms", "timeout_ms", "poll_ms", "max_inflight"],
         "wait-state": ["timeout_ms", "poll_ms"],
@@ -18580,6 +18628,15 @@ def _case_action_schema() -> dict[str, Any]:
             "timeout_ms",
             "poll_ms",
             "exact",
+            "case_sensitive",
+        ],
+        "wait-storage": [
+            "area",
+            "value",
+            "state",
+            "match",
+            "timeout_ms",
+            "poll_ms",
             "case_sensitive",
         ],
         "wait-text": [
@@ -18679,6 +18736,52 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
         "click-text": ["found", "clicked", "text", "element", "url"],
+        "cookie-clear": [
+            "document_cookie_scope",
+            "prefix",
+            "cleared",
+            "cleared_count",
+            "matched_count",
+            "remaining_count",
+            "url",
+        ],
+        "cookie-delete": [
+            "document_cookie_scope",
+            "name",
+            "deleted",
+            "had_cookie",
+            "found",
+            "previous_value",
+            "path",
+            "domain",
+            "url",
+        ],
+        "cookie-get": [
+            "document_cookie_scope",
+            "name",
+            "prefix",
+            "found",
+            "value",
+            "raw_value",
+            "count",
+            "item_count",
+            "items",
+            "url",
+        ],
+        "cookie-set": [
+            "document_cookie_scope",
+            "name",
+            "set",
+            "found",
+            "previous_value",
+            "value",
+            "path",
+            "domain",
+            "max_age",
+            "same_site",
+            "secure",
+            "url",
+        ],
         "count": ["selector", "count", "total_count", "visible_count", "url"],
         "double-click": ["found", "double_clicked", "events", "element", "url"],
         "double-click-role": [
@@ -18943,6 +19046,45 @@ def _case_action_schema() -> dict[str, Any]:
             "dispatched_events",
             "url",
         ],
+        "storage-clear": [
+            "area",
+            "prefix",
+            "cleared",
+            "cleared_count",
+            "keys",
+            "url",
+        ],
+        "storage-get": [
+            "area",
+            "key",
+            "prefix",
+            "found",
+            "value",
+            "value_length",
+            "count",
+            "item_count",
+            "items",
+            "url",
+        ],
+        "storage-remove": [
+            "area",
+            "key",
+            "removed",
+            "had_key",
+            "found",
+            "previous_value",
+            "url",
+        ],
+        "storage-set": [
+            "area",
+            "key",
+            "set",
+            "found",
+            "previous_value",
+            "value",
+            "value_length",
+            "url",
+        ],
         "submit": [
             "selector",
             "found",
@@ -19007,6 +19149,19 @@ def _case_action_schema() -> dict[str, Any]:
             "count",
             "requested_count",
             "comparison",
+            "waited_ms",
+            "url",
+        ],
+        "wait-cookie": [
+            "document_cookie_scope",
+            "name",
+            "found",
+            "state",
+            "exists",
+            "value",
+            "raw_value",
+            "requested_value",
+            "match",
             "waited_ms",
             "url",
         ],
@@ -19080,6 +19235,18 @@ def _case_action_schema() -> dict[str, Any]:
             "waited_ms",
             "url",
         ],
+        "wait-storage": [
+            "area",
+            "key",
+            "found",
+            "state",
+            "exists",
+            "value",
+            "requested_value",
+            "match",
+            "waited_ms",
+            "url",
+        ],
         "wait-text": ["found", "text", "selector", "waited_ms", "url"],
     }
     examples: dict[str, dict[str, Any]] = {
@@ -19125,6 +19292,10 @@ def _case_action_schema() -> dict[str, Any]:
         "clear-role": {"action": "clear-role", "role": "textbox", "name": "Email"},
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
+        "cookie-clear": {"action": "cookie-clear", "prefix": "tmp:"},
+        "cookie-delete": {"action": "cookie-delete", "name": "consent"},
+        "cookie-get": {"action": "cookie-get", "name": "consent"},
+        "cookie-set": {"action": "cookie-set", "name": "consent", "value": "yes"},
         "count": {"action": "count", "selector": ".result"},
         "double-click": {"action": "double-click", "selector": ".item"},
         "double-click-role": {
@@ -19219,6 +19390,23 @@ def _case_action_schema() -> dict[str, Any]:
             "selector": "input[name=email]",
             "value": "me@example.com",
         },
+        "storage-clear": {"action": "storage-clear", "area": "session"},
+        "storage-get": {
+            "action": "storage-get",
+            "area": "local",
+            "key": "featureFlag",
+        },
+        "storage-remove": {
+            "action": "storage-remove",
+            "area": "session",
+            "key": "draft",
+        },
+        "storage-set": {
+            "action": "storage-set",
+            "area": "local",
+            "key": "seenIntro",
+            "value": "true",
+        },
         "submit": {"action": "submit", "selector": "form"},
         "uncheck": {"action": "uncheck", "selector": "input[name=subscribe]"},
         "uncheck-label": {"action": "uncheck-label", "label": "Subscribe"},
@@ -19245,6 +19433,12 @@ def _case_action_schema() -> dict[str, Any]:
             "selector": ".result",
             "count": 1,
             "comparison": "gte",
+        },
+        "wait-cookie": {
+            "action": "wait-cookie",
+            "name": "consent",
+            "value": "yes",
+            "match": "exact",
         },
         "wait-load-state": {"action": "wait-load-state", "state": "complete"},
         "wait-network-idle": {"action": "wait-network-idle", "idle_ms": 500},
@@ -19275,6 +19469,13 @@ def _case_action_schema() -> dict[str, Any]:
             "role": "textbox",
             "name": "Email",
             "value": "me@example.com",
+        },
+        "wait-storage": {
+            "action": "wait-storage",
+            "area": "local",
+            "key": "seenIntro",
+            "value": "true",
+            "match": "exact",
         },
         "wait-text": {"action": "wait-text", "text": "Saved"},
     }
@@ -19633,6 +19834,57 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "cookie-clear":
+        return _case_eval_expression(
+            page,
+            _cookie_clear_expression(
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+                path=str(step["path"]) if step.get("path") is not None else None,
+                domain=str(step["domain"]) if step.get("domain") is not None else None,
+            ),
+        )
+    if action == "cookie-delete":
+        return _case_eval_expression(
+            page,
+            _cookie_delete_expression(
+                name=str(step["name"]),
+                path=str(step["path"]) if step.get("path") is not None else None,
+                domain=str(step["domain"]) if step.get("domain") is not None else None,
+            ),
+        )
+    if action == "cookie-get":
+        return _case_eval_expression(
+            page,
+            _cookie_get_expression(
+                name=str(step["name"]) if step.get("name") is not None else None,
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+                max_items=_case_step_int(step, "max_items", default=50),
+            ),
+        )
+    if action == "cookie-set":
+        return _case_eval_expression(
+            page,
+            _cookie_set_expression(
+                name=str(step["name"]),
+                value=str(step["value"]),
+                path=str(step["path"]) if step.get("path") is not None else None,
+                domain=str(step["domain"]) if step.get("domain") is not None else None,
+                max_age=(
+                    _case_step_int(step, "max_age", default=0)
+                    if step.get("max_age") is not None
+                    else None
+                ),
+                expires=(
+                    str(step["expires"]) if step.get("expires") is not None else None
+                ),
+                same_site=(
+                    str(step["same_site"])
+                    if step.get("same_site") is not None
+                    else None
+                ),
+                secure=_case_step_bool(step, "secure"),
+            ),
+        )
     if action == "double-click":
         return _case_eval_expression(
             page,
@@ -19942,6 +20194,41 @@ def _run_browser_cli_case_step(
                 dispatch_events=not _case_step_bool(step, "no_events"),
             ),
         )
+    if action == "storage-clear":
+        return _case_eval_expression(
+            page,
+            _storage_clear_expression(
+                area=str(step.get("area", "local")),
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+            ),
+        )
+    if action == "storage-get":
+        return _case_eval_expression(
+            page,
+            _storage_get_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]) if step.get("key") is not None else None,
+                prefix=str(step["prefix"]) if step.get("prefix") is not None else None,
+                max_items=_case_step_int(step, "max_items", default=50),
+            ),
+        )
+    if action == "storage-remove":
+        return _case_eval_expression(
+            page,
+            _storage_remove_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]),
+            ),
+        )
+    if action == "storage-set":
+        return _case_eval_expression(
+            page,
+            _storage_set_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]),
+                value=str(step["value"]),
+            ),
+        )
     if action == "submit":
         return _case_eval_expression(
             page,
@@ -20017,6 +20304,19 @@ def _run_browser_cli_case_step(
                 timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
                 poll_ms=_case_step_float(step, "poll_ms", default=250),
                 include_hidden=_case_step_bool(step, "include_hidden"),
+            ),
+        )
+    if action == "wait-cookie":
+        return _case_eval_expression(
+            page,
+            _wait_cookie_expression(
+                name=str(step["name"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                case_sensitive=case_sensitive,
             ),
         )
     if action == "wait-load-state":
@@ -20106,6 +20406,20 @@ def _run_browser_cli_case_step(
                 timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
                 poll_ms=_case_step_float(step, "poll_ms", default=250),
                 exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-storage":
+        return _case_eval_expression(
+            page,
+            _wait_storage_expression(
+                area=str(step.get("area", "local")),
+                key=str(step["key"]),
+                value=str(step["value"]) if step.get("value") is not None else None,
+                state=str(step.get("state", "present")),
+                match=str(step.get("match", "contains")),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=250),
                 case_sensitive=case_sensitive,
             ),
         )

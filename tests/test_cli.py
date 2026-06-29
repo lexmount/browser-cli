@@ -2711,6 +2711,10 @@ def test_case_schema_returns_supported_actions_and_fields(
         "click",
         "click-role",
         "click-text",
+        "cookie-clear",
+        "cookie-delete",
+        "cookie-get",
+        "cookie-set",
         "count",
         "double-click",
         "double-click-role",
@@ -2750,6 +2754,10 @@ def test_case_schema_returns_supported_actions_and_fields(
         "select-role",
         "set-value",
         "snapshot",
+        "storage-clear",
+        "storage-get",
+        "storage-remove",
+        "storage-set",
         "submit",
         "type",
         "uncheck",
@@ -2757,12 +2765,14 @@ def test_case_schema_returns_supported_actions_and_fields(
         "uncheck-role",
         "wait-attribute",
         "wait-attribute-role",
+        "wait-cookie",
         "wait-count",
         "wait-load-state",
         "wait-network-idle",
         "wait-selector",
         "wait-state",
         "wait-state-role",
+        "wait-storage",
         "wait-text",
         "wait-title",
         "wait-url",
@@ -2794,6 +2804,16 @@ def test_case_schema_returns_supported_actions_and_fields(
         "attribute",
     ]
     assert payload["required_fields"]["set-value"] == ["selector", "value"]
+    assert payload["required_fields"]["storage-get"] == []
+    assert payload["required_fields"]["storage-set"] == ["key", "value"]
+    assert payload["required_fields"]["storage-remove"] == ["key"]
+    assert payload["required_fields"]["storage-clear"] == []
+    assert payload["required_fields"]["wait-storage"] == ["key"]
+    assert payload["required_fields"]["cookie-get"] == []
+    assert payload["required_fields"]["cookie-set"] == ["name", "value"]
+    assert payload["required_fields"]["cookie-delete"] == ["name"]
+    assert payload["required_fields"]["cookie-clear"] == []
+    assert payload["required_fields"]["wait-cookie"] == ["name"]
     assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["wait-title"] == ["title"]
     assert payload["required_fields"]["wait-url"] == ["url"]
@@ -2824,6 +2844,15 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "attributes" in payload["actions"]["inspect"]["result_fields"]
     assert "bounding_box" in payload["actions"]["bounding-box"]["result_fields"]
     assert "set" in payload["actions"]["set-value"]["result_fields"]
+    assert "area" in payload["actions"]["storage-get"]["optional_fields"]
+    assert "value" in payload["actions"]["storage-get"]["result_fields"]
+    assert "cleared_count" in payload["actions"]["storage-clear"]["result_fields"]
+    assert payload["actions"]["storage-set"]["example_step"]["key"] == "seenIntro"
+    assert "document_cookie_scope" in payload["actions"]["cookie-get"]["result_fields"]
+    assert "max_age" in payload["actions"]["cookie-set"]["optional_fields"]
+    assert "deleted" in payload["actions"]["cookie-delete"]["result_fields"]
+    assert "requested_value" in payload["actions"]["wait-cookie"]["result_fields"]
+    assert payload["actions"]["wait-storage"]["example_step"]["match"] == "exact"
     assert "submitted" in payload["actions"]["submit"]["result_fields"]
     assert "network_idle" in payload["actions"]["wait-network-idle"]["result_fields"]
     assert "hovered" in payload["actions"]["hover-role"]["result_fields"]
@@ -2850,7 +2879,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 70,
+        "action_count": 80,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -2865,6 +2894,10 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "click",
             "click-role",
             "click-text",
+            "cookie-clear",
+            "cookie-delete",
+            "cookie-get",
+            "cookie-set",
             "count",
             "double-click",
             "double-click-role",
@@ -2904,6 +2937,10 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "select-role",
             "set-value",
             "snapshot",
+            "storage-clear",
+            "storage-get",
+            "storage-remove",
+            "storage-set",
             "submit",
             "type",
             "uncheck",
@@ -2911,12 +2948,14 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "uncheck-role",
             "wait-attribute",
             "wait-attribute-role",
+            "wait-cookie",
             "wait-count",
             "wait-load-state",
             "wait-network-idle",
             "wait-selector",
             "wait-state",
             "wait-state-role",
+            "wait-storage",
             "wait-text",
             "wait-title",
             "wait-url",
@@ -2944,12 +2983,23 @@ def test_case_schema_single_action_and_unknown_action_json(
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["case", "schema", "--action", "storage-get"])
 
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.schema"
+    assert payload["action"] == "storage-get"
+    assert payload["action_schema"]["required_fields"] == []
+    assert payload["action_schema"]["example_step"]["key"] == "featureFlag"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["case", "schema", "--action", "not-a-case-action"])
+
     assert exc_info.value.code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
     assert payload["command"] == "case.schema"
     assert payload["error"] == "unknown_case_action"
-    assert payload["action"] == "storage-get"
+    assert payload["action"] == "not-a-case-action"
     assert "wait-selector" in payload["available_actions"]
     assert payload["fix"]["code"] == "inspect_available_case_actions"
 
@@ -3089,6 +3139,38 @@ def test_case_validate_select_actions_require_value_or_option_label(
     both_result = validate_case_file(both)
     assert both_result.valid is False
     assert "steps[0] must not set both 'value' and 'option_label'" in both_result.errors
+
+
+def test_case_validate_browser_state_actions_reject_invalid_choices(
+    tmp_path: Any,
+) -> None:
+    invalid = tmp_path / "invalid-browser-state.json"
+    invalid.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {"action": "storage-get", "area": "indexeddb"},
+                    {"action": "wait-storage", "key": "ready", "state": "visible"},
+                    {"action": "wait-cookie", "name": "consent", "match": "glob"},
+                    {
+                        "action": "cookie-set",
+                        "name": "consent",
+                        "value": "yes",
+                        "same_site": "wide",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_case_file(invalid)
+
+    assert result.valid is False
+    assert "steps[0].area must be one of 'local', 'session'" in result.errors
+    assert "steps[1].state must be one of 'absent', 'present'" in result.errors
+    assert "steps[2].match must be one of 'contains', 'exact', 'regex'" in result.errors
+    assert "steps[3].same_site must be one of 'lax', 'none', 'strict'" in result.errors
 
 
 def test_extended_case_step_uses_semantic_action_expression(tmp_path: Any) -> None:
@@ -3399,6 +3481,86 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
     ],
 )
 def test_extended_case_step_uses_selector_state_and_value_expressions(
+    tmp_path: Any,
+    step: dict[str, Any],
+    expression_snippet: str,
+) -> None:
+    class FakePage:
+        url = "https://example.test/state"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(page, step, tmp_path, 0)
+
+    assert result["found"] is True
+    assert result["url"] == "https://example.test/state"
+    assert expression_snippet in page.expressions[0]
+
+
+@pytest.mark.parametrize(
+    ("step", "expression_snippet"),
+    [
+        (
+            {"action": "storage-get", "area": "local", "key": "featureFlag"},
+            "requestedKey",
+        ),
+        (
+            {"action": "storage-set", "key": "seenIntro", "value": "true"},
+            "storage.setItem",
+        ),
+        (
+            {"action": "storage-remove", "area": "session", "key": "draft"},
+            "storage.removeItem",
+        ),
+        (
+            {"action": "storage-clear", "area": "session", "prefix": "tmp:"},
+            "cleared_count",
+        ),
+        (
+            {
+                "action": "wait-storage",
+                "key": "seenIntro",
+                "value": "true",
+                "match": "exact",
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+            },
+            "requestedState",
+        ),
+        ({"action": "cookie-get", "name": "consent"}, "documentCookieScope"),
+        (
+            {
+                "action": "cookie-set",
+                "name": "consent",
+                "value": "yes",
+                "path": "/",
+                "same_site": "lax",
+                "secure": True,
+            },
+            "document.cookie = assignment",
+        ),
+        ({"action": "cookie-delete", "name": "consent", "path": "/"}, "maxAge: 0"),
+        ({"action": "cookie-clear", "prefix": "tmp:"}, "matched_count"),
+        (
+            {
+                "action": "wait-cookie",
+                "name": "consent",
+                "value": "yes",
+                "match": "exact",
+                "timeout_ms": 1000,
+                "poll_ms": 50,
+            },
+            "requestedState",
+        ),
+    ],
+)
+def test_extended_case_step_uses_browser_state_expressions(
     tmp_path: Any,
     step: dict[str, Any],
     expression_snippet: str,

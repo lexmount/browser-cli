@@ -873,8 +873,11 @@ browser-cli session close --session-id <session_id>
 `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`,
 `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `clear`,
 `set-value`, and `submit`; plus navigation/status checks such as `page-info`,
-`wait-url`, `wait-title`, `wait-load-state`, and `wait-network-idle`, so agents
-can encode common smoke tests without dropping into custom browser scripts.
+`wait-url`, `wait-title`, `wait-load-state`, and `wait-network-idle`; and
+browser state checks such as `storage-get`, `storage-set`, `storage-remove`,
+`storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
+`cookie-clear`, and `wait-cookie`, so agents can encode common smoke tests
+without dropping into custom browser scripts.
 
 Common agent recipes:
 

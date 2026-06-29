@@ -396,7 +396,10 @@ selector state/value checks such as `query`, `inspect`, `count`, `wait-count`,
 `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`,
 `bounding-box`, `clear`, `set-value`, and `submit`, plus navigation/status
 checks such as `page-info`, `wait-url`, `wait-title`, `wait-load-state`, and
-`wait-network-idle`; use those before falling back to case-level `eval`.
+`wait-network-idle`, plus browser state checks such as `storage-get`,
+`storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
+`cookie-set`, `cookie-delete`, `cookie-clear`, and `wait-cookie`; use those
+before falling back to case-level `eval`.
 Read `valid`, `errors`, `step_count`, `next_commands`, `events_path`,
 `artifacts_dir`, `session`, and `steps`.
 
