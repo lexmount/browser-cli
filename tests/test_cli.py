@@ -952,6 +952,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "fill_labeled_field",
         "choose_labeled_option",
         "check_labeled_control",
+        "click_labeled_control",
         "wait_submit_ready",
         "submit_form",
         "verify_result",
@@ -971,14 +972,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.option_found" in form_steps[3]["read"]
     assert form_steps[4]["optional"] is True
     assert "result.checked" in form_steps[4]["read"]
+    assert form_steps[5]["optional"] is True
+    assert "result.clicked" in form_steps[5]["read"]
     assert "result.element" in form_steps[5]["read"]
-    assert "result.matched" in form_steps[5]["read"]
-    assert "result.state_values" in form_steps[5]["read"]
-    assert "browser-cli action wait-role" in form_steps[5]["fallback_commands"][0]
-    assert "result.clicked" in form_steps[6]["read"]
-    assert form_steps[7]["optional"] is True
-    assert "found" in form_steps[7]["read"]
-    assert "browser-cli action wait-text" in form_steps[7]["fallback_commands"][0]
+    assert "result.matched" in form_steps[6]["read"]
+    assert "result.state_values" in form_steps[6]["read"]
+    assert "browser-cli action wait-role" in form_steps[6]["fallback_commands"][0]
+    assert "result.clicked" in form_steps[7]["read"]
+    assert form_steps[8]["optional"] is True
+    assert "found" in form_steps[8]["read"]
+    assert "browser-cli action wait-text" in form_steps[8]["fallback_commands"][0]
     upload_steps = workflows["file_upload"]["steps"]
     assert [step["id"] for step in upload_steps] == [
         "inspect_action_guide",
@@ -1309,6 +1312,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.exists-role",
         "action.bounding-box",
         "action.bounding-box-role",
+        "action.click-label",
         "action.click-role",
         "action.click-index",
         "action.double-click",
@@ -2746,6 +2750,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "clear-role",
         "click",
         "click-index",
+        "click-label",
         "click-role",
         "click-text",
         "console-snapshot",
@@ -2835,8 +2840,9 @@ def test_case_schema_returns_supported_actions_and_fields(
     ]
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
-    assert payload["required_fields"]["click-role"] == ["role"]
     assert payload["required_fields"]["click-index"] == ["selector", "index"]
+    assert payload["required_fields"]["click-label"] == ["label"]
+    assert payload["required_fields"]["click-role"] == ["role"]
     assert payload["required_fields"]["double-click"] == ["selector"]
     assert payload["required_fields"]["double-click-role"] == ["role"]
     assert payload["required_fields"]["right-click"] == ["selector"]
@@ -2964,7 +2970,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 98,
+        "action_count": 99,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -2978,6 +2984,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "clear-role",
             "click",
             "click-index",
+            "click-label",
             "click-role",
             "click-text",
             "console-snapshot",
@@ -4125,12 +4132,16 @@ def test_commands_catalog_returns_form_interaction_workflow(
         "browser-cli action fill-role"
         in payload["workflow"]["steps"][2]["alternative_commands"][0]
     )
-    assert payload["workflow"]["steps"][5]["id"] == "wait_submit_ready"
+    assert payload["workflow"]["steps"][5]["id"] == "click_labeled_control"
+    assert "browser-cli action click-label" in payload["workflow"]["steps"][5][
+        "command"
+    ]
+    assert payload["workflow"]["steps"][6]["id"] == "wait_submit_ready"
     assert (
         "browser-cli action wait-state-role"
-        in payload["workflow"]["steps"][5]["command"]
+        in payload["workflow"]["steps"][6]["command"]
     )
-    assert "result.state_values" in payload["workflow"]["steps"][5]["read"]
+    assert "result.state_values" in payload["workflow"]["steps"][6]["read"]
     assert payload["workflow"]["steps"][-1]["id"] == "verify_result"
     assert payload["workflow"]["steps"][-1]["optional"] is True
     assert (
@@ -5000,6 +5011,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "fill_labeled_field",
         "choose_labeled_option",
         "check_labeled_control",
+        "click_labeled_control",
         "wait_submit_ready",
         "submit_form",
         "verify_result",
@@ -5181,6 +5193,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.frame-snapshot",
         "action.wait-frame",
         "action.performance-snapshot",
+        "action.click-label",
         "reference.list",
         "reference.get",
         "example.list",
@@ -5195,10 +5208,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 98
-    assert checks["case_schema"]["supported_action_count"] == 98
+    assert checks["case_schema"]["action_count"] == 99
+    assert checks["case_schema"]["supported_action_count"] == 99
     for case_action in (
         "fill-label",
+        "click-label",
         "click-role",
         "interactive-only-snapshot",
         "network-snapshot",
@@ -5450,6 +5464,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "action.select-label",
         "action.check-label",
         "action.uncheck-label",
+        "action.click-label",
         "action.click-index",
         "action.focus",
         "action.get-value",
@@ -6034,6 +6049,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "fill_labeled_field"},
                         {"id": "choose_labeled_option"},
                         {"id": "check_labeled_control"},
+                        {"id": "click_labeled_control"},
                         {"id": "wait_submit_ready"},
                         {"id": "submit_form"},
                         {"id": "verify_result"},
@@ -11322,6 +11338,9 @@ def test_eval_backed_action_commands_emit_structured_results(
     if command in {"action.right-click", "action.right-click-role"}:
         assert '"right-click"' in observed["expression"]
         assert "contextmenu" in observed["expression"]
+    if command == "action.click-label":
+        assert 'const requestedLabel = "Remember me"' in observed["expression"]
+        assert "findFieldByLabel" in observed["expression"]
     payload = json.loads(capsys.readouterr().out)
     assert payload == {
         "ok": True,
@@ -12903,6 +12922,30 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "checked": False,
                 "changed": True,
                 "candidate_count": 1,
+                "url": "https://example.test",
+            },
+        ),
+        (
+            [
+                "action",
+                "click-label",
+                "--session-id",
+                "s1",
+                "--label",
+                "Remember me",
+            ],
+            "action.click-label",
+            {
+                "found": True,
+                "clicked": True,
+                "label": "Remember me",
+                "click_target": "control",
+            },
+            {
+                "found": True,
+                "clicked": True,
+                "label": "Remember me",
+                "click_target": "control",
                 "url": "https://example.test",
             },
         ),

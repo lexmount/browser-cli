@@ -65,6 +65,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     assert "`get-attribute-role`" in normalized
     assert "`wait-attribute-role`" in normalized
     assert "`exists-role`, `get-text-role`, and `bounding-box-role`" in normalized
+    assert "`click-label` for labeled controls" in normalized
     assert "`click-role` for known roles/names" in normalized
     assert "`click-text` for visible text" in normalized
     assert "`click-index` for a chosen repeated selector match" in normalized

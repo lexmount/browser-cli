@@ -593,6 +593,7 @@ browser-cli action hover-role --session-id <session_id> --role button --name "Me
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
+browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
@@ -633,7 +634,7 @@ the boundary for custom JavaScript.
 `cookie-clear`, `wait-cookie`, `clear`, `clear-role`, `set-value`, `set-file-input`,
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `inspect`,
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
-`check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-text`, `click-role`,
+`check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-label`, `click-text`, `click-role`,
 `double-click`, `double-click-role`, `right-click`, `right-click-role`,
 `click-index`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
@@ -890,7 +891,7 @@ browser-cli session close --session-id <session_id>
 ```
 
 `case schema` supports repeatable semantic form and targeting steps such as
-`fill-label`, `fill-role`, `click-role`, `click-text`, `wait-text`,
+`fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `form-snapshot`,
@@ -937,13 +938,13 @@ Common agent recipes:
   `check-label`, `check-role`, `uncheck-role`, or `check` -> `wait-state-role --state enabled`, `wait-state --state enabled`, or `wait-role` for
   async submit buttons -> `dispatch-event` if explicit `input`/`change` is needed ->
   `submit --selector <form-or-field>`,
-  `click-role --role button --name <text>` or `click-text` -> `wait-url` or
+  `click-label --label <label>`, `click-role --role button --name <text>`, or `click-text` -> `wait-url` or
   `wait-text`.
 - Visible button/link: run `browser-cli commands --workflow interactive_targeting`,
   use `interactive-snapshot` or `accessibility-snapshot` to choose the target,
   then `wait-role` when the control appears asynchronously,
   then use `exists-role`, `get-text-role`, or `bounding-box-role` to confirm
-  semantic existence, text, or geometry before `click-role` or `click-text`; run `link-snapshot` when the task is to
+  semantic existence, text, or geometry before `click-label`, `click-role`, or `click-text`; run `link-snapshot` when the task is to
   choose, inspect, or report navigation URLs, then use `scroll-into-view` and
   selector `click` after `exists`, `inspect`, or `bounding-box` confirms a
   stable selector.
@@ -1006,7 +1007,7 @@ Common agent recipes:
   first; use `wait-dialog --text <text> --modal-only` when
   the prompt appears asynchronously, otherwise `dialog-snapshot`; read
   `dialogs`, `title`, `description`, `text`, `controls`, `control_count`, and
-  link masks; then use `click-role`, `click-text`, or `click-index` for the
+  link masks; then use `click-label`, `click-role`, `click-text`, or `click-index` for the
   chosen control.
 - Embedded frame: run `browser-cli action guide --task dialog_frame_handling`,
   then `frame-snapshot` -> read `frames`, `src`, `readable`,

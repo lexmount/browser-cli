@@ -187,6 +187,7 @@ browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 
 browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
 browser-cli action get-text-role --session-id <session_id> --role button --name "Submit"
 browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"
+browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action hover-role --session-id <session_id> --role button --name "Menu"
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
@@ -392,7 +393,7 @@ browser-cli case run --file examples/cases/page-inspection.yaml --close-created-
 
 Case files are good for smoke tests, regression checks, and demos because they
 produce structured JSON summaries and event logs. `case schema` includes
-semantic form and targeting steps such as `fill-label`, `click-role`,
+semantic form and targeting steps such as `fill-label`, `click-label`, `click-role`,
 `wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `interactive-snapshot`,
@@ -442,7 +443,7 @@ options, checking boxes, hovering, double-clicking, right-clicking, pressing sel
 active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
-actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-role`, `click-text`,
+actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
 `fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `scroll-into-view-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 

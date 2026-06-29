@@ -202,6 +202,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.press",
     "action.press-role",
     "action.press-key",
+    "action.click-label",
     "action.click-text",
     "action.click-role",
     "action.click-index",
@@ -269,6 +270,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "clear-role",
     "click",
     "click-index",
+    "click-label",
     "click-role",
     "click-text",
     "console-snapshot",
@@ -510,6 +512,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "fill_labeled_field",
         "choose_labeled_option",
         "check_labeled_control",
+        "click_labeled_control",
         "wait_submit_ready",
         "submit_form",
         "verify_result",
@@ -1368,6 +1371,7 @@ def _command_catalog() -> dict[str, Any]:
                 'browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"',
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"',
                 'browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"',
+                'browser-cli action click-label --session-id <session_id> --label "Remember me"',
                 'browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled',
                 'browser-cli action blur-role --session-id <session_id> --role textbox --name "Email"',
                 'browser-cli action get-value-role --session-id <session_id> --role textbox --name "Email"',
@@ -3090,6 +3094,23 @@ def _command_catalog() -> dict[str, Any]:
                         "alternative_commands": [
                             'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
                             'browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                        ],
+                    },
+                    {
+                        "id": "click_labeled_control",
+                        "command": 'browser-cli action click-label --session-id <session_id> --label "<label>"',
+                        "optional": True,
+                        "read": [
+                            "result.found",
+                            "result.clicked",
+                            "result.label",
+                            "result.click_target",
+                            "result.element",
+                            "result.label_element",
+                        ],
+                        "alternative_commands": [
+                            'browser-cli action click-role --session-id <session_id> --role button --name "<accessible name>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
                         ],
                     },
                     {
@@ -8525,6 +8546,69 @@ def _click_role_expression(
     role: requestedRole,
     name: requestedName,
     element: nodeInfo(element)
+  }};
+}}
+""".strip()
+
+
+def _click_label_expression(
+    *,
+    label: str,
+    exact: bool,
+    case_sensitive: bool,
+) -> str:
+    return f"""
+() => {{
+{_dom_helpers_expression()}
+{_label_control_helpers_expression()}
+  const requestedLabel = {_js_literal(label)};
+  const exact = {_js_literal(exact)};
+  const caseSensitive = {_js_literal(case_sensitive)};
+  const fieldSelector = [
+    "button",
+    "input:not([type=hidden])",
+    "textarea",
+    "select",
+    "[contenteditable='true']",
+    "a[href]",
+    "[role]"
+  ].join(",");
+  const match = findFieldByLabel(requestedLabel, exact, caseSensitive, fieldSelector);
+  const element = match.element;
+  const labelElement = match.label_element;
+  const elementVisible = element ? visible(element) : false;
+  const labelVisible = labelElement ? visible(labelElement) : false;
+  const clickTarget = elementVisible ? element : (labelVisible ? labelElement : element);
+  const clickTargetKind = clickTarget === element ? "control" : "label";
+  if (!element) {{
+    return {{
+      found: false,
+      clicked: false,
+      label: requestedLabel
+    }};
+  }}
+  if (!clickTarget || (!elementVisible && !labelVisible)) {{
+    return {{
+      found: true,
+      clicked: false,
+      visible: false,
+      label: requestedLabel,
+      element: nodeInfo(element),
+      label_element: labelElement ? nodeInfo(labelElement) : null,
+      error: "not_visible",
+      message: "Matched label/control is not visible."
+    }};
+  }}
+  clickTarget.focus?.();
+  clickTarget.click();
+  return {{
+    found: true,
+    clicked: true,
+    visible: true,
+    label: requestedLabel,
+    click_target: clickTargetKind,
+    element: nodeInfo(element),
+    label_element: labelElement ? nodeInfo(labelElement) : null
   }};
 }}
 """.strip()
@@ -15233,6 +15317,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "select-role",
                 "check-label",
                 "check-role",
+                "click-label",
                 "focus-role",
                 "blur-role",
                 "wait-state-role",
@@ -15251,6 +15336,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action select-role --session-id <session_id> --role combobox --name "<accessible name>" --option-label "<option>"',
                 'browser-cli action check-label --session-id <session_id> --label "<label>"',
                 'browser-cli action check-role --session-id <session_id> --role checkbox --name "<accessible name>"',
+                'browser-cli action click-label --session-id <session_id> --label "<label>"',
                 'browser-cli action wait-state-role --session-id <session_id> --role button --name "<submit text>" --state enabled',
                 'browser-cli action click-role --session-id <session_id> --role button --name "<submit text>"',
             ],
@@ -15286,6 +15372,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.checkable",
                 "result.checked",
                 "result.clicked",
+                "result.click_target",
                 "result.focused",
                 "result.blurred",
                 "result.matched",
@@ -17320,6 +17407,18 @@ def cmd_action_press_key(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_action_click_label(args: argparse.Namespace) -> None:
+    _run_eval_backed_action_command(
+        args,
+        "action.click-label",
+        _click_label_expression(
+            label=args.label,
+            exact=args.exact,
+            case_sensitive=args.case_sensitive,
+        ),
+    )
+
+
 def cmd_action_click_text(args: argparse.Namespace) -> None:
     _run_eval_backed_action_command(
         args,
@@ -19324,6 +19423,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "clear": ("selector",),
     "clear-role": ("role",),
     "click-index": ("selector", "index"),
+    "click-label": ("label",),
     "click-role": ("role",),
     "click-text": ("text",),
     "console-snapshot": tuple(),
@@ -19731,6 +19831,7 @@ def _case_action_schema() -> dict[str, Any]:
         "clear": [],
         "clear-role": ["name", "exact", "case_sensitive"],
         "click-index": ["include_hidden"],
+        "click-label": ["exact", "case_sensitive"],
         "click-role": ["name", "exact", "case_sensitive"],
         "click-text": ["selector", "exact", "case_sensitive"],
         "console-snapshot": ["max_entries", "clear", "install_only"],
@@ -20067,6 +20168,15 @@ def _case_action_schema() -> dict[str, Any]:
             "visible_count",
             "element",
             "candidates",
+            "url",
+        ],
+        "click-label": [
+            "found",
+            "clicked",
+            "label",
+            "click_target",
+            "element",
+            "label_element",
             "url",
         ],
         "click-role": ["found", "clicked", "role", "name", "element", "url"],
@@ -20840,6 +20950,7 @@ def _case_action_schema() -> dict[str, Any]:
             "selector": ".result button",
             "index": 0,
         },
+        "click-label": {"action": "click-label", "label": "Remember me"},
         "click-role": {"action": "click-role", "role": "button", "name": "Submit"},
         "click-text": {"action": "click-text", "text": "Submit"},
         "console-snapshot": {"action": "console-snapshot", "max_entries": 50},
@@ -21458,6 +21569,15 @@ def _run_browser_cli_case_step(
             _click_role_expression(
                 role=str(step["role"]),
                 name=str(step["name"]) if step.get("name") is not None else None,
+                exact=exact,
+                case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "click-label":
+        return _case_eval_expression(
+            page,
+            _click_label_expression(
+                label=str(step["label"]),
                 exact=exact,
                 case_sensitive=case_sensitive,
             ),
@@ -23975,6 +24095,15 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     action_press_key.add_argument("--meta-key", action="store_true")
     action_press_key.add_argument("--shift-key", action="store_true")
     action_press_key.set_defaults(func=cmd_action_press_key)
+
+    action_click_label = action_subparsers.add_parser(
+        "click-label",
+        help="Click a visible form control matched by label, aria-label, or placeholder",
+    )
+    _add_session_target_args(action_click_label)
+    action_click_label.add_argument("--label", required=True)
+    _add_text_match_args(action_click_label)
+    action_click_label.set_defaults(func=cmd_action_click_label)
 
     action_click_text = action_subparsers.add_parser(
         "click-text",

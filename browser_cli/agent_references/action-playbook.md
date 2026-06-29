@@ -124,6 +124,7 @@ browser-cli action hover-role --session-id <session_id> --role button --name "Me
 browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
+browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
@@ -186,7 +187,7 @@ Prefer built-in actions over writing custom JavaScript. `page-info`, `set-viewpo
 `set-value`, `set-file-input`, `dispatch-event`, `submit`, `scroll`,
 `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `select-option`, `select-label`, `select-role`, `check`,
 `uncheck`, `check-label`, `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, and `press-key`
-plus `click-text`, `click-role`, `click-index`, `double-click`, `double-click-role`, `right-click`, `right-click-role`, `fill-label`, `fill-role`, `link-snapshot`,
+plus `click-label`, `click-text`, `click-role`, `click-index`, `double-click`, `double-click-role`, `right-click`, `right-click-role`, `fill-label`, `fill-role`, `link-snapshot`,
 `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`,
 `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`,
 `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`,
@@ -258,8 +259,8 @@ console/page error entries and the reported page URL.
    frame-related JavaScript or when content appears embedded.
 2. Prefer semantic actions: `wait-role` for async roles/names,
    `exists-role`, `get-text-role`, and `bounding-box-role` for semantic
-   existence, text, or geometry checks, `click-role` for known roles/names,
-   `click-text` for visible text, `click-index` for a chosen repeated selector
+   existence, text, or geometry checks, `click-label` for labeled controls,
+   `click-role` for known roles/names, `click-text` for visible text, `click-index` for a chosen repeated selector
    match, `link-snapshot` for choosing or reporting navigation
    URLs, `list-snapshot` for reading list/menu item state, `fill-label` for
    labeled text fields, `fill-role` for writable role/name fields,
@@ -394,7 +395,7 @@ then verify with `wait-url`, `wait-title`, `wait-load-state`, and `page-info`.
    modal dialogs, alert dialogs, cookie banners, confirmation prompts, or
    embedded frames, first read `dialog_frame_handling`; run `wait-dialog` when
    the dialog appears asynchronously, otherwise run `dialog-snapshot`, choose
-   from `controls`, then use `click-role`,
+   from `controls`, then use `click-label`, `click-role`,
    `click-text`, or `click-index`. For iframe or embedded app issues, run
    `wait-frame` when the frame appears asynchronously, otherwise run
    `frame-snapshot` and parse `readable`, `same_origin`, `frame_url`, and

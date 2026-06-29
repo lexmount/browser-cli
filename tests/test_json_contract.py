@@ -396,6 +396,7 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "check-role",
         "uncheck-label",
         "uncheck-role",
+        "click-label",
         "click-text",
         "click-role",
         "click-index",

@@ -175,6 +175,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "runtime errors" in text
     assert "fetch/XHR issues" in text
     assert "wait-role" in text
+    assert "click-label" in text
     assert "click-role" in text
     assert "click-text" in text
     assert "page-info" in text
