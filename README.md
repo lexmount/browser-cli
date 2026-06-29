@@ -406,6 +406,10 @@ expected outputs, structured `setup_blocks`, `requested_scope_details`,
 `site_capabilities`/`site_capability_status`, `browser_site_acceptance_tests`,
 and the browser site requirements needed before device-code or scoped-token
 login can be marked available.
+The Connect from Codex site workflow also reads
+`connect_from_codex.browser_site_acceptance_tests` from manual and device-code
+handoff responses so agents can use the same browser.lexmount.cn acceptance
+checklist on either auth path.
 `setup_blocks` groups install, Connect, local env, and verification commands
 with secret placeholder and chat-safety metadata so browser.lexmount.cn can
 render copy buttons without guessing which commands are local-shell-only.

@@ -1637,6 +1637,7 @@ def _command_catalog() -> dict[str, Any]:
                             "connect_from_codex.url",
                             "connect_from_codex.site_capability_status.missing",
                             "connect_from_codex.required_runtime_auth",
+                            "connect_from_codex.browser_site_acceptance_tests",
                             "handoff.setup_blocks",
                         ],
                     },
@@ -1653,6 +1654,7 @@ def _command_catalog() -> dict[str, Any]:
                             "device_code.required_browser_site_support",
                             "fallback_handoff.setup_blocks",
                             "connect_from_codex.required_runtime_auth",
+                            "connect_from_codex.browser_site_acceptance_tests",
                         ],
                     },
                     {

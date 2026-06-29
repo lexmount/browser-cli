@@ -574,8 +574,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser_site_acceptance_tests" in site_steps[1]["read"]
     assert site_steps[2]["optional"] is True
     assert "connect_from_codex.required_runtime_auth" in site_steps[2]["read"]
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[2][
+        "read"
+    ]
     assert site_steps[3]["command"] == "browser-cli auth login --device-code"
     assert "connect_from_codex.required_runtime_auth" in site_steps[3]["read"]
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[3][
+        "read"
+    ]
     assert site_steps[4]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[0]["command"] == "browser-cli auth status"

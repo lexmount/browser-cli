@@ -153,6 +153,10 @@ Expected behavior after the website page exists:
   browser.lexmount.cn can verify Project ID display, scope review, local env
   copy safety, doctor verification, credential lifecycle controls, and
   device-code behavior before marking Connect from Codex available.
+- The Connect from Codex site workflow reads
+  `connect_from_codex.browser_site_acceptance_tests` from both manual handoff
+  and device-code handoff responses so agents can verify the same checklist no
+  matter which auth path the site currently supports.
 - `browser-cli auth login` includes `setup_blocks` for install, Connect, local
   env, and verification copy sections. Each block reports commands,
   `contains_secret_values`, `contains_secret_placeholders`,

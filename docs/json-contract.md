@@ -106,6 +106,7 @@ The Connect from Codex site requirements workflow includes
 `browser_site_contract.scope_ui_fields`,
 `browser_site_contract.browser_site_acceptance_tests`,
 `connect_from_codex.site_capability_status.missing`,
+`connect_from_codex.browser_site_acceptance_tests`,
 `required_device_code_endpoints`, `required_api_contract`,
 `required_token_lifecycle`, `required_runtime_auth`, `setup_blocks`,
 `browser_site_acceptance_tests`, and verification commands so agents can
