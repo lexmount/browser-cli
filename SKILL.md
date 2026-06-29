@@ -65,15 +65,15 @@ browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 ```
 
-When the task is to inspect or explain what browser.lexmount.cn must implement,
-run `browser-cli auth scopes --include-site-contract`,
-`browser-cli auth connect-requirements`, or
-`browser-cli commands --workflow connect_from_codex_site_requirements` first.
+When the task is to inspect or explain what browser.lexmount.cn must implement, run
+`browser-cli auth scopes --include-site-contract`, `browser-cli auth connect-requirements`,
+`browser-cli auth connect-requirements --checklist`, or `browser-cli commands --workflow connect_from_codex_site_requirements` first.
 Read `browser_site_contract.scope_ui_fields`,
 `browser_site_contract.browser_site_acceptance_tests`, `known_scopes`,
 `default_scopes`, `connect_from_codex.site_capability_status.missing`,
 `required_device_code_endpoints`, `required_api_contract`, `required_token_lifecycle`,
-`required_runtime_auth`, `setup_blocks`, and `verification.doctor_command`.
+`required_runtime_auth`, `setup_blocks`, `implementation_checklist.phases`,
+`implementation_checklist.blocked_until`, and `verification.doctor_command`.
 
 When `auth login` returns `handoff`, use it as the setup contract: open
 `connect_from_codex_url` or `login_url`, follow `copyable_commands`, require the
@@ -199,9 +199,7 @@ then `browser-cli auth status` and `browser-cli doctor --json` before creating a
 session. Inspect doctor `context_registry` before persistent login reuse; warnings identify invalid JSON, non-file paths, or unwritable locations and include `repair_context_registry`. If credentials are missing, run
 `browser-cli commands --workflow connect_from_codex_auth`, then
 `browser-cli auth login` and guide the user to set local environment variables.
-If the task is to coordinate browser.lexmount.cn changes, run
-`browser-cli commands --workflow connect_from_codex_site_requirements` and
-`browser-cli auth connect-requirements`.
+If the task is to coordinate browser.lexmount.cn changes, run `browser-cli commands --workflow connect_from_codex_site_requirements` and `browser-cli auth connect-requirements --checklist`.
 
 If an existing session is stale, inactive, or possibly consuming quota, inspect
 the recovery workflow before creating more sessions:

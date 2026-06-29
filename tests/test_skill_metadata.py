@@ -41,6 +41,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "refresh" in prompt
     assert "login" in prompt
     assert "connect-requirements" in prompt
+    assert "connect-requirements --checklist" in prompt
     assert "device-code --wait only after approval instructions are visible" in prompt
     assert "doctor --json" in prompt
     assert "commands" in prompt
@@ -68,7 +69,10 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "page_diagnostics" in prompt
     assert "workflow read arrays" in prompt
     assert "auth export-env" in prompt
-    assert "safe_to_paste_in_chat/local_shell_only/safety/setup_block/verification" in prompt
+    assert (
+        "safe_to_paste_in_chat/local_shell_only/safety/setup_block/verification"
+        in prompt
+    )
     assert "before using env commands" in prompt
     assert "required_runtime_auth" in prompt
     assert "before treating scoped-token or device-code auth as usable" in prompt

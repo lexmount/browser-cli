@@ -72,8 +72,10 @@ browser URLs out of chat.
 
 If the task is to improve browser.lexmount.cn, read
 `browser-cli commands --workflow connect_from_codex_site_requirements` and run
-`browser-cli auth connect-requirements`. Report
+`browser-cli auth connect-requirements --checklist`. Report
 `connect_from_codex.site_capability_status.missing`,
+`implementation_checklist.phases`,
+`implementation_checklist.blocked_until`,
 `required_device_code_endpoints`, `required_api_contract`,
 `required_token_lifecycle`, and `setup_blocks` instead of inventing a site
 checklist.

@@ -42,6 +42,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli auth status" in prompt
     assert "browser-cli auth scopes --include-site-contract" in prompt
     assert "browser-cli auth connect-requirements" in prompt
+    assert "browser-cli auth connect-requirements --checklist" in prompt
     assert "browser_site_contract.required_runtime_auth" in prompt
     assert "required_runtime_auth" in prompt
     assert "runtime auth 阻塞项已处理" in prompt

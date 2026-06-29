@@ -357,7 +357,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli context list"
         in payload["agent_entrypoints"]["persistent_login_state"][0]
     )
-    assert "--include-reuse-state" in payload["agent_entrypoints"]["persistent_login_state"][0]
+    assert (
+        "--include-reuse-state"
+        in payload["agent_entrypoints"]["persistent_login_state"][0]
+    )
     assert (
         "browser-cli context pick"
         in payload["agent_entrypoints"]["persistent_login_state"][1]
@@ -568,6 +571,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert [step["id"] for step in site_steps] == [
         "inspect_scope_catalog",
         "inspect_site_requirements",
+        "inspect_implementation_checklist",
         "verify_manual_handoff",
         "verify_device_code_handoff",
         "doctor_after_credentials",
@@ -576,26 +580,29 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli auth scopes --include-site-contract"
     )
     assert "browser_site_contract.scope_ui_fields" in site_steps[0]["read"]
-    assert "browser_site_contract.browser_site_acceptance_tests" in site_steps[0][
-        "read"
-    ]
+    assert (
+        "browser_site_contract.browser_site_acceptance_tests" in site_steps[0]["read"]
+    )
     assert site_steps[1]["command"] == "browser-cli auth connect-requirements"
     assert "connect_from_codex.device_code_url" in site_steps[1]["read"]
     assert "required_device_code_endpoints" in site_steps[1]["read"]
     assert "required_token_lifecycle" in site_steps[1]["read"]
     assert "required_runtime_auth" in site_steps[1]["read"]
     assert "browser_site_acceptance_tests" in site_steps[1]["read"]
-    assert site_steps[2]["optional"] is True
-    assert "connect_from_codex.required_runtime_auth" in site_steps[2]["read"]
-    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[2][
-        "read"
-    ]
-    assert site_steps[3]["command"] == "browser-cli auth login --device-code"
+    assert (
+        site_steps[2]["command"] == "browser-cli auth connect-requirements --checklist"
+    )
+    assert "implementation_checklist.phases" in site_steps[2]["read"]
+    assert (
+        "implementation_checklist.blocked_until.runtime_auth" in site_steps[2]["read"]
+    )
+    assert site_steps[3]["optional"] is True
     assert "connect_from_codex.required_runtime_auth" in site_steps[3]["read"]
-    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[3][
-        "read"
-    ]
-    assert site_steps[4]["command"] == "browser-cli doctor --json"
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[3]["read"]
+    assert site_steps[4]["command"] == "browser-cli auth login --device-code"
+    assert "connect_from_codex.required_runtime_auth" in site_steps[4]["read"]
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[4]["read"]
+    assert site_steps[5]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[0]["command"] == "browser-cli auth status"
     assert "runtime_auth.usable" in auth_steps[0]["read"]
@@ -3001,7 +3008,9 @@ def test_case_schema_returns_supported_actions_and_fields(
         "text": "hello",
     }
     assert "double_clicked" in payload["actions"]["double-click-role"]["result_fields"]
-    assert "target_role_found" in payload["actions"]["drag-role-to-role"]["result_fields"]
+    assert (
+        "target_role_found" in payload["actions"]["drag-role-to-role"]["result_fields"]
+    )
     assert payload["actions"]["drag-role-to-role"]["example_step"] == {
         "action": "drag-role-to-role",
         "source_role": "listitem",
@@ -4213,6 +4222,7 @@ def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
     assert [step["id"] for step in steps] == [
         "inspect_scope_catalog",
         "inspect_site_requirements",
+        "inspect_implementation_checklist",
         "verify_manual_handoff",
         "verify_device_code_handoff",
         "doctor_after_credentials",
@@ -4222,17 +4232,23 @@ def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
     assert steps[1]["command"] == "browser-cli auth connect-requirements"
     assert "connect_from_codex.site_capabilities" in steps[1]["read"]
     assert "required_device_code_endpoints" in steps[1]["read"]
-    assert steps[2]["optional"] is True
-    assert "handoff.setup_blocks" in steps[2]["read"]
-    assert steps[3]["command"] == "browser-cli auth login --device-code"
-    assert "device_code.required_endpoints" in steps[3]["read"]
-    assert steps[4]["command"] == "browser-cli doctor --json"
+    assert steps[2]["command"] == "browser-cli auth connect-requirements --checklist"
+    assert "implementation_checklist.phases" in steps[2]["read"]
+    assert steps[3]["optional"] is True
+    assert "handoff.setup_blocks" in steps[3]["read"]
+    assert steps[4]["command"] == "browser-cli auth login --device-code"
+    assert "device_code.required_endpoints" in steps[4]["read"]
+    assert steps[5]["command"] == "browser-cli doctor --json"
     assert (
         "browser-cli auth scopes --include-site-contract"
         in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
     )
     assert (
         "browser-cli auth connect-requirements"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
+    )
+    assert (
+        "browser-cli auth connect-requirements --checklist"
         in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
     )
 
@@ -4268,9 +4284,9 @@ def test_commands_catalog_returns_form_interaction_workflow(
         in payload["workflow"]["steps"][2]["alternative_commands"][1]
     )
     assert payload["workflow"]["steps"][5]["id"] == "click_labeled_control"
-    assert "browser-cli action click-label" in payload["workflow"]["steps"][5][
-        "command"
-    ]
+    assert (
+        "browser-cli action click-label" in payload["workflow"]["steps"][5]["command"]
+    )
     assert payload["workflow"]["steps"][6]["id"] == "wait_submit_ready"
     assert (
         "browser-cli action wait-state-role"
@@ -5067,6 +5083,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ] == [
         "inspect_scope_catalog",
         "inspect_site_requirements",
+        "inspect_implementation_checklist",
         "verify_manual_handoff",
         "verify_device_code_handoff",
         "doctor_after_credentials",
@@ -5415,9 +5432,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ]
     assert checks["connect_from_codex_contract"]["missing_capabilities"] == []
     assert checks["connect_from_codex_contract"]["missing_acceptance_tests"] == []
-    assert checks["connect_from_codex_contract"][
-        "missing_acceptance_capabilities"
-    ] == []
+    assert (
+        checks["connect_from_codex_contract"]["missing_acceptance_capabilities"] == []
+    )
     assert checks["connect_from_codex_contract"]["invalid_acceptance_tests"] == []
     assert checks["connect_from_codex_contract"]["missing_token_lifecycle"] == []
     assert checks["connect_from_codex_contract"]["missing_runtime_auth"] == []
@@ -5826,9 +5843,10 @@ def test_doctor_warns_when_auth_export_env_contract_is_incomplete(
     assert "verification.status_command" in contract["invalid_fields"]
     assert contract["fix"]["code"] == "repair_auth_export_env_contract"
     assert "browser-cli auth export-env" in payload["repair_plan"]["commands"]
-    assert "browser-cli auth export-env --from-current" in payload["repair_plan"][
-        "commands"
-    ]
+    assert (
+        "browser-cli auth export-env --from-current"
+        in payload["repair_plan"]["commands"]
+    )
     assert "api_connectivity" in payload["skipped_checks"]
 
 
@@ -5888,9 +5906,7 @@ def test_doctor_warns_when_connect_from_codex_contract_is_incomplete(
         }
     ]
     assert contract["fix"]["code"] == "repair_connect_from_codex_contract"
-    assert "browser-cli auth connect-requirements" in payload["repair_plan"][
-        "commands"
-    ]
+    assert "browser-cli auth connect-requirements" in payload["repair_plan"]["commands"]
     assert (
         "browser-cli commands --workflow connect_from_codex_site_requirements"
         in payload["repair_plan"]["commands"]
@@ -6099,6 +6115,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                     "steps": [
                         {"id": "inspect_scope_catalog"},
                         {"id": "inspect_site_requirements"},
+                        {"id": "inspect_implementation_checklist"},
                         {"id": "verify_manual_handoff"},
                         {"id": "verify_device_code_handoff"},
                         {"id": "doctor_after_credentials"},
@@ -6890,9 +6907,10 @@ def test_runtime_failures_mask_sensitive_values(
     assert "api_key=***" in serialized
     assert "token=***" in serialized
     assert payload["fix"]["code"] == "inspect_unexpected_runtime_failure"
-    assert "browser-cli action guide --task interactive_targeting" in payload["fix"][
-        "commands"
-    ]
+    assert (
+        "browser-cli action guide --task interactive_targeting"
+        in payload["fix"]["commands"]
+    )
     assert payload["next_steps"] == payload["fix"]["guidance"]
 
 
@@ -6912,9 +6930,10 @@ def test_parallel_limit_failure_includes_session_recovery_fix(
     assert payload["error"] == "browser_parallel_limit_reached"
     assert payload["fix"]["code"] == "reduce_browser_parallel_sessions"
     assert "browser-cli session list --status active" in payload["fix"]["commands"]
-    assert "browser-cli session close --session-id <session_id>" in payload["fix"][
-        "commands"
-    ]
+    assert (
+        "browser-cli session close --session-id <session_id>"
+        in payload["fix"]["commands"]
+    )
     assert payload["next_steps"] == payload["fix"]["guidance"]
 
 
@@ -7357,7 +7376,9 @@ def test_auth_refresh_reports_remote_refresh_pending_without_revealing_tokens(
     assert payload["reason"] == "remote_refresh_unavailable"
     assert payload["runtime_auth_usable"] is False
     assert "Device token is expired." in payload["warnings"]
-    assert "Token lifecycle refresh endpoint is not configured" in payload["warnings"][-1]
+    assert (
+        "Token lifecycle refresh endpoint is not configured" in payload["warnings"][-1]
+    )
     assert payload["device_token"]["token_id"] == "tok_123"
     assert payload["next_steps"][0] == "Local device-token metadata is expired."
 
@@ -7633,7 +7654,9 @@ def test_auth_refresh_reports_invalid_success_response_schema(
     assert payload["remote_refresh"]["saved"] is False
     assert payload["remote_refresh"]["response_payload_source"] == "missing"
     assert "json.token" in payload["remote_refresh"]["inspected_response_sources"]
-    assert "Remote token refresh endpoint did not return usable" in payload["warnings"][-1]
+    assert (
+        "Remote token refresh endpoint did not return usable" in payload["warnings"][-1]
+    )
 
 
 def test_auth_refresh_reports_not_needed_without_force(
@@ -7817,7 +7840,9 @@ def test_auth_logout_revoke_flag_reports_remote_revoke_pending(
     assert payload["warnings"] == [
         "Token lifecycle revoke endpoint is not configured; remove local metadata and revoke from browser.lexmount.cn if needed."
     ]
-    assert "Token lifecycle revoke endpoint is not configured" in payload["next_steps"][-1]
+    assert (
+        "Token lifecycle revoke endpoint is not configured" in payload["next_steps"][-1]
+    )
 
 
 def test_auth_logout_revoke_calls_configured_token_endpoint(
@@ -8382,15 +8407,33 @@ def test_auth_connect_requirements_reports_browser_site_contract(
     assert payload["browser_site_acceptance_tests"][2]["capability"] == (
         "copy_install_and_env"
     )
-    assert "setup_blocks.local_env.local_shell_only" in payload[
-        "browser_site_acceptance_tests"
-    ][2]["source_fields"]
+    assert (
+        "setup_blocks.local_env.local_shell_only"
+        in payload["browser_site_acceptance_tests"][2]["source_fields"]
+    )
     assert payload["verification"]["workflow_command"] == (
         "browser-cli commands --workflow connect_from_codex_site_requirements"
     )
     assert "browser-cli auth connect-requirements" in payload["agent_commands"]
     assert payload["secret_policy"]["contains_secret_values"] is False
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["do_not_paste_in_chat"]
+    checklist = payload["implementation_checklist"]
+    assert checklist["project"] == {
+        "project_id": "arg-project",
+        "project_id_source": "argument",
+    }
+    assert checklist["connect_urls"]["manual_env"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert [phase["id"] for phase in checklist["phases"]] == [
+        "route_and_project_identity",
+        "scoped_agent_credential",
+        "copy_install_and_local_env",
+        "doctor_verification",
+        "credential_lifecycle",
+        "device_code_oauth",
+        "runtime_bearer_auth",
+    ]
 
     connect = payload["connect_from_codex"]
     assert connect["url"].startswith("https://browser.lexmount.cn/connect/codex?")
@@ -8401,9 +8444,11 @@ def test_auth_connect_requirements_reports_browser_site_contract(
     assert connect["requested_scopes"] == ["browser:actions"]
     assert connect["setup_blocks"] == payload["setup_blocks"]
     assert connect["required_runtime_auth"] == payload["required_runtime_auth"]
-    assert connect["browser_site_acceptance_tests"] == payload[
-        "browser_site_acceptance_tests"
-    ]
+    assert (
+        connect["browser_site_acceptance_tests"]
+        == payload["browser_site_acceptance_tests"]
+    )
+    assert connect["implementation_checklist"] == checklist
     assert connect["supported_response_modes"] == ["env", "device_code"]
     assert "response=env|device_code" in connect["required_query_parameters"]
     capability_ids = [
@@ -8435,6 +8480,107 @@ def test_auth_connect_requirements_reports_browser_site_contract(
     assert device_query["response"] == ["device_code"]
     assert "arg-project" in json.dumps(payload)
     assert "real-api-key-value" not in json.dumps(payload)
+
+
+def test_auth_connect_requirements_checklist_view(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "connect-requirements",
+                "--checklist",
+                "--project-id",
+                "site-project",
+                "--scope",
+                "browser:sessions",
+                "--scope",
+                "browser:actions",
+                "--expires-in",
+                "7d",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "auth.connect-requirements"
+    assert payload["checklist_view"] is True
+    assert payload["available"] is False
+    assert payload["project_id"] == "site-project"
+    assert payload["requested_scopes"] == [
+        "browser:sessions",
+        "browser:actions",
+    ]
+    assert payload["secret_policy"]["contains_secret_values"] is False
+
+    checklist = payload["implementation_checklist"]
+    assert checklist["version"] == 1
+    assert checklist["audience"] == "browser.lexmount.cn implementers"
+    assert checklist["project"] == {
+        "project_id": "site-project",
+        "project_id_source": "argument",
+    }
+    assert checklist["requested_credential"]["expires_in"] == "7d"
+    assert checklist["connect_urls"]["manual_env"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert checklist["connect_urls"]["device_code"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert checklist["acceptance_tests"] == payload["browser_site_acceptance_tests"]
+
+    phases = {phase["id"]: phase for phase in checklist["phases"]}
+    assert phases["route_and_project_identity"]["status"]["pending"] == [
+        "project_id_display"
+    ]
+    assert phases["scoped_agent_credential"]["requested_scopes"] == [
+        "browser:sessions",
+        "browser:actions",
+    ]
+    assert (
+        phases["scoped_agent_credential"]["required_token_lifecycle"][0]["id"]
+        == "issue_scoped_key"
+    )
+    assert [
+        block["id"] for block in phases["copy_install_and_local_env"]["setup_blocks"]
+    ] == [
+        "install",
+        "open_connect",
+        "local_env",
+    ]
+    assert phases["copy_install_and_local_env"]["copy_safety"] == {
+        "local_env_safe_to_paste_in_chat": False,
+        "local_env_local_shell_only": True,
+        "secret_env": ["LEXMOUNT_API_KEY"],
+    }
+    assert phases["doctor_verification"]["setup_blocks"][0]["id"] == "verify"
+    assert phases["device_code_oauth"]["required_device_code_endpoints"] == [
+        "POST /api/auth/device/code",
+        "POST /api/auth/device/token",
+    ]
+    assert phases["device_code_oauth"]["required_api_contract"][0]["path"] == (
+        "/api/auth/device/code"
+    )
+    assert phases["runtime_bearer_auth"]["status"]["pending"] == [
+        "sdk_accepts_bearer_token",
+        "api_accepts_bearer_token",
+        "browser_gateway_accepts_bearer_token",
+    ]
+    assert checklist["blocked_until"]["browser_site_capabilities"] == [
+        "project_id_display",
+        "scoped_api_key",
+        "copy_install_and_env",
+        "doctor_verification",
+        "scoped_key_lifecycle",
+        "device_code_oauth",
+    ]
+    assert "browser-cli doctor --smoke-session" in checklist["verification_commands"]
+    assert any("never safe to paste" in rule for rule in checklist["safe_copy_rules"])
 
 
 def test_auth_login_guides_manual_browser_flow(
@@ -10700,9 +10846,10 @@ def test_action_target_is_required(
     assert payload["error"] == "BrowserRuntimeError"
     assert "Pass exactly one action target" in payload["message"]
     assert payload["fix"]["code"] == "inspect_browser_runtime_failure"
-    assert "browser-cli action guide --task interactive_targeting" in payload["fix"][
-        "commands"
-    ]
+    assert (
+        "browser-cli action guide --task interactive_targeting"
+        in payload["fix"]["commands"]
+    )
     assert "browser-cli doctor --smoke-session" in payload["fix"]["commands"]
     assert payload["next_steps"] == payload["fix"]["guidance"]
 
@@ -15300,7 +15447,9 @@ def test_action_fill_expression_sets_selector_value_with_masking(
 
     monkeypatch.setattr(
         "browser_cli.cli.resolve_browser_action_connect_url",
-        lambda target: "wss://api.lexmount.cn/connection?project_id=project&api_key=secret",
+        lambda target: (
+            "wss://api.lexmount.cn/connection?project_id=project&api_key=secret"
+        ),
     )
 
     def fake_run_browser_action(

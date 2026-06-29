@@ -104,6 +104,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "context reuse fields" in text
     assert "browser-cli auth login" in text
     assert "browser-cli auth connect-requirements" in text
+    assert "browser-cli auth connect-requirements --checklist" in text
     assert "browser-cli auth export-env" in text
     assert "safe_to_paste_in_chat" in text
     assert "local_shell_only" in text

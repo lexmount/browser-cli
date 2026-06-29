@@ -116,6 +116,7 @@ browser-cli auth token-info
 browser-cli auth refresh
 browser-cli auth logout
 browser-cli auth connect-requirements
+browser-cli auth connect-requirements --checklist
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth export-env
@@ -138,6 +139,13 @@ Expected behavior after the website page exists:
   `required_device_code_endpoints`, `required_api_contract`,
   `required_token_lifecycle`, `setup_blocks`, and
   `browser_site_acceptance_tests` plus `verification.doctor_command`.
+- `browser-cli auth connect-requirements --checklist` prints a focused
+  `implementation_checklist` view for browser.lexmount.cn implementers. It
+  groups the same contract into phases for project identity, scoped credential
+  creation, local env copy safety, doctor verification, credential lifecycle,
+  device-code/OAuth, and runtime bearer-token support. Each phase includes
+  `status.pending`, `browser_site_actions`, acceptance tests, and the relevant
+  setup blocks or API requirements.
 - `browser-cli auth login` prints
   `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
   opens it in the local default browser and reports `open_result`.
@@ -229,6 +237,31 @@ Expected behavior after the website page exists:
 
 The page should display the same command names so users and agents follow one
 workflow.
+
+## Implementation Checklist JSON
+
+When coordinating browser.lexmount.cn work, start with:
+
+```bash
+browser-cli auth connect-requirements --checklist
+```
+
+Read these fields:
+
+- `implementation_checklist.phases[].id`
+- `implementation_checklist.phases[].status.pending`
+- `implementation_checklist.phases[].browser_site_actions`
+- `implementation_checklist.phases[].acceptance_tests`
+- `implementation_checklist.blocked_until.browser_site_capabilities`
+- `implementation_checklist.blocked_until.runtime_auth`
+- `implementation_checklist.blocked_until.token_lifecycle`
+- `implementation_checklist.blocked_until.api_contract`
+- `implementation_checklist.safe_copy_rules`
+
+The checklist is derived from the same capabilities, setup blocks,
+acceptance tests, token lifecycle requirements, and runtime auth requirements as
+the full `auth connect-requirements` output. Treat it as the short implementation
+view, and use the full command when the page needs every source field.
 
 ## Device-Code/OAuth Flow
 
