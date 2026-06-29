@@ -677,17 +677,102 @@ def _failure(
     _json_dump(data, exit_code=exit_code)
 
 
-def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
+def _runtime_failure_fix(command: str, code: str) -> dict[str, Any]:
+    commands = [AGENT_DOCTOR_COMMAND]
+    guidance = [
+        "Read the structured error fields before retrying.",
+        "Do not paste secrets or full direct connect URLs into chat.",
+    ]
+    env = ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+
+    if command.startswith("action."):
+        commands = [
+            "browser-cli action guide --task interactive_targeting",
+            "browser-cli action page-info --session-id <session_id>",
+            "browser-cli doctor --smoke-session",
+            AGENT_DOCTOR_COMMAND,
+        ]
+        guidance = [
+            "Confirm the browser target is exactly one of --session-id, --connect-url, or --direct-url.",
+            "Inspect page-info and action guide before falling back to custom JavaScript.",
+            "Run doctor --smoke-session if session creation or browser connectivity is uncertain.",
+        ]
+    elif command.startswith("session."):
+        commands = [
+            "browser-cli session list --status active",
+            "browser-cli session get --session-id <session_id>",
+            "browser-cli session close --session-id <session_id>",
+            AGENT_DOCTOR_COMMAND,
+        ]
+        guidance = [
+            "Inspect active sessions before creating replacements.",
+            "Close stale sessions when limits or stale state may be involved.",
+        ]
+    elif command.startswith("context."):
+        commands = [
+            "browser-cli context pick --metadata-json '{\"purpose\":\"codex-login\"}' --selection newest --dry-run",
+            "browser-cli context status --context-id <context_id>",
+            AGENT_DOCTOR_COMMAND,
+        ]
+        guidance = [
+            "Use context pick --dry-run to inspect availability before mutating persistent login state.",
+            "Treat availability=locked as busy and pick or create a different context.",
+        ]
+
+    return {
+        "code": code,
+        "commands": commands,
+        "env": env,
+        "guidance": guidance,
+    }
+
+
+def _failure_payload_for_exception(command: str, exc: Exception) -> dict[str, Any]:
     info = getattr(exc, "lexmount_error_info", None)
     if isinstance(info, LexmountErrorInfo):
-        _failure(command, **info.payload())
+        payload = info.payload()
+        payload.setdefault(
+            "fix",
+            _runtime_failure_fix(command, "inspect_lexmount_api_error"),
+        )
+        payload.setdefault("next_steps", payload["fix"]["guidance"])
+        return payload
     if isinstance(exc, BrowserParallelLimitError):
-        _failure(command, "browser_parallel_limit_reached", str(exc))
+        fix = _runtime_failure_fix(command, "reduce_browser_parallel_sessions")
+        return {
+            "error": "browser_parallel_limit_reached",
+            "message": str(exc),
+            "fix": fix,
+            "next_steps": fix["guidance"],
+        }
     if isinstance(exc, BrowserConfigError):
-        _failure(command, "configuration_error", str(exc))
+        fix = _runtime_failure_fix(command, "repair_browser_cli_configuration")
+        return {
+            "error": "configuration_error",
+            "message": str(exc),
+            "fix": fix,
+            "next_steps": fix["guidance"],
+        }
     if isinstance(exc, BrowserRuntimeError):
-        _failure(command, exc.__class__.__name__, str(exc))
-    _failure(command, exc.__class__.__name__, str(exc))
+        fix = _runtime_failure_fix(command, "inspect_browser_runtime_failure")
+        return {
+            "error": exc.__class__.__name__,
+            "message": str(exc),
+            "fix": fix,
+            "next_steps": fix["guidance"],
+        }
+
+    fix = _runtime_failure_fix(command, "inspect_unexpected_runtime_failure")
+    return {
+        "error": exc.__class__.__name__,
+        "message": str(exc),
+        "fix": fix,
+        "next_steps": fix["guidance"],
+    }
+
+
+def _failure_from_exception(command: str, exc: Exception) -> NoReturn:
+    _failure(command, **_failure_payload_for_exception(command, exc))
 
 
 def _command_from_prog(prog: str) -> str:

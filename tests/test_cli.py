@@ -6531,6 +6531,33 @@ def test_runtime_failures_mask_sensitive_values(
     assert "local-secret" not in serialized
     assert "api_key=***" in serialized
     assert "token=***" in serialized
+    assert payload["fix"]["code"] == "inspect_unexpected_runtime_failure"
+    assert "browser-cli action guide --task interactive_targeting" in payload["fix"][
+        "commands"
+    ]
+    assert payload["next_steps"] == payload["fix"]["guidance"]
+
+
+def test_parallel_limit_failure_includes_session_recovery_fix(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_module._failure_from_exception(
+            "session.create",
+            cli_module.BrowserParallelLimitError("parallel limit reached"),
+        )
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "session.create"
+    assert payload["error"] == "browser_parallel_limit_reached"
+    assert payload["fix"]["code"] == "reduce_browser_parallel_sessions"
+    assert "browser-cli session list --status active" in payload["fix"]["commands"]
+    assert "browser-cli session close --session-id <session_id>" in payload["fix"][
+        "commands"
+    ]
+    assert payload["next_steps"] == payload["fix"]["guidance"]
 
 
 def test_failure_payload_masks_nested_sensitive_fields(
@@ -9841,6 +9868,12 @@ def test_action_target_is_required(
     assert payload["command"] == "action.snapshot"
     assert payload["error"] == "BrowserRuntimeError"
     assert "Pass exactly one action target" in payload["message"]
+    assert payload["fix"]["code"] == "inspect_browser_runtime_failure"
+    assert "browser-cli action guide --task interactive_targeting" in payload["fix"][
+        "commands"
+    ]
+    assert "browser-cli doctor --smoke-session" in payload["fix"]["commands"]
+    assert payload["next_steps"] == payload["fix"]["guidance"]
 
 
 def test_action_target_rejects_multiple_targets(
@@ -9855,6 +9888,7 @@ def test_action_target_rejects_multiple_targets(
     assert payload["command"] == "action.snapshot"
     assert payload["error"] == "BrowserRuntimeError"
     assert "Pass exactly one action target" in payload["message"]
+    assert payload["fix"]["code"] == "inspect_browser_runtime_failure"
 
 
 def test_action_eval_accepts_script_alias(
