@@ -201,6 +201,8 @@ browser-cli commands --group action --names-only
 If credentials are missing or wrong:
 
 ```bash
+browser-cli reference get --id usable_status --metadata-only
+browser-cli reference get --id usable_status
 browser-cli auth login
 browser-cli auth export-env
 browser-cli auth status

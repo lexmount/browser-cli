@@ -6712,6 +6712,10 @@ def test_doctor_fails_missing_required_env(
     assert payload["repair_plan"]["required"] is True
     assert "LEXMOUNT_API_KEY" in payload["repair_plan"]["env"]
     assert "LEXMOUNT_PROJECT_ID" in payload["repair_plan"]["env"]
+    assert payload["repair_plan"]["commands"][:2] == [
+        "browser-cli reference get --id usable_status --metadata-only",
+        "browser-cli reference get --id usable_status",
+    ]
     assert "browser-cli auth login" in payload["repair_plan"]["commands"]
     connect = payload["repair_plan"]["connect_from_codex"]
     assert connect["available"] is False
@@ -7173,6 +7177,8 @@ def test_auth_status_reports_connect_from_codex_fix_when_env_is_missing(
     assert fix["code"] == "configure_credentials"
     assert fix["env"] == ["LEXMOUNT_API_KEY"]
     assert fix["commands"] == [
+        "browser-cli reference get --id usable_status --metadata-only",
+        "browser-cli reference get --id usable_status",
         "browser-cli auth login",
         "browser-cli auth export-env",
         "browser-cli auth status",
@@ -8697,6 +8703,10 @@ def test_auth_login_guides_manual_browser_flow(
     assert payload["flows"][0]["available"] is True
     assert payload["flows"][1]["name"] == "connect_from_codex"
     assert payload["flows"][1]["available"] is False
+    assert payload["commands"][:2] == [
+        "browser-cli reference get --id usable_status --metadata-only",
+        "browser-cli reference get --id usable_status",
+    ]
     assert "browser-cli doctor --json" in payload["commands"]
 
     handoff = payload["handoff"]
@@ -8721,6 +8731,8 @@ def test_auth_login_guides_manual_browser_flow(
         "uv tool install git+https://github.com/lexmount/browser-cli.git",
         "browser-cli --help",
         "browser-cli --version",
+        "browser-cli reference get --id usable_status --metadata-only",
+        "browser-cli reference get --id usable_status",
     ]
     assert handoff["setup_blocks"][2] == {
         "id": "local_env",
@@ -8743,6 +8755,8 @@ def test_auth_login_guides_manual_browser_flow(
     ]
     assert handoff["setup_blocks"][3]["safe_to_paste_in_chat"] is True
     assert handoff["copyable_commands"] == [
+        "browser-cli reference get --id usable_status --metadata-only",
+        "browser-cli reference get --id usable_status",
         "browser-cli auth status",
         "browser-cli auth login",
         "browser-cli auth export-env",

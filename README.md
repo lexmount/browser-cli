@@ -239,8 +239,9 @@ Read `runtime_auth.usable`, `runtime_auth.source`,
 actions can use the current credential source. Device tokens remain local
 metadata until the SDK, API, and browser gateway all accept bearer tokens.
 When env credentials are incomplete, `auth status` also reports `missing_env`
-and a `fix` object with safe `browser-cli auth login` / Connect from Codex setup
-commands.
+and a `fix` object that first points agents at
+`browser-cli reference get --id usable_status`, then safe
+`browser-cli auth login` / Connect from Codex setup commands.
 Persistent context metadata created by this CLI is also cached locally at
 `~/.config/lexmount/browser-cli/context-registry.json`; set
 `LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE` to override that path for tests or

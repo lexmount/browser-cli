@@ -238,8 +238,10 @@ Default behavior:
   gateway can authorize CDP websocket connections without an `api_key` query
   parameter.
 - When env API-key credentials are incomplete, `auth status` reports
-  `missing_env` plus a `fix` object with safe Connect from Codex setup commands
-  and no API key values.
+  `missing_env` plus a `fix` object that starts with
+  `browser-cli reference get --id usable_status --metadata-only` and
+  `browser-cli reference get --id usable_status`, followed by safe Connect from
+  Codex setup commands and no API key values.
 - `auth scopes` reports the stable Connect from Codex scope catalog without
   credentials or secrets: `known_scopes`, `default_scopes`, `scopes`,
   `permission_count`, `risk`, `destructive`, `unknown_scopes`, and the
@@ -416,8 +418,10 @@ Default behavior:
   `connect_from_codex` with safe `/connect/codex` URLs, `open_command`,
   `device_code_url`, requested scopes, `site_capability_status`,
   `required_token_lifecycle`, `required_runtime_auth`, setup blocks,
-  browser-site requirements, and verification commands. This handoff must not
-  contain API key values or direct connect URLs.
+  browser-site requirements, and verification commands. Their command lists
+  should point agents at the packaged `usable_status` reference before auth
+  setup so current usable boundaries are explicit. This handoff must not contain
+  API key values or direct connect URLs.
 - `auth logout` may report local credential file deletion metadata,
   `revoke_endpoint`, `remote_revoke`, and `revoked`, but must not print token
   values or unset environment variables. With `--revoke` and a configured token
