@@ -727,14 +727,35 @@ def _runtime_failure_fix(command: str, code: str) -> dict[str, Any]:
     }
 
 
+def _missing_lexmount_env_from_error(message: Any) -> list[str]:
+    text = str(message or "")
+    missing = [
+        name
+        for name in ("LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID")
+        if name in text
+    ]
+    if missing:
+        return missing
+    if "Missing required Lexmount environment variables" in text:
+        return ["LEXMOUNT_API_KEY", "LEXMOUNT_PROJECT_ID"]
+    return []
+
+
+def _credential_failure_payload_fix(message: Any) -> dict[str, Any] | None:
+    missing_env = _missing_lexmount_env_from_error(message)
+    if not missing_env:
+        return None
+    return _credential_doctor_fix(*missing_env)
+
+
 def _failure_payload_for_exception(command: str, exc: Exception) -> dict[str, Any]:
     info = getattr(exc, "lexmount_error_info", None)
     if isinstance(info, LexmountErrorInfo):
         payload = info.payload()
-        payload.setdefault(
-            "fix",
-            _runtime_failure_fix(command, "inspect_lexmount_api_error"),
+        fix = _credential_failure_payload_fix(payload.get("message")) or (
+            _runtime_failure_fix(command, "inspect_lexmount_api_error")
         )
+        payload["fix"] = fix
         payload.setdefault("next_steps", payload["fix"]["guidance"])
         return payload
     if isinstance(exc, BrowserParallelLimitError):
@@ -746,7 +767,9 @@ def _failure_payload_for_exception(command: str, exc: Exception) -> dict[str, An
             "next_steps": fix["guidance"],
         }
     if isinstance(exc, BrowserConfigError):
-        fix = _runtime_failure_fix(command, "repair_browser_cli_configuration")
+        fix = _credential_failure_payload_fix(str(exc)) or _runtime_failure_fix(
+            command, "repair_browser_cli_configuration"
+        )
         return {
             "error": "configuration_error",
             "message": str(exc),

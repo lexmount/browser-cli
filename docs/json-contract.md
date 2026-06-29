@@ -175,6 +175,9 @@ warning with `fix.code=repair_context_registry`.
 - Runtime/configuration failures may include a `fix` object with stable `code`,
   `commands`, `env`, and `guidance`, plus `next_steps` copied from the guidance.
   Agents should follow those fields before inventing retries.
+- Missing Lexmount credential failures use `fix.code=configure_credentials`
+  with `auth login`, `auth export-env`, `auth status`, and `doctor --json`
+  commands so agents enter setup flow before retrying browser operations.
 - If stdout is closed by a downstream pipe, the CLI exits with code `141`
   without printing a Python traceback.
 
