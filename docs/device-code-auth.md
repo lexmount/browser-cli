@@ -72,7 +72,7 @@ Content-Type: application/json
 ```json
 {
   "client_name": "browser-cli",
-  "client_version": "0.1.0",
+  "client_version": "0.2.0",
   "device_name": "Codex workstation",
   "project_id": null,
   "requested_scopes": [

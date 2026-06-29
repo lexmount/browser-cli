@@ -79,7 +79,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.1.0"
+    assert payload["version"] == "0.2.0"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -4976,7 +4976,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     monkeypatch.setattr(
         "browser_cli.cli._package_version",
         lambda distribution: {
-            "browser-cli": "0.1.0",
+            "browser-cli": "0.2.0",
             "lex-browser-runtime": "1.2.3",
         }.get(distribution),
     )
@@ -5031,7 +5031,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "message": "browser-cli executable is available on PATH",
         "path": "/usr/local/bin/browser-cli",
     }
-    assert checks["browser_cli"]["version"] == "0.1.0"
+    assert checks["browser_cli"]["version"] == "0.2.0"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_metadata"
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
@@ -6587,7 +6587,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.1.0"
+    assert checks["browser_cli"]["version"] == "0.2.0"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
