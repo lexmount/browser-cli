@@ -18166,6 +18166,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "cookie-get": tuple(),
     "cookie-set": ("name", "value"),
     "count": ("selector",),
+    "dialog-snapshot": tuple(),
     "double-click": ("selector",),
     "double-click-role": ("role",),
     "exists": ("selector",),
@@ -18174,6 +18175,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "fill-role": ("role", "text"),
     "focus": ("selector",),
     "focus-role": ("role",),
+    "frame-snapshot": tuple(),
     "form-snapshot": tuple(),
     "get-attribute": ("selector", "name"),
     "get-attribute-role": ("role", "attribute"),
@@ -18190,6 +18192,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "list-snapshot": tuple(),
     "outline-snapshot": tuple(),
     "page-info": tuple(),
+    "performance-snapshot": tuple(),
     "press": ("selector", "key"),
     "press-role": ("role", "key"),
     "query": ("selector",),
@@ -18216,6 +18219,8 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "wait-attribute-role": ("role", "attribute"),
     "wait-count": ("selector", "count"),
     "wait-cookie": ("name",),
+    "wait-dialog": tuple(),
+    "wait-frame": tuple(),
     "wait-load-state": tuple(),
     "wait-network-idle": tuple(),
     "wait-state": ("selector", "state"),
@@ -18243,6 +18248,11 @@ BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
     "wait-cookie": {
         "state": frozenset({"present", "absent"}),
         "match": frozenset({"contains", "exact", "regex"}),
+    },
+    "wait-dialog": {"match": frozenset({"contains", "exact", "regex"})},
+    "wait-frame": {
+        "url_match": frozenset({"contains", "exact", "regex"}),
+        "text_match": frozenset({"contains", "exact", "regex"}),
     },
     "wait-storage": {
         "area": frozenset({"local", "session"}),
@@ -18530,6 +18540,13 @@ def _case_action_schema() -> dict[str, Any]:
         "cookie-get": ["name", "prefix", "max_items"],
         "cookie-set": ["path", "domain", "max_age", "expires", "same_site", "secure"],
         "count": ["include_hidden"],
+        "dialog-snapshot": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_controls",
+            "max_chars",
+        ],
         "double-click": [],
         "double-click-role": ["name", "exact", "case_sensitive"],
         "exists": [],
@@ -18538,6 +18555,7 @@ def _case_action_schema() -> dict[str, Any]:
         "fill-role": ["name", "exact", "case_sensitive"],
         "focus": ["prevent_scroll"],
         "focus-role": ["name", "prevent_scroll", "exact", "case_sensitive"],
+        "frame-snapshot": ["selector", "include_hidden", "max_nodes", "max_chars"],
         "form-snapshot": [
             "selector",
             "include_hidden",
@@ -18565,6 +18583,11 @@ def _case_action_schema() -> dict[str, Any]:
         "list-snapshot": ["selector", "include_hidden", "max_nodes", "max_items"],
         "outline-snapshot": ["selector", "include_hidden", "max_nodes"],
         "page-info": [],
+        "performance-snapshot": [
+            "max_resources",
+            "initiator_type",
+            "min_duration_ms",
+        ],
         "press": [],
         "press-role": ["name", "exact", "case_sensitive"],
         "query": ["include_hidden", "max_nodes"],
@@ -18633,6 +18656,34 @@ def _case_action_schema() -> dict[str, Any]:
             "timeout_ms",
             "poll_ms",
             "case_sensitive",
+        ],
+        "wait-dialog": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_controls",
+            "max_chars",
+            "text",
+            "match",
+            "case_sensitive",
+            "modal_only",
+            "timeout_ms",
+            "poll_ms",
+        ],
+        "wait-frame": [
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_chars",
+            "url",
+            "url_match",
+            "text",
+            "text_match",
+            "case_sensitive",
+            "readable_only",
+            "same_origin_only",
+            "timeout_ms",
+            "poll_ms",
         ],
         "wait-load-state": ["state", "timeout_ms", "poll_ms"],
         "wait-network-idle": ["idle_ms", "timeout_ms", "poll_ms", "max_inflight"],
@@ -18814,6 +18865,16 @@ def _case_action_schema() -> dict[str, Any]:
             "url",
         ],
         "count": ["selector", "count", "total_count", "visible_count", "url"],
+        "dialog-snapshot": [
+            "dialogs",
+            "dialog_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
+        ],
         "double-click": ["found", "double_clicked", "events", "element", "url"],
         "double-click-role": [
             "found",
@@ -18862,6 +18923,16 @@ def _case_action_schema() -> dict[str, Any]:
             "role",
             "name",
             "url",
+        ],
+        "frame-snapshot": [
+            "frames",
+            "frame_count",
+            "node_count",
+            "total_count",
+            "visible_count",
+            "truncated",
+            "url",
+            "title",
         ],
         "form-snapshot": ["fields", "field_count", "node_count", "url", "title"],
         "get-attribute": [
@@ -18968,6 +19039,16 @@ def _case_action_schema() -> dict[str, Any]:
             "visibility_state",
             "viewport",
             "scroll",
+        ],
+        "performance-snapshot": [
+            "navigation",
+            "resources",
+            "resource_count",
+            "total_count",
+            "initiator_types",
+            "truncated",
+            "url",
+            "title",
         ],
         "press": [
             "selector",
@@ -19236,6 +19317,37 @@ def _case_action_schema() -> dict[str, Any]:
             "waited_ms",
             "url",
         ],
+        "wait-dialog": [
+            "found",
+            "matched",
+            "timed_out",
+            "requested_text",
+            "match",
+            "modal_only",
+            "dialog_count",
+            "total_dialog_count",
+            "dialog",
+            "dialogs",
+            "waited_ms",
+            "url",
+        ],
+        "wait-frame": [
+            "found",
+            "matched",
+            "timed_out",
+            "requested_url",
+            "url_match",
+            "requested_text",
+            "text_match",
+            "readable_only",
+            "same_origin_only",
+            "frame_count",
+            "total_frame_count",
+            "frame",
+            "frames",
+            "waited_ms",
+            "url",
+        ],
         "wait-load-state": [
             "found",
             "state",
@@ -19368,6 +19480,7 @@ def _case_action_schema() -> dict[str, Any]:
         "cookie-get": {"action": "cookie-get", "name": "consent"},
         "cookie-set": {"action": "cookie-set", "name": "consent", "value": "yes"},
         "count": {"action": "count", "selector": ".result"},
+        "dialog-snapshot": {"action": "dialog-snapshot"},
         "double-click": {"action": "double-click", "selector": ".item"},
         "double-click-role": {
             "action": "double-click-role",
@@ -19389,6 +19502,7 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "focus": {"action": "focus", "selector": "input[name=email]"},
         "focus-role": {"action": "focus-role", "role": "textbox", "name": "Email"},
+        "frame-snapshot": {"action": "frame-snapshot", "selector": "iframe"},
         "form-snapshot": {"action": "form-snapshot", "selector": "form"},
         "get-attribute": {
             "action": "get-attribute",
@@ -19421,6 +19535,7 @@ def _case_action_schema() -> dict[str, Any]:
         "list-snapshot": {"action": "list-snapshot", "selector": "main"},
         "outline-snapshot": {"action": "outline-snapshot", "selector": "main"},
         "page-info": {"action": "page-info"},
+        "performance-snapshot": {"action": "performance-snapshot"},
         "press": {"action": "press", "selector": "input[name=q]", "key": "Enter"},
         "press-role": {
             "action": "press-role",
@@ -19514,6 +19629,17 @@ def _case_action_schema() -> dict[str, Any]:
             "name": "consent",
             "value": "yes",
             "match": "exact",
+        },
+        "wait-dialog": {
+            "action": "wait-dialog",
+            "text": "Confirm",
+            "modal_only": True,
+        },
+        "wait-frame": {
+            "action": "wait-frame",
+            "url": "/checkout",
+            "url_match": "contains",
+            "readable_only": True,
         },
         "wait-load-state": {"action": "wait-load-state", "state": "complete"},
         "wait-network-idle": {"action": "wait-network-idle", "idle_ms": 500},
@@ -19976,6 +20102,17 @@ def _run_browser_cli_case_step(
                 include_hidden=_case_step_bool(step, "include_hidden"),
             ),
         )
+    if action == "dialog-snapshot":
+        return _case_eval_expression(
+            page,
+            _dialog_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_controls=_case_step_int(step, "max_controls", default=30),
+                max_chars=_case_step_int(step, "max_chars", default=1000),
+            ),
+        )
     if action == "accessibility-snapshot":
         return _case_eval_expression(
             page,
@@ -20119,6 +20256,16 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
+    if action == "frame-snapshot":
+        return _case_eval_expression(
+            page,
+            _frame_snapshot_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_chars=_case_step_int(step, "max_chars", default=500),
+            ),
+        )
     if action == "form-snapshot":
         return _case_eval_expression(
             page,
@@ -20248,6 +20395,23 @@ def _run_browser_cli_case_step(
         )
     if action == "page-info":
         return _case_eval_expression(page, _page_info_expression())
+    if action == "performance-snapshot":
+        return _case_eval_expression(
+            page,
+            _performance_snapshot_expression(
+                max_resources=_case_step_int(step, "max_resources", default=50),
+                initiator_type=(
+                    str(step["initiator_type"])
+                    if step.get("initiator_type") is not None
+                    else None
+                ),
+                min_duration_ms=_case_step_float(
+                    step,
+                    "min_duration_ms",
+                    default=0,
+                ),
+            ),
+        )
     if action == "press":
         return _case_eval_expression(
             page,
@@ -20519,6 +20683,42 @@ def _run_browser_cli_case_step(
                 timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
                 poll_ms=_case_step_float(step, "poll_ms", default=250),
                 case_sensitive=case_sensitive,
+            ),
+        )
+    if action == "wait-dialog":
+        return _case_eval_expression(
+            page,
+            _wait_dialog_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_controls=_case_step_int(step, "max_controls", default=30),
+                max_chars=_case_step_int(step, "max_chars", default=1000),
+                text=str(step["text"]) if step.get("text") is not None else None,
+                match=str(step.get("match", "contains")),
+                case_sensitive=case_sensitive,
+                modal_only=_case_step_bool(step, "modal_only"),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
+            ),
+        )
+    if action == "wait-frame":
+        return _case_eval_expression(
+            page,
+            _wait_frame_expression(
+                selector=str(step["selector"]) if step.get("selector") else None,
+                include_hidden=_case_step_bool(step, "include_hidden"),
+                max_nodes=_case_step_int(step, "max_nodes", default=100),
+                max_chars=_case_step_int(step, "max_chars", default=500),
+                url=str(step["url"]) if step.get("url") is not None else None,
+                url_match=str(step.get("url_match", "contains")),
+                text=str(step["text"]) if step.get("text") is not None else None,
+                text_match=str(step.get("text_match", "contains")),
+                case_sensitive=case_sensitive,
+                readable_only=_case_step_bool(step, "readable_only"),
+                same_origin_only=_case_step_bool(step, "same_origin_only"),
+                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
+                poll_ms=_case_step_float(step, "poll_ms", default=100),
             ),
         )
     if action == "wait-load-state":

@@ -399,8 +399,9 @@ checks such as `page-info`, `wait-url`, `wait-title`, `wait-load-state`, and
 `wait-network-idle`, plus browser state checks such as `storage-get`,
 `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`,
 `cookie-set`, `cookie-delete`, `cookie-clear`, and `wait-cookie`; add
-`text-snapshot`, `link-snapshot`, `table-snapshot`, and `list-snapshot` before
-falling back to case-level `eval`.
+`text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
+`dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, and
+`performance-snapshot` before falling back to case-level `eval`.
 Add `expect` to steps that must fail the case when structured result fields do
 not match, for example `expect: {found: true}` after `wait-text`, `wait-storage`,
 or `wait-cookie`.

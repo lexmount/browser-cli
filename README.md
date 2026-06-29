@@ -877,9 +877,10 @@ browser-cli session close --session-id <session_id>
 browser state checks such as `storage-get`, `storage-set`, `storage-remove`,
 `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`,
 `cookie-clear`, and `wait-cookie`; plus content extraction snapshots such as
-`text-snapshot`, `link-snapshot`, `table-snapshot`, and `list-snapshot`, so
-agents can encode common smoke tests without dropping into custom browser
-scripts.
+`text-snapshot`, `link-snapshot`, `table-snapshot`, and `list-snapshot`, plus
+diagnostic surfaces such as `dialog-snapshot`, `wait-dialog`,
+`frame-snapshot`, `wait-frame`, and `performance-snapshot`, so agents can
+encode common smoke tests without dropping into custom browser scripts.
 
 Add `expect` to any case step when a structured result must make the run fail
 instead of merely being reported. For example:

@@ -2716,6 +2716,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "cookie-get",
         "cookie-set",
         "count",
+        "dialog-snapshot",
         "double-click",
         "double-click-role",
         "eval",
@@ -2726,6 +2727,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "focus",
         "focus-role",
         "form-snapshot",
+        "frame-snapshot",
         "get-attribute",
         "get-attribute-role",
         "get-text",
@@ -2742,6 +2744,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "open-url",
         "outline-snapshot",
         "page-info",
+        "performance-snapshot",
         "press",
         "press-role",
         "query",
@@ -2771,6 +2774,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "wait-attribute-role",
         "wait-cookie",
         "wait-count",
+        "wait-dialog",
+        "wait-frame",
         "wait-load-state",
         "wait-network-idle",
         "wait-selector",
@@ -2802,6 +2807,11 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["wait-state"] == ["selector", "state"]
     assert payload["required_fields"]["wait-state-role"] == ["role", "state"]
     assert payload["required_fields"]["wait-count"] == ["selector", "count"]
+    assert payload["required_fields"]["dialog-snapshot"] == []
+    assert payload["required_fields"]["wait-dialog"] == []
+    assert payload["required_fields"]["frame-snapshot"] == []
+    assert payload["required_fields"]["wait-frame"] == []
+    assert payload["required_fields"]["performance-snapshot"] == []
     assert payload["required_fields"]["get-attribute"] == ["selector", "name"]
     assert payload["required_fields"]["get-attribute-role"] == [
         "role",
@@ -2870,6 +2880,11 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "lists" in payload["actions"]["list-snapshot"]["result_fields"]
     assert "tables" in payload["actions"]["table-snapshot"]["result_fields"]
     assert "texts" in payload["actions"]["text-snapshot"]["result_fields"]
+    assert "dialogs" in payload["actions"]["dialog-snapshot"]["result_fields"]
+    assert "dialog" in payload["actions"]["wait-dialog"]["result_fields"]
+    assert "frames" in payload["actions"]["frame-snapshot"]["result_fields"]
+    assert "frame" in payload["actions"]["wait-frame"]["result_fields"]
+    assert "resources" in payload["actions"]["performance-snapshot"]["result_fields"]
     assert "steps" in payload["top_level"]["required_fields"]
     assert "session.create" in payload["top_level"]["target_options"]
     assert "field/path" in payload["top_level"]["step_options"]["expect"]
@@ -2888,7 +2903,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 84,
+        "action_count": 89,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -2908,6 +2923,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "cookie-get",
             "cookie-set",
             "count",
+            "dialog-snapshot",
             "double-click",
             "double-click-role",
             "eval",
@@ -2918,6 +2934,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "focus",
             "focus-role",
             "form-snapshot",
+            "frame-snapshot",
             "get-attribute",
             "get-attribute-role",
             "get-text",
@@ -2934,6 +2951,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "open-url",
             "outline-snapshot",
             "page-info",
+            "performance-snapshot",
             "press",
             "press-role",
             "query",
@@ -2963,6 +2981,8 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "wait-attribute-role",
             "wait-cookie",
             "wait-count",
+            "wait-dialog",
+            "wait-frame",
             "wait-load-state",
             "wait-network-idle",
             "wait-selector",
@@ -3184,6 +3204,40 @@ def test_case_validate_browser_state_actions_reject_invalid_choices(
     assert "steps[1].state must be one of 'absent', 'present'" in result.errors
     assert "steps[2].match must be one of 'contains', 'exact', 'regex'" in result.errors
     assert "steps[3].same_site must be one of 'lax', 'none', 'strict'" in result.errors
+
+
+def test_case_validate_diagnostic_wait_actions_reject_invalid_match_modes(
+    tmp_path: Any,
+) -> None:
+    invalid = tmp_path / "invalid-diagnostic-waits.json"
+    invalid.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {"action": "wait-dialog", "match": "glob"},
+                    {
+                        "action": "wait-frame",
+                        "url_match": "glob",
+                        "text_match": "wildcard",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_case_file(invalid)
+
+    assert result.valid is False
+    assert "steps[0].match must be one of 'contains', 'exact', 'regex'" in result.errors
+    assert (
+        "steps[1].url_match must be one of 'contains', 'exact', 'regex'"
+        in result.errors
+    )
+    assert (
+        "steps[1].text_match must be one of 'contains', 'exact', 'regex'"
+        in result.errors
+    )
 
 
 def test_case_validate_expect_requires_object_with_string_paths() -> None:
@@ -3490,10 +3544,15 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
             "clearable",
         ),
         ({"action": "count", "selector": ".item"}, "visible_count"),
+        ({"action": "dialog-snapshot"}, 'kind: "dialogs"'),
         ({"action": "focus", "selector": "input"}, "preventScroll"),
         (
             {"action": "focus-role", "role": "textbox", "name": "Email"},
             "preventScroll",
+        ),
+        (
+            {"action": "frame-snapshot", "selector": "iframe"},
+            'kind: "frames"',
         ),
         (
             {"action": "get-attribute", "selector": "button", "name": "disabled"},
@@ -3514,6 +3573,10 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
         ({"action": "link-snapshot", "selector": "main"}, 'kind: "links"'),
         ({"action": "list-snapshot", "selector": "main"}, 'kind: "lists"'),
         ({"action": "outline-snapshot", "selector": "main"}, "heading_count"),
+        (
+            {"action": "performance-snapshot", "max_resources": 5},
+            'kind: "performance"',
+        ),
         ({"action": "query", "selector": ".item"}, 'kind: "query"'),
         (
             {"action": "set-value", "selector": "input", "value": "hello"},
@@ -3535,6 +3598,24 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
             "requestedState",
         ),
         ({"action": "wait-count", "selector": ".item", "count": 2}, "requestedCount"),
+        (
+            {
+                "action": "wait-dialog",
+                "text": "Confirm",
+                "match": "exact",
+                "modal_only": True,
+            },
+            'kind: "dialog_wait"',
+        ),
+        (
+            {
+                "action": "wait-frame",
+                "url": "/checkout",
+                "url_match": "contains",
+                "readable_only": True,
+            },
+            'kind: "frame_wait"',
+        ),
         ({"action": "wait-network-idle"}, "network_idle"),
         (
             {"action": "wait-state", "selector": "button", "state": "enabled"},
