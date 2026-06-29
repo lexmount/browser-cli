@@ -195,6 +195,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`mouse_interaction`" in text
     assert "`double-click-role`" in text
     assert "`right-click-role`" in text
+    assert "`drag-role-to-role`" in text
     assert "`press-key`" in text
     assert "`state_waits`" in text
     assert "`wait-network`" in text

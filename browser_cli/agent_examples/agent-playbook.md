@@ -280,6 +280,7 @@ browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
 browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"
 browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"
 browser-cli action right-click --session-id <session_id> --selector ".row"
+browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
 browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"
 ```
 
@@ -446,7 +447,7 @@ active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
 actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
-`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `drag-to`, `scroll-into-view-role`, `interactive-snapshot`, and
+`fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `drag-role-to-role`, `drag-to`, `scroll-into-view-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 
 Use `action eval` only when the CLI does not yet expose the browser operation as

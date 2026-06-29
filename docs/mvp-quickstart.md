@@ -169,6 +169,7 @@ browser-cli action select-role --session-id <session_id> --role combobox --name 
 browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action get-text-role --session-id <session_id> --role alert --name "Saved"
 browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
+browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
 browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120
 ```

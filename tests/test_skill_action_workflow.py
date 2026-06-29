@@ -331,10 +331,11 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "choose semantic actions such as `click-label`, `click-role`, and `click-text`" in normalized
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "for mouse gestures use `mouse_interaction`" in normalized
-    assert (
-        "`double-click-role`, `right-click-role`, `drag-to`, `double-click`, or `right-click`"
-        in normalized
+    expected_mouse_actions = (
+        "`double-click-role`, `right-click-role`, `drag-role-to-role`, "
+        "`drag-to`, `double-click`, or `right-click`"
     )
+    assert expected_mouse_actions in normalized
     assert "and `click-text` before selectors" in normalized
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
@@ -680,6 +681,7 @@ def test_skill_includes_common_task_recipes() -> None:
     assert "browser-cli action guide --task mouse_interaction" in normalized
     assert "`double-click-role`" in normalized
     assert "`right-click-role`" in normalized
+    assert "`drag-role-to-role`" in normalized
     assert "`context_menu`" in normalized
     assert "Wait for deterministic state" in normalized
     assert "`wait-storage`" in normalized

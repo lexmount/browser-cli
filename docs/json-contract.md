@@ -131,8 +131,8 @@ The interactive targeting workflow exposes `selection_order`,
 `click-role`, `click-text`, or `click-index` from snapshot evidence instead of
 writing JavaScript.
 The mouse interaction workflow exposes role/name and selector `double-click`,
-`double-click-role`, `right-click`, `right-click-role`, and selector
-`drag-to` routes so agents can
+`double-click-role`, `right-click`, `right-click-role`, role/name
+`drag-role-to-role`, and selector `drag-to` routes so agents can
 open editors or context menus without custom event JavaScript.
 The form interaction workflow exposes form snapshots, labeled and role/name
 fill steps, role/name value read/wait verification, labeled select/check steps,
@@ -389,7 +389,7 @@ Default behavior:
   get-attribute, get-attribute-role, wait-attribute, wait-attribute-role, bounding-box, bounding-box-role,
   select-option, select-label, select-role, check, uncheck, check-label,
   check-role, uncheck-label, uncheck-role, click-label, click-text, click-role, click-index,
-  double-click, double-click-role, drag-to, right-click, right-click-role,
+  double-click, double-click-role, drag-role-to-role, drag-to, right-click, right-click-role,
   focus, focus-role, fill, fill-label, fill-role, get-value, get-value-role,
   wait-value, wait-value-role,
   link-snapshot, table-snapshot, list-snapshot, text-snapshot, dialog-snapshot,

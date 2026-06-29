@@ -779,6 +779,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "double-click-role" in mouse_steps[2]["selection_order"]
     assert "right-click-role" in mouse_steps[2]["selection_order"]
+    assert "drag-role-to-role" in mouse_steps[2]["selection_order"]
     assert "drag-to" in mouse_steps[2]["selection_order"]
     assert "result.double_clicked" in mouse_steps[3]["read"]
     assert "result.right_clicked" in mouse_steps[3]["read"]
@@ -1353,6 +1354,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.click-index",
         "action.double-click",
         "action.double-click-role",
+        "action.drag-role-to-role",
         "action.drag-to",
         "action.right-click",
         "action.right-click-role",
@@ -1516,6 +1518,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     drag_to = commands["action.drag-to"]
     assert drag_to["required_options"] == ["--selector", "--target-selector"]
     assert drag_to["browser_target"] == open_url["browser_target"]
+    drag_role = commands["action.drag-role-to-role"]
+    assert drag_role["required_options"] == ["--source-role", "--target-role"]
+    assert drag_role["browser_target"] == open_url["browser_target"]
+    assert any("--source-name" in option["flags"] for option in drag_role["options"])
+    assert any("--target-name" in option["flags"] for option in drag_role["options"])
     right_click = commands["action.right-click"]
     assert right_click["required_options"] == ["--selector"]
     right_click_role = commands["action.right-click-role"]
@@ -1720,11 +1727,12 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "interactive_targeting",
         "menu_keyboard_flow",
     ]
-    assert payload["guide"]["selection_order"][:4] == [
+    assert payload["guide"]["selection_order"][:5] == [
         "interactive-snapshot",
         "accessibility-snapshot",
         "double-click-role",
         "right-click-role",
+        "drag-role-to-role",
     ]
     assert any(
         "browser-cli action double-click-role" in command
@@ -1738,9 +1746,14 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli action drag-to" in command
         for command in payload["guide"]["preferred_commands"]
     )
+    assert any(
+        "browser-cli action drag-role-to-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
     assert "result.double_clicked" in payload["guide"]["read_fields"]
     assert "result.dragged" in payload["guide"]["read_fields"]
     assert "result.target_found" in payload["guide"]["read_fields"]
+    assert "result.target_role_found" in payload["guide"]["read_fields"]
     assert "result.context_menu" in payload["guide"]["read_fields"]
     assert "drag/drop" in payload["guide"]["custom_js_boundary"]
     assert payload["next_commands"] == [
@@ -2494,20 +2507,23 @@ def test_commands_catalog_returns_mouse_interaction_workflow(
     assert "guide.custom_js_boundary" in steps[0]["read"]
     assert "browser-cli action interactive-snapshot" in steps[1]["command"]
     assert steps[2]["agent_action"] is True
-    assert steps[2]["selection_order"][:4] == [
+    assert steps[2]["selection_order"][:5] == [
         "double-click-role",
         "right-click-role",
+        "drag-role-to-role",
         "double-click",
         "right-click",
     ]
     assert "drag-to" in steps[2]["selection_order"]
     assert "browser-cli action double-click-role" in steps[2]["preferred_commands"][0]
-    assert "browser-cli action right-click" in steps[2]["preferred_commands"][3]
-    assert "browser-cli action drag-to" in steps[2]["preferred_commands"][4]
+    assert "browser-cli action drag-role-to-role" in steps[2]["preferred_commands"][2]
+    assert "browser-cli action right-click" in steps[2]["preferred_commands"][4]
+    assert "browser-cli action drag-to" in steps[2]["preferred_commands"][5]
     assert steps[3]["agent_action"] is True
     assert "result.double_clicked" in steps[3]["read"]
     assert "result.dragged" in steps[3]["read"]
     assert "result.target_found" in steps[3]["read"]
+    assert "result.target_role_found" in steps[3]["read"]
     assert "result.context_menu" in steps[3]["read"]
     assert "browser-cli action wait-text" in steps[-1]["fallback_commands"][0]
     assert (
@@ -2830,6 +2846,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "dispatch-event",
         "double-click",
         "double-click-role",
+        "drag-role-to-role",
         "drag-to",
         "eval",
         "exists",
@@ -2915,6 +2932,10 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["click-role"] == ["role"]
     assert payload["required_fields"]["double-click"] == ["selector"]
     assert payload["required_fields"]["double-click-role"] == ["role"]
+    assert payload["required_fields"]["drag-role-to-role"] == [
+        "source_role",
+        "target_role",
+    ]
     assert payload["required_fields"]["drag-to"] == ["selector", "target_selector"]
     assert payload["required_fields"]["right-click"] == ["selector"]
     assert payload["required_fields"]["right-click-role"] == ["role"]
@@ -2980,6 +3001,14 @@ def test_case_schema_returns_supported_actions_and_fields(
         "text": "hello",
     }
     assert "double_clicked" in payload["actions"]["double-click-role"]["result_fields"]
+    assert "target_role_found" in payload["actions"]["drag-role-to-role"]["result_fields"]
+    assert payload["actions"]["drag-role-to-role"]["example_step"] == {
+        "action": "drag-role-to-role",
+        "source_role": "listitem",
+        "source_name": "Todo",
+        "target_role": "list",
+        "target_name": "Done",
+    }
     assert "dropped" in payload["actions"]["drag-to"]["result_fields"]
     assert "target_found" in payload["actions"]["drag-to"]["result_fields"]
     assert "context_menu" in payload["actions"]["right-click-role"]["result_fields"]
@@ -3050,7 +3079,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 101,
+        "action_count": 102,
         "supported_actions": [
             "accessibility-snapshot",
             "blur",
@@ -3077,6 +3106,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "dispatch-event",
             "double-click",
             "double-click-role",
+            "drag-role-to-role",
             "drag-to",
             "eval",
             "exists",
@@ -3841,6 +3871,16 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
                 "target_selector": ".dropzone",
             },
             "targetSelector",
+        ),
+        (
+            {
+                "action": "drag-role-to-role",
+                "source_role": "listitem",
+                "source_name": "Todo",
+                "target_role": "list",
+                "target_name": "Done",
+            },
+            "sourceRole",
         ),
         (
             {"action": "set-value", "selector": "input", "value": "hello"},
@@ -5255,6 +5295,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.click-index",
         "action.double-click",
         "action.double-click-role",
+        "action.drag-role-to-role",
         "action.drag-to",
         "action.right-click",
         "action.right-click-role",
@@ -5310,12 +5351,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 101
-    assert checks["case_schema"]["supported_action_count"] == 101
+    assert checks["case_schema"]["action_count"] == 102
+    assert checks["case_schema"]["supported_action_count"] == 102
     for case_action in (
         "fill-label",
         "click-label",
         "click-role",
+        "drag-role-to-role",
         "interactive-only-snapshot",
         "network-snapshot",
         "wait-network",
@@ -11650,6 +11692,73 @@ def test_action_set_file_input_missing_file_is_json(
         (
             [
                 "action",
+                "drag-role-to-role",
+                "--session-id",
+                "s1",
+                "--source-role",
+                "listitem",
+                "--source-name",
+                "Todo",
+                "--target-role",
+                "list",
+                "--target-name",
+                "Done",
+            ],
+            "action.drag-role-to-role",
+            {
+                "source_role": "listitem",
+                "source_name": "Todo",
+                "target_role": "list",
+                "target_name": "Done",
+                "found": True,
+                "role_found": True,
+                "target_found": True,
+                "target_role_found": True,
+                "dragged": True,
+                "dropped": True,
+                "source_candidate_count": 1,
+                "target_candidate_count": 1,
+                "events": [
+                    "mousedown",
+                    "dragstart",
+                    "mousemove",
+                    "dragenter",
+                    "dragover",
+                    "drop",
+                    "dragend",
+                    "mouseup",
+                ],
+            },
+            {
+                "source_role": "listitem",
+                "source_name": "Todo",
+                "target_role": "list",
+                "target_name": "Done",
+                "found": True,
+                "role_found": True,
+                "target_found": True,
+                "target_role_found": True,
+                "dragged": True,
+                "dropped": True,
+                "source_candidate_count": 1,
+                "target_candidate_count": 1,
+                "events": [
+                    "mousedown",
+                    "dragstart",
+                    "mousemove",
+                    "dragenter",
+                    "dragover",
+                    "drop",
+                    "dragend",
+                    "mouseup",
+                ],
+                "url": "https://example.test",
+                "fallback": "cdp",
+            },
+        ),
+        (
+            [
+                "action",
                 "right-click",
                 "--session-id",
                 "s1",
@@ -11847,6 +11956,12 @@ def test_eval_backed_action_commands_emit_structured_results(
         assert "dblclick" in observed["expression"]
     if command == "action.drag-to":
         assert "targetSelector" in observed["expression"]
+        assert "dragstart" in observed["expression"]
+        assert "drop" in observed["expression"]
+    if command == "action.drag-role-to-role":
+        assert 'const sourceRole = "listitem"' in observed["expression"]
+        assert 'const targetRole = "list"' in observed["expression"]
+        assert 'if (tag === "li") return "listitem";' in observed["expression"]
         assert "dragstart" in observed["expression"]
         assert "drop" in observed["expression"]
     if command in {"action.right-click", "action.right-click-role"}:

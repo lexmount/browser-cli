@@ -611,6 +611,7 @@ browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
+browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
 browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
@@ -650,7 +651,7 @@ the boundary for custom JavaScript.
 `dispatch-event`, `submit`, `scroll`, `scroll-into-view`, `scroll-into-view-role`, `bounding-box`, `bounding-box-role`, `inspect`,
 `select-option`, `select-label`, `select-role`, `check`, `uncheck`, `check-label`,
 `check-role`, `uncheck-label`, `uncheck-role`, `hover`, `hover-role`, `press`, `press-role`, `press-key`, `click-label`, `click-text`, `click-role`,
-`double-click`, `double-click-role`, `drag-to`, `right-click`, `right-click-role`,
+`double-click`, `double-click-role`, `drag-role-to-role`, `drag-to`, `right-click`, `right-click-role`,
 `click-index`, `fill`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
@@ -994,8 +995,8 @@ Common agent recipes:
   `list-snapshot`, or `press-key` before custom JavaScript.
 - Mouse gestures: run `browser-cli commands --workflow mouse_interaction` and
   `browser-cli action guide --task mouse_interaction`, then prefer
-  `double-click-role`, `right-click-role`, or selector `drag-to`, falling back to selector
-  `double-click` or `right-click`; verify with `page-info`, `wait-text`,
+  `double-click-role`, `right-click-role`, or `drag-role-to-role`, then fall
+  back to selector `drag-to`, `double-click`, or `right-click`; verify with `page-info`, `wait-text`,
   `interactive-snapshot`, or `wait-url`.
 - Navigation: run `browser-cli commands --workflow navigation_flow` and
   `browser-cli action guide --task navigation_flow`, then use `open-url`,
