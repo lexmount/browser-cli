@@ -217,6 +217,106 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.console-snapshot",
     "action.wait-console",
 )
+DOCTOR_REQUIRED_CASE_ACTIONS = (
+    "accessibility-snapshot",
+    "blur",
+    "blur-role",
+    "bounding-box",
+    "bounding-box-role",
+    "check",
+    "check-label",
+    "check-role",
+    "clear",
+    "clear-role",
+    "click",
+    "click-index",
+    "click-role",
+    "click-text",
+    "console-snapshot",
+    "cookie-clear",
+    "cookie-delete",
+    "cookie-get",
+    "cookie-set",
+    "count",
+    "dialog-snapshot",
+    "dispatch-event",
+    "double-click",
+    "double-click-role",
+    "eval",
+    "exists",
+    "exists-role",
+    "fill-label",
+    "fill-role",
+    "focus",
+    "focus-role",
+    "form-snapshot",
+    "frame-snapshot",
+    "get-attribute",
+    "get-attribute-role",
+    "get-text",
+    "get-text-role",
+    "get-value",
+    "get-value-role",
+    "hover",
+    "hover-role",
+    "inspect",
+    "interactive-only-snapshot",
+    "interactive-snapshot",
+    "link-snapshot",
+    "list-snapshot",
+    "network-snapshot",
+    "open-url",
+    "outline-snapshot",
+    "page-info",
+    "performance-snapshot",
+    "press",
+    "press-key",
+    "press-role",
+    "query",
+    "right-click",
+    "right-click-role",
+    "screenshot",
+    "scroll",
+    "scroll-into-view",
+    "scroll-into-view-role",
+    "select-label",
+    "select-option",
+    "select-role",
+    "set-file-input",
+    "set-value",
+    "snapshot",
+    "storage-clear",
+    "storage-get",
+    "storage-remove",
+    "storage-set",
+    "submit",
+    "table-snapshot",
+    "text-snapshot",
+    "type",
+    "uncheck",
+    "uncheck-label",
+    "uncheck-role",
+    "wait-attribute",
+    "wait-attribute-role",
+    "wait-console",
+    "wait-cookie",
+    "wait-count",
+    "wait-dialog",
+    "wait-frame",
+    "wait-load-state",
+    "wait-network",
+    "wait-network-idle",
+    "wait-role",
+    "wait-selector",
+    "wait-state",
+    "wait-state-role",
+    "wait-storage",
+    "wait-text",
+    "wait-title",
+    "wait-url",
+    "wait-value",
+    "wait-value-role",
+)
 DOCTOR_REQUIRED_REFERENCES = ("action_playbook",)
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
@@ -3482,6 +3582,135 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         missing_required_workflows=[],
         required_workflow_steps=required_workflow_steps,
         missing_required_workflow_steps={},
+    )
+
+
+def _doctor_invalid_case_action_schemas(
+    actions: dict[str, Any],
+) -> list[dict[str, Any]]:
+    invalid: list[dict[str, Any]] = []
+    for action in DOCTOR_REQUIRED_CASE_ACTIONS:
+        schema = actions.get(action)
+        if not isinstance(schema, dict):
+            continue
+
+        problems: list[str] = []
+        for field in (
+            "required_fields",
+            "required_one_of",
+            "optional_fields",
+            "result_fields",
+        ):
+            if not isinstance(schema.get(field), list):
+                problems.append(f"{field}_not_list")
+        example = schema.get("example_step")
+        if not isinstance(example, dict):
+            problems.append("example_step_not_object")
+        elif example.get("action") != action:
+            problems.append("example_step_action_mismatch")
+
+        if problems:
+            invalid.append(
+                {
+                    "action": action,
+                    "problems": problems,
+                }
+            )
+    return invalid
+
+
+def _doctor_case_schema_check() -> dict[str, Any]:
+    try:
+        actions = _case_action_schema()
+        supported_actions = set(BROWSER_CLI_SUPPORTED_CASE_ACTIONS)
+    except Exception as exc:
+        return _doctor_check(
+            "case_schema",
+            "warn",
+            "Case schema could not be built.",
+            error=exc.__class__.__name__,
+            required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+            fix=_doctor_fix(
+                "verify_case_schema",
+                commands=[
+                    "browser-cli case schema --names-only",
+                    "browser-cli case schema --action fill-label",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on case schema before writing repeatable browser tasks.",
+                    "Upgrade or reinstall browser-cli if case schema discovery fails.",
+                ],
+            ),
+        )
+
+    action_names = set(actions) if isinstance(actions, dict) else set()
+    missing_supported_actions = [
+        action
+        for action in DOCTOR_REQUIRED_CASE_ACTIONS
+        if action not in supported_actions
+    ]
+    missing_action_schemas = [
+        action for action in DOCTOR_REQUIRED_CASE_ACTIONS if action not in action_names
+    ]
+    missing_required_case_actions = [
+        action
+        for action in DOCTOR_REQUIRED_CASE_ACTIONS
+        if action in set(missing_supported_actions) | set(missing_action_schemas)
+    ]
+    invalid_action_schemas = (
+        _doctor_invalid_case_action_schemas(actions)
+        if isinstance(actions, dict)
+        else [
+            {
+                "action": action,
+                "problems": ["case_schema_not_object"],
+            }
+            for action in DOCTOR_REQUIRED_CASE_ACTIONS
+        ]
+    )
+
+    if missing_supported_actions or missing_action_schemas or invalid_action_schemas:
+        return _doctor_check(
+            "case_schema",
+            "warn",
+            "Case schema is missing actions or schema fields expected by the Codex Skill.",
+            schema_version=1,
+            action_count=len(action_names),
+            supported_action_count=len(supported_actions),
+            required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+            missing_required_case_actions=missing_required_case_actions,
+            missing_supported_actions=missing_supported_actions,
+            missing_action_schemas=missing_action_schemas,
+            invalid_action_schemas=invalid_action_schemas,
+            fix=_doctor_fix(
+                "upgrade_browser_cli_case_schema",
+                commands=[
+                    "browser-cli case schema --names-only",
+                    "browser-cli case schema --action fill-label",
+                    "browser-cli case schema --action network-snapshot",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Upgrade browser-cli before relying on case files for the full Codex Skill workflow.",
+                    "Use `browser-cli case schema --names-only` to inspect repeatable case actions.",
+                    "Use `browser-cli case schema --action <action>` to inspect required fields, result fields, and example steps.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "case_schema",
+        "pass",
+        "Case schema includes the repeatable actions expected by the Codex Skill.",
+        schema_version=1,
+        action_count=len(action_names),
+        supported_action_count=len(supported_actions),
+        required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+        missing_required_case_actions=[],
+        missing_supported_actions=[],
+        missing_action_schemas=[],
+        invalid_action_schemas=[],
     )
 
 
@@ -16632,6 +16861,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     )
 
     checks.append(_doctor_command_catalog_check())
+    checks.append(_doctor_case_schema_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())
 
