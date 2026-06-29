@@ -18922,6 +18922,10 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         (check for check in checks if check.get("name") == "api_connectivity"),
         None,
     )
+    browser_smoke_session = next(
+        (check for check in checks if check.get("name") == "browser_smoke_session"),
+        None,
+    )
     data: dict[str, Any] = {
         "ok": not failed,
         "command": command,
@@ -18944,6 +18948,8 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "repair_plan": _doctor_repair_plan(checks),
         "checks": checks,
     }
+    if browser_smoke_session is not None:
+        data["browser_smoke_session"] = browser_smoke_session
     if failed:
         data.update(
             {
