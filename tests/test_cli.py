@@ -5714,6 +5714,28 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["case_schema"]["missing_supported_actions"] == []
     assert checks["case_schema"]["missing_action_schemas"] == []
     assert checks["case_schema"]["missing_case_scaffold_templates"] == []
+    checked_scaffolds = {
+        item["template"]: item
+        for item in checks["case_schema"]["checked_case_scaffold_templates"]
+    }
+    assert sorted(checked_scaffolds) == [
+        "form-fill",
+        "interactive-targeting",
+        "page-inspection",
+    ]
+    assert all(item["valid"] for item in checked_scaffolds.values())
+    assert all(item["output_format"] == "json" for item in checked_scaffolds.values())
+    assert checked_scaffolds["interactive-targeting"]["actions"] == [
+        "open-url",
+        "eval",
+        "interactive-snapshot",
+        "accessibility-snapshot",
+        "click-role",
+        "wait-text",
+        "get-text",
+        "screenshot",
+    ]
+    assert checks["case_schema"]["invalid_case_scaffold_templates"] == []
     assert checks["case_schema"]["invalid_action_schemas"] == []
     assert checks["auth_export_env_contract"]["status"] == "pass"
     assert checks["auth_export_env_contract"]["required_fields"] == [
@@ -6362,6 +6384,69 @@ def test_doctor_warns_when_case_schema_misses_scaffold_templates(
         "form-fill",
         "interactive-targeting",
     ]
+    assert [
+        item["template"] for item in case_schema["checked_case_scaffold_templates"]
+    ] == ["page-inspection"]
+    assert case_schema["invalid_case_scaffold_templates"] == []
+    assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
+    assert (
+        "browser-cli case scaffold --template interactive-targeting --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_case_scaffold_template_is_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    original_scaffold_spec = cli_module._case_scaffold_spec
+
+    def fake_scaffold_spec(args: Any) -> dict[str, Any]:
+        if args.template == "form-fill":
+            return {
+                "name": "form-fill",
+                "steps": [
+                    {
+                        "action": "fill-label",
+                    }
+                ],
+            }
+        return original_scaffold_spec(args)
+
+    monkeypatch.setattr("browser_cli.cli._case_scaffold_spec", fake_scaffold_spec)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "case_schema" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    case_schema = checks["case_schema"]
+    assert case_schema["status"] == "warn"
+    assert case_schema["missing_case_scaffold_templates"] == []
+    invalid_templates = case_schema["invalid_case_scaffold_templates"]
+    assert [item["template"] for item in invalid_templates] == ["form-fill"]
+    assert invalid_templates[0]["valid"] is False
+    assert "steps[0] missing required field 'label'" in invalid_templates[0]["errors"]
+    assert "steps[0] missing required field 'text'" in invalid_templates[0]["errors"]
+    checked_scaffolds = {
+        item["template"]: item
+        for item in case_schema["checked_case_scaffold_templates"]
+    }
+    assert checked_scaffolds["form-fill"]["valid"] is False
+    assert checked_scaffolds["page-inspection"]["valid"] is True
+    assert checked_scaffolds["interactive-targeting"]["valid"] is True
     assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
     assert (
         "browser-cli case scaffold --template interactive-targeting --format json"

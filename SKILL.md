@@ -162,7 +162,9 @@ what to do:
   `missing_required_commands`, `missing_required_agent_entrypoints`, `invalid_workflow_command_references`, and `invalid_agent_entrypoint_command_references`; if `action_guides` warns, inspect `missing_required_action_guides`, `invalid_action_guides`, and `invalid_guide_command_references`; follow its `fix` guidance before relying on
   the full Skill workflow.
 - `case_schema` with `status: "warn"`: inspect `missing_required_case_actions`,
-  `missing_case_scaffold_templates`, `missing_action_schemas`, `invalid_action_schemas`; reinstall if needed.
+  `missing_case_scaffold_templates`, `checked_case_scaffold_templates`,
+  `invalid_case_scaffold_templates`, `missing_action_schemas`,
+  `invalid_action_schemas`; reinstall if needed.
 - `agent_references` with `status: "warn"`: run
   `browser-cli reference get --id usable_status`,
   `browser-cli reference get --id action_playbook`, or follow its `fix`

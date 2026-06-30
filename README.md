@@ -940,8 +940,10 @@ expected semantic, state, content, storage/cookie, and diagnostic actions; it
 reports `required_case_actions`,
 `required_case_scaffold_templates`, `missing_required_case_actions`,
 `missing_supported_actions`, `missing_action_schemas`,
-`missing_case_scaffold_templates`, and `invalid_action_schemas` with upgrade
-guidance when the installed CLI is too old for case-based smoke tests.
+`missing_case_scaffold_templates`, `checked_case_scaffold_templates`,
+`invalid_case_scaffold_templates`, and `invalid_action_schemas` with upgrade
+guidance when the installed CLI is too old or its packaged starter cases no
+longer validate for case-based smoke tests.
 The `connect_from_codex_contract` check verifies that browser.lexmount.cn
 handoff fields such as capabilities, `browser_site_acceptance_tests`, token
 lifecycle, runtime auth, and device-code API contracts are still present.

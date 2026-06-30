@@ -4536,6 +4536,76 @@ def _doctor_invalid_case_action_schemas(
     return invalid
 
 
+def _doctor_case_scaffold_args(template: str) -> argparse.Namespace:
+    return argparse.Namespace(
+        template=template,
+        name=None,
+        url=None,
+        selector=None,
+        text="lexmount browser",
+        browser_mode="light",
+        max_chars=2000,
+        output_format="json",
+        output=None,
+        overwrite=False,
+    )
+
+
+def _doctor_case_scaffold_checks(
+    available_templates: set[str],
+) -> list[dict[str, Any]]:
+    checked: list[dict[str, Any]] = []
+    for template in DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES:
+        if template not in available_templates:
+            continue
+        try:
+            spec = _case_scaffold_spec(_doctor_case_scaffold_args(template))
+            if not isinstance(spec, dict):
+                raise TypeError("case scaffold spec must be an object")
+            errors = _validate_browser_cli_case_spec(spec)
+            content = _serialize_case_spec(
+                command="doctor.case_schema",
+                spec=spec,
+                output_format="json",
+            )
+            decoded = json.loads(content)
+            if isinstance(decoded, dict):
+                round_trip_errors = _validate_browser_cli_case_spec(decoded)
+            else:
+                round_trip_errors = ["serialized case must be an object"]
+            errors.extend(f"serialized.{error}" for error in round_trip_errors)
+            steps = spec.get("steps", [])
+            actions = [
+                str(step.get("action"))
+                for step in steps
+                if isinstance(step, dict) and step.get("action") is not None
+            ]
+            checked.append(
+                {
+                    "template": template,
+                    "valid": not errors,
+                    "errors": errors,
+                    "step_count": len(steps) if isinstance(steps, list) else 0,
+                    "actions": actions,
+                    "output_format": "json",
+                    "content_length": len(content),
+                }
+            )
+        except Exception as exc:
+            checked.append(
+                {
+                    "template": template,
+                    "valid": False,
+                    "errors": [f"{exc.__class__.__name__}: {exc}"],
+                    "step_count": 0,
+                    "actions": [],
+                    "output_format": "json",
+                    "content_length": 0,
+                }
+            )
+    return checked
+
+
 def _doctor_case_schema_check() -> dict[str, Any]:
     try:
         actions = _case_action_schema()
@@ -4550,6 +4620,8 @@ def _doctor_case_schema_check() -> dict[str, Any]:
             required_case_scaffold_templates=list(
                 DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
             ),
+            checked_case_scaffold_templates=[],
+            invalid_case_scaffold_templates=[],
             fix=_doctor_fix(
                 "verify_case_schema",
                 commands=[
@@ -4584,6 +4656,10 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         for template in DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
         if template not in scaffold_templates
     ]
+    checked_case_scaffold_templates = _doctor_case_scaffold_checks(scaffold_templates)
+    invalid_case_scaffold_templates = [
+        result for result in checked_case_scaffold_templates if not result["valid"]
+    ]
     invalid_action_schemas = (
         _doctor_invalid_case_action_schemas(actions)
         if isinstance(actions, dict)
@@ -4600,12 +4676,13 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         missing_supported_actions
         or missing_action_schemas
         or missing_case_scaffold_templates
+        or invalid_case_scaffold_templates
         or invalid_action_schemas
     ):
         return _doctor_check(
             "case_schema",
             "warn",
-            "Case schema is missing actions, scaffold templates, or schema fields expected by the Codex Skill.",
+            "Case schema is missing actions, scaffold templates, valid starter cases, or schema fields expected by the Codex Skill.",
             schema_version=1,
             action_count=len(action_names),
             supported_action_count=len(supported_actions),
@@ -4617,6 +4694,8 @@ def _doctor_case_schema_check() -> dict[str, Any]:
             missing_supported_actions=missing_supported_actions,
             missing_action_schemas=missing_action_schemas,
             missing_case_scaffold_templates=missing_case_scaffold_templates,
+            checked_case_scaffold_templates=checked_case_scaffold_templates,
+            invalid_case_scaffold_templates=invalid_case_scaffold_templates,
             invalid_action_schemas=invalid_action_schemas,
             fix=_doctor_fix(
                 "upgrade_browser_cli_case_schema",
@@ -4631,7 +4710,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "Upgrade browser-cli before relying on case files for the full Codex Skill workflow.",
                     "Use `browser-cli case schema --names-only` to inspect repeatable case actions.",
                     "Use `browser-cli case schema --action <action>` to inspect required fields, result fields, and example steps.",
-                    "Use `browser-cli case scaffold --template <template>` to verify packaged starter cases are available.",
+                    "Use `browser-cli case scaffold --template <template> --format json` to verify packaged starter cases are valid.",
                 ],
             ),
         )
@@ -4639,7 +4718,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
     return _doctor_check(
         "case_schema",
         "pass",
-        "Case schema includes the repeatable actions expected by the Codex Skill.",
+        "Case schema includes the repeatable actions and valid scaffold templates expected by the Codex Skill.",
         schema_version=1,
         action_count=len(action_names),
         supported_action_count=len(supported_actions),
@@ -4649,6 +4728,8 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         missing_supported_actions=[],
         missing_action_schemas=[],
         missing_case_scaffold_templates=[],
+        checked_case_scaffold_templates=checked_case_scaffold_templates,
+        invalid_case_scaffold_templates=[],
         invalid_action_schemas=[],
     )
 
