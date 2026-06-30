@@ -417,9 +417,11 @@ Default behavior:
   accessibility snapshot, and interactive-only snapshot.
 - `doctor` reports an `action_guides` check with
   `required_action_guides`, `missing_required_action_guides`,
-  `required_guide_fields`, `invalid_action_guides`, `schema_version`, and
-  `guide_count` so agents can detect an installed CLI whose task-specific
-  guides are too old to route actions before custom JavaScript.
+  `required_guide_fields`, `invalid_action_guides`,
+  `invalid_guide_command_references`, `schema_version`, and `guide_count` so
+  agents can detect an installed CLI whose task-specific guides are too old or
+  reference commands missing from the parser-backed catalog before custom
+  JavaScript.
 - `doctor` reports a `case_schema` check with `required_case_actions`,
   `required_case_scaffold_templates`, `missing_required_case_actions`,
   `missing_supported_actions`, `missing_action_schemas`,

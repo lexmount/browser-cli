@@ -320,6 +320,7 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
     assert "`missing_required_action_guides`" in text
     assert "`required_guide_fields`" in text
     assert "`invalid_action_guides`" in text
+    assert "`invalid_guide_command_references`" in text
     assert "`required_case_actions`" in text
     assert "`required_case_scaffold_templates`" in text
     assert "`missing_case_scaffold_templates`" in text

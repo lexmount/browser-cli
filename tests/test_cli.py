@@ -5555,6 +5555,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "custom_js_boundary",
     ]
     assert checks["action_guides"]["invalid_action_guides"] == []
+    assert checks["action_guides"]["invalid_guide_command_references"] == []
     for command_name in (
         "action.press",
         "action.press-role",
@@ -6127,8 +6128,76 @@ def test_doctor_warns_when_action_guides_are_incomplete(
             ],
         }
     ]
+    assert action_guides["invalid_guide_command_references"] == []
     assert action_guides["fix"]["code"] == "upgrade_browser_cli_action_guides"
     assert "browser-cli action guide --names-only" in payload["repair_plan"]["commands"]
+    assert (
+        "browser-cli action guide --task interactive_targeting"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_action_guides_reference_unknown_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    guides = {
+        task: dict(guide) for task, guide in cli_module._action_guide_tasks().items()
+    }
+    guides["interactive_targeting"] = {
+        **guides["interactive_targeting"],
+        "preferred_commands": [
+            *guides["interactive_targeting"]["preferred_commands"],
+            "browser-cli action missing-action --session-id <session_id>",
+        ],
+    }
+    monkeypatch.setattr("browser_cli.cli._action_guide_tasks", lambda: guides)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "action_guides" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    action_guides = checks["action_guides"]
+    assert action_guides["status"] == "warn"
+    assert action_guides["missing_required_action_guides"] == []
+    assert action_guides["invalid_action_guides"] == [
+        {
+            "task": "interactive_targeting",
+            "problems": ["unknown_command_references"],
+            "invalid_command_references": [
+                {
+                    "field": "preferred_commands",
+                    "command": (
+                        "browser-cli action missing-action --session-id <session_id>"
+                    ),
+                    "command_name": "action.missing-action",
+                }
+            ],
+        }
+    ]
+    assert action_guides["invalid_guide_command_references"] == [
+        {
+            "task": "interactive_targeting",
+            "field": "preferred_commands",
+            "command": "browser-cli action missing-action --session-id <session_id>",
+            "command_name": "action.missing-action",
+        }
+    ]
+    assert action_guides["fix"]["code"] == "upgrade_browser_cli_action_guides"
     assert (
         "browser-cli action guide --task interactive_targeting"
         in payload["repair_plan"]["commands"]

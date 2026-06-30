@@ -4146,6 +4146,7 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
 
 def _doctor_invalid_action_guides(
     guides: dict[str, Any],
+    command_names: set[str],
 ) -> list[dict[str, Any]]:
     invalid: list[dict[str, Any]] = []
     list_fields = {
@@ -4159,6 +4160,12 @@ def _doctor_invalid_action_guides(
         "read_fields",
     }
     text_fields = {"purpose", "custom_js_boundary"}
+    command_fields = {
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+    }
     workflow_names = set(DOCTOR_REQUIRED_WORKFLOWS)
 
     for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS:
@@ -4193,10 +4200,69 @@ def _doctor_invalid_action_guides(
             if unknown_workflows:
                 problems.append("related_workflows_unknown")
 
+        invalid_command_references: list[dict[str, Any]] = []
+        for field in command_fields:
+            commands = guide.get(field)
+            if not isinstance(commands, list):
+                continue
+            for command in commands:
+                if not isinstance(command, str):
+                    continue
+                command_name = _browser_cli_command_reference_name(command)
+                if command_name is None:
+                    continue
+                if command_name not in command_names:
+                    invalid_command_references.append(
+                        {
+                            "field": field,
+                            "command": command,
+                            "command_name": command_name,
+                        }
+                    )
+        if invalid_command_references:
+            problems.append("unknown_command_references")
+
         if problems:
-            invalid.append({"task": task, "problems": problems})
+            item: dict[str, Any] = {"task": task, "problems": problems}
+            if invalid_command_references:
+                item["invalid_command_references"] = invalid_command_references
+            invalid.append(item)
 
     return invalid
+
+
+def _browser_cli_command_reference_name(command: str) -> str | None:
+    text = command.strip()
+    if not text.startswith("browser-cli "):
+        return None
+    try:
+        tokens = shlex.split(text)
+    except ValueError:
+        tokens = text.split()
+    if len(tokens) < 2 or tokens[0] != "browser-cli":
+        return None
+    group = tokens[1]
+    if group in {"commands", "doctor", "version"}:
+        return group
+    if group in {"action", "auth", "case", "context", "example", "reference", "session"}:
+        if len(tokens) < 3:
+            return None
+        return f"{group}.{tokens[2]}"
+    return group
+
+
+def _doctor_action_guide_command_names() -> set[str]:
+    try:
+        catalog = _command_catalog()
+    except Exception:
+        return set(DOCTOR_REQUIRED_COMMANDS)
+    command_names = {
+        str(command.get("name"))
+        for command in catalog.get("commands", [])
+        if isinstance(command, dict) and command.get("name")
+    }
+    command_names.update(COMMAND_ALIASES)
+    return command_names
 
 
 def _doctor_action_guides_check() -> dict[str, Any]:
@@ -4228,8 +4294,9 @@ def _doctor_action_guides_check() -> dict[str, Any]:
     missing_action_guides = [
         task for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS if task not in guide_names
     ]
+    command_names = _doctor_action_guide_command_names()
     invalid_action_guides = (
-        _doctor_invalid_action_guides(guides)
+        _doctor_invalid_action_guides(guides, command_names)
         if isinstance(guides, dict)
         else [
             {
@@ -4239,6 +4306,15 @@ def _doctor_action_guides_check() -> dict[str, Any]:
             for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS
         ]
     )
+    invalid_guide_command_references = [
+        {
+            "task": guide["task"],
+            **reference,
+        }
+        for guide in invalid_action_guides
+        for reference in guide.get("invalid_command_references", [])
+        if isinstance(reference, dict)
+    ]
 
     if missing_action_guides or invalid_action_guides:
         return _doctor_check(
@@ -4251,6 +4327,7 @@ def _doctor_action_guides_check() -> dict[str, Any]:
             missing_required_action_guides=missing_action_guides,
             required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
             invalid_action_guides=invalid_action_guides,
+            invalid_guide_command_references=invalid_guide_command_references,
             fix=_doctor_fix(
                 "upgrade_browser_cli_action_guides",
                 commands=[
@@ -4277,6 +4354,7 @@ def _doctor_action_guides_check() -> dict[str, Any]:
         missing_required_action_guides=[],
         required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
         invalid_action_guides=[],
+        invalid_guide_command_references=[],
     )
 
 

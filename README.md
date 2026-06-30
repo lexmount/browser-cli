@@ -918,8 +918,11 @@ accessibility snapshot, interactive-only snapshot, and diagnostic commands. The
 `interactive_targeting`, `form_interaction`, `content_extraction`,
 `browser_state_management`, and `page_diagnostics`; it reports
 `missing_required_action_guides`, `required_guide_fields`, and
-`invalid_action_guides` when an installed CLI is too old to guide agents away
-from custom Playwright/JavaScript. The `case_schema` check verifies that repeatable case files can use the Skill's
+`invalid_action_guides`, plus `invalid_guide_command_references` when a guide
+points at a command not present in the parser-backed catalog. This tells agents
+when an installed CLI is too old to guide them away from custom
+Playwright/JavaScript.
+The `case_schema` check verifies that repeatable case files can use the Skill's
 expected semantic, state, content, storage/cookie, and diagnostic actions; it
 reports `required_case_actions`,
 `required_case_scaffold_templates`, `missing_required_case_actions`,
