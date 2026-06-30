@@ -438,6 +438,34 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "state_waits",
     "page_diagnostics",
 )
+DOCTOR_REQUIRED_ACTION_GUIDE_TASKS = (
+    "browser_state_management",
+    "content_extraction",
+    "dialog_frame_handling",
+    "file_upload",
+    "form_interaction",
+    "interactive_targeting",
+    "link_navigation",
+    "menu_keyboard_flow",
+    "mouse_interaction",
+    "navigation_flow",
+    "page_diagnostics",
+    "semantic_waits",
+    "state_waits",
+    "visual_capture",
+)
+DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS = (
+    "purpose",
+    "related_workflows",
+    "when_to_use",
+    "selection_order",
+    "inspect_commands",
+    "preferred_commands",
+    "fallback_commands",
+    "verify_commands",
+    "read_fields",
+    "custom_js_boundary",
+)
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
         "inspect_skill_positioning",
@@ -4113,6 +4141,142 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         missing_required_workflows=[],
         required_workflow_steps=required_workflow_steps,
         missing_required_workflow_steps={},
+    )
+
+
+def _doctor_invalid_action_guides(
+    guides: dict[str, Any],
+) -> list[dict[str, Any]]:
+    invalid: list[dict[str, Any]] = []
+    list_fields = {
+        "related_workflows",
+        "when_to_use",
+        "selection_order",
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+        "read_fields",
+    }
+    text_fields = {"purpose", "custom_js_boundary"}
+    workflow_names = set(DOCTOR_REQUIRED_WORKFLOWS)
+
+    for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS:
+        guide = guides.get(task)
+        if not isinstance(guide, dict):
+            if guide is not None:
+                invalid.append({"task": task, "problems": ["guide_not_object"]})
+            continue
+
+        problems: list[str] = []
+        for field in DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS:
+            if field not in guide:
+                problems.append(f"{field}_missing")
+                continue
+            value = guide.get(field)
+            if field in list_fields and not isinstance(value, list):
+                problems.append(f"{field}_not_list")
+            elif field in list_fields and not value:
+                problems.append(f"{field}_empty")
+            elif field in text_fields and not (
+                isinstance(value, str) and value.strip()
+            ):
+                problems.append(f"{field}_empty")
+
+        related_workflows = guide.get("related_workflows")
+        if isinstance(related_workflows, list):
+            unknown_workflows = [
+                str(workflow)
+                for workflow in related_workflows
+                if str(workflow) not in workflow_names
+            ]
+            if unknown_workflows:
+                problems.append("related_workflows_unknown")
+
+        if problems:
+            invalid.append({"task": task, "problems": problems})
+
+    return invalid
+
+
+def _doctor_action_guides_check() -> dict[str, Any]:
+    try:
+        guides = _action_guide_tasks()
+    except Exception as exc:
+        return _doctor_check(
+            "action_guides",
+            "warn",
+            "Action guide catalog could not be built.",
+            error=exc.__class__.__name__,
+            required_action_guides=list(DOCTOR_REQUIRED_ACTION_GUIDE_TASKS),
+            required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
+            fix=_doctor_fix(
+                "verify_action_guide_catalog",
+                commands=[
+                    "browser-cli action guide --names-only",
+                    "browser-cli action guide --task interactive_targeting",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on action guides before choosing browser actions.",
+                    "Upgrade or reinstall browser-cli if action guide discovery fails.",
+                ],
+            ),
+        )
+
+    guide_names = set(guides) if isinstance(guides, dict) else set()
+    missing_action_guides = [
+        task for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS if task not in guide_names
+    ]
+    invalid_action_guides = (
+        _doctor_invalid_action_guides(guides)
+        if isinstance(guides, dict)
+        else [
+            {
+                "task": task,
+                "problems": ["action_guides_not_object"],
+            }
+            for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS
+        ]
+    )
+
+    if missing_action_guides or invalid_action_guides:
+        return _doctor_check(
+            "action_guides",
+            "warn",
+            "Action guide catalog is missing tasks or fields expected by the Codex Skill.",
+            schema_version=1,
+            guide_count=len(guide_names),
+            required_action_guides=list(DOCTOR_REQUIRED_ACTION_GUIDE_TASKS),
+            missing_required_action_guides=missing_action_guides,
+            required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
+            invalid_action_guides=invalid_action_guides,
+            fix=_doctor_fix(
+                "upgrade_browser_cli_action_guides",
+                commands=[
+                    "browser-cli action guide --names-only",
+                    "browser-cli action guide --task interactive_targeting",
+                    "browser-cli action guide --task form_interaction",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Upgrade browser-cli before relying on action guides for the full Codex Skill workflow.",
+                    "Use `browser-cli action guide --names-only` to inspect supported guide tasks.",
+                    "Use `browser-cli action guide --task <task>` before choosing browser actions or custom JavaScript.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "action_guides",
+        "pass",
+        "Action guide catalog includes the task guides expected by the Codex Skill.",
+        schema_version=1,
+        guide_count=len(guide_names),
+        required_action_guides=list(DOCTOR_REQUIRED_ACTION_GUIDE_TASKS),
+        missing_required_action_guides=[],
+        required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
+        invalid_action_guides=[],
     )
 
 
@@ -18847,6 +19011,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     )
 
     checks.append(_doctor_command_catalog_check())
+    checks.append(_doctor_action_guides_check())
     checks.append(_doctor_case_schema_check())
     checks.append(_doctor_auth_export_env_contract_check())
     checks.append(_doctor_connect_from_codex_contract_check())

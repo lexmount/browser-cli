@@ -914,12 +914,18 @@ workflow surface is too old or missing critical steps such as cleanup. That
 required surface includes selector actions, role-based text/existence/geometry
 checks, press/hover/scroll, select/check/uncheck, role/text/label actions,
 accessibility snapshot, interactive-only snapshot, and diagnostic commands. The
-`case_schema` check verifies that repeatable case files can use the Skill's
+`action_guides` check verifies task-specific action guides such as
+`interactive_targeting`, `form_interaction`, `content_extraction`,
+`browser_state_management`, and `page_diagnostics`; it reports
+`missing_required_action_guides`, `required_guide_fields`, and
+`invalid_action_guides` when an installed CLI is too old to guide agents away
+from custom Playwright/JavaScript. The `case_schema` check verifies that repeatable case files can use the Skill's
 expected semantic, state, content, storage/cookie, and diagnostic actions; it
 reports `required_case_actions`,
-`missing_required_case_actions`, `missing_supported_actions`,
-`missing_action_schemas`, and `invalid_action_schemas` with upgrade guidance
-when the installed CLI is too old for case-based smoke tests.
+`required_case_scaffold_templates`, `missing_required_case_actions`,
+`missing_supported_actions`, `missing_action_schemas`,
+`missing_case_scaffold_templates`, and `invalid_action_schemas` with upgrade
+guidance when the installed CLI is too old for case-based smoke tests.
 The `connect_from_codex_contract` check verifies that browser.lexmount.cn
 handoff fields such as capabilities, `browser_site_acceptance_tests`, token
 lifecycle, runtime auth, and device-code API contracts are still present.

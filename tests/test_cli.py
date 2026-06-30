@@ -5522,6 +5522,39 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "capture_visible_state",
     ]
     assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
+    assert checks["action_guides"]["status"] == "pass"
+    assert checks["action_guides"]["schema_version"] == 1
+    assert checks["action_guides"]["guide_count"] == 14
+    assert checks["action_guides"]["required_action_guides"] == [
+        "browser_state_management",
+        "content_extraction",
+        "dialog_frame_handling",
+        "file_upload",
+        "form_interaction",
+        "interactive_targeting",
+        "link_navigation",
+        "menu_keyboard_flow",
+        "mouse_interaction",
+        "navigation_flow",
+        "page_diagnostics",
+        "semantic_waits",
+        "state_waits",
+        "visual_capture",
+    ]
+    assert checks["action_guides"]["missing_required_action_guides"] == []
+    assert checks["action_guides"]["required_guide_fields"] == [
+        "purpose",
+        "related_workflows",
+        "when_to_use",
+        "selection_order",
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+        "read_fields",
+        "custom_js_boundary",
+    ]
+    assert checks["action_guides"]["invalid_action_guides"] == []
     for command_name in (
         "action.press",
         "action.press-role",
@@ -6019,6 +6052,87 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_action_guides_are_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._action_guide_tasks",
+        lambda: {
+            "form_interaction": {
+                "purpose": "",
+                "related_workflows": ["unknown_workflow"],
+                "when_to_use": [],
+                "selection_order": [],
+                "inspect_commands": [],
+                "preferred_commands": [],
+                "fallback_commands": [],
+                "verify_commands": [],
+                "read_fields": [],
+                "custom_js_boundary": "",
+            }
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "action_guides" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    action_guides = checks["action_guides"]
+    assert action_guides["status"] == "warn"
+    assert action_guides["guide_count"] == 1
+    assert "interactive_targeting" in action_guides["missing_required_action_guides"]
+    assert "page_diagnostics" in action_guides["missing_required_action_guides"]
+    assert action_guides["required_guide_fields"] == [
+        "purpose",
+        "related_workflows",
+        "when_to_use",
+        "selection_order",
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+        "read_fields",
+        "custom_js_boundary",
+    ]
+    assert action_guides["invalid_action_guides"] == [
+        {
+            "task": "form_interaction",
+            "problems": [
+                "purpose_empty",
+                "when_to_use_empty",
+                "selection_order_empty",
+                "inspect_commands_empty",
+                "preferred_commands_empty",
+                "fallback_commands_empty",
+                "verify_commands_empty",
+                "read_fields_empty",
+                "custom_js_boundary_empty",
+                "related_workflows_unknown",
+            ],
+        }
+    ]
+    assert action_guides["fix"]["code"] == "upgrade_browser_cli_action_guides"
+    assert "browser-cli action guide --names-only" in payload["repair_plan"]["commands"]
+    assert (
+        "browser-cli action guide --task interactive_targeting"
+        in payload["repair_plan"]["commands"]
+    )
     assert "api_connectivity" in payload["skipped_checks"]
 
 
