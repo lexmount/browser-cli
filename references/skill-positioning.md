@@ -68,17 +68,17 @@ browser-cli action guide --task interactive_targeting
 Comparison source: [Browserbase MCP Server](https://github.com/browserbase/mcp-server-browserbase)
 and its linked [Browserbase MCP documentation](https://docs.browserbase.com/integrations/mcp/introduction).
 
-Browserbase MCP is a useful reference point because it presents a cloud-browser
-agent interface as a small MCP tool set. Its public README describes a hosted
-MCP server plus a self-hostable version, and exposes six tools:
+Browserbase MCP is the closest public cloud-browser agent reference for this
+comparison. Its README positions the hosted MCP server as the easiest setup,
+offers self-hosted transports, and exposes a compact six-tool surface:
 `start`, `end`, `navigate`, `act`, `observe`, and `extract`.
 
 | Area | Browserbase MCP Shape | browser-cli Shape | Current Gap |
 | --- | --- | --- | --- |
-| Agent integration | Hosted MCP endpoint and local MCP package. | Local CLI plus Codex Skill instructions. | We do not yet provide a hosted MCP or one-step Codex connector. |
+| Agent integration | Hosted MCP endpoint plus self-hosted MCP transports. | Local CLI plus Codex Skill instructions. | We do not yet provide a hosted MCP, local MCP adapter, or one-step Codex connector. |
 | Tool surface | Small natural-language tool set: start/end/navigate/act/observe/extract. | Many deterministic commands, workflows, guides, and case-file actions. | We need an optional natural-language layer for simple tasks without losing deterministic commands. |
-| Setup | MCP client configuration with hosted or local transports. | `uv tool install`, local env credentials, `auth login`, and `doctor`. | Setup is more verbose until browser.lexmount.cn provides Connect from Codex and device-code authorization. |
-| Auth UX | Project/API key env vars for self-hosting; hosted flow is externally managed. | Manual env path today, with scoped-token/device-code contracts exposed but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, revoke/expire UI, and device-code/OAuth. |
+| Setup | MCP client configuration can point at a hosted endpoint or an NPM/Docker self-host. | `uv tool install`, local env credentials, `auth login`, and `doctor`. | Setup is more verbose until browser.lexmount.cn provides Connect from Codex and device-code authorization. |
+| Auth UX | Self-hosting uses project/API key env vars; hosted setup is centered on MCP client connection. | Manual env path today, with scoped-token/device-code contracts exposed but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, revoke/expire UI, and device-code/OAuth. |
 | Determinism | Natural-language `act` and `extract` can be concise but model-dependent. | Explicit commands and JSON fields make behavior auditable and testable. | We should keep deterministic commands as the core and add higher-level wrappers later. |
 | Reproducibility | MCP tools are interactive; repeatable flows depend on the client. | Case schema, scaffold, validate, run, artifacts, events, and packaged page/form/interactive examples are first-class. | We need a broader case library for common agent tasks. |
 | Diagnostics | Cloud service and MCP errors are surfaced through tool results. | `doctor`, repair plans, command catalog checks, page diagnostics, console/network snapshots. | Diagnostics are strong, but the docs need shorter decision paths for agents. |
@@ -89,11 +89,12 @@ MCP server plus a self-hostable version, and exposes six tools:
    Codex, Project ID display, scoped key creation, copyable env/install blocks,
    doctor verification, revoke/expire, and device-code/OAuth are not a single
    smooth path yet.
-2. `browser-cli` has no hosted MCP or native Codex connector. The Skill works,
-   but users still install a CLI and follow a prompt.
+2. `browser-cli` has no hosted MCP, local MCP adapter, or native Codex
+   connector. The Skill works, but users still install a CLI and follow a
+   prompt.
 3. There is no simple `act`/`observe`/`extract` layer for tasks where a user
    expects natural language browser control. The deterministic command catalog
-   is powerful, but verbose.
+   is powerful, but verbose for quick exploratory work.
 4. The runtime auth story still depends on env API-key credentials for browser
    actions. Device-token metadata, refresh, revoke, and scope checks exist, but
    bearer-token browser runtime support must land across the site, API, SDK, and

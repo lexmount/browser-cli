@@ -36,9 +36,14 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "Inspection and extraction" in text
     assert "click-label, click-text, click-role" in text
     assert "interactive-only" in text
+    assert "dialogs/frames" in text
+    assert "file uploads" in text
     assert "Do not use this Skill for local desktop app control" in normalized
+    assert "already-open local browser tabs" in normalized
     assert "Chrome" not in text
     assert "chrome" not in text
+    assert "Chromium" not in text
+    assert "chromium" not in text
 
 
 def test_skill_guides_safe_one_off_sessions() -> None:

@@ -11,21 +11,17 @@ ad hoc Playwright scripts.
 
 ## Use When
 
-Use this Skill for Lexmount remote browser tasks: navigation, inspection, forms,
-persistent login reuse, screenshots, content extraction, browser state setup,
-diagnostics, and repeatable case files through JSON CLI commands. Start with
-`browser-cli reference get --id usable_status`, `browser-cli auth status`,
-`browser-cli doctor --json`, then choose a workflow and
-`browser-cli action guide --task <task>` before custom code. Do not use this
-Skill for local desktop app control, local in-app browser tabs, or tasks that do
-not need Lexmount credentials.
+Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, testing, login reuse, inspection, forms, screenshots, content
+extraction, browser state setup, diagnostics, or repeatable case files. Start with `browser-cli reference get --id usable_status`, `browser-cli auth status`,
+and `browser-cli doctor --json`; then choose a workflow and `browser-cli action guide --task <task>` before custom code. Do not use this
+Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials.
 
 ## Supported Operations
 
-Supports setup/auth/doctor; Sessions: create, list, get, keepalive, close;
-Contexts: create, list, get, status, pick, delete with availability/locked
-decisions; navigation/readiness waits; Inspection and extraction including
-accessibility and interactive-only snapshots; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser state storage/cookies; repeatable JSON/YAML cases.
+Supports setup/auth/doctor; Sessions: create, list, get, keepalive, close; Contexts: create, list, get, status, pick, delete with availability/locked
+decisions; navigation/readiness waits; Inspection and extraction with accessibility, form, link, table, list, dialog, frame, network, console, and
+interactive-only snapshots; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
+state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, and repeatable JSON/YAML cases.
 
 ## Setup
 

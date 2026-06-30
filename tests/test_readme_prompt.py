@@ -154,13 +154,19 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "## When To Use This Skill" in text
     assert "## Supported Operation Map" in text
     assert "Use `browser-cli` when Codex or another agent needs" in text
+    assert "Do not use this Skill for a local desktop app" in text
     assert "persistent_login_state" in text
+    assert "navigation_flow" in text
     assert "interactive_targeting" in text
     assert "content_extraction" in text
+    assert "visual_capture" in text
+    assert "dialog_frame_handling" in text
     assert "page_diagnostics" in text
     assert "docs/skill-positioning.md" in text
     assert "Chrome" not in text
     assert "chrome" not in text
+    assert "Chromium" not in text
+    assert "chromium" not in text
 
 
 def test_skill_positioning_doc_compares_browserbase_mcp() -> None:
@@ -170,8 +176,10 @@ def test_skill_positioning_doc_compares_browserbase_mcp() -> None:
     assert "Browserbase MCP Server" in text
     assert "https://github.com/browserbase/mcp-server-browserbase" in text
     assert "browser-cli reference get --id skill_positioning" in text
+    assert "hosted MCP server as the easiest setup" in text
     assert "`start`, `end`, `navigate`, `act`, `observe`, and `extract`" in text
     assert "Current Gap" in text
     assert "hosted MCP" in text
+    assert "local MCP adapter" in text
     assert "Connect from Codex" in text
     assert "Skill positioning and cloud-browser comparison" in docs_index

@@ -19,23 +19,29 @@ trial status, readiness checks, and browser.lexmount.cn integration boundaries.
 
 ## When To Use This Skill
 
-Use `browser-cli` when Codex or another agent needs to control a Lexmount
-remote browser with machine-readable JSON, deterministic commands, and safe
-secret handling. It is the right first choice for:
+Use `browser-cli` when Codex or another agent needs a Lexmount remote browser
+instead of a local tab, with machine-readable JSON, deterministic commands,
+structured repair hints, explicit cleanup, and safe secret handling.
 
-- Creating, listing, inspecting, keeping alive, and closing remote sessions.
-- Reusing persistent login state through contexts and metadata filters.
-- Opening pages, waiting for readiness, navigating history, and capturing
+Start here when the user asks an agent to:
+
+- Create, list, inspect, keep alive, and close remote sessions.
+- Reuse persistent login state through contexts and metadata filters.
+- Open pages, wait for readiness, navigate history, and capture
   screenshots or page snapshots.
-- Inspecting page structure before acting: text, links, forms, tables, lists,
+- Inspect page structure before acting: text, links, forms, tables, lists,
   dialogs, frames, accessibility trees, interactive elements, console logs, and
   network activity.
-- Clicking, typing, filling, selecting, checking, hovering, pressing keys,
+- Click, type, fill, select, check, hover, press keys,
   scrolling, and targeting by selector, role, label, text, or index.
-- Reading and mutating browser state through storage and cookies.
-- Running repeatable JSON/YAML browser case files instead of ad hoc scripts.
-- Diagnosing setup, credential, API, selector, page, console, and network
+- Read and mutate browser state through storage and cookies.
+- Run repeatable JSON/YAML browser case files instead of ad hoc scripts.
+- Diagnose setup, credential, API, selector, page, console, and network
   failures with structured repair hints.
+
+Do not use this Skill for a local desktop app, an already-open local browser
+tab, or a task that only needs static documentation. If Lexmount credentials are
+missing or unclear, stay in setup/auth/doctor commands before creating sessions.
 
 Use the setup and auth commands first when credentials are missing or unclear:
 `browser-cli reference get --id usable_status`, `browser-cli auth status`,
@@ -51,9 +57,12 @@ catalog cannot express the browser task.
 | Install and readiness | `browser-cli doctor --json` | Confirm the CLI, Python runtime, environment variables, packaged references, examples, and API connectivity are usable. |
 | First browser task | `browser-cli commands --workflow one_off_page_task` | Open a page, inspect it, act once, collect evidence, then close the temporary session. |
 | Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
+| Navigation and readiness | `browser-cli commands --workflow navigation_flow` | Open URLs, reload, move through history, and wait for URL, title, load state, or network idle before acting. |
 | Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
 | Interactive targets | `browser-cli action guide --task interactive_targeting` | Choose between role, label, text, selector, and index targeting for buttons, links, menus, and repeated controls. |
 | Content extraction | `browser-cli action guide --task content_extraction` | Prefer outline/text/link/table/list/accessibility snapshots and bounded text reads before custom JS. |
+| Visual evidence | `browser-cli action guide --task visual_capture` | Set a viewport, capture a full page, selector, or role screenshot, and gather bounded text as supporting evidence. |
+| Dialogs, frames, uploads | `browser-cli action guide --task dialog_frame_handling` | Detect modals, prompts, embedded frames, cookie banners, and file upload controls before custom workarounds. |
 | State and credentials | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies for setup, cleanup, or assertions. |
 | Diagnostics | `browser-cli commands --workflow page_diagnostics` | Capture console and network evidence around page failures, fetch/XHR issues, and runtime errors. |
 | Repeatable cases | `browser-cli commands --workflow case_file_task` | Validate, scaffold, and run browser tasks as JSON/YAML artifacts with cleanup and generated evidence. |
