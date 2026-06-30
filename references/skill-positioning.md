@@ -83,18 +83,32 @@ comparison. Its repository packages multiple agent skills around the `browse`
 CLI, including browser automation, platform CLI workflows, functions, tracing,
 cookie sync, fetch/search utilities, and browser-specific testing workflows.
 The browser Skill gives agents a short default loop: open a page, snapshot page
-state, act using element refs, confirm with another snapshot, and stop.
+state, act using element refs, confirm with another snapshot, and stop. Its
+Stagehand path also documents concise `act` and `extract` style primitives for
+natural-language browser work.
+
+What Browserbase currently does better:
+
+- The first-run path is shorter: install the skill, set remote credentials, run
+  an open/snapshot/act/snapshot loop.
+- The agent-facing primitive is memorable: `browse snapshot` produces refs, and
+  follow-up actions use those refs directly.
+- The docs explain when to choose local, remote, or CDP-style operation.
+- The public ecosystem includes adjacent skills for tracing, cookie sync,
+  fetch/search, testing, and automation improvement.
+- Product capabilities are named clearly: identity, verified browsers,
+  CAPTCHA solving, proxies, and session persistence.
 
 | Area | Browserbase Skill Shape | browser-cli Shape | Current Gap |
 | --- | --- | --- | --- |
-| Skill distribution | Marketplace/plugin install paths and an official skill collection. | Local CLI plus `SKILL.md`, README prompt, packaged references, and examples. | We do not yet provide a one-step Codex connector, plugin package, or skill marketplace install path. |
-| First action path | A compact `browse open`, `browse snapshot`, interact, snapshot, stop loop. | `first_browser_task` gives agents a short doctor, open, inspect, act, verify/capture, close path while `action observe`, `action extract`, and `agent_browser_primitives` cover the first observe/act/extract/verify loop. | We still need a single-command or natural-language wrapper for act tasks. |
-| Environment choice | The Skill explains local, remote Browserbase, and CDP-style modes and when to switch. | `browser-cli` is intentionally focused on Lexmount remote browsers plus persistent contexts. | We should state this boundary more clearly and expose platform capability signals when remote behavior is required. |
+| Skill distribution | Marketplace/plugin install paths and an official skill collection. | Local CLI plus `SKILL.md`, README prompt, packaged references, and examples. | Ship a one-step Codex connector/plugin package or skill marketplace install path. |
+| First action path | A compact `browse open`, `browse snapshot`, interact, snapshot, stop loop. | `first_browser_task` gives agents a short doctor, open, inspect, act, verify/capture, close path while `action observe`, `action extract`, and `agent_browser_primitives` cover the first observe/act/extract/verify loop. | Add a single-command or natural-language wrapper for act tasks while returning the deterministic plan. |
+| Environment choice | The Skill explains local, remote Browserbase, and CDP-style modes and when to switch. | `browser-cli` is intentionally focused on Lexmount remote browsers plus persistent contexts. | Keep the README/SKILL boundary clear: use Lexmount remote browser sessions here, use local tools for local apps or already-open local tabs. |
 | Remote platform features | Browserbase advertises Identity, verified browsers, CAPTCHA solving, residential proxies, and session persistence. | Lexmount has remote sessions, contexts, action evidence, structured doctor checks, and case files. | browser.lexmount.cn should surface comparable capability labels, limits, region/proxy choices, and context persistence status if supported. |
 | Auth UX | The Skill points users to account settings and uses environment credentials for remote sessions. | Manual env credentials work today; Connect from Codex, scoped tokens, and device-code contracts are documented but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, revoke/expire UI, and device-code/OAuth. |
-| Determinism | Simple element-ref interaction is fast to explain; natural-language layers are concise but less auditable. | Explicit commands, JSON fields, `action observe`, `action extract`, and `agent_browser_primitives` make behavior auditable, testable, and repairable. | We still need one-command or MCP-style `act` wrappers that return the underlying deterministic plan and evidence. |
-| Ecosystem breadth | The skill collection includes adjacent skills for tracing, cookie sync, fetch/search, testing, and automation improvement. | `browser-cli` packages references, examples, action guides, and case scaffolds in one CLI. | We need more packaged case examples and, later, companion skills for trace analysis, search/fetch, and site-specific workflows. |
-| Diagnostics | The Browserbase ecosystem includes tracing and troubleshooting guidance. | `doctor`, repair plans, command catalog checks, page diagnostics, console/network snapshots, events, and artifacts are first-class. | Diagnostics are strong, but the first-step docs must stay short enough that agents actually choose them. |
+| Determinism | Simple element-ref interaction is fast to explain; natural-language layers are concise but less auditable. | Explicit commands, JSON fields, `action observe`, `action extract`, and `agent_browser_primitives` make behavior auditable, testable, and repairable. | Provide one-command or MCP-style `act` wrappers that return the underlying deterministic plan and evidence. |
+| Ecosystem breadth | The skill collection includes adjacent skills for tracing, cookie sync, fetch/search, testing, and automation improvement. | `browser-cli` packages references, examples, action guides, and case scaffolds in one CLI. | Add more packaged case examples and, later, companion skills for trace analysis, search/fetch, and site-specific workflows. |
+| Diagnostics | The Browserbase ecosystem includes tracing and troubleshooting guidance. | `doctor`, repair plans, command catalog checks, page diagnostics, console/network snapshots, events, and artifacts are first-class. | Keep first-step docs short enough that agents choose them before custom code. |
 
 ## Defects To Fix Next
 

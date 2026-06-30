@@ -18,10 +18,10 @@ Skill for local desktop app control, already-open local browser tabs, static doc
 
 ## Supported Operations
 
-Supports setup/auth/doctor; Sessions: create, list, get, keepalive, close; Contexts: create, list, get, status, pick, delete with availability/locked
-decisions; navigation/readiness waits; Inspection and extraction with observe, extract, accessibility, form, link, table, list, dialog, frame, network, console, and
-interactive-only snapshots; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
-state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, and repeatable JSON/YAML cases.
+Supports setup/auth/doctor before browser work; Sessions: create, list, get, keepalive, close; Contexts: create, list, get, status, pick, delete with availability/locked
+decisions; navigation/readiness waits after page changes; Inspection and extraction with observe, extract, accessibility, form, link, table, list, dialog, frame, network, console, and
+interactive-only snapshots before choosing targets; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
+state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, and repeatable JSON/YAML cases for reproducible tasks.
 
 ## Setup
 

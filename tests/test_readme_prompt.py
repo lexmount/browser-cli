@@ -177,6 +177,8 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "## When To Use This Skill" in text
     assert "## Supported Operation Map" in text
     assert "Use `browser-cli` when Codex or another agent needs" in text
+    assert "| Use `browser-cli` when | Use something else when |" in text
+    assert "isolated Lexmount remote browser session" in text
     assert "Do not use this Skill for a local desktop app" in text
     assert "persistent_login_state" in text
     assert "navigation_flow" in text
@@ -209,6 +211,9 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     assert "browser-cli reference get --id skill_positioning" in text
     assert "short default loop" in text
     assert "element refs" in text
+    assert "What Browserbase currently does better" in text
+    assert "first-run path is shorter" in text
+    assert "browse snapshot" in text
     assert "agent_browser_primitives" in text
     assert "browser-cli action observe --session-id <session_id>" in text
     assert "browser-cli action extract --session-id <session_id>" in text

@@ -1,7 +1,8 @@
 # browser-cli
 
-`browser-cli` is a command-line interface for operating Lexmount remote browser
-sessions from local shells, Codex, and other agents.
+`browser-cli` is the agent-facing command-line interface and Codex Skill starter
+for operating Lexmount remote browser sessions from local shells, Codex, and
+other agents.
 
 It owns command parsing, JSON output, installation docs, and agent-facing
 ergonomics. Browser lifecycle and page action behavior stay in
@@ -22,6 +23,13 @@ trial status, readiness checks, and browser.lexmount.cn integration boundaries.
 Use `browser-cli` when Codex or another agent needs a Lexmount remote browser
 instead of a local tab, with machine-readable JSON, deterministic commands,
 structured repair hints, explicit cleanup, and safe secret handling.
+
+| Use `browser-cli` when | Use something else when |
+| --- | --- |
+| The task needs an isolated Lexmount remote browser session. | The task is about a local desktop app or an already-open local browser tab. |
+| The agent must log in, reuse cookies/storage, fill forms, inspect page state, capture evidence, or diagnose page failures. | The task only needs static documentation lookup or HTTP fetch/search without browser state. |
+| The work should be repeatable through JSON/YAML case files or auditable JSON output. | The user only needs advice and no live browser operation. |
+| Credentials, API connectivity, session cleanup, or secret handling need structured checks. | Lexmount credentials are unavailable and the user does not want to configure them. |
 
 Start here when the user asks an agent to:
 
