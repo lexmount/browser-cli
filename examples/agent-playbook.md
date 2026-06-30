@@ -18,6 +18,7 @@ browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow first_browser_task
+browser-cli commands --workflow agent_browser_primitives
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
@@ -157,6 +158,7 @@ Use a temporary session and close it when finished:
 ```bash
 browser-cli commands --workflow session_recovery
 browser-cli commands --workflow first_browser_task
+browser-cli commands --workflow agent_browser_primitives
 browser-cli commands --workflow one_off_page_task
 browser-cli session create --browser-mode light
 browser-cli action open-url --session-id <session_id> --url <url>

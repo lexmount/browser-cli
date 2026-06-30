@@ -103,6 +103,7 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
     assert "browser-cli commands --workflow session_recovery" in normalized
     assert "browser-cli commands --workflow first_browser_task" in normalized
+    assert "browser-cli commands --workflow agent_browser_primitives" in normalized
     assert "browser-cli commands --workflow one_off_page_task" in normalized
     assert "browser-cli commands --workflow case_file_task" in normalized
     assert "browser-cli commands --workflow persistent_login_state" in normalized

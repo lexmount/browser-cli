@@ -317,6 +317,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "first_browser_task" in references["quickstart"]["related_workflows"]
     assert "first_browser_task" in references["usable_status"]["related_workflows"]
     assert "first_browser_task" in references["action_playbook"]["related_workflows"]
+    assert "agent_browser_primitives" in references["quickstart"]["related_workflows"]
+    assert "agent_browser_primitives" in references["action_playbook"]["related_workflows"]
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "mouse_interaction" in references["action_playbook"]["related_workflows"]
@@ -339,6 +341,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli example get --id agent_playbook"
     )
     assert "first_browser_task" in examples["agent_playbook"]["related_workflows"]
+    assert "agent_browser_primitives" in examples["agent_playbook"]["related_workflows"]
     assert (
         "first_browser_task"
         in examples["setup_verification_playbook"]["related_workflows"]
@@ -411,6 +414,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert (
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
         in payload["agent_entrypoints"]["first_browser_task"]
+    )
+    assert (
+        "browser-cli commands --workflow agent_browser_primitives"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
+        "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
     assert (
         "browser-cli action page-info --session-id <session_id>"
@@ -903,6 +914,37 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "command": "browser-cli session close --session-id <session_id>",
         "cleanup": True,
     }
+    primitive_steps = workflows["agent_browser_primitives"]["steps"]
+    assert [step["id"] for step in primitive_steps] == [
+        "inspect_action_surface",
+        "observe_page",
+        "choose_primitive",
+        "act_semantically",
+        "extract_content",
+        "verify_result",
+    ]
+    assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
+    assert "custom_js_boundary" in primitive_steps[0]["read"]
+    assert primitive_steps[1]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in primitive_steps[1]["read"]
+    assert "browser-cli action page-info" in primitive_steps[1]["fallback_commands"][0]
+    assert primitive_steps[2]["agent_action"] is True
+    assert primitive_steps[2]["selection_order"] == [
+        "observe",
+        "act",
+        "extract",
+        "verify",
+    ]
+    assert primitive_steps[3]["optional"] is True
+    assert "click-role" in primitive_steps[3]["selection_order"]
+    assert "browser-cli commands --workflow form_interaction" in primitive_steps[3]["fallback_commands"]
+    assert primitive_steps[4]["optional"] is True
+    assert "text-snapshot" in primitive_steps[4]["selection_order"]
+    assert "browser-cli commands --workflow content_extraction" in primitive_steps[4]["fallback_commands"]
+    assert primitive_steps[5]["agent_action"] is True
+    assert "result.link_count" in primitive_steps[5]["read"]
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
     assert "result.nodes" in one_off_steps[3]["read"]
@@ -2454,7 +2496,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 24
+    assert payload["workflow_count"] == 25
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -2494,6 +2536,22 @@ def test_commands_catalog_returns_workflows_only(
     assert "click-role" in first_steps[5]["selection_order"]
     assert "result.matched" in first_steps[6]["read"]
     assert first_steps[-1]["cleanup"] is True
+    primitive_steps = payload["agent_workflows"]["agent_browser_primitives"]["steps"]
+    assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
+    assert primitive_steps[1]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert primitive_steps[2]["selection_order"] == [
+        "observe",
+        "act",
+        "extract",
+        "verify",
+    ]
+    assert primitive_steps[3]["optional"] is True
+    assert "fill-label" in primitive_steps[3]["selection_order"]
+    assert primitive_steps[4]["optional"] is True
+    assert "table-snapshot" in primitive_steps[4]["selection_order"]
+    assert "result.link_count" in primitive_steps[5]["read"]
     assert (
         "required_token_lifecycle"
         in payload["agent_workflows"]["connect_from_codex_site_requirements"]["steps"][
@@ -2684,6 +2742,46 @@ def test_commands_catalog_returns_first_browser_task_workflow(
     assert (
         "browser-cli commands --workflow first_browser_task"
         in payload["agent_entrypoints"]["first_browser_task"]
+    )
+
+
+def test_commands_catalog_returns_agent_browser_primitives_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "agent_browser_primitives"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "commands"
+    assert payload["workflow_id"] == "agent_browser_primitives"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_surface",
+        "observe_page",
+        "choose_primitive",
+        "act_semantically",
+        "extract_content",
+        "verify_result",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --names-only"
+    assert steps[1]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in steps[1]["read"]
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"] == ["observe", "act", "extract", "verify"]
+    assert steps[3]["optional"] is True
+    assert "click-role" in steps[3]["selection_order"]
+    assert steps[4]["optional"] is True
+    assert "text-snapshot" in steps[4]["selection_order"]
+    assert steps[5]["agent_action"] is True
+    assert "result.node_count" in steps[5]["read"]
+    assert (
+        "browser-cli commands --workflow agent_browser_primitives"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
 
 
@@ -5517,6 +5615,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["error"] == "unknown_workflow"
     assert payload["workflow"] == "missing"
     assert payload["available_workflows"] == [
+        "agent_browser_primitives",
         "browser_state_management",
         "case_file_task",
         "connect_from_codex_auth",
@@ -5697,8 +5796,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 24
-    assert checks["command_catalog"]["agent_entrypoint_count"] == 24
+    assert checks["command_catalog"]["workflow_count"] == 25
+    assert checks["command_catalog"]["agent_entrypoint_count"] == 25
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -5707,6 +5806,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "scoped_token_lifecycle",
         "session_recovery",
         "first_browser_task",
+        "agent_browser_primitives",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -5734,6 +5834,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "scoped_token_lifecycle",
         "session_recovery",
         "first_browser_task",
+        "agent_browser_primitives",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -5815,6 +5916,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "choose_first_action",
         "verify_or_capture",
         "close_session",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "agent_browser_primitives"
+    ] == [
+        "inspect_action_surface",
+        "observe_page",
+        "choose_primitive",
+        "act_semantically",
+        "extract_content",
+        "verify_result",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "one_off_page_task"
@@ -6666,6 +6777,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "scoped_token_lifecycle",
         "session_recovery",
         "first_browser_task",
+        "agent_browser_primitives",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -6692,6 +6804,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "scoped_token_lifecycle",
         "session_recovery",
         "first_browser_task",
+        "agent_browser_primitives",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -7596,6 +7709,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "choose_first_action"},
                     ],
                 },
+                "agent_browser_primitives": {
+                    "steps": [
+                        {"id": "inspect_action_surface"},
+                        {"id": "observe_page"},
+                        {"id": "choose_primitive"},
+                        {"id": "act_semantically"},
+                    ],
+                },
                 "one_off_page_task": {
                     "steps": [
                         {"id": "create_session"},
@@ -7776,6 +7897,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
             ],
         "one_off_page_task": ["close_session"],
         "first_browser_task": ["verify_or_capture", "close_session"],
+        "agent_browser_primitives": ["extract_content", "verify_result"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
         "setup_and_verify": [

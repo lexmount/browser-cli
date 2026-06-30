@@ -86,6 +86,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli commands --workflow scoped_token_lifecycle" in prompt
     assert "browser-cli commands --workflow session_recovery" in prompt
     assert "browser-cli commands --workflow first_browser_task" in prompt
+    assert "browser-cli commands --workflow agent_browser_primitives" in prompt
     assert "browser-cli commands --workflow one_off_page_task" in prompt
     assert "browser-cli commands --workflow case_file_task" in prompt
     assert "browser-cli commands --workflow persistent_login_state" in prompt
@@ -171,6 +172,8 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "Do not use this Skill for a local desktop app" in text
     assert "persistent_login_state" in text
     assert "navigation_flow" in text
+    assert "agent_browser_primitives" in text
+    assert "observe, act, extract, and verify" in text
     assert "interactive_targeting" in text
     assert "content_extraction" in text
     assert "visual_capture" in text
@@ -185,14 +188,21 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
 
 def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     text = (DOCS / "skill-positioning.md").read_text()
+    normalized = " ".join(text.split())
     docs_index = (DOCS / "README.md").read_text()
 
     assert "Browserbase Skills" in text
     assert "https://github.com/browserbase/skills" in text
     assert "https://raw.githubusercontent.com/browserbase/skills/main/skills/browser/SKILL.md" in text
+    assert "https://docs.browserbase.com/welcome/quickstarts/skills" in text
+    assert "https://docs.browserbase.com/welcome/quickstarts/browse" in text
+    assert "https://docs.browserbase.com/welcome/quickstarts/stagehand" in text
     assert "browser-cli reference get --id skill_positioning" in text
     assert "short default loop" in text
     assert "element refs" in text
+    assert "agent_browser_primitives" in text
+    assert "MCP-style `observe`/`act`/`extract` wrappers" in normalized
+    assert "no one-command `observe`/`act`/`extract` wrapper yet" in normalized
     assert "Current Gap" in text
     assert "plugin package" in text
     assert "capability panel" in text

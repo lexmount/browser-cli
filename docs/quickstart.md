@@ -149,6 +149,7 @@ Agents should inspect machine-readable workflows before choosing actions:
 ```bash
 browser-cli commands --workflow setup_and_verify
 browser-cli commands --workflow first_browser_task
+browser-cli commands --workflow agent_browser_primitives
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli commands --workflow interactive_targeting

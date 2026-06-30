@@ -225,10 +225,11 @@ browser-cli commands --workflow session_recovery
 Use its `read` fields for `sessions`, `session.status`, `final_status`,
 `closed`, and replacement `session.session_id`.
 
-For a first browser task:
+For a first browser task or observe/act/extract planning:
 
 ```bash
 browser-cli commands --workflow first_browser_task
+browser-cli commands --workflow agent_browser_primitives
 ```
 
 Then follow the returned steps, typically:
