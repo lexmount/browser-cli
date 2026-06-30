@@ -135,6 +135,7 @@ def test_commands_catalog_output_contract(
     assert payload["agent_examples"]["page_inspection_case"]["content_command"] == (
         "browser-cli example get --id page_inspection_case"
     )
+    assert payload["agent_examples"]["page_diagnostics_case"]["format"] == "yaml"
     assert payload["agent_examples"]["form_fill_case"]["format"] == "yaml"
     assert payload["agent_examples"]["interactive_targeting_case"]["format"] == "yaml"
     assert all(command["group"] == "action" for command in payload["commands"])
@@ -235,6 +236,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`browser-cli example get --id setup_verification_playbook`" in text
     assert "`browser-cli example get --id page_inspection_case`" in text
     assert "`browser-cli example get --id interactive_targeting_case`" in text
+    assert "`browser-cli example get --id page_diagnostics_case`" in text
     assert "`scaffold_templates`" in text
     assert "`load_when`" in text
     assert "`related_workflows`" in text

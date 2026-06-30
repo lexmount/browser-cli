@@ -134,6 +134,7 @@ CLI for you:
    browser-cli example get --id page_inspection_case
    browser-cli example get --id form_fill_case
    browser-cli example get --id interactive_targeting_case
+   browser-cli example get --id page_diagnostics_case
    browser-cli case schema
    browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
    browser-cli case scaffold --template form-fill --output form-case.yaml
@@ -407,6 +408,7 @@ browser-cli reference get --id action_playbook --metadata-only
 browser-cli example list
 browser-cli example get --id page_inspection_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
+browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
@@ -879,8 +881,10 @@ setup/readiness boundary reference.
 markdown content from an installed CLI. `agent_examples` points to packaged
 playbook and case-file examples, readable with `browser-cli example list` and
 `browser-cli example get --id setup_verification_playbook`,
-`browser-cli example get --id page_inspection_case`, or
-`browser-cli example get --id interactive_targeting_case`. Use `--workflows-only` when
+`browser-cli example get --id page_inspection_case`,
+`browser-cli example get --id form_fill_case`,
+`browser-cli example get --id interactive_targeting_case`, or
+`browser-cli example get --id page_diagnostics_case`. Use `--workflows-only` when
 you only need the structured setup,
 Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page
 task, persistent login state, session recovery, case file task, form interaction,
@@ -996,6 +1000,7 @@ browser-cli case schema
 browser-cli case schema --action fill-label
 browser-cli example get --id form_fill_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
+browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli session create

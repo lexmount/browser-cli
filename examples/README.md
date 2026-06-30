@@ -13,8 +13,8 @@ browser-cli case scaffold --template interactive-targeting --output interactive-
 ```
 
 Case files can use semantic actions such as `fill`, `fill-label`, `click-role`,
-`wait-text`, `get-value-role`, `interactive-snapshot`, and
-`accessibility-snapshot`.
+`wait-text`, `get-value-role`, `interactive-snapshot`,
+`accessibility-snapshot`, `console-snapshot`, and `network-snapshot`.
 
 Validate all case files:
 
@@ -40,6 +40,12 @@ Run an interactive targeting case:
 
 ```bash
 browser-cli case run --file examples/cases/interactive-targeting.yaml --close-created-session
+```
+
+Run a page diagnostics case:
+
+```bash
+browser-cli case run --file examples/cases/page-diagnostics.yaml --close-created-session
 ```
 
 Case runs create browser artifacts under `/tmp/lexmount-runs` unless

@@ -85,8 +85,9 @@ returns the installed action playbook as JSON.
 `agent_examples` describes packaged common-task examples and case files.
 `browser-cli example list` returns example metadata, and
 `browser-cli example get --id setup_verification_playbook`,
-`browser-cli example get --id page_inspection_case`, or
-`browser-cli example get --id interactive_targeting_case` returns an installed
+`browser-cli example get --id page_inspection_case`,
+`browser-cli example get --id interactive_targeting_case`, or
+`browser-cli example get --id page_diagnostics_case` returns an installed
 example case file or playbook as JSON.
 `agent_workflows` describes ordered setup, Connect from Codex site requirements,
 Connect from Codex auth, device-code auth, scoped token lifecycle, session
@@ -135,7 +136,7 @@ inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.
 The case file task workflow includes case command discovery, `case schema`
 inspection, action-specific schema lookup, `form_fill_case` and
-`interactive_targeting_case` example discovery,
+`interactive_targeting_case` plus `page_diagnostics_case` example discovery,
 optional page/form/interactive `case scaffold` generation, `scaffold_templates`,
 case validation, and
 `--close-created-session` case runs with `supported_actions`,

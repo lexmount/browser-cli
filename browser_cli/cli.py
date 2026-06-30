@@ -432,6 +432,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "setup_verification_playbook",
     "page_inspection_case",
+    "page_diagnostics_case",
     "form_fill_case",
     "interactive_targeting_case",
 )
@@ -622,6 +623,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_semantic_case_action",
         "inspect_form_case_example",
         "inspect_interactive_targeting_case_example",
+        "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
         "scaffold_form_case_file",
         "scaffold_interactive_targeting_case_file",
@@ -1494,6 +1496,34 @@ def _agent_examples() -> dict[str, Any]:
                 "action: screenshot",
             ],
         },
+        "page_diagnostics_case": {
+            "path": "examples/cases/page-diagnostics.yaml",
+            "content_command": "browser-cli example get --id page_diagnostics_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:page-diagnostics.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local page diagnostics case that installs "
+                "console/network capture, reproduces a fixture issue, waits for "
+                "evidence, and saves artifacts."
+            ),
+            "related_workflows": ["case_file_task", "page_diagnostics"],
+            "load_when": [
+                "Creating a repeatable diagnostic smoke test for runtime errors.",
+                "Needing console and fetch/XHR evidence before custom probes.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: page-diagnostics",
+                "action: console-snapshot",
+                "action: network-snapshot",
+                "action: wait-console",
+                "action: wait-network",
+                "action: screenshot",
+            ],
+        },
         "form_fill_case": {
             "path": "examples/cases/form-fill.yaml",
             "content_command": "browser-cli example get --id form_fill_case",
@@ -1727,6 +1757,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case schema --action fill-label",
                 "browser-cli example get --id form_fill_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
+                "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
@@ -2664,6 +2695,16 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "inspect_interactive_targeting_case_example",
                         "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page_diagnostics_case_example",
+                        "command": "browser-cli example get --id page_diagnostics_case --metadata-only",
                         "read": [
                             "example.content_command",
                             "example.grep_patterns",

@@ -19,7 +19,7 @@ Codex browser surface.
 ## Supported Today
 
 - Setup and readiness: version JSON, command discovery, packaged references,
-  packaged setup-verification, page-inspection, form-fill, and interactive-targeting examples,
+  packaged setup-verification, page-inspection, page-diagnostics, form-fill, and interactive-targeting examples,
   auth status/login/export-env helpers, scoped-token metadata inspection,
   Connect from Codex site requirements, and doctor checks.
 - Session lifecycle: create, list, inspect, keep alive, close, recover from

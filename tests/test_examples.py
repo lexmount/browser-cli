@@ -53,6 +53,24 @@ def test_interactive_targeting_case_uses_semantic_targets() -> None:
     assert "action: click\n" not in text
 
 
+def test_page_diagnostics_case_uses_console_and_network_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "page-diagnostics.yaml").read_text()
+
+    assert "name: page-diagnostics" in text
+    assert "action: console-snapshot" in text
+    assert "action: network-snapshot" in text
+    assert "install_only: true" in text
+    assert "action: wait-console" in text
+    assert "source: console" in text
+    assert "level: error" in text
+    assert "action: wait-network" in text
+    assert "source: fetch" in text
+    assert "diagnostic-network-ok" in text
+    assert "action: eval" in text
+    assert "action: screenshot" in text
+    assert "action: click\n" not in text
+
+
 def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     text = (REPO_ROOT / "examples" / "agent-playbook.md").read_text()
 
@@ -116,6 +134,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
         "browser-cli example get --id interactive_targeting_case --metadata-only"
         in text
     )
+    assert "browser-cli example get --id page_diagnostics_case --metadata-only" in text
     assert "browser-cli commands --group action" in text
     assert "browser-cli commands --group action --names-only" in text
     assert "action guide --task <task>" in text
