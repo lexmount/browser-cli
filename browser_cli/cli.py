@@ -203,6 +203,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "session.create",
     "session.close",
     "action.guide",
+    "action.observe",
     "action.open-url",
     "action.wait-selector",
     "action.click",
@@ -416,6 +417,14 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "wait-value",
     "wait-value-role",
 )
+OBSERVE_SURFACE_CHOICES = (
+    "interactive",
+    "accessibility",
+    "text",
+    "links",
+    "forms",
+    "outline",
+)
 DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
     "form-fill",
@@ -461,6 +470,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "setup_verification_playbook",
     "example get",
     "action guide",
+    "action observe",
     "click-label",
     "fill before custom JavaScript",
     "custom JavaScript",
@@ -1778,6 +1788,7 @@ def _command_catalog() -> dict[str, Any]:
             "agent_browser_primitives": [
                 "browser-cli commands --workflow agent_browser_primitives",
                 "browser-cli action guide --names-only",
+                "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
                 "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                 "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
@@ -2647,16 +2658,22 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "observe_page",
-                        "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        "command": "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
                         "read": [
-                            "result.nodes",
-                            "result.node_count",
-                            "result.truncated",
                             "result.url",
                             "result.title",
+                            "result.ready_state",
+                            "result.page_info",
+                            "result.snapshots.interactive.nodes",
+                            "result.snapshots.interactive.node_count",
+                            "result.snapshots.interactive.truncated",
+                            "result.snapshots.text.texts",
+                            "result.snapshots.text.text_count",
                         ],
                         "fallback_commands": [
                             "browser-cli action page-info --session-id <session_id>",
+                            "browser-cli action observe --session-id <session_id> --surface all --selector main",
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                             "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             "browser-cli action form-snapshot --session-id <session_id> --selector form",
                             "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
@@ -10160,6 +10177,108 @@ def _run_eval_backed_action_command(
             reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
         ),
         result=_eval_backed_result_payload(result.result),
+    )
+
+
+def _run_eval_expression_result(*, connect_url: str, expression: str) -> dict[str, Any]:
+    result = run_browser_action(
+        connect_url=connect_url,
+        action="eval",
+        request=EvalRequest(expression=expression),
+    )
+    return _eval_backed_result_payload(result.result)
+
+
+def _normalize_observe_surfaces(values: list[str]) -> list[str]:
+    requested = values or ["interactive", "text"]
+    if "all" in requested:
+        requested = list(OBSERVE_SURFACE_CHOICES)
+    return _dedupe_preserving_order(requested)
+
+
+def _observe_surface_expression(
+    surface: str,
+    args: argparse.Namespace,
+) -> str:
+    if surface == "interactive":
+        return _interactive_snapshot_expression(
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    if surface == "accessibility":
+        return _accessibility_snapshot_expression(
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    if surface == "text":
+        return _text_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_chars=args.max_chars,
+        )
+    if surface == "links":
+        return _link_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            include_empty=False,
+            same_origin_only=False,
+        )
+    if surface == "forms":
+        return _form_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            reveal_sensitive_values=False,
+        )
+    if surface == "outline":
+        return _outline_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    raise BrowserRuntimeError(f"Unsupported observe surface: {surface}")
+
+
+def cmd_action_observe(args: argparse.Namespace) -> None:
+    command = "action.observe"
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        page_info = _run_eval_expression_result(
+            connect_url=connect_url,
+            expression=_page_info_expression(),
+        )
+        surfaces = _normalize_observe_surfaces(args.surface)
+        snapshots = {
+            surface: _run_eval_expression_result(
+                connect_url=connect_url,
+                expression=_observe_surface_expression(surface, args),
+            )
+            for surface in surfaces
+        }
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    result = {
+        "kind": "observe",
+        "url": page_info.get("url"),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "page_info": page_info,
+        "snapshots": snapshots,
+    }
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
     )
 
 
@@ -25950,6 +26069,47 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Only list available action guide task ids.",
     )
     action_guide.set_defaults(func=cmd_action_guide)
+
+    action_observe = action_subparsers.add_parser(
+        "observe",
+        help="Read page info plus bounded agent observation surfaces",
+    )
+    _add_session_target_args(action_observe)
+    action_observe.add_argument(
+        "--surface",
+        action="append",
+        choices=[*OBSERVE_SURFACE_CHOICES, "all"],
+        default=[],
+        help=(
+            "Observation surface to include. Repeat for multiple surfaces; "
+            "default is interactive and text."
+        ),
+    )
+    action_observe.add_argument(
+        "--selector",
+        help=(
+            "Optional container selector used to scope text, links, forms, "
+            "and outline surfaces."
+        ),
+    )
+    action_observe.add_argument(
+        "--max-nodes",
+        type=_non_negative_int,
+        default=80,
+        help="Maximum DOM nodes returned per bounded surface.",
+    )
+    action_observe.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters returned per text block.",
+    )
+    action_observe.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in supported surfaces.",
+    )
+    action_observe.set_defaults(func=cmd_action_observe)
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)

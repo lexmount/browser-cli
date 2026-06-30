@@ -158,6 +158,12 @@ browser-cli commands --workflow content_extraction
 browser-cli commands --workflow page_diagnostics
 ```
 
+Use the first-class observe primitive before choosing page targets:
+
+```bash
+browser-cli action observe --session-id <session_id> --surface interactive --surface text
+```
+
 Before writing custom JavaScript, inspect the action guide:
 
 ```bash

@@ -162,6 +162,7 @@ browser-cli commands --workflow agent_browser_primitives
 browser-cli commands --workflow one_off_page_task
 browser-cli session create --browser-mode light
 browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action observe --session-id <session_id> --surface interactive --surface text
 browser-cli action snapshot --session-id <session_id>
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli session close --session-id <session_id>

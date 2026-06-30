@@ -97,6 +97,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli case scaffold --template page-diagnostics" in text
     assert "browser-cli commands --workflow first_browser_task" in text
     assert "browser-cli commands --workflow agent_browser_primitives" in text
+    assert "browser-cli action observe --session-id <session_id>" in text
     assert "browser-cli commands --workflow one_off_page_task" in text
     assert "browser-cli commands --workflow persistent_login_state" in text
     assert "browser-cli commands --workflow form_interaction" in text

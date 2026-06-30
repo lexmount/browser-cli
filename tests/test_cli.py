@@ -420,6 +420,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
     assert (
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
         "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000"
         in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
@@ -926,9 +930,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
     assert "custom_js_boundary" in primitive_steps[0]["read"]
     assert primitive_steps[1]["command"] == (
-        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
     )
-    assert "result.nodes" in primitive_steps[1]["read"]
+    assert "result.page_info" in primitive_steps[1]["read"]
+    assert "result.snapshots.interactive.nodes" in primitive_steps[1]["read"]
+    assert "result.snapshots.text.texts" in primitive_steps[1]["read"]
     assert "browser-cli action page-info" in primitive_steps[1]["fallback_commands"][0]
     assert primitive_steps[2]["agent_action"] is True
     assert primitive_steps[2]["selection_order"] == [
@@ -1587,6 +1593,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "session.create",
         "context.pick",
         "action.guide",
+        "action.observe",
         "action.open-url",
         "action.page-info",
         "action.set-viewport",
@@ -1668,6 +1675,15 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     ):
         assert name in commands
 
+    observe = commands["action.observe"]
+    assert observe["required_options"] == []
+    assert observe["browser_target"] == {
+        "required": True,
+        "exactly_one_of": ["--connect-url", "--direct-url", "--session-id"],
+    }
+    assert any("--surface" in option["flags"] for option in observe["options"])
+    assert any("--selector" in option["flags"] for option in observe["options"])
+    assert any("--max-nodes" in option["flags"] for option in observe["options"])
     open_url = commands["action.open-url"]
     assert open_url["browser_target"] == {
         "required": True,
@@ -2539,7 +2555,7 @@ def test_commands_catalog_returns_workflows_only(
     primitive_steps = payload["agent_workflows"]["agent_browser_primitives"]["steps"]
     assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
     assert primitive_steps[1]["command"] == (
-        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
     )
     assert primitive_steps[2]["selection_order"] == [
         "observe",
@@ -2768,9 +2784,9 @@ def test_commands_catalog_returns_agent_browser_primitives_workflow(
     ]
     assert steps[0]["command"] == "browser-cli action guide --names-only"
     assert steps[1]["command"] == (
-        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
     )
-    assert "result.nodes" in steps[1]["read"]
+    assert "result.snapshots.interactive.nodes" in steps[1]["read"]
     assert steps[2]["agent_action"] is True
     assert steps[2]["selection_order"] == ["observe", "act", "extract", "verify"]
     assert steps[3]["optional"] is True
@@ -5694,6 +5710,7 @@ def test_commands_catalog_filters_group_and_names_only(
         "commands": payload["commands"],
     }
     assert "action.open-url" in payload["commands"]
+    assert "action.observe" in payload["commands"]
     assert "action.page-info" in payload["commands"]
     assert "action.set-viewport" in payload["commands"]
     assert "action.screenshot-selector" in payload["commands"]
@@ -6123,6 +6140,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["action_guides"]["invalid_action_guides"] == []
     assert checks["action_guides"]["invalid_guide_command_references"] == []
     for command_name in (
+        "action.observe",
         "action.press",
         "action.press-role",
         "action.press-key",
@@ -6720,6 +6738,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-url" in catalog["missing_required_commands"]
     assert "action.wait-load-state" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
+    assert "action.observe" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
     assert "action.wait-state-role" in catalog["missing_required_commands"]
@@ -14281,6 +14300,114 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
     assert "element.value ||" not in expression
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "action.interactive-snapshot"
+
+
+def test_action_observe_collects_page_info_and_requested_surfaces(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expressions: list[str] = []
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert connect_url == "wss://example.test/devtools"
+        assert action == "eval"
+        expression = request.expression
+        expressions.append(expression)
+        if "body_text_length" in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "url": "https://example.test",
+                        "title": "Example",
+                        "ready_state": "complete",
+                    }
+                }
+            )
+        if 'kind: "interactive"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "interactive", "node_count": 1, "nodes": []}}
+            )
+        if 'kind: "dom-accessibility"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "dom-accessibility",
+                        "node_count": 2,
+                        "nodes": [],
+                    }
+                }
+            )
+        if 'kind: "text"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "text", "text_count": 3, "texts": []}}
+            )
+        if 'kind: "links"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "links", "link_count": 4, "links": []}}
+            )
+        if 'kind: "form"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "form", "field_count": 5, "fields": []}}
+            )
+        if 'kind: "outline"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "outline", "node_count": 6, "nodes": []}}
+            )
+        raise AssertionError("unexpected observe expression")
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "observe",
+                "--session-id",
+                "s1",
+                "--surface",
+                "all",
+                "--selector",
+                "main",
+                "--max-nodes",
+                "12",
+                "--max-chars",
+                "80",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert len(expressions) == 7
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.observe"
+    assert payload["result"]["kind"] == "observe"
+    assert payload["result"]["url"] == "https://example.test"
+    assert payload["result"]["ready_state"] == "complete"
+    assert payload["result"]["surface_count"] == 6
+    assert payload["result"]["surfaces"] == [
+        "interactive",
+        "accessibility",
+        "text",
+        "links",
+        "forms",
+        "outline",
+    ]
+    assert payload["result"]["page_info"]["title"] == "Example"
+    assert payload["result"]["snapshots"]["interactive"]["node_count"] == 1
+    assert payload["result"]["snapshots"]["accessibility"]["node_count"] == 2
+    assert payload["result"]["snapshots"]["text"]["text_count"] == 3
+    assert payload["result"]["snapshots"]["links"]["link_count"] == 4
+    assert payload["result"]["snapshots"]["forms"]["field_count"] == 5
+    assert payload["result"]["snapshots"]["outline"]["node_count"] == 6
 
 
 @pytest.mark.parametrize(

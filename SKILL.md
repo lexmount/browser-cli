@@ -19,7 +19,7 @@ Skill for local desktop app control, already-open local browser tabs, static doc
 ## Supported Operations
 
 Supports setup/auth/doctor; Sessions: create, list, get, keepalive, close; Contexts: create, list, get, status, pick, delete with availability/locked
-decisions; navigation/readiness waits; Inspection and extraction with accessibility, form, link, table, list, dialog, frame, network, console, and
+decisions; navigation/readiness waits; Inspection and extraction with observe, accessibility, form, link, table, list, dialog, frame, network, console, and
 interactive-only snapshots; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
 state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, and repeatable JSON/YAML cases.
 
@@ -232,7 +232,7 @@ browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow agent_browser_primitives
 ```
 
-Then follow the returned steps, typically:
+Then follow the returned steps; use `browser-cli action observe --session-id <session_id> --surface interactive --surface text` before choosing targets, typically:
 
 ```bash
 browser-cli session create
