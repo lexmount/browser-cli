@@ -273,6 +273,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "doctor" in payload["groups"]
     assert "example" in payload["groups"]
     assert "reference" in payload["groups"]
+    assert "skill" in payload["groups"]
     assert "version" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
@@ -403,6 +404,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli example get --id setup_verification_playbook"
         in payload["agent_entrypoints"]["setup"]
     )
+    assert "browser-cli skill status" in payload["agent_entrypoints"]["setup"]
+    assert "browser-cli skill install --force" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth scopes" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
@@ -723,6 +726,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         == "browser-cli reference get --id usable_status"
     )
     assert "reference.content_command" in setup_steps["inspect_usable_status"]["read"]
+    assert setup_steps["skill_status"]["command"] == "browser-cli skill status"
+    assert setup_steps["skill_status"]["optional"] is True
+    assert "force_install_command" in setup_steps["skill_status"]["read"]
     assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
     assert (
         "repair_plan.connect_from_codex.url"
@@ -1615,6 +1621,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "auth.login",
         "auth.refresh",
         "doctor",
+        "skill.status",
+        "skill.install",
         "case.schema",
         "case.scaffold",
         "case.validate",
@@ -1730,6 +1738,12 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any("--label" in option["flags"] for option in act["options"])
     assert any("--value" in option["flags"] for option in act["options"])
     assert any("--option-label" in option["flags"] for option in act["options"])
+    skill_status = commands["skill.status"]
+    assert skill_status["required_options"] == []
+    assert any("--skill-dir" in option["flags"] for option in skill_status["options"])
+    skill_install = commands["skill.install"]
+    assert skill_install["required_options"] == []
+    assert any("--force" in option["flags"] for option in skill_install["options"])
     open_url = commands["action.open-url"]
     assert open_url["browser_target"] == {
         "required": True,
@@ -2589,6 +2603,7 @@ def test_commands_catalog_returns_workflows_only(
     assert setup_steps["inspect_usable_status"]["command"] == (
         "browser-cli reference get --id usable_status --metadata-only"
     )
+    assert setup_steps["skill_status"]["command"] == "browser-cli skill status"
     assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
     assert (
         "browser_smoke_session.status"
@@ -3300,6 +3315,93 @@ def test_reference_get_fails_unknown_reference_as_json(
         "usable_status",
     ]
     assert payload["fix"]["code"] == "inspect_available_agent_references"
+
+
+def test_skill_status_reports_missing_local_skill(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "status", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "skill.status"
+    assert payload["status"] == "missing"
+    assert payload["current"] is False
+    assert payload["installed"] is False
+    assert payload["skill_dir"] == str(skill_dir)
+    assert payload["resource_count"] == 7
+    assert "SKILL.md" in payload["missing_files"]
+    assert payload["stale_files"] == []
+    assert payload["package_errors"] == []
+    assert payload["force_install_command"].endswith("--force")
+
+
+def test_skill_install_writes_packaged_skill_resources(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "skill.install"
+    assert payload["before"]["status"] == "missing"
+    assert payload["after"]["status"] == "current"
+    assert payload["after"]["current"] is True
+    assert "SKILL.md" in payload["written_files"]
+    assert (skill_dir / "SKILL.md").is_file()
+    assert (skill_dir / "agents" / "openai.yaml").is_file()
+    assert (skill_dir / "references" / "action-playbook.md").is_file()
+    assert "browser-cli action act --session-id <session_id>" in (
+        skill_dir / "SKILL.md"
+    ).read_text()
+
+    with pytest.raises(SystemExit) as status_exc:
+        cli_main(["skill", "status", "--skill-dir", str(skill_dir)])
+
+    assert status_exc.value.code == 0
+    status_payload = json.loads(capsys.readouterr().out)
+    assert status_payload["status"] == "current"
+    assert status_payload["missing_files"] == []
+    assert status_payload["stale_files"] == []
+
+
+def test_skill_install_requires_force_for_stale_files(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("old skill", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "skill.install"
+    assert payload["error"] == "would_overwrite_skill_files"
+    assert payload["conflicting_files"] == ["SKILL.md"]
+    assert payload["force_required"] is True
+    assert "--force" in payload["fix"]["commands"][0]
+
+    with pytest.raises(SystemExit) as force_exc:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir), "--force"])
+
+    assert force_exc.value.code == 0
+    force_payload = json.loads(capsys.readouterr().out)
+    assert force_payload["after"]["status"] == "current"
+    assert "SKILL.md" in force_payload["updated_files"]
 
 
 def test_example_list_returns_packaged_agent_examples(
@@ -5941,6 +6043,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "inspect_skill_positioning",
         "inspect_quickstart",
         "inspect_usable_status",
+        "skill_status",
         "auth_status",
         "doctor",
         "smoke_session",
@@ -6302,6 +6405,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "reference.get",
         "example.list",
         "example.get",
+        "skill.status",
+        "skill.install",
         "version",
         "case.schema",
         "case.scaffold",
@@ -6550,6 +6655,24 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["agent_prompt"]["missing_fields"] == []
     assert checks["agent_prompt"]["missing_patterns"] == []
     assert checks["agent_prompt"]["mismatched_fields"] == []
+    assert checks["agent_skill_resources"]["status"] == "pass"
+    assert checks["agent_skill_resources"]["resource_count"] == 7
+    assert checks["agent_skill_resources"]["expected_resource_count"] == 7
+    assert checks["agent_skill_resources"]["missing_patterns"] == []
+    assert checks["agent_skill_resources"]["package_errors"] == []
+    skill_resources = {
+        resource["path"]: resource
+        for resource in checks["agent_skill_resources"]["checked_resources"]
+    }
+    assert skill_resources["SKILL.md"]["package_resource"] == (
+        "browser_cli.agent_skill:SKILL.md"
+    )
+    assert checks["agent_skill_resources"]["status_command"] == (
+        "browser-cli skill status"
+    )
+    assert checks["agent_skill_resources"]["force_install_command"] == (
+        "browser-cli skill install --force"
+    )
     assert checks["agent_references"]["status"] == "pass"
     assert checks["agent_references"]["reference_count"] == 5
     assert checks["agent_references"]["required_references"] == [
@@ -6809,6 +6932,8 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.observe" in catalog["missing_required_commands"]
     assert "action.act" in catalog["missing_required_commands"]
     assert "action.extract" in catalog["missing_required_commands"]
+    assert "skill.status" in catalog["missing_required_commands"]
+    assert "skill.install" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
     assert "action.wait-state-role" in catalog["missing_required_commands"]
@@ -7534,6 +7659,52 @@ def test_doctor_warns_when_agent_prompt_metadata_is_incomplete(
     assert "api_connectivity" in payload["skipped_checks"]
 
 
+def test_doctor_warns_when_packaged_skill_resources_are_stale(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._packaged_skill_resource_items",
+        lambda: (
+            [
+                {
+                    "path": "SKILL.md",
+                    "package_resource": "browser_cli.agent_skill:SKILL.md",
+                    "content": "# browser-cli\n\nUse browser-cli.",
+                    "sha256": "old",
+                    "size": 30,
+                }
+            ],
+            [],
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "agent_skill_resources" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    skill_resources = checks["agent_skill_resources"]
+    assert skill_resources["status"] == "warn"
+    assert "browser-cli action act --session-id <session_id>" in skill_resources[
+        "missing_patterns"
+    ]
+    assert skill_resources["fix"]["code"] == "repair_packaged_agent_skill_resources"
+    assert "browser-cli skill install --force" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
 def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -7989,12 +8160,13 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "agent_browser_primitives": ["extract_content", "verify_result"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
-        "setup_and_verify": [
-            "inspect_skill_positioning",
-            "inspect_quickstart",
-            "inspect_usable_status",
-            "smoke_session",
-        ],
+            "setup_and_verify": [
+                "inspect_skill_positioning",
+                "inspect_quickstart",
+                "inspect_usable_status",
+                "skill_status",
+                "smoke_session",
+            ],
         "connect_from_codex_site_requirements": [
             "inspect_connect_from_codex_reference"
         ],

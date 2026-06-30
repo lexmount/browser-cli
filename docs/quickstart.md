@@ -21,6 +21,7 @@ browser-cli version
 browser-cli commands --names-only
 browser-cli commands --workflows-only
 browser-cli reference get --id quickstart --metadata-only
+browser-cli skill status
 ```
 
 After installation, agents can read this same minimum path from the packaged
@@ -28,6 +29,13 @@ reference:
 
 ```bash
 browser-cli reference get --id quickstart
+```
+
+If `browser-cli skill status` reports `status` other than `current`, review
+`stale_files` and `missing_files`, then refresh the local Codex Skill with:
+
+```bash
+browser-cli skill install --force
 ```
 
 ## Configure Credentials

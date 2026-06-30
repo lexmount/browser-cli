@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import mimetypes
 import os
@@ -73,6 +74,8 @@ AGENT_USABLE_STATUS_METADATA_COMMAND = (
     "browser-cli reference get --id usable_status --metadata-only"
 )
 AGENT_USABLE_STATUS_COMMAND = "browser-cli reference get --id usable_status"
+CODEX_HOME_ENV = "CODEX_HOME"
+DEFAULT_CODEX_SKILL_DIRECTORY_NAME = "lexmount-browser"
 DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
     "usable",
     "unusable_exports",
@@ -187,6 +190,8 @@ DOCTOR_REQUIRED_COMMANDS = (
     "reference.get",
     "example.list",
     "example.get",
+    "skill.status",
+    "skill.install",
     "version",
     "doctor",
     "case.schema",
@@ -508,6 +513,16 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "JSON output",
     "secrets out of chat",
 )
+DOCTOR_REQUIRED_SKILL_PATTERNS = (
+    "Use When",
+    "Supported Operations",
+    "browser-cli reference get --id quickstart",
+    "browser-cli action observe --session-id <session_id>",
+    "browser-cli action act --session-id <session_id>",
+    "browser-cli action extract --session-id <session_id>",
+    "browser-cli doctor --json",
+    "Write custom Playwright only when the CLI cannot express the task",
+)
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
     "connect_from_codex_site_requirements",
@@ -595,6 +610,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_skill_positioning",
         "inspect_quickstart",
         "inspect_usable_status",
+        "skill_status",
         "auth_status",
         "doctor",
         "smoke_session",
@@ -1444,13 +1460,7 @@ def _read_agent_reference_content(reference_id: str) -> str:
     reference = _agent_references().get(reference_id)
     if reference is None:
         raise KeyError(reference_id)
-    package_resource = str(reference["package_resource"])
-    package, resource_name = package_resource.split(":", 1)
-    return (
-        importlib_resources.files(package)
-        .joinpath(resource_name)
-        .read_text(encoding="utf-8")
-    )
+    return _read_package_resource_text(str(reference["package_resource"]))
 
 
 def _agent_examples() -> dict[str, Any]:
@@ -1660,13 +1670,7 @@ def _read_agent_example_content(example_id: str) -> str:
     example = _agent_examples().get(example_id)
     if example is None:
         raise KeyError(example_id)
-    package_resource = str(example["package_resource"])
-    package, resource_name = package_resource.split(":", 1)
-    return (
-        importlib_resources.files(package)
-        .joinpath(resource_name)
-        .read_text(encoding="utf-8")
-    )
+    return _read_package_resource_text(str(example["package_resource"]))
 
 
 def _agent_prompt_metadata() -> dict[str, Any]:
@@ -1686,13 +1690,178 @@ def _read_agent_prompt_metadata_content(metadata_id: str = "openai") -> str:
     metadata = _agent_prompt_metadata().get(metadata_id)
     if metadata is None:
         raise KeyError(metadata_id)
-    package_resource = str(metadata["package_resource"])
+    return _read_package_resource_text(str(metadata["package_resource"]))
+
+
+def _read_package_resource_text(package_resource: str) -> str:
     package, resource_name = package_resource.split(":", 1)
     return (
         importlib_resources.files(package)
         .joinpath(resource_name)
         .read_text(encoding="utf-8")
     )
+
+
+def _sha256_text(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _packaged_skill_resources() -> dict[str, str]:
+    resources = {
+        "SKILL.md": "browser_cli.agent_skill:SKILL.md",
+        "agents/openai.yaml": str(
+            _agent_prompt_metadata()["openai"]["package_resource"]
+        ),
+    }
+    for reference in _agent_references().values():
+        resources[str(reference["path"])] = str(reference["package_resource"])
+    return resources
+
+
+def _default_codex_skill_dir() -> Path:
+    codex_home = os.environ.get(CODEX_HOME_ENV)
+    if codex_home:
+        return (
+            Path(codex_home).expanduser()
+            / "skills"
+            / DEFAULT_CODEX_SKILL_DIRECTORY_NAME
+        )
+    return (
+        Path.home()
+        / ".codex"
+        / "skills"
+        / DEFAULT_CODEX_SKILL_DIRECTORY_NAME
+    )
+
+
+def _skill_dir_from_args(args: argparse.Namespace) -> Path:
+    configured = getattr(args, "skill_dir", None)
+    if configured:
+        return Path(str(configured)).expanduser()
+    return _default_codex_skill_dir()
+
+
+def _skill_install_command(skill_dir: Path, *, force: bool = False) -> str:
+    default_dir = _default_codex_skill_dir()
+    parts = ["browser-cli", "skill", "install"]
+    if skill_dir != default_dir:
+        parts.extend(["--skill-dir", str(skill_dir)])
+    if force:
+        parts.append("--force")
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def _skill_status_command(skill_dir: Path) -> str:
+    default_dir = _default_codex_skill_dir()
+    parts = ["browser-cli", "skill", "status"]
+    if skill_dir != default_dir:
+        parts.extend(["--skill-dir", str(skill_dir)])
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def _packaged_skill_resource_items() -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    items: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    for relative_path, package_resource in _packaged_skill_resources().items():
+        try:
+            content = _read_package_resource_text(package_resource)
+        except Exception as exc:
+            errors.append(
+                {
+                    "path": relative_path,
+                    "package_resource": package_resource,
+                    "error": exc.__class__.__name__,
+                }
+            )
+            continue
+        items.append(
+            {
+                "path": relative_path,
+                "package_resource": package_resource,
+                "content": content,
+                "sha256": _sha256_text(content),
+                "size": len(content.encode("utf-8")),
+            }
+        )
+    return items, errors
+
+
+def _skill_status_payload(skill_dir: Path) -> dict[str, Any]:
+    resource_items, package_errors = _packaged_skill_resource_items()
+    checked_files: list[dict[str, Any]] = []
+    missing_files: list[str] = []
+    stale_files: list[str] = []
+    unreadable_files: list[str] = []
+
+    for item in resource_items:
+        relative_path = str(item["path"])
+        target = skill_dir / relative_path
+        file_payload: dict[str, Any] = {
+            "path": relative_path,
+            "package_resource": item["package_resource"],
+            "target": str(target),
+            "expected_sha256": item["sha256"],
+        }
+        if not target.exists():
+            file_payload["status"] = "missing"
+            missing_files.append(relative_path)
+        elif not target.is_file():
+            file_payload["status"] = "unreadable"
+            file_payload["reason"] = "not_a_file"
+            unreadable_files.append(relative_path)
+        else:
+            try:
+                current = target.read_text(encoding="utf-8")
+            except Exception as exc:
+                file_payload["status"] = "unreadable"
+                file_payload["error"] = exc.__class__.__name__
+                unreadable_files.append(relative_path)
+            else:
+                current_hash = _sha256_text(current)
+                file_payload["current_sha256"] = current_hash
+                if current_hash == item["sha256"]:
+                    file_payload["status"] = "current"
+                else:
+                    file_payload["status"] = "stale"
+                    stale_files.append(relative_path)
+        checked_files.append(file_payload)
+
+    current = (
+        not package_errors
+        and not missing_files
+        and not stale_files
+        and not unreadable_files
+    )
+    if package_errors:
+        status = "packaged_resources_unavailable"
+    elif current:
+        status = "current"
+    elif stale_files:
+        status = "stale"
+    elif missing_files:
+        status = "missing"
+    else:
+        status = "unreadable"
+
+    return {
+        "skill_name": "browser-cli",
+        "install_directory_name": DEFAULT_CODEX_SKILL_DIRECTORY_NAME,
+        "skill_dir": str(skill_dir),
+        "codex_home_env": CODEX_HOME_ENV,
+        "codex_home": str(skill_dir.parent.parent),
+        "installed": (skill_dir / "SKILL.md").is_file(),
+        "status": status,
+        "current": current,
+        "resource_count": len(resource_items),
+        "checked_files": checked_files,
+        "missing_files": missing_files,
+        "stale_files": stale_files,
+        "unreadable_files": unreadable_files,
+        "package_errors": package_errors,
+        "install_command": _skill_install_command(skill_dir),
+        "force_install_command": _skill_install_command(skill_dir, force=True),
+        "status_command": _skill_status_command(skill_dir),
+    }
 
 
 def _quoted_yaml_field(text: str, key: str) -> str | None:
@@ -1745,6 +1914,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli reference get --id usable_status",
                 "browser-cli example get --id setup_verification_playbook --metadata-only",
                 "browser-cli example get --id setup_verification_playbook",
+                "browser-cli skill status",
+                "browser-cli skill install --force",
                 "browser-cli auth status",
                 "browser-cli auth scopes",
                 "browser-cli auth refresh",
@@ -2067,6 +2238,23 @@ def _command_catalog() -> dict[str, Any]:
                         "use_when": (
                             "Setup is unclear, the installed CLI version is new "
                             "to the agent, or the user asks what is usable now."
+                        ),
+                    },
+                    {
+                        "id": "skill_status",
+                        "command": "browser-cli skill status",
+                        "optional": True,
+                        "read": [
+                            "status",
+                            "current",
+                            "skill_dir",
+                            "missing_files",
+                            "stale_files",
+                            "force_install_command",
+                        ],
+                        "use_when": (
+                            "Codex appears to be using stale Skill instructions "
+                            "or the agent needs to refresh the local Skill directory."
                         ),
                     },
                     {
@@ -5105,7 +5293,16 @@ def _browser_cli_command_reference_name(command: str) -> str | None:
     group = tokens[1]
     if group in {"commands", "doctor", "version"}:
         return group
-    if group in {"action", "auth", "case", "context", "example", "reference", "session"}:
+    if group in {
+        "action",
+        "auth",
+        "case",
+        "context",
+        "example",
+        "reference",
+        "session",
+        "skill",
+    }:
         if len(tokens) < 3:
             return None
         return f"{group}.{tokens[2]}"
@@ -6531,6 +6728,72 @@ def _doctor_agent_prompt_check() -> dict[str, Any]:
         "agent_prompt",
         "pass",
         "Packaged agent prompt metadata includes the expected Codex setup guidance.",
+        **common_details,
+    )
+
+
+def _doctor_agent_skill_resources_check() -> dict[str, Any]:
+    resource_items, package_errors = _packaged_skill_resource_items()
+    checked_resources: list[dict[str, Any]] = []
+    missing_patterns: list[str] = []
+    skill_content = ""
+    for item in resource_items:
+        resource_payload = {
+            "path": item["path"],
+            "package_resource": item["package_resource"],
+            "content_length": len(str(item["content"])),
+            "sha256": item["sha256"],
+        }
+        if item["path"] == "SKILL.md":
+            skill_content = str(item["content"])
+        checked_resources.append(resource_payload)
+
+    if skill_content:
+        missing_patterns = [
+            pattern
+            for pattern in DOCTOR_REQUIRED_SKILL_PATTERNS
+            if pattern not in skill_content
+        ]
+    elif not package_errors:
+        missing_patterns = list(DOCTOR_REQUIRED_SKILL_PATTERNS)
+
+    common_details = {
+        "resource_count": len(resource_items),
+        "expected_resource_count": len(_packaged_skill_resources()),
+        "checked_resources": checked_resources,
+        "package_errors": package_errors,
+        "required_patterns": list(DOCTOR_REQUIRED_SKILL_PATTERNS),
+        "missing_patterns": missing_patterns,
+        "status_command": "browser-cli skill status",
+        "install_command": "browser-cli skill install",
+        "force_install_command": "browser-cli skill install --force",
+    }
+
+    if package_errors or missing_patterns:
+        return _doctor_check(
+            "agent_skill_resources",
+            "warn",
+            "Packaged Codex Skill resources are missing or stale.",
+            fix=_doctor_fix(
+                "repair_packaged_agent_skill_resources",
+                commands=[
+                    "browser-cli skill status",
+                    "browser-cli skill install --force",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Packaged Skill resources should include SKILL.md, agents/openai.yaml, and references.",
+                    "Keep root SKILL.md and browser_cli.agent_skill:SKILL.md in sync.",
+                    "Run skill install to refresh a local Codex Skill directory.",
+                ],
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "agent_skill_resources",
+        "pass",
+        "Packaged Codex Skill resources are installable.",
         **common_details,
     )
 
@@ -21261,6 +21524,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     checks.append(_doctor_device_code_contract_check())
     checks.append(_doctor_connect_from_codex_contract_check())
     checks.append(_doctor_agent_prompt_check())
+    checks.append(_doctor_agent_skill_resources_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())
     checks.append(_doctor_context_registry_check())
@@ -22782,6 +23046,134 @@ def cmd_example_get(args: argparse.Namespace) -> None:
         content_length=len(content),
         content_included=True,
         content=content,
+    )
+
+
+def cmd_skill_status(args: argparse.Namespace) -> None:
+    command = "skill.status"
+    skill_dir = _skill_dir_from_args(args)
+    _success(command, **_skill_status_payload(skill_dir))
+
+
+def cmd_skill_install(args: argparse.Namespace) -> None:
+    command = "skill.install"
+    skill_dir = _skill_dir_from_args(args)
+    before = _skill_status_payload(skill_dir)
+    if before["package_errors"]:
+        _failure(
+            command,
+            "packaged_skill_unavailable",
+            "Packaged Codex Skill resources could not be read.",
+            skill_dir=str(skill_dir),
+            package_errors=before["package_errors"],
+            fix=_doctor_fix(
+                "reinstall_browser_cli_skill_resources",
+                commands=[
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    "browser-cli skill status",
+                ],
+                guidance=[
+                    "The installed package should include browser-cli Codex Skill resources.",
+                    "Reinstall browser-cli if packaged Skill resources are unavailable.",
+                ],
+            ),
+        )
+
+    conflicts = [
+        *[str(path) for path in before["stale_files"]],
+        *[str(path) for path in before["unreadable_files"]],
+    ]
+    if conflicts and not bool(args.force):
+        _failure(
+            command,
+            "would_overwrite_skill_files",
+            "Codex Skill files already exist with different or unreadable content.",
+            skill_dir=str(skill_dir),
+            conflicting_files=conflicts,
+            force_required=True,
+            fix=_doctor_fix(
+                "rerun_skill_install_with_force",
+                commands=[_skill_install_command(skill_dir, force=True)],
+                guidance=[
+                    "Review the conflicting files if they may contain local edits.",
+                    "Use --force to replace them with the packaged browser-cli Skill resources.",
+                ],
+            ),
+        )
+
+    resource_items, _package_errors = _packaged_skill_resource_items()
+    status_by_path = {
+        str(item["path"]): str(item["status"])
+        for item in before["checked_files"]
+        if isinstance(item, dict)
+    }
+    written_files: list[str] = []
+    updated_files: list[str] = []
+    skipped_current_files: list[str] = []
+    created_directories: list[str] = []
+
+    for item in resource_items:
+        relative_path = str(item["path"])
+        target = skill_dir / relative_path
+        parent = target.parent
+        if parent.exists() and not parent.is_dir():
+            _failure(
+                command,
+                "skill_parent_path_not_directory",
+                "A parent path for a Codex Skill resource is not a directory.",
+                skill_dir=str(skill_dir),
+                path=relative_path,
+                parent=str(parent),
+            )
+        if not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
+            created_directories.append(str(parent))
+        if target.exists() and not target.is_file():
+            _failure(
+                command,
+                "skill_resource_path_not_file",
+                "A Codex Skill resource path exists but is not a file.",
+                skill_dir=str(skill_dir),
+                path=relative_path,
+                target=str(target),
+            )
+        previous_status = status_by_path.get(relative_path)
+        if previous_status == "current":
+            skipped_current_files.append(relative_path)
+            continue
+        target.write_text(str(item["content"]), encoding="utf-8")
+        if previous_status == "missing":
+            written_files.append(relative_path)
+        else:
+            updated_files.append(relative_path)
+
+    after = _skill_status_payload(skill_dir)
+    _success(
+        command,
+        skill_dir=str(skill_dir),
+        force=bool(args.force),
+        written_files=written_files,
+        updated_files=updated_files,
+        skipped_current_files=skipped_current_files,
+        created_directories=_dedupe_preserving_order(created_directories),
+        before={
+            "status": before["status"],
+            "current": before["current"],
+            "missing_files": before["missing_files"],
+            "stale_files": before["stale_files"],
+            "unreadable_files": before["unreadable_files"],
+        },
+        after={
+            "status": after["status"],
+            "current": after["current"],
+            "missing_files": after["missing_files"],
+            "stale_files": after["stale_files"],
+            "unreadable_files": after["unreadable_files"],
+        },
+        next_steps=[
+            "Restart or reload Codex so the updated Skill instructions are read.",
+            "Run `browser-cli skill status` to verify the installed Skill remains current.",
+        ],
     )
 
 
@@ -29145,6 +29537,48 @@ def _add_example_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     example_get.set_defaults(func=cmd_example_get)
 
 
+def _add_skill_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    skill = subparsers.add_parser(
+        "skill",
+        help="Inspect or install the packaged Codex Skill resources",
+    )
+    skill_subparsers = skill.add_subparsers(
+        dest="skill_command",
+        required=True,
+    )
+
+    skill_status = skill_subparsers.add_parser(
+        "status",
+        help="Compare the installed Codex Skill directory with packaged resources",
+    )
+    skill_status.add_argument(
+        "--skill-dir",
+        help=(
+            "Codex Skill directory to inspect. Defaults to "
+            "$CODEX_HOME/skills/lexmount-browser or ~/.codex/skills/lexmount-browser."
+        ),
+    )
+    skill_status.set_defaults(func=cmd_skill_status)
+
+    skill_install = skill_subparsers.add_parser(
+        "install",
+        help="Install or update packaged Codex Skill resources",
+    )
+    skill_install.add_argument(
+        "--skill-dir",
+        help=(
+            "Codex Skill directory to write. Defaults to "
+            "$CODEX_HOME/skills/lexmount-browser or ~/.codex/skills/lexmount-browser."
+        ),
+    )
+    skill_install.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing stale Skill resource files.",
+    )
+    skill_install.set_defaults(func=cmd_skill_install)
+
+
 def _add_version_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     version_parser = subparsers.add_parser(
         "version",
@@ -29218,6 +29652,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_commands_command(subparsers)
     _add_reference_commands(subparsers)
     _add_example_commands(subparsers)
+    _add_skill_commands(subparsers)
     _add_alias_commands(subparsers)
     _add_json_compatibility_flag(parser)
 

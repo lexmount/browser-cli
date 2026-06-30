@@ -4,6 +4,9 @@ from pathlib import Path
 
 
 SKILL_MD = Path(__file__).resolve().parents[1] / "SKILL.md"
+PACKAGED_SKILL_MD = (
+    Path(__file__).resolve().parents[1] / "browser_cli" / "agent_skill" / "SKILL.md"
+)
 ACTION_PLAYBOOK = (
     Path(__file__).resolve().parents[1] / "references" / "action-playbook.md"
 )
@@ -81,6 +84,10 @@ def test_skill_routes_action_details_to_reference() -> None:
 
 def test_packaged_action_playbook_matches_skill_reference() -> None:
     assert PACKAGED_ACTION_PLAYBOOK.read_text() == ACTION_PLAYBOOK.read_text()
+
+
+def test_packaged_skill_md_matches_root_skill() -> None:
+    assert PACKAGED_SKILL_MD.read_text() == SKILL_MD.read_text()
 
 
 def test_packaged_usable_status_matches_skill_reference() -> None:

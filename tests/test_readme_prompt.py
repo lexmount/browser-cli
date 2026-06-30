@@ -51,6 +51,8 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli auth login --device-code" in prompt
     assert "browser-cli auth login --device-code --wait" in prompt
     assert "available=false 时使用 manual env fallback" in prompt
+    assert "browser-cli skill status" in prompt
+    assert "browser-cli skill install --force" in prompt
     assert "browser-cli commands --workflows-only" in prompt
     assert "browser-cli reference list" in prompt
     assert "browser-cli reference get --id quickstart --metadata-only" in prompt

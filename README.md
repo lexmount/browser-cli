@@ -105,6 +105,9 @@ CLI for you:
    browser-cli --version
    browser-cli version
 5. 先读取当前安装版本提供给 agent 的 workflow 契约，后续按 JSON 中的 workflow.steps 执行，不要解析 --help 文本：
+   browser-cli skill status
+   如果 status 不是 current，先检查 stale_files/missing_files；确认要刷新本机 Codex Skill 后运行：
+   browser-cli skill install --force
    browser-cli commands --workflows-only
    browser-cli commands --workflow setup_and_verify
    browser-cli commands --workflow connect_from_codex_site_requirements
@@ -899,6 +902,9 @@ gap notes.
 `agent_references.usable_status.content_command` points to
 `browser-cli reference get --id usable_status`, which returns the installed
 setup/readiness boundary reference.
+`browser-cli skill status` compares the local Codex Skill directory with the
+packaged Skill resources; use `browser-cli skill install --force` only after
+reviewing `stale_files` or `missing_files`.
 `agent_references.action_playbook.content_command` points to
 `browser-cli reference get --id action_playbook`, which returns the packaged
 markdown content from an installed CLI. `agent_examples` points to packaged

@@ -20,6 +20,7 @@ include = ["browser_cli*"]
 
 [tool.setuptools.package-data]
 browser_cli = [
+    "agent_skill/*.md",
     "agent_references/*.md",
     "agent_examples/*.md",
     "agent_examples/cases/*.yaml",
