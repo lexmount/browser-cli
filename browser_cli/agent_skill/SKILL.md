@@ -11,18 +11,18 @@ ad hoc Playwright scripts.
 
 ## Use When
 
-Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, testing, login reuse, inspection, forms, screenshots, content
-extraction, browser state setup, diagnostics, or repeatable case files. Start with `browser-cli reference get --id quickstart`, `browser-cli auth status`,
-and `browser-cli doctor --json`; then choose a workflow and `browser-cli action guide --task <task>` before custom code. Do not use this
-Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials.
+Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, website testing, login reuse, inspection, forms, screenshots,
+content extraction, browser state setup, diagnostics, or repeatable case files. Start every new browser task with `browser-cli reference get --id quickstart`,
+`browser-cli auth status`, and `browser-cli doctor --json`; then choose a workflow and `browser-cli action guide --task <task>` before custom code.
+Do not use this Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials.
 
 ## Supported Operations
-
-Supports setup/auth/doctor before browser work; Sessions: create, list, get, keepalive, close; Contexts: create, list, get, status, pick, delete with availability/locked
-decisions; navigation/readiness waits after page changes; Inspection and extraction with observe, extract, accessibility, form, link, table, list, dialog, frame, network, console, and
-interactive-only snapshots before choosing targets; Interaction including act, click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
-state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, and repeatable JSON/YAML cases for reproducible tasks.
-
+- Setup and auth: install/version checks, credential state, scoped-token metadata, Connect from Codex requirements, doctor readiness, and smoke-session cleanup.
+- Sessions: create, list, get, keepalive, close, and recover stale sessions; Contexts: create, list, get, status, pick, delete, reuse by metadata, and explain `available`/`locked`/`unavailable` decisions.
+- Navigation and readiness: open URLs, reload, history navigation, and waits for URL, title, load state, network idle, selectors, roles, text, attributes, values, frames, dialogs, storage, cookies, console, and fetch/XHR.
+- Inspection and extraction: observe/extract/page-info plus snapshot, text, links, tables, lists, forms, dialogs, frames, accessibility, interactive-only, network, console, performance, and screenshots.
+- Interaction: act, click-label, click-text, click-role, click-index, fill, select, check/uncheck, hover, press, focus/blur, scroll, drag, file uploads, dialogs/frames, and storage/cookie state changes.
+- Repeatable automation: validate, scaffold, and run JSON/YAML cases with artifacts, events, expectations, and cleanup for reproducible tasks.
 ## Setup
 
 Check availability with `browser-cli --version`, `browser-cli commands --names-only`,

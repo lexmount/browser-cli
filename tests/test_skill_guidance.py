@@ -31,15 +31,19 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "## Use When" in text
     assert "## Supported Operations" in text
     assert "Lexmount remote browser" in text
+    assert "Start every new browser task with" in text
     assert "browser-cli reference get --id connect_from_codex" in text
     assert "browser-cli reference get --id quickstart" in text
     assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli action guide --task <task>" in text
+    assert "Setup and auth" in text
     assert "Sessions: create, list, get, keepalive, close" in text
     assert "Contexts: create, list, get, status, pick, delete" in text
+    assert "Navigation and readiness" in text
     assert "Inspection and extraction" in text
     assert "click-label, click-text, click-role" in text
     assert "interactive-only" in text
+    assert "Repeatable automation" in text
     assert "observe/act/extract planning" in text
     assert "browser-cli action observe --session-id <session_id>" in text
     assert "browser-cli action act --session-id <session_id>" in text

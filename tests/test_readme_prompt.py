@@ -219,6 +219,9 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     assert "short default loop" in text
     assert "element refs" in text
     assert "What Browserbase currently does better" in text
+    assert "What `browser-cli` should copy from that shape" in text
+    assert "Keep one memorable first loop" in text
+    assert "Expose platform capabilities as data" in text
     assert "first-run path is shorter" in text
     assert "browse snapshot" in text
     assert "agent_browser_primitives" in text
@@ -232,4 +235,8 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     assert "plugin package" in text
     assert "capability panel" in text
     assert "Connect from Codex" in text
+    assert "single Connect from Codex flow" in text
+    assert "scoped agent key" in text
+    assert "browser.lexmount.cn project page" in text
+    assert "machine-readable data that `doctor` can verify" in text
     assert "Skill positioning and cloud-browser comparison" in docs_index

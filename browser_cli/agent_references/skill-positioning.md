@@ -100,23 +100,35 @@ What Browserbase currently does better:
 - Product capabilities are named clearly: identity, verified browsers,
   CAPTCHA solving, proxies, and session persistence.
 
+What `browser-cli` should copy from that shape:
+
+- Keep the homepage and Skill entrypoint short enough that an agent immediately
+  knows when to use Lexmount remote browsers and when to choose a local tool.
+- Keep one memorable first loop: doctor, create session, observe, act, extract
+  or capture evidence, close.
+- Expose platform capabilities as data, not prose: credentials, project,
+  scopes, persistence, regions, proxies, quotas, and runtime readiness should
+  be readable by `doctor` or a small command.
+- Preserve the deterministic CLI plan underneath any natural-language,
+  connector, or MCP layer so audits still show what was actually executed.
+
 | Area | Browserbase Skill/MCP Shape | browser-cli Shape | Current Gap |
 | --- | --- | --- | --- |
-| Skill distribution | Marketplace/plugin install paths and an official skill collection. | Local CLI plus `SKILL.md`, README prompt, packaged references, and examples. | Ship a one-step Codex connector/plugin package or skill marketplace install path. |
+| Skill distribution | Marketplace/plugin install paths and an official skill collection. | Local CLI plus `SKILL.md`, README prompt, packaged references, examples, and `browser-cli skill install --force`. | Ship a one-step Codex connector/plugin package or skill marketplace install path. |
 | First action path | A compact `browse open`, `browse snapshot`, interact, snapshot, stop loop. | `first_browser_task` gives agents a short doctor, open, inspect, act, verify/capture, close path while `action observe`, `action act`, `action extract`, and `agent_browser_primitives` cover the first observe/act/extract/verify loop. | Add a natural-language wrapper or MCP tool layer on top of deterministic `action act`. |
 | Environment choice | The Skill explains local, remote Browserbase, and CDP-style modes and when to switch. | `browser-cli` is intentionally focused on Lexmount remote browsers plus persistent contexts. | Keep the README/SKILL boundary clear: use Lexmount remote browser sessions here, use local tools for local apps or already-open local tabs. |
-| Remote platform features | Browserbase advertises Identity, verified browsers, CAPTCHA solving, residential proxies, and session persistence. | Lexmount has remote sessions, contexts, action evidence, structured doctor checks, and case files. | browser.lexmount.cn should surface comparable capability labels, limits, region/proxy choices, and context persistence status if supported. |
-| Auth UX | The Skill points users to account settings and uses environment credentials for remote sessions. | Manual env credentials work today; Connect from Codex, scoped tokens, and device-code contracts are documented but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, revoke/expire UI, and device-code/OAuth. |
+| Remote platform features | Browserbase advertises Identity, verified browsers, CAPTCHA solving, residential proxies, and session persistence. | Lexmount has remote sessions, contexts, action evidence, structured doctor checks, and case files. | browser.lexmount.cn should surface comparable capability labels, limits, region/proxy choices, quotas, and context persistence status if supported. |
+| Auth UX | The Skill points users to account settings and uses environment credentials for remote sessions. | Manual env credentials work today; Connect from Codex, scoped tokens, and device-code contracts are documented but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, one-click revoke/expire UI, and device-code/OAuth. |
 | Determinism | Simple element-ref interaction is fast to explain; natural-language layers are concise but less auditable. | Explicit commands, JSON fields, `action observe`, deterministic `action act` plans, `action extract`, and `agent_browser_primitives` make behavior auditable, testable, and repairable. | Provide MCP-style or natural-language wrappers that call `action act` and preserve the underlying plan and evidence. |
 | Ecosystem breadth | The skill collection includes adjacent skills for tracing, cookie sync, fetch/search, testing, and automation improvement. | `browser-cli` packages references, examples, action guides, and case scaffolds in one CLI. | Add more packaged case examples and, later, companion skills for trace analysis, search/fetch, and site-specific workflows. |
 | Diagnostics | The Browserbase ecosystem includes tracing and troubleshooting guidance. | `doctor`, repair plans, command catalog checks, page diagnostics, console/network snapshots, events, and artifacts are first-class. | Keep first-step docs short enough that agents choose them before custom code. |
 
 ## Defects To Fix Next
 
-1. browser.lexmount.cn onboarding is still the largest product gap: Connect from
-   Codex, Project ID display, scoped key creation, copyable env/install blocks,
-   doctor verification, revoke/expire, and device-code/OAuth are not a single
-   smooth path yet.
+1. browser.lexmount.cn onboarding is still the largest product gap. The site
+   should provide a single Connect from Codex flow that shows the selected
+   Project ID, creates a scoped agent key, returns copyable local-shell setup,
+   links to `browser-cli doctor --json`, and exposes revoke/expire controls.
 2. `browser-cli` has no one-step plugin/marketplace package, hosted MCP, local
    MCP adapter, or native Codex connector. The Skill works, but users still
    install a CLI and follow a prompt.
@@ -127,14 +139,17 @@ What Browserbase currently does better:
    language browser control still need MCP/plugin tooling that translates intent
    to `--kind` plus role/label/text/selector arguments.
 5. The product does not yet expose a clear remote capability matrix in the
-   Skill: identity/session persistence, region/proxy options, anti-bot support,
-   quotas, and browser availability should be visible from browser.lexmount.cn
-   and `doctor`.
+   Skill. Identity/session persistence, region/proxy options, anti-bot support,
+   quotas, browser availability, and context persistence should be visible from
+   browser.lexmount.cn and `doctor`.
 6. The runtime auth story still depends on env API-key credentials for browser
    actions. Device-token metadata, refresh, revoke, and scope checks exist, but
    bearer-token browser runtime support must land across the site, API, SDK, and
    gateway.
-7. Skill docs are improving, but agents still need clearer first-step guidance:
+7. Case files do not yet cover enough real agent tasks. Add examples for login
+   reuse, multi-step checkout/forms, file upload, navigation with assertions,
+   and page diagnostics so agents run artifacts instead of inventing scripts.
+8. Skill docs are improving, but agents still need clearer first-step guidance:
    read `skill_positioning` and `usable_status`, run `auth status`, run
    `doctor`, then choose a workflow and action guide before custom code.
 
@@ -151,5 +166,8 @@ interface on top later:
   handling from normal onboarding.
 - A browser.lexmount.cn capability panel that tells agents which remote browser
   features are enabled for the current project.
+- A browser.lexmount.cn project page that exposes scoped key status, expiration,
+  revoke controls, quotas, regions, proxy availability, and context persistence
+  as machine-readable data that `doctor` can verify.
 - More case-file examples for common agent tasks so Codex can run artifacts
   instead of inventing scripts.
