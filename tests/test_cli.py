@@ -5522,6 +5522,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "capture_visible_state",
     ]
     assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
+    assert checks["command_catalog"]["invalid_workflow_command_references"] == []
     assert checks["action_guides"]["status"] == "pass"
     assert checks["action_guides"]["schema_version"] == 1
     assert checks["action_guides"]["guide_count"] == 14
@@ -6898,8 +6899,53 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],
     }
+    assert catalog["invalid_workflow_command_references"] == []
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
+
+
+def test_doctor_warns_when_agent_workflow_references_unknown_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    catalog = json.loads(json.dumps(cli_module._command_catalog()))
+    steps = catalog["agent_workflows"]["interactive_targeting"]["steps"]
+    steps[0]["fallback_commands"] = [
+        "browser-cli action missing-action --session-id <session_id>"
+    ]
+    monkeypatch.setattr("browser_cli.cli._command_catalog", lambda: catalog)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "warning"
+    assert "command_catalog" in payload["warning_checks"]
+    catalog_check = _checks_by_name(payload)["command_catalog"]
+    assert catalog_check["missing_required_commands"] == []
+    assert catalog_check["missing_required_workflows"] == []
+    assert catalog_check["missing_required_workflow_steps"] == {}
+    assert catalog_check["invalid_workflow_command_references"] == [
+        {
+            "workflow": "interactive_targeting",
+            "step": "inspect_action_guide",
+            "field": "fallback_commands",
+            "command": "browser-cli action missing-action --session-id <session_id>",
+            "command_name": "action.missing-action",
+        }
+    ]
+    assert catalog_check["fix"]["code"] == "upgrade_browser_cli_command_surface"
+    assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
 
 
 def test_doctor_smoke_session_creates_and_closes_temp_session(

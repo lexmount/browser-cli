@@ -4048,6 +4048,61 @@ def _doctor_workflow_step_names(workflow: Any) -> set[str]:
     }
 
 
+def _doctor_workflow_command_references(
+    workflows: Any,
+    command_names: set[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(workflows, dict):
+        return []
+
+    invalid: list[dict[str, Any]] = []
+    scalar_fields = ("command", "follow_up_command")
+    list_fields = ("preferred_commands", "fallback_commands", "alternative_commands")
+    for workflow_id, workflow in workflows.items():
+        if not isinstance(workflow, dict):
+            continue
+        steps = workflow.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            step_id = str(step.get("id") or "")
+            for field in scalar_fields:
+                command = step.get(field)
+                if isinstance(command, str):
+                    command_name = _browser_cli_command_reference_name(command)
+                    if command_name is not None and command_name not in command_names:
+                        invalid.append(
+                            {
+                                "workflow": str(workflow_id),
+                                "step": step_id,
+                                "field": field,
+                                "command": command,
+                                "command_name": command_name,
+                            }
+                        )
+            for field in list_fields:
+                commands = step.get(field)
+                if not isinstance(commands, list):
+                    continue
+                for command in commands:
+                    if not isinstance(command, str):
+                        continue
+                    command_name = _browser_cli_command_reference_name(command)
+                    if command_name is not None and command_name not in command_names:
+                        invalid.append(
+                            {
+                                "workflow": str(workflow_id),
+                                "step": step_id,
+                                "field": field,
+                                "command": command,
+                                "command_name": command_name,
+                            }
+                        )
+    return invalid
+
+
 def _doctor_command_catalog_check() -> dict[str, Any]:
     try:
         catalog = _command_catalog()
@@ -4075,6 +4130,8 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         for command in catalog.get("commands", [])
         if isinstance(command, dict)
     }
+    command_reference_names = set(command_names)
+    command_reference_names.update(COMMAND_ALIASES)
     workflows = catalog.get("agent_workflows")
     workflow_names = set(workflows) if isinstance(workflows, dict) else set()
     missing_commands = [
@@ -4098,12 +4155,21 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
             missing_steps = [step for step in required_steps if step not in step_names]
             if missing_steps:
                 missing_workflow_steps[workflow] = missing_steps
+    invalid_workflow_command_references = _doctor_workflow_command_references(
+        workflows,
+        command_reference_names,
+    )
 
-    if missing_commands or missing_workflows or missing_workflow_steps:
+    if (
+        missing_commands
+        or missing_workflows
+        or missing_workflow_steps
+        or invalid_workflow_command_references
+    ):
         return _doctor_check(
             "command_catalog",
             "warn",
-            "Command catalog is missing commands, workflows, or workflow steps expected by the Codex Skill.",
+            "Command catalog is missing commands, workflows, workflow steps, or workflow command references expected by the Codex Skill.",
             schema_version=catalog.get("schema_version"),
             command_count=len(command_names),
             workflow_count=len(workflow_names),
@@ -4113,6 +4179,7 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
             missing_required_workflows=missing_workflows,
             required_workflow_steps=required_workflow_steps,
             missing_required_workflow_steps=missing_workflow_steps,
+            invalid_workflow_command_references=invalid_workflow_command_references,
             fix=_doctor_fix(
                 "upgrade_browser_cli_command_surface",
                 commands=[
@@ -4141,6 +4208,7 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         missing_required_workflows=[],
         required_workflow_steps=required_workflow_steps,
         missing_required_workflow_steps={},
+        invalid_workflow_command_references=[],
     )
 
 
