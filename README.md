@@ -123,6 +123,7 @@ CLI for you:
    browser-cli case schema
    browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
    browser-cli case scaffold --template form-fill --output form-case.yaml
+   browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 8. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
 9. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先读取权限目录和站点契约：
@@ -393,6 +394,7 @@ browser-cli example get --id page_inspection_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 ```
 
 `commands` returns the current parser-backed command catalog, option metadata,
@@ -789,6 +791,7 @@ browser-cli commands
 browser-cli commands --workflow case_file_task
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
 browser-cli doctor
@@ -953,6 +956,7 @@ browser-cli case schema --action fill-label
 browser-cli example get --id form_fill_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli case scaffold --template form-fill --output form-case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>

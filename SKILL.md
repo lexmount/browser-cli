@@ -203,7 +203,7 @@ and `agent_references.action_playbook.content_command` or
 `browser-cli reference get --id action_playbook` for action guidance from an
 installed CLI. Use `browser-cli example list` and
 `browser-cli example get --id page_inspection_case` when a common task or case
-file template would help. Use `browser-cli case scaffold --template page-inspection`
+file template would help. Use `browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template interactive-targeting`
 to generate a valid starter case before hand-writing YAML, then follow each workflow step's `read` array first;
 it names the auth availability, export usability, and context reuse fields that
 drive the next decision.
@@ -251,7 +251,7 @@ browser-cli commands --workflow case_file_task
 ```
 
 Run `browser-cli case schema` before hand-writing a case file. Generate starters with
-`browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template form-fill`,
+`browser-cli case scaffold --template page-inspection`, `browser-cli case scaffold --template form-fill`, or `browser-cli case scaffold --template interactive-targeting`,
 validate, then run with `--close-created-session`. Read `supported_actions`, `required_fields`, `step_options.expect`,
 semantic/navigation/state actions such as `fill-label`, `fill`, `click-label`, `click-role`,
 `select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-network`, `wait-console`, `wait-role`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,

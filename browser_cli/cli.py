@@ -506,6 +506,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_interactive_targeting_case_example",
         "scaffold_case_file",
         "scaffold_form_case_file",
+        "scaffold_interactive_targeting_case_file",
         "validate_case_file",
         "run_case_file",
     ),
@@ -1473,6 +1474,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
@@ -2393,6 +2395,21 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "scaffold_form_case_file",
                         "command": "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_interactive_targeting_case_file",
+                        "command": "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -20435,7 +20452,7 @@ def cmd_version(args: argparse.Namespace) -> None:
     )
 
 
-CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill")
+CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill", "interactive-targeting")
 
 EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "accessibility-snapshot": tuple(),
@@ -20777,6 +20794,78 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                 {
                     "action": "screenshot",
                     "output": f"{stem}-filled.png",
+                },
+            ],
+        }
+
+    if template == "interactive-targeting":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny interactive fixture, inspect actionable targets, "
+                "click by role, and verify the result with first-class browser-cli actions."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Interactive targeting fixture</h1>
+      <p id="status" role="status" aria-live="polite">Waiting</p>
+      <button type="button" aria-label="Launch report">Launch report</button>
+      <button type="button" aria-label="Archive report">Archive report</button>
+    </main>
+  `;
+  const status = document.querySelector("#status");
+  document.querySelector("[aria-label='Launch report']").addEventListener("click", () => {
+    status.textContent = "Launch report clicked";
+  });
+  document.querySelector("[aria-label='Archive report']").addEventListener("click", () => {
+    status.textContent = "Archive report clicked";
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "interactive-snapshot",
+                    "max_nodes": 20,
+                },
+                {
+                    "action": "accessibility-snapshot",
+                    "max_nodes": 40,
+                },
+                {
+                    "action": "click-role",
+                    "role": "button",
+                    "name": "Launch report",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#status",
+                    "text": "Launch report clicked",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#status",
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
                 },
             ],
         }
@@ -22342,6 +22431,7 @@ def cmd_case_schema(args: argparse.Namespace) -> None:
         "schema_version": 1,
         "supported_actions": sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
         "action_count": len(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
+        "scaffold_templates": list(CASE_SCAFFOLD_TEMPLATES),
         "required_fields": {
             action: list(fields)
             for action, fields in sorted(BROWSER_CLI_REQUIRED_CASE_FIELDS.items())

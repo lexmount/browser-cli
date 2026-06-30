@@ -369,6 +369,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli example get --id form_fill_case --metadata-only"
         in payload["agent_entrypoints"]["case_file_task"]
     )
@@ -939,6 +943,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "inspect_interactive_targeting_case_example",
         "scaffold_case_file",
         "scaffold_form_case_file",
+        "scaffold_interactive_targeting_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -970,14 +975,20 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert case_steps[6]["optional"] is True
     assert "case.steps" in case_steps[6]["read"]
     assert "supported_actions" in case_steps[6]["read"]
-    assert case_steps[7]["command"] == "browser-cli case validate --file <case.yaml>"
-    assert case_steps[7]["success_condition"] == "valid=true"
-    assert "errors" in case_steps[7]["read"]
-    assert case_steps[8]["command"] == (
+    assert case_steps[7]["command"] == (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+    )
+    assert case_steps[7]["optional"] is True
+    assert "case.steps" in case_steps[7]["read"]
+    assert "supported_actions" in case_steps[7]["read"]
+    assert case_steps[8]["command"] == "browser-cli case validate --file <case.yaml>"
+    assert case_steps[8]["success_condition"] == "valid=true"
+    assert "errors" in case_steps[8]["read"]
+    assert case_steps[9]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "events_path" in case_steps[8]["read"]
-    assert "message" in case_steps[8]["on_failure_read"]
+    assert "events_path" in case_steps[9]["read"]
+    assert "message" in case_steps[9]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
     assert context_steps[0]["id"] == "list_reuse_candidates"
     assert context_steps[0]["optional"] is True
@@ -2372,7 +2383,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "events_path"
-        in payload["agent_workflows"]["case_file_task"]["steps"][8]["read"]
+        in payload["agent_workflows"]["case_file_task"]["steps"][9]["read"]
     )
     assert (
         "selection_summary.recommended_next_action"
@@ -3000,6 +3011,11 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["ok"] is True
     assert payload["command"] == "case.schema"
     assert payload["schema_version"] == 1
+    assert payload["scaffold_templates"] == [
+        "page-inspection",
+        "form-fill",
+        "interactive-targeting",
+    ]
     assert payload["supported_actions"] == [
         "accessibility-snapshot",
         "blur",
@@ -3482,6 +3498,52 @@ def test_case_scaffold_writes_valid_yaml_case_file(
     assert "action: wait-text" in content
     assert "action: get-value-role" in content
     assert "action: type" not in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 8
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_interactive_targeting_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "interactive-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "interactive-targeting",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "interactive-targeting"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][2]["action"] == "interactive-snapshot"
+    assert payload["case"]["steps"][3]["action"] == "accessibility-snapshot"
+    assert payload["case"]["steps"][4]["action"] == "click-role"
+    assert payload["case"]["steps"][7]["output"] == "interactive-targeting.png"
+    content = output.read_text()
+    assert "name: interactive-targeting" in content
+    assert "action: interactive-snapshot" in content
+    assert "action: accessibility-snapshot" in content
+    assert "action: click-role" in content
+    assert "action: wait-text" in content
+    assert "action: get-text" in content
+    assert "action: click\n" not in content
     result = validate_case_file(output)
     assert result.valid is True
     assert result.step_count == 8
@@ -4664,6 +4726,7 @@ def test_commands_catalog_returns_case_file_task_workflow(
         "inspect_interactive_targeting_case_example",
         "scaffold_case_file",
         "scaffold_form_case_file",
+        "scaffold_interactive_targeting_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -4692,13 +4755,18 @@ def test_commands_catalog_returns_case_file_task_workflow(
     )
     assert steps[6]["optional"] is True
     assert "case.steps" in steps[6]["read"]
-    assert steps[7]["success_condition"] == "valid=true"
-    assert "step_count" in steps[7]["read"]
-    assert steps[8]["command"] == (
+    assert steps[7]["command"] == (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+    )
+    assert steps[7]["optional"] is True
+    assert "case.steps" in steps[7]["read"]
+    assert steps[8]["success_condition"] == "valid=true"
+    assert "step_count" in steps[8]["read"]
+    assert steps[9]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "artifacts_dir" in steps[8]["read"]
-    assert "steps" in steps[8]["on_failure_read"]
+    assert "artifacts_dir" in steps[9]["read"]
+    assert "steps" in steps[9]["on_failure_read"]
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
         "browser-cli case schema --action fill-label"
@@ -4718,6 +4786,10 @@ def test_commands_catalog_returns_case_file_task_workflow(
     )
     assert (
         "browser-cli case scaffold --template form-fill --output form-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
@@ -5326,6 +5398,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "inspect_interactive_targeting_case_example",
         "scaffold_case_file",
         "scaffold_form_case_file",
+        "scaffold_interactive_targeting_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -6574,6 +6647,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "inspect_form_case_example",
                 "inspect_interactive_targeting_case_example",
                 "scaffold_form_case_file",
+                "scaffold_interactive_targeting_case_file",
             ],
         "one_off_page_task": ["close_session"],
         "navigation_flow": ["verify_navigation_result"],

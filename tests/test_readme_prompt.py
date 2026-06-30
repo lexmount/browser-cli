@@ -65,6 +65,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli case schema" in prompt
     assert "browser-cli case scaffold --template page-inspection" in prompt
     assert "browser-cli case scaffold --template form-fill" in prompt
+    assert "browser-cli case scaffold --template interactive-targeting" in prompt
     assert "不要先写自定义 Playwright/JS" in prompt
     assert "browser-cli commands --workflow setup_and_verify" in prompt
     assert (

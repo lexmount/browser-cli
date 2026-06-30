@@ -129,7 +129,8 @@ creation steps so agents can avoid leaking sessions or consuming quota.
 The case file task workflow includes case command discovery, `case schema`
 inspection, action-specific schema lookup, `form_fill_case` and
 `interactive_targeting_case` example discovery,
-optional page/form `case scaffold` generation, case validation, and
+optional page/form/interactive `case scaffold` generation, `scaffold_templates`,
+case validation, and
 `--close-created-session` case runs with `supported_actions`,
 `required_fields`, `next_commands`, `events_path`, `artifacts_dir`, `session`,
 and `steps` fields for repeatable smoke tests or regressions.

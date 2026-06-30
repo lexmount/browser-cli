@@ -226,6 +226,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`browser-cli example list`" in text
     assert "`browser-cli example get --id page_inspection_case`" in text
     assert "`browser-cli example get --id interactive_targeting_case`" in text
+    assert "`scaffold_templates`" in text
     assert "`load_when`" in text
     assert "`related_workflows`" in text
     assert "`grep_patterns`" in text
