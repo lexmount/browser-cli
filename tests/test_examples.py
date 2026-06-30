@@ -54,6 +54,19 @@ def test_interactive_targeting_case_uses_semantic_targets() -> None:
     assert "action: click\n" not in text
 
 
+def test_agent_primitives_case_uses_observe_act_extract() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "agent-primitives.yaml").read_text()
+
+    assert "name: agent-primitives" in text
+    assert "action: observe" in text
+    assert "action: act" in text
+    assert "kind: click" in text
+    assert "action: extract" in text
+    assert "action: wait-text" in text
+    assert "action: get-text" in text
+    assert "action: click\n" not in text
+
+
 def test_page_diagnostics_case_uses_console_and_network_actions() -> None:
     text = (REPO_ROOT / "examples" / "cases" / "page-diagnostics.yaml").read_text()
 
@@ -91,8 +104,10 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow case_file_task" in text
     assert "browser-cli case schema" in text
     assert "browser-cli case schema --action fill-label" in text
+    assert "browser-cli example get --id agent_primitives_case --metadata-only" in text
     assert "browser-cli example get --id form_fill_case --metadata-only" in text
     assert "browser-cli case scaffold --template page-inspection" in text
+    assert "browser-cli case scaffold --template agent-primitives" in text
     assert "browser-cli case scaffold --template form-fill" in text
     assert "browser-cli case scaffold --template interactive-targeting" in text
     assert "browser-cli case scaffold --template page-diagnostics" in text

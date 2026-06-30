@@ -456,6 +456,7 @@ ACT_KIND_CHOICES = (
 )
 DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
+    "agent-primitives",
     "form-fill",
     "interactive-targeting",
     "page-diagnostics",
@@ -471,6 +472,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "setup_verification_playbook",
     "page_inspection_case",
+    "agent_primitives_case",
     "page_diagnostics_case",
     "form_fill_case",
     "interactive_targeting_case",
@@ -698,10 +700,12 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_case_commands",
         "inspect_case_schema",
         "inspect_semantic_case_action",
+        "inspect_agent_primitives_case_example",
         "inspect_form_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
+        "scaffold_agent_primitives_case_file",
         "scaffold_form_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
@@ -1583,6 +1587,41 @@ def _agent_examples() -> dict[str, Any]:
                 "action: screenshot",
             ],
         },
+        "agent_primitives_case": {
+            "path": "examples/cases/agent-primitives.yaml",
+            "content_command": "browser-cli example get --id agent_primitives_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:agent-primitives.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local agent-primitives case that observes "
+                "a tiny page, acts by role, extracts bounded content, verifies "
+                "text, and screenshots."
+            ),
+            "related_workflows": [
+                "case_file_task",
+                "agent_browser_primitives",
+                "content_extraction",
+                "interactive_targeting",
+            ],
+            "load_when": [
+                "Creating a repeatable observe/act/extract smoke test.",
+                "Needing a case file template for the default agent browser loop.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: agent-primitives",
+                "action: observe",
+                "action: act",
+                "kind: click",
+                "action: extract",
+                "action: wait-text",
+                "action: get-text",
+                "action: screenshot",
+            ],
+        },
         "page_diagnostics_case": {
             "path": "examples/cases/page-diagnostics.yaml",
             "content_command": "browser-cli example get --id page_diagnostics_case",
@@ -2034,10 +2073,12 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case schema --action act",
                 "browser-cli case schema --action extract",
                 "browser-cli case schema --action fill-label",
+                "browser-cli example get --id agent_primitives_case --metadata-only",
                 "browser-cli example get --id form_fill_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+                "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                 "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
@@ -3295,6 +3336,16 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_agent_primitives_case_example",
+                        "command": "browser-cli example get --id agent_primitives_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "inspect_form_case_example",
                         "command": "browser-cli example get --id form_fill_case --metadata-only",
                         "read": [
@@ -3332,6 +3383,21 @@ def _command_catalog() -> dict[str, Any]:
                         "read": [
                             "template",
                             "output",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_agent_primitives_case_file",
+                        "command": "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
                             "valid",
                             "errors",
                             "step_count",
@@ -5633,6 +5699,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case schema --action observe",
                     "browser-cli case schema --action extract",
                     "browser-cli case schema --action fill-label",
+                    "browser-cli case scaffold --template agent-primitives --format json",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
                     "browser-cli case scaffold --template page-diagnostics --format json",
@@ -23312,6 +23379,7 @@ def cmd_version(args: argparse.Namespace) -> None:
 
 CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
+    "agent-primitives",
     "form-fill",
     "interactive-targeting",
     "page-diagnostics",
@@ -23602,6 +23670,87 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                     "action": "screenshot",
                     "output": f"{stem}-page.png",
                     "full_page": True,
+                },
+            ],
+        }
+
+    if template == "agent-primitives":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny page and exercise the agent observe, act, extract, "
+                "and verify loop without custom browser automation code."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Agent primitives fixture</h1>
+      <p id="summary">Revenue: $42</p>
+      <p id="status" role="status" aria-live="polite">Waiting</p>
+      <button type="button" aria-label="Generate insight">Generate insight</button>
+      <a href="#details">Details</a>
+    </main>
+  `;
+  const status = document.querySelector("#status");
+  document.querySelector("[aria-label='Generate insight']").addEventListener("click", () => {
+    status.textContent = "Insight generated";
+    document.querySelector("#summary").textContent = "Revenue: $84";
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "observe",
+                    "surface": ["interactive", "text"],
+                    "selector": "main",
+                    "max_nodes": 40,
+                    "max_chars": 1000,
+                },
+                {
+                    "action": "act",
+                    "kind": "click",
+                    "role": "button",
+                    "name": "Generate insight",
+                },
+                {
+                    "action": "extract",
+                    "surface": ["text", "links"],
+                    "selector": "main",
+                    "max_nodes": 40,
+                    "max_chars": 1000,
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#status",
+                    "text": "Insight generated",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#summary",
+                    "expect": {
+                        "text": "Revenue: $84",
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
                 },
             ],
         }
