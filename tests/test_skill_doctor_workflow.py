@@ -118,6 +118,7 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli reference list" in normalized
+    assert "browser-cli reference get --id quickstart" in normalized
     assert "browser-cli reference get --id usable_status" in normalized
     assert "browser-cli example list" in normalized
     assert (

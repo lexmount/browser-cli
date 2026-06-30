@@ -220,6 +220,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`content_command`" in text
     assert "`package_resource`" in text
     assert "`browser-cli reference list`" in text
+    assert "`browser-cli reference get --id quickstart`" in text
     assert "`browser-cli reference get --id usable_status`" in text
     assert "`browser-cli reference get --id action_playbook`" in text
     assert "`agent_examples`" in text

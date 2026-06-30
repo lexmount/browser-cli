@@ -53,6 +53,8 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "available=false 时使用 manual env fallback" in prompt
     assert "browser-cli commands --workflows-only" in prompt
     assert "browser-cli reference list" in prompt
+    assert "browser-cli reference get --id quickstart --metadata-only" in prompt
+    assert "browser-cli reference get --id quickstart" in prompt
     assert "browser-cli reference get --id usable_status --metadata-only" in prompt
     assert "browser-cli reference get --id usable_status" in prompt
     assert "browser-cli reference get --id action_playbook --metadata-only" in prompt

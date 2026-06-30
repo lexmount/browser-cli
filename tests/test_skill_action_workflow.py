@@ -31,6 +31,13 @@ PACKAGED_SKILL_POSITIONING = (
     / "agent_references"
     / "skill-positioning.md"
 )
+QUICKSTART = Path(__file__).resolve().parents[1] / "references" / "quickstart.md"
+PACKAGED_QUICKSTART = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "quickstart.md"
+)
 
 
 def _normalized_skill_text() -> str:
@@ -73,6 +80,10 @@ def test_packaged_usable_status_matches_skill_reference() -> None:
 
 def test_packaged_skill_positioning_matches_skill_reference() -> None:
     assert PACKAGED_SKILL_POSITIONING.read_text() == SKILL_POSITIONING.read_text()
+
+
+def test_packaged_quickstart_matches_skill_reference() -> None:
+    assert PACKAGED_QUICKSTART.read_text() == QUICKSTART.read_text()
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:

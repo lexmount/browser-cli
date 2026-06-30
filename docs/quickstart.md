@@ -20,6 +20,14 @@ browser-cli --version
 browser-cli version
 browser-cli commands --names-only
 browser-cli commands --workflows-only
+browser-cli reference get --id quickstart --metadata-only
+```
+
+After installation, agents can read this same minimum path from the packaged
+reference:
+
+```bash
+browser-cli reference get --id quickstart
 ```
 
 ## Configure Credentials

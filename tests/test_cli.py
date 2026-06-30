@@ -294,6 +294,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert references["usable_status"]["package_resource"] == (
         "browser_cli.agent_references:usable-status.md"
     )
+    assert references["quickstart"]["path"] == "references/quickstart.md"
+    assert references["quickstart"]["content_command"] == (
+        "browser-cli reference get --id quickstart"
+    )
+    assert references["quickstart"]["package_resource"] == (
+        "browser_cli.agent_references:quickstart.md"
+    )
+    assert "first browser task" in references["quickstart"]["covers"]
     assert "setup_and_verify" in references["usable_status"]["related_workflows"]
     assert "doctor readiness checks" in references["usable_status"]["covers"]
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
@@ -331,6 +339,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli auth connect-requirements" in payload["agent_entrypoints"]["setup"]
     )
     assert "browser-cli reference list" in payload["agent_entrypoints"]["setup"]
+    assert (
+        "browser-cli reference get --id quickstart --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli reference get --id quickstart"
+        in payload["agent_entrypoints"]["setup"]
+    )
     assert (
         "browser-cli reference get --id skill_positioning --metadata-only"
         in payload["agent_entrypoints"]["setup"]
@@ -611,6 +627,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "reference.content_command"
         in setup_steps["inspect_skill_positioning"]["read"]
     )
+    assert setup_steps["inspect_quickstart"]["command"] == (
+        "browser-cli reference get --id quickstart --metadata-only"
+    )
+    assert (
+        setup_steps["inspect_quickstart"]["follow_up_command"]
+        == "browser-cli reference get --id quickstart"
+    )
+    assert "reference.content_command" in setup_steps["inspect_quickstart"]["read"]
     assert setup_steps["inspect_usable_status"]["command"] == (
         "browser-cli reference get --id usable_status --metadata-only"
     )
@@ -2338,6 +2362,9 @@ def test_commands_catalog_returns_workflows_only(
     assert setup_steps["inspect_skill_positioning"]["command"] == (
         "browser-cli reference get --id skill_positioning --metadata-only"
     )
+    assert setup_steps["inspect_quickstart"]["command"] == (
+        "browser-cli reference get --id quickstart --metadata-only"
+    )
     assert setup_steps["inspect_usable_status"]["command"] == (
         "browser-cli reference get --id usable_status --metadata-only"
     )
@@ -2723,7 +2750,7 @@ def test_reference_list_returns_packaged_agent_references(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 3
+    assert payload["reference_count"] == 4
     reference = payload["references"]["action_playbook"]
     assert reference["id"] == "action_playbook"
     assert reference["path"] == "references/action-playbook.md"
@@ -2742,6 +2769,15 @@ def test_reference_list_returns_packaged_agent_references(
         "browser_cli.agent_references:usable-status.md"
     )
     assert "browser_smoke_session.status=pass" in usable["grep_patterns"]
+    quickstart = payload["references"]["quickstart"]
+    assert quickstart["id"] == "quickstart"
+    assert quickstart["path"] == "references/quickstart.md"
+    assert quickstart["content_command"] == "browser-cli reference get --id quickstart"
+    assert quickstart["package_resource"] == (
+        "browser_cli.agent_references:quickstart.md"
+    )
+    assert "Verify Readiness" in quickstart["grep_patterns"]
+    assert "first browser task" in quickstart["covers"]
     positioning = payload["references"]["skill_positioning"]
     assert positioning["id"] == "skill_positioning"
     assert positioning["path"] == "references/skill-positioning.md"
@@ -2763,9 +2799,10 @@ def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 3
+    assert payload["reference_count"] == 4
     assert payload["references"] == [
         "action_playbook",
+        "quickstart",
         "skill_positioning",
         "usable_status",
     ]
@@ -2809,6 +2846,27 @@ def test_reference_get_returns_packaged_usable_status(
     assert "# Browser CLI Usable Status" in payload["content"]
     assert "Readiness Checks" in payload["content"]
     assert "browser.lexmount.cn Work Needed" in payload["content"]
+
+
+def test_reference_get_returns_packaged_quickstart(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "quickstart"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.get"
+    assert payload["reference_id"] == "quickstart"
+    assert payload["reference"]["id"] == "quickstart"
+    assert payload["content_format"] == "markdown"
+    assert payload["content_included"] is True
+    assert payload["content_length"] == len(payload["content"])
+    assert "# Browser CLI Quickstart" in payload["content"]
+    assert "Verify Readiness" in payload["content"]
+    assert "First Browser Task" in payload["content"]
+    assert "browser-cli doctor --json" in payload["content"]
 
 
 def test_reference_get_returns_packaged_skill_positioning(
@@ -2863,6 +2921,7 @@ def test_reference_get_fails_unknown_reference_as_json(
     assert payload["reference_id"] == "missing"
     assert payload["available_references"] == [
         "action_playbook",
+        "quickstart",
         "skill_positioning",
         "usable_status",
     ]
@@ -5347,6 +5406,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_agent_entrypoints"] == []
     assert checks["command_catalog"]["required_workflow_steps"]["setup_and_verify"] == [
         "inspect_skill_positioning",
+        "inspect_quickstart",
         "inspect_usable_status",
         "auth_status",
         "doctor",
@@ -5916,9 +5976,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["agent_prompt"]["missing_patterns"] == []
     assert checks["agent_prompt"]["mismatched_fields"] == []
     assert checks["agent_references"]["status"] == "pass"
-    assert checks["agent_references"]["reference_count"] == 3
+    assert checks["agent_references"]["reference_count"] == 4
     assert checks["agent_references"]["required_references"] == [
         "action_playbook",
+        "quickstart",
         "usable_status",
         "skill_positioning",
     ]
@@ -5949,6 +6010,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert usable_reference["content_length"] > 1000
     assert usable_reference["missing_patterns"] == []
+    quickstart_reference = checked_references["quickstart"]
+    assert quickstart_reference["status"] == "pass"
+    assert quickstart_reference["content_command"] == (
+        "browser-cli reference get --id quickstart"
+    )
+    assert quickstart_reference["package_resource"] == (
+        "browser_cli.agent_references:quickstart.md"
+    )
+    assert quickstart_reference["content_length"] > 1000
+    assert quickstart_reference["missing_patterns"] == []
     skill_positioning_reference = checked_references["skill_positioning"]
     assert skill_positioning_reference["status"] == "pass"
     assert skill_positioning_reference["content_command"] == (
@@ -6872,6 +6943,16 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
                 "browser_smoke_session.status=pass\n"
                 "browser.lexmount.cn Work Needed\n"
             )
+        if reference_id == "quickstart":
+            return (
+                "Install\n"
+                "Configure Credentials\n"
+                "Verify Readiness\n"
+                "First Browser Task\n"
+                "Persistent Login State\n"
+                "Agent Discovery\n"
+                "Current Limits\n"
+            )
         assert reference_id == "skill_positioning"
         return (
             "Primary Use Case\n"
@@ -6895,6 +6976,7 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     assert references["status"] == "warn"
     assert references["required_references"] == [
         "action_playbook",
+        "quickstart",
         "usable_status",
         "skill_positioning",
     ]
@@ -6916,6 +6998,10 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     )
     assert (
         "browser-cli reference get --id usable_status"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli reference get --id quickstart"
         in payload["repair_plan"]["commands"]
     )
     assert (
@@ -7252,6 +7338,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "link_navigation": ["verify_navigation_result"],
         "setup_and_verify": [
             "inspect_skill_positioning",
+            "inspect_quickstart",
             "inspect_usable_status",
             "smoke_session",
         ],

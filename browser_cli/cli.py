@@ -421,7 +421,12 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "form-fill",
     "interactive-targeting",
 )
-DOCTOR_REQUIRED_REFERENCES = ("action_playbook", "usable_status", "skill_positioning")
+DOCTOR_REQUIRED_REFERENCES = (
+    "action_playbook",
+    "quickstart",
+    "usable_status",
+    "skill_positioning",
+)
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "page_inspection_case",
@@ -444,6 +449,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "page_diagnostics",
     "workflow read arrays",
     "required_runtime_auth",
+    "quickstart",
     "reference get",
     "example get",
     "action guide",
@@ -542,6 +548,7 @@ DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS = (
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
         "inspect_skill_positioning",
+        "inspect_quickstart",
         "inspect_usable_status",
         "auth_status",
         "doctor",
@@ -1188,6 +1195,50 @@ def _agent_references() -> dict[str, Any]:
                 "Target Contract",
             ],
         },
+        "quickstart": {
+            "path": "references/quickstart.md",
+            "content_command": "browser-cli reference get --id quickstart",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:quickstart.md",
+            "format": "markdown",
+            "purpose": (
+                "Follow the shortest safe install, credential, doctor, first "
+                "browser task, persistent context, and command-discovery path."
+            ),
+            "load_when": [
+                "Starting from a fresh browser-cli install.",
+                "Guiding a user from install to the first remote-browser task.",
+                "Deciding which doctor fields prove browser work is ready.",
+                "Choosing between temporary sessions and persistent login contexts.",
+            ],
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_auth",
+                "one_off_page_task",
+                "persistent_login_state",
+                "interactive_targeting",
+                "form_interaction",
+                "content_extraction",
+                "page_diagnostics",
+            ],
+            "covers": [
+                "mainline install command",
+                "manual env credential setup",
+                "doctor readiness fields",
+                "first browser task",
+                "persistent login context reuse",
+                "agent command discovery",
+            ],
+            "grep_patterns": [
+                "Install",
+                "Configure Credentials",
+                "Verify Readiness",
+                "First Browser Task",
+                "Persistent Login State",
+                "Agent Discovery",
+                "Current Limits",
+            ],
+        },
         "usable_status": {
             "path": "references/usable-status.md",
             "content_command": "browser-cli reference get --id usable_status",
@@ -1490,6 +1541,8 @@ def _command_catalog() -> dict[str, Any]:
         "agent_entrypoints": {
             "setup": [
                 "browser-cli reference list",
+                "browser-cli reference get --id quickstart --metadata-only",
+                "browser-cli reference get --id quickstart",
                 "browser-cli reference get --id skill_positioning --metadata-only",
                 "browser-cli reference get --id skill_positioning",
                 "browser-cli reference get --id usable_status --metadata-only",
@@ -1748,6 +1801,24 @@ def _command_catalog() -> dict[str, Any]:
                             "The agent is deciding whether browser-cli is the right "
                             "Skill, explaining supported operations, or comparing "
                             "cloud-browser agent gaps."
+                        ),
+                    },
+                    {
+                        "id": "inspect_quickstart",
+                        "command": (
+                            "browser-cli reference get --id quickstart --metadata-only"
+                        ),
+                        "read": [
+                            "reference_id",
+                            "reference.content_command",
+                            "reference.purpose",
+                            "reference.load_when",
+                            "reference.covers",
+                        ],
+                        "follow_up_command": "browser-cli reference get --id quickstart",
+                        "use_when": (
+                            "Starting a fresh install, guiding the first browser "
+                            "task, or explaining the minimum safe setup path."
                         ),
                     },
                     {

@@ -29,6 +29,7 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "## Use When" in text
     assert "## Supported Operations" in text
     assert "Lexmount remote browser" in text
+    assert "browser-cli reference get --id quickstart" in text
     assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli action guide --task <task>" in text
     assert "Sessions: create, list, get, keepalive, close" in text

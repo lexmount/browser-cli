@@ -76,6 +76,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "before using env commands" in prompt
     assert "required_runtime_auth" in prompt
     assert "before treating scoped-token or device-code auth as usable" in prompt
+    assert "quickstart" in prompt
     assert "usable_status" in prompt
     assert "action_playbook" in prompt
     assert "reference get" in prompt

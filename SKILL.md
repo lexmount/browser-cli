@@ -12,7 +12,7 @@ ad hoc Playwright scripts.
 ## Use When
 
 Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, testing, login reuse, inspection, forms, screenshots, content
-extraction, browser state setup, diagnostics, or repeatable case files. Start with `browser-cli reference get --id usable_status`, `browser-cli auth status`,
+extraction, browser state setup, diagnostics, or repeatable case files. Start with `browser-cli reference get --id quickstart`, `browser-cli auth status`,
 and `browser-cli doctor --json`; then choose a workflow and `browser-cli action guide --task <task>` before custom code. Do not use this
 Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials.
 
@@ -26,8 +26,8 @@ state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, a
 ## Setup
 
 Check availability with `browser-cli --version`, `browser-cli commands --names-only`,
-`browser-cli commands --workflows-only`, `browser-cli reference list`, and
-`browser-cli example list`.
+`browser-cli commands --workflows-only`, `browser-cli reference list`,
+`browser-cli reference get --id quickstart --metadata-only`, and `browser-cli example list`.
 If it is not installed, install it with:
 
 ```bash

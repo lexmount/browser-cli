@@ -117,6 +117,8 @@ CLI for you:
    browser-cli action guide --task mouse_interaction
    browser-cli action guide --task state_waits
    browser-cli reference list
+   browser-cli reference get --id quickstart --metadata-only
+   browser-cli reference get --id quickstart
    browser-cli reference get --id skill_positioning --metadata-only
    browser-cli reference get --id skill_positioning
    browser-cli reference get --id usable_status --metadata-only
