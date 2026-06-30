@@ -328,6 +328,12 @@ Default behavior:
 - `doctor` includes an `auth_export_env_contract` check so missing or invalid
   `auth export-env` safety metadata becomes an actionable warning instead of an
   agent-side guess.
+- `doctor` includes an `auth_login_contract` check so missing or invalid
+  `auth login` handoff metadata becomes actionable before agents guide setup.
+  It reports `required_handoff_fields`, `missing_handoff_fields`,
+  `required_setup_blocks`, `missing_setup_blocks`, `invalid_fields`,
+  `setup_block_ids`, `copyable_commands`, `local_env_names`, `verification`,
+  `secret_policy`, `connect_from_codex_url`, and `missing_runtime_auth`.
 - `doctor` includes a `connect_from_codex_contract` check so missing
   browser-site capabilities, `browser_site_acceptance_tests`, token lifecycle,
   runtime auth, or device-code API contract fields become actionable warnings

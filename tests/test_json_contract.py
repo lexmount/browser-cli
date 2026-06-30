@@ -331,6 +331,9 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
     assert "`missing_case_scaffold_templates`" in text
     assert "`checked_case_scaffold_templates`" in text
     assert "`invalid_case_scaffold_templates`" in text
+    assert "`auth_login_contract`" in text
+    assert "`missing_handoff_fields`" in text
+    assert "`missing_setup_blocks`" in text
 
 
 def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:

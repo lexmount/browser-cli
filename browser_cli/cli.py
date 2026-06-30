@@ -85,6 +85,29 @@ DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
     "setup_block",
     "verification",
 )
+DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS = (
+    "recommended_flow",
+    "login_url",
+    "connect_from_codex_url",
+    "connect_from_codex_available",
+    "open_command",
+    "open_url",
+    "install_command",
+    "setup_blocks",
+    "copyable_commands",
+    "local_env",
+    "requested_scopes",
+    "requested_scope_details",
+    "requested_expires_in",
+    "verification",
+    "secret_policy",
+)
+DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS = (
+    "install",
+    "open_connect",
+    "local_env",
+    "verify",
+)
 DOCTOR_REQUIRED_CONNECT_CAPABILITIES = (
     "project_id_display",
     "scoped_api_key",
@@ -4856,6 +4879,242 @@ def _doctor_auth_export_env_contract_check() -> dict[str, Any]:
         "auth_export_env_contract",
         "pass",
         "auth export-env exposes safe local-shell metadata for agents.",
+        **common_details,
+    )
+
+
+def _doctor_auth_login_contract_check() -> dict[str, Any]:
+    try:
+        project_id = None
+        project_id_source = "unset"
+        scopes = list(DEFAULT_CODEX_CONNECT_SCOPES)
+        expires_in = DEFAULT_CODEX_CONNECT_EXPIRES_IN
+        connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        handoff = _auth_login_handoff(
+            connect_url=connect_url,
+            project_id=project_id,
+            project_id_source=project_id_source,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        site_capability_status = _connect_from_codex_site_capability_status(
+            _connect_from_codex_site_capabilities()
+        )
+        runtime_auth = _connect_from_codex_required_runtime_auth()
+    except Exception as exc:
+        return _doctor_check(
+            "auth_login_contract",
+            "warn",
+            "auth login handoff contract could not be built.",
+            error=exc.__class__.__name__,
+            required_handoff_fields=list(DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS),
+            fix=_doctor_fix(
+                "repair_auth_login_contract",
+                commands=[
+                    "browser-cli auth login",
+                    "browser-cli auth connect-requirements",
+                    "browser-cli commands --workflow connect_from_codex_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents rely on auth login handoff fields before guiding users through local credential setup.",
+                    "Upgrade or reinstall browser-cli if auth login cannot produce JSON.",
+                ],
+            ),
+        )
+
+    missing_handoff_fields = [
+        field
+        for field in DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS
+        if field not in handoff
+    ]
+    invalid_fields: list[str] = []
+    if handoff.get("recommended_flow") != "manual_env":
+        invalid_fields.append("recommended_flow")
+    if handoff.get("login_url") != LEXMOUNT_CONSOLE_URL:
+        invalid_fields.append("login_url")
+    if handoff.get("connect_from_codex_available") is not False:
+        invalid_fields.append("connect_from_codex_available")
+    if handoff.get("open_command") != "browser-cli auth login --open":
+        invalid_fields.append("open_command")
+    if handoff.get("open_url") != handoff.get("connect_from_codex_url"):
+        invalid_fields.append("open_url")
+    if handoff.get("connect_from_codex_url") != connect_url:
+        invalid_fields.append("connect_from_codex_url")
+
+    split_url = urlsplit(str(handoff.get("connect_from_codex_url", "")))
+    query_pairs = parse_qsl(split_url.query)
+    query_values = {key: value for key, value in query_pairs if key != "scope"}
+    scope_values = [value for key, value in query_pairs if key == "scope"]
+    if f"{split_url.scheme}://{split_url.netloc}{split_url.path}" != (
+        LEXMOUNT_CODEX_CONNECT_URL
+    ):
+        invalid_fields.append("connect_from_codex_url.base")
+    expected_query = {
+        "source": "browser-cli",
+        "intent": "agent-browser-control",
+        "response": "env",
+        "expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+    }
+    for key, expected in expected_query.items():
+        if query_values.get(key) != expected:
+            invalid_fields.append(f"connect_from_codex_url.{key}")
+    if scope_values != list(DEFAULT_CODEX_CONNECT_SCOPES):
+        invalid_fields.append("connect_from_codex_url.scope")
+
+    setup_blocks = handoff.get("setup_blocks")
+    setup_block_ids: list[str] = []
+    missing_setup_blocks = list(DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS)
+    setup_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(setup_blocks, list):
+        setup_by_id = {
+            str(block.get("id")): block
+            for block in setup_blocks
+            if isinstance(block, dict) and block.get("id") is not None
+        }
+        setup_block_ids = list(setup_by_id)
+        missing_setup_blocks = [
+            block_id
+            for block_id in DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS
+            if block_id not in setup_by_id
+        ]
+    else:
+        invalid_fields.append("setup_blocks")
+
+    install_block = setup_by_id.get("install", {})
+    if "uv tool install git+https://github.com/lexmount/browser-cli.git" not in (
+        install_block.get("commands") or []
+    ):
+        invalid_fields.append("setup_blocks.install.commands")
+    local_env_block = setup_by_id.get("local_env", {})
+    if local_env_block.get("safe_to_paste_in_chat") is not False:
+        invalid_fields.append("setup_blocks.local_env.safe_to_paste_in_chat")
+    if local_env_block.get("local_shell_only") is not True:
+        invalid_fields.append("setup_blocks.local_env.local_shell_only")
+    if local_env_block.get("contains_secret_values") is not False:
+        invalid_fields.append("setup_blocks.local_env.contains_secret_values")
+    if "LEXMOUNT_API_KEY" not in local_env_block.get("secret_env", []):
+        invalid_fields.append("setup_blocks.local_env.secret_env")
+    verify_block = setup_by_id.get("verify", {})
+    if AGENT_DOCTOR_COMMAND not in (verify_block.get("commands") or []):
+        invalid_fields.append("setup_blocks.verify.commands")
+
+    copyable_commands = handoff.get("copyable_commands")
+    if not isinstance(copyable_commands, list):
+        invalid_fields.append("copyable_commands")
+    else:
+        for command in (
+            AGENT_USABLE_STATUS_METADATA_COMMAND,
+            AGENT_USABLE_STATUS_COMMAND,
+            "browser-cli auth status",
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            AGENT_DOCTOR_COMMAND,
+        ):
+            if command not in copyable_commands:
+                invalid_fields.append(f"copyable_commands.{command}")
+
+    local_env = handoff.get("local_env")
+    if not isinstance(local_env, list):
+        invalid_fields.append("local_env")
+        local_env_names: list[str] = []
+    else:
+        env_by_name = {
+            str(item.get("name")): item
+            for item in local_env
+            if isinstance(item, dict) and item.get("name") is not None
+        }
+        local_env_names = list(env_by_name)
+        if env_by_name.get("LEXMOUNT_API_KEY", {}).get("secret") is not True:
+            invalid_fields.append("local_env.LEXMOUNT_API_KEY.secret")
+        if env_by_name.get("LEXMOUNT_PROJECT_ID", {}).get("required") is not True:
+            invalid_fields.append("local_env.LEXMOUNT_PROJECT_ID.required")
+
+    verification = handoff.get("verification")
+    if not isinstance(verification, dict):
+        invalid_fields.append("verification")
+        verification = {}
+    if verification.get("doctor_command") != AGENT_DOCTOR_COMMAND:
+        invalid_fields.append("verification.doctor_command")
+    if verification.get("status_command") != "browser-cli auth status":
+        invalid_fields.append("verification.status_command")
+
+    secret_policy = handoff.get("secret_policy")
+    if not isinstance(secret_policy, dict):
+        invalid_fields.append("secret_policy")
+        secret_policy = {}
+    if "LEXMOUNT_API_KEY" not in secret_policy.get("do_not_paste_in_chat", []):
+        invalid_fields.append("secret_policy.do_not_paste_in_chat")
+    if "browser-cli doctor output with default masking" not in secret_policy.get(
+        "safe_to_share", []
+    ):
+        invalid_fields.append("secret_policy.safe_to_share")
+
+    runtime_auth_ids = [
+        str(item.get("id")) for item in runtime_auth if isinstance(item, dict)
+    ]
+    missing_runtime_auth = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH
+        if item not in runtime_auth_ids
+    ]
+    if missing_runtime_auth:
+        invalid_fields.append("required_runtime_auth")
+
+    invalid_fields = _dedupe_preserving_order(invalid_fields)
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "required_handoff_fields": list(DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS),
+        "missing_handoff_fields": missing_handoff_fields,
+        "required_setup_blocks": list(DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS),
+        "setup_block_ids": setup_block_ids,
+        "missing_setup_blocks": missing_setup_blocks,
+        "invalid_fields": invalid_fields,
+        "copyable_commands": copyable_commands,
+        "local_env_names": local_env_names,
+        "recommended_flow": handoff.get("recommended_flow"),
+        "manual_env_available": True,
+        "connect_from_codex_available": handoff.get("connect_from_codex_available"),
+        "connect_from_codex_url": handoff.get("connect_from_codex_url"),
+        "connect_from_codex_url_masked": False,
+        "requested_scopes": handoff.get("requested_scopes"),
+        "requested_expires_in": handoff.get("requested_expires_in"),
+        "site_capability_status": site_capability_status,
+        "runtime_auth_ids": runtime_auth_ids,
+        "missing_runtime_auth": missing_runtime_auth,
+        "secret_policy": secret_policy,
+        "verification": verification,
+    }
+
+    if missing_handoff_fields or missing_setup_blocks or invalid_fields:
+        return _doctor_check(
+            "auth_login_contract",
+            "warn",
+            "auth login handoff metadata is missing or invalid.",
+            fix=_doctor_fix(
+                "repair_auth_login_contract",
+                commands=[
+                    "browser-cli auth login",
+                    "browser-cli auth login --device-code",
+                    "browser-cli commands --workflow connect_from_codex_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Keep auth login, auth connect-requirements, README, and docs/json-contract.md in sync.",
+                    "Agents should not guide users through browser credentials unless auth login exposes setup_blocks, local_env safety, verification, and secret_policy.",
+                ],
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "auth_login_contract",
+        "pass",
+        "auth login exposes the handoff metadata agents need for safe setup.",
         **common_details,
     )
 
@@ -19317,6 +19576,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     checks.append(_doctor_action_guides_check())
     checks.append(_doctor_case_schema_check())
     checks.append(_doctor_auth_export_env_contract_check())
+    checks.append(_doctor_auth_login_contract_check())
     checks.append(_doctor_connect_from_codex_contract_check())
     checks.append(_doctor_agent_prompt_check())
     checks.append(_doctor_agent_references_check())

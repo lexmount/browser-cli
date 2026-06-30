@@ -5764,6 +5764,67 @@ def test_doctor_checks_install_env_direct_url_and_api(
             "auth status reports configured=true and doctor reports ok=true"
         ),
     }
+    assert checks["auth_login_contract"]["status"] == "pass"
+    assert checks["auth_login_contract"]["required_handoff_fields"] == [
+        "recommended_flow",
+        "login_url",
+        "connect_from_codex_url",
+        "connect_from_codex_available",
+        "open_command",
+        "open_url",
+        "install_command",
+        "setup_blocks",
+        "copyable_commands",
+        "local_env",
+        "requested_scopes",
+        "requested_scope_details",
+        "requested_expires_in",
+        "verification",
+        "secret_policy",
+    ]
+    assert checks["auth_login_contract"]["missing_handoff_fields"] == []
+    assert checks["auth_login_contract"]["required_setup_blocks"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert checks["auth_login_contract"]["setup_block_ids"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert checks["auth_login_contract"]["missing_setup_blocks"] == []
+    assert checks["auth_login_contract"]["invalid_fields"] == []
+    assert checks["auth_login_contract"]["copyable_commands"][:2] == [
+        "browser-cli reference get --id usable_status --metadata-only",
+        "browser-cli reference get --id usable_status",
+    ]
+    assert checks["auth_login_contract"]["local_env_names"] == [
+        "LEXMOUNT_API_KEY",
+        "LEXMOUNT_PROJECT_ID",
+    ]
+    assert checks["auth_login_contract"]["recommended_flow"] == "manual_env"
+    assert checks["auth_login_contract"]["manual_env_available"] is True
+    assert checks["auth_login_contract"]["connect_from_codex_available"] is False
+    assert checks["auth_login_contract"]["connect_from_codex_url"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert checks["auth_login_contract"]["connect_from_codex_url_masked"] is False
+    assert checks["auth_login_contract"]["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert checks["auth_login_contract"]["requested_expires_in"] == "7d"
+    assert checks["auth_login_contract"]["missing_runtime_auth"] == []
+    assert "LEXMOUNT_API_KEY" in checks["auth_login_contract"]["secret_policy"][
+        "do_not_paste_in_chat"
+    ]
+    assert checks["auth_login_contract"]["verification"]["doctor_command"] == (
+        "browser-cli doctor --json"
+    )
     assert checks["connect_from_codex_contract"]["status"] == "pass"
     assert checks["connect_from_codex_contract"]["capability_ids"] == [
         "project_id_display",
@@ -6508,6 +6569,60 @@ def test_doctor_warns_when_auth_export_env_contract_is_incomplete(
     assert "browser-cli auth export-env" in payload["repair_plan"]["commands"]
     assert (
         "browser-cli auth export-env --from-current"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_auth_login_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    original_handoff = cli_module._auth_login_handoff
+
+    def broken_handoff(**kwargs: Any) -> dict[str, Any]:
+        payload = original_handoff(**kwargs)
+        payload.pop("secret_policy")
+        payload["setup_blocks"] = [
+            block
+            for block in payload["setup_blocks"]
+            if block["id"] not in {"local_env", "verify"}
+        ]
+        return payload
+
+    monkeypatch.setattr("browser_cli.cli._auth_login_handoff", broken_handoff)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "auth_login_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["auth_login_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_handoff_fields"] == ["secret_policy"]
+    assert contract["missing_setup_blocks"] == ["local_env", "verify"]
+    assert "secret_policy" in contract["invalid_fields"]
+    assert "setup_blocks.local_env.safe_to_paste_in_chat" in contract[
+        "invalid_fields"
+    ]
+    assert "setup_blocks.verify.commands" in contract["invalid_fields"]
+    assert contract["fix"]["code"] == "repair_auth_login_contract"
+    assert "browser-cli auth login" in payload["repair_plan"]["commands"]
+    assert (
+        "browser-cli commands --workflow connect_from_codex_auth"
         in payload["repair_plan"]["commands"]
     )
     assert "api_connectivity" in payload["skipped_checks"]

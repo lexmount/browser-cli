@@ -944,6 +944,10 @@ reports `required_case_actions`,
 `invalid_case_scaffold_templates`, and `invalid_action_schemas` with upgrade
 guidance when the installed CLI is too old or its packaged starter cases no
 longer validate for case-based smoke tests.
+The `auth_login_contract` check verifies that `auth login` still exposes the
+handoff fields agents need for safe setup, including `setup_blocks`,
+`copyable_commands`, `local_env`, `verification`, `secret_policy`,
+`connect_from_codex_url`, and runtime-auth blockers.
 The `connect_from_codex_contract` check verifies that browser.lexmount.cn
 handoff fields such as capabilities, `browser_site_acceptance_tests`, token
 lifecycle, runtime auth, and device-code API contracts are still present.
