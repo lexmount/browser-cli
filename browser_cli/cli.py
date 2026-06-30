@@ -434,6 +434,7 @@ DOCTOR_REQUIRED_WORKFLOWS = (
 )
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
+        "inspect_skill_positioning",
         "inspect_usable_status",
         "auth_status",
         "doctor",
@@ -1590,6 +1591,25 @@ def _command_catalog() -> dict[str, Any]:
             "setup_and_verify": {
                 "purpose": "Verify local credentials and browser action readiness before the first browser action.",
                 "steps": [
+                    {
+                        "id": "inspect_skill_positioning",
+                        "command": (
+                            "browser-cli reference get --id skill_positioning --metadata-only"
+                        ),
+                        "read": [
+                            "reference_id",
+                            "reference.content_command",
+                            "reference.purpose",
+                            "reference.load_when",
+                            "reference.covers",
+                        ],
+                        "follow_up_command": "browser-cli reference get --id skill_positioning",
+                        "use_when": (
+                            "The agent is deciding whether browser-cli is the right "
+                            "Skill, explaining supported operations, or comparing "
+                            "cloud-browser agent gaps."
+                        ),
+                    },
                     {
                         "id": "inspect_usable_status",
                         "command": (
