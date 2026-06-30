@@ -420,6 +420,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
     "form-fill",
     "interactive-targeting",
+    "page-diagnostics",
 )
 DOCTOR_REQUIRED_REFERENCES = (
     "action_playbook",
@@ -627,6 +628,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "scaffold_case_file",
         "scaffold_form_case_file",
         "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ),
@@ -1338,13 +1340,13 @@ def _agent_references() -> dict[str, Any]:
             "format": "markdown",
             "purpose": (
                 "Explain when agents should use browser-cli, what operations it "
-                "supports, and how its gaps compare with Browserbase MCP."
+                "supports, and how its gaps compare with Browserbase Skills."
             ),
             "load_when": [
                 "Evaluating browser-cli as a Codex Skill.",
                 "Explaining supported operations or when to choose this Skill.",
                 "Comparing browser-cli with another cloud-browser agent interface.",
-                "Planning product gaps such as hosted MCP, act/observe/extract, or Connect from Codex.",
+                "Planning product gaps such as plugin packaging, hosted MCP, act/observe/extract, or Connect from Codex.",
             ],
             "related_workflows": [
                 "setup_and_verify",
@@ -1359,14 +1361,14 @@ def _agent_references() -> dict[str, Any]:
             "covers": [
                 "Skill use cases",
                 "supported operation map",
-                "Browserbase MCP comparison",
+                "Browserbase Skills comparison",
                 "current product gaps",
                 "browser.lexmount.cn onboarding direction",
             ],
             "grep_patterns": [
                 "Primary Use Case",
                 "Supported Today",
-                "Comparison: Browserbase MCP Server",
+                "Comparison: Browserbase Skills",
                 "Defects To Fix Next",
             ],
         },
@@ -1761,6 +1763,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
+                "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
@@ -2744,6 +2747,21 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "scaffold_interactive_targeting_case_file",
                         "command": "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_page_diagnostics_case_file",
+                        "command": "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -4980,6 +4998,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case schema --action fill-label",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
+                    "browser-cli case scaffold --template page-diagnostics --format json",
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
@@ -21738,7 +21757,12 @@ def cmd_version(args: argparse.Namespace) -> None:
     )
 
 
-CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill", "interactive-targeting")
+CASE_SCAFFOLD_TEMPLATES = (
+    "page-inspection",
+    "form-fill",
+    "interactive-targeting",
+    "page-diagnostics",
+)
 
 EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "accessibility-snapshot": tuple(),
@@ -22152,6 +22176,92 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                 {
                     "action": "screenshot",
                     "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "page-diagnostics":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a local diagnostic fixture, capture console/runtime and "
+                "fetch evidence, and save artifacts."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "console-snapshot",
+                    "install_only": True,
+                },
+                {
+                    "action": "network-snapshot",
+                    "install_only": True,
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+async () => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Diagnostics fixture</h1>
+      <p id="status" role="status" aria-live="polite">Starting</p>
+    </main>
+  `;
+  console.info("diagnostic fixture ready");
+  console.error("diagnostic runtime error");
+  await fetch("data:text/plain,diagnostic-network-ok", {
+    method: "GET",
+  });
+  document.querySelector("#status").textContent = "Diagnostics captured";
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "wait-console",
+                    "source": "console",
+                    "level": "error",
+                    "text": "diagnostic runtime error",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "wait-network",
+                    "source": "fetch",
+                    "method": "GET",
+                    "status": 200,
+                    "url": "diagnostic-network-ok",
+                    "url_match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "console-snapshot",
+                    "max_entries": 20,
+                    "output": f"{stem}-console.json",
+                },
+                {
+                    "action": "network-snapshot",
+                    "max_entries": 20,
+                    "output": f"{stem}-network.json",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#status",
+                    "text": "Diagnostics captured",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}-page.png",
                 },
             ],
         }

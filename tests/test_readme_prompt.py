@@ -75,6 +75,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli case scaffold --template page-inspection" in prompt
     assert "browser-cli case scaffold --template form-fill" in prompt
     assert "browser-cli case scaffold --template interactive-targeting" in prompt
+    assert "browser-cli case scaffold --template page-diagnostics" in prompt
     assert "不要先写自定义 Playwright/JS" in prompt
     assert "browser-cli commands --workflow setup_and_verify" in prompt
     assert (
@@ -181,17 +182,18 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "chromium" not in text
 
 
-def test_skill_positioning_doc_compares_browserbase_mcp() -> None:
+def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     text = (DOCS / "skill-positioning.md").read_text()
     docs_index = (DOCS / "README.md").read_text()
 
-    assert "Browserbase MCP Server" in text
-    assert "https://github.com/browserbase/mcp-server-browserbase" in text
+    assert "Browserbase Skills" in text
+    assert "https://github.com/browserbase/skills" in text
+    assert "https://raw.githubusercontent.com/browserbase/skills/main/skills/browser/SKILL.md" in text
     assert "browser-cli reference get --id skill_positioning" in text
-    assert "hosted MCP server as the easiest setup" in text
-    assert "`start`, `end`, `navigate`, `act`, `observe`, and `extract`" in text
+    assert "short default loop" in text
+    assert "element refs" in text
     assert "Current Gap" in text
-    assert "hosted MCP" in text
-    assert "local MCP adapter" in text
+    assert "plugin package" in text
+    assert "capability panel" in text
     assert "Connect from Codex" in text
     assert "Skill positioning and cloud-browser comparison" in docs_index

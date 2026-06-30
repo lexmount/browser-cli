@@ -10,6 +10,7 @@ browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
+browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
 
 Case files can use semantic actions such as `fill`, `fill-label`, `click-role`,

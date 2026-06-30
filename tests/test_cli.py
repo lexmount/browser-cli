@@ -417,6 +417,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli example get --id form_fill_case --metadata-only"
         in payload["agent_entrypoints"]["case_file_task"]
     )
@@ -1008,6 +1012,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "scaffold_case_file",
         "scaffold_form_case_file",
         "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -1049,14 +1054,20 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert case_steps[8]["optional"] is True
     assert "case.steps" in case_steps[8]["read"]
     assert "supported_actions" in case_steps[8]["read"]
-    assert case_steps[9]["command"] == "browser-cli case validate --file <case.yaml>"
-    assert case_steps[9]["success_condition"] == "valid=true"
-    assert "errors" in case_steps[9]["read"]
-    assert case_steps[10]["command"] == (
+    assert case_steps[9]["command"] == (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+    )
+    assert case_steps[9]["optional"] is True
+    assert "case.steps" in case_steps[9]["read"]
+    assert "supported_actions" in case_steps[9]["read"]
+    assert case_steps[10]["command"] == "browser-cli case validate --file <case.yaml>"
+    assert case_steps[10]["success_condition"] == "valid=true"
+    assert "errors" in case_steps[10]["read"]
+    assert case_steps[11]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "events_path" in case_steps[10]["read"]
-    assert "message" in case_steps[10]["on_failure_read"]
+    assert "events_path" in case_steps[11]["read"]
+    assert "message" in case_steps[11]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
     assert context_steps[0]["id"] == "list_reuse_candidates"
     assert context_steps[0]["optional"] is True
@@ -2454,7 +2465,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "events_path"
-        in payload["agent_workflows"]["case_file_task"]["steps"][10]["read"]
+        in payload["agent_workflows"]["case_file_task"]["steps"][11]["read"]
     )
     assert (
         "selection_summary.recommended_next_action"
@@ -2842,8 +2853,8 @@ def test_reference_list_returns_packaged_agent_references(
     assert positioning["package_resource"] == (
         "browser_cli.agent_references:skill-positioning.md"
     )
-    assert "Browserbase MCP comparison" in positioning["covers"]
-    assert "Comparison: Browserbase MCP Server" in positioning["grep_patterns"]
+    assert "Browserbase Skills comparison" in positioning["covers"]
+    assert "Comparison: Browserbase Skills" in positioning["grep_patterns"]
 
 
 def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
@@ -2962,7 +2973,7 @@ def test_reference_get_returns_packaged_skill_positioning(
     assert payload["content_included"] is True
     assert payload["content_length"] == len(payload["content"])
     assert "# browser-cli Skill Positioning" in payload["content"]
-    assert "Comparison: Browserbase MCP Server" in payload["content"]
+    assert "Comparison: Browserbase Skills" in payload["content"]
     assert "Defects To Fix Next" in payload["content"]
 
 
@@ -3213,6 +3224,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "page-inspection",
         "form-fill",
         "interactive-targeting",
+        "page-diagnostics",
     ]
     assert payload["supported_actions"] == [
         "accessibility-snapshot",
@@ -3745,6 +3757,56 @@ def test_case_scaffold_writes_interactive_targeting_case_file(
     result = validate_case_file(output)
     assert result.valid is True
     assert result.step_count == 8
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_page_diagnostics_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "diagnostics-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "page-diagnostics",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "page-diagnostics"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][1]["action"] == "console-snapshot"
+    assert payload["case"]["steps"][1]["install_only"] is True
+    assert payload["case"]["steps"][2]["action"] == "network-snapshot"
+    assert payload["case"]["steps"][2]["install_only"] is True
+    assert payload["case"]["steps"][4]["action"] == "wait-console"
+    assert payload["case"]["steps"][5]["action"] == "wait-network"
+    assert payload["case"]["steps"][6]["output"] == "page-diagnostics-console.json"
+    assert payload["case"]["steps"][7]["output"] == "page-diagnostics-network.json"
+    assert payload["case"]["steps"][9]["output"] == "page-diagnostics-page.png"
+    content = output.read_text()
+    assert "name: page-diagnostics" in content
+    assert "action: console-snapshot" in content
+    assert "action: network-snapshot" in content
+    assert "action: wait-console" in content
+    assert "action: wait-network" in content
+    assert "diagnostic-network-ok" in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 10
     assert payload["next_commands"] == [
         f"browser-cli case validate --file {str(output)}",
         f"browser-cli case run --file {str(output)} --close-created-session",
@@ -4941,6 +5003,7 @@ def test_commands_catalog_returns_case_file_task_workflow(
         "scaffold_case_file",
         "scaffold_form_case_file",
         "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -4978,13 +5041,18 @@ def test_commands_catalog_returns_case_file_task_workflow(
     )
     assert steps[8]["optional"] is True
     assert "case.steps" in steps[8]["read"]
-    assert steps[9]["success_condition"] == "valid=true"
-    assert "step_count" in steps[9]["read"]
-    assert steps[10]["command"] == (
+    assert steps[9]["command"] == (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+    )
+    assert steps[9]["optional"] is True
+    assert "case.steps" in steps[9]["read"]
+    assert steps[10]["success_condition"] == "valid=true"
+    assert "step_count" in steps[10]["read"]
+    assert steps[11]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "artifacts_dir" in steps[10]["read"]
-    assert "steps" in steps[10]["on_failure_read"]
+    assert "artifacts_dir" in steps[11]["read"]
+    assert "steps" in steps[11]["on_failure_read"]
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
         "browser-cli case schema --action fill-label"
@@ -5012,6 +5080,10 @@ def test_commands_catalog_returns_case_file_task_workflow(
     )
     assert (
         "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
@@ -5651,6 +5723,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "scaffold_case_file",
         "scaffold_form_case_file",
         "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -5922,6 +5995,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "page-inspection",
         "form-fill",
         "interactive-targeting",
+        "page-diagnostics",
     ]
     for case_action in (
         "fill-label",
@@ -5946,6 +6020,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert sorted(checked_scaffolds) == [
         "form-fill",
         "interactive-targeting",
+        "page-diagnostics",
         "page-inspection",
     ]
     assert all(item["valid"] for item in checked_scaffolds.values())
@@ -5958,6 +6033,18 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "click-role",
         "wait-text",
         "get-text",
+        "screenshot",
+    ]
+    assert checked_scaffolds["page-diagnostics"]["actions"] == [
+        "open-url",
+        "console-snapshot",
+        "network-snapshot",
+        "eval",
+        "wait-console",
+        "wait-network",
+        "console-snapshot",
+        "network-snapshot",
+        "wait-text",
         "screenshot",
     ]
     assert checks["case_schema"]["invalid_case_scaffold_templates"] == []
@@ -6750,6 +6837,7 @@ def test_doctor_warns_when_case_schema_misses_scaffold_templates(
     assert case_schema["missing_case_scaffold_templates"] == [
         "form-fill",
         "interactive-targeting",
+        "page-diagnostics",
     ]
     assert [
         item["template"] for item in case_schema["checked_case_scaffold_templates"]
@@ -6758,6 +6846,10 @@ def test_doctor_warns_when_case_schema_misses_scaffold_templates(
     assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
     assert (
         "browser-cli case scaffold --template interactive-targeting --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template page-diagnostics --format json"
         in payload["repair_plan"]["commands"]
     )
     assert "api_connectivity" in payload["skipped_checks"]
@@ -6814,9 +6906,14 @@ def test_doctor_warns_when_case_scaffold_template_is_invalid(
     assert checked_scaffolds["form-fill"]["valid"] is False
     assert checked_scaffolds["page-inspection"]["valid"] is True
     assert checked_scaffolds["interactive-targeting"]["valid"] is True
+    assert checked_scaffolds["page-diagnostics"]["valid"] is True
     assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
     assert (
         "browser-cli case scaffold --template interactive-targeting --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template page-diagnostics --format json"
         in payload["repair_plan"]["commands"]
     )
     assert "api_connectivity" in payload["skipped_checks"]
@@ -7154,7 +7251,7 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
         return (
             "Primary Use Case\n"
             "Supported Today\n"
-            "Comparison: Browserbase MCP Server\n"
+            "Comparison: Browserbase Skills\n"
             "Defects To Fix Next\n"
         )
 
@@ -7537,6 +7634,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "inspect_page_diagnostics_case_example",
                 "scaffold_form_case_file",
                 "scaffold_interactive_targeting_case_file",
+                "scaffold_page_diagnostics_case_file",
             ],
         "one_off_page_task": ["close_session"],
         "navigation_flow": ["verify_navigation_result"],
