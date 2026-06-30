@@ -438,6 +438,31 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "state_waits",
     "page_diagnostics",
 )
+DOCTOR_REQUIRED_AGENT_ENTRYPOINTS = (
+    "setup",
+    "connect_from_codex_site_requirements",
+    "connect_from_codex_auth",
+    "device_code_auth",
+    "scoped_token_lifecycle",
+    "session_recovery",
+    "one_off_page_task",
+    "navigation_flow",
+    "link_navigation",
+    "case_file_task",
+    "persistent_login_state",
+    "browser_state_management",
+    "form_interaction",
+    "file_upload",
+    "dialog_frame_handling",
+    "interactive_targeting",
+    "mouse_interaction",
+    "visual_capture",
+    "semantic_waits",
+    "menu_keyboard_flow",
+    "content_extraction",
+    "state_waits",
+    "page_diagnostics",
+)
 DOCTOR_REQUIRED_ACTION_GUIDE_TASKS = (
     "browser_state_management",
     "content_extraction",
@@ -4103,6 +4128,32 @@ def _doctor_workflow_command_references(
     return invalid
 
 
+def _doctor_agent_entrypoint_command_references(
+    entrypoints: Any,
+    command_names: set[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(entrypoints, dict):
+        return []
+
+    invalid: list[dict[str, Any]] = []
+    for entrypoint_id, commands in entrypoints.items():
+        if not isinstance(commands, list):
+            continue
+        for command in commands:
+            if not isinstance(command, str):
+                continue
+            command_name = _browser_cli_command_reference_name(command)
+            if command_name is not None and command_name not in command_names:
+                invalid.append(
+                    {
+                        "entrypoint": str(entrypoint_id),
+                        "command": command,
+                        "command_name": command_name,
+                    }
+                )
+    return invalid
+
+
 def _doctor_command_catalog_check() -> dict[str, Any]:
     try:
         catalog = _command_catalog()
@@ -4133,7 +4184,9 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
     command_reference_names = set(command_names)
     command_reference_names.update(COMMAND_ALIASES)
     workflows = catalog.get("agent_workflows")
+    entrypoints = catalog.get("agent_entrypoints")
     workflow_names = set(workflows) if isinstance(workflows, dict) else set()
+    entrypoint_names = set(entrypoints) if isinstance(entrypoints, dict) else set()
     missing_commands = [
         command for command in DOCTOR_REQUIRED_COMMANDS if command not in command_names
     ]
@@ -4141,6 +4194,11 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         workflow
         for workflow in DOCTOR_REQUIRED_WORKFLOWS
         if workflow not in workflow_names
+    ]
+    missing_agent_entrypoints = [
+        entrypoint
+        for entrypoint in DOCTOR_REQUIRED_AGENT_ENTRYPOINTS
+        if entrypoint not in entrypoint_names
     ]
     required_workflow_steps = {
         workflow: list(steps)
@@ -4159,27 +4217,41 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         workflows,
         command_reference_names,
     )
+    invalid_agent_entrypoint_command_references = (
+        _doctor_agent_entrypoint_command_references(
+            entrypoints,
+            command_reference_names,
+        )
+    )
 
     if (
         missing_commands
         or missing_workflows
+        or missing_agent_entrypoints
         or missing_workflow_steps
         or invalid_workflow_command_references
+        or invalid_agent_entrypoint_command_references
     ):
         return _doctor_check(
             "command_catalog",
             "warn",
-            "Command catalog is missing commands, workflows, workflow steps, or workflow command references expected by the Codex Skill.",
+            "Command catalog is missing commands, workflows, agent entrypoints, workflow steps, or command references expected by the Codex Skill.",
             schema_version=catalog.get("schema_version"),
             command_count=len(command_names),
             workflow_count=len(workflow_names),
+            agent_entrypoint_count=len(entrypoint_names),
             required_commands=list(DOCTOR_REQUIRED_COMMANDS),
             missing_required_commands=missing_commands,
             required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
             missing_required_workflows=missing_workflows,
+            required_agent_entrypoints=list(DOCTOR_REQUIRED_AGENT_ENTRYPOINTS),
+            missing_required_agent_entrypoints=missing_agent_entrypoints,
             required_workflow_steps=required_workflow_steps,
             missing_required_workflow_steps=missing_workflow_steps,
             invalid_workflow_command_references=invalid_workflow_command_references,
+            invalid_agent_entrypoint_command_references=(
+                invalid_agent_entrypoint_command_references
+            ),
             fix=_doctor_fix(
                 "upgrade_browser_cli_command_surface",
                 commands=[
@@ -4202,13 +4274,17 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         schema_version=catalog.get("schema_version"),
         command_count=len(command_names),
         workflow_count=len(workflow_names),
+        agent_entrypoint_count=len(entrypoint_names),
         required_commands=list(DOCTOR_REQUIRED_COMMANDS),
         missing_required_commands=[],
         required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
         missing_required_workflows=[],
+        required_agent_entrypoints=list(DOCTOR_REQUIRED_AGENT_ENTRYPOINTS),
+        missing_required_agent_entrypoints=[],
         required_workflow_steps=required_workflow_steps,
         missing_required_workflow_steps={},
         invalid_workflow_command_references=[],
+        invalid_agent_entrypoint_command_references=[],
     )
 
 

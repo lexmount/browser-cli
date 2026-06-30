@@ -5292,6 +5292,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
     assert checks["command_catalog"]["workflow_count"] == 23
+    assert checks["command_catalog"]["agent_entrypoint_count"] == 23
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -5318,6 +5319,32 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "page_diagnostics",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
+    assert checks["command_catalog"]["required_agent_entrypoints"] == [
+        "setup",
+        "connect_from_codex_site_requirements",
+        "connect_from_codex_auth",
+        "device_code_auth",
+        "scoped_token_lifecycle",
+        "session_recovery",
+        "one_off_page_task",
+        "navigation_flow",
+        "link_navigation",
+        "case_file_task",
+        "persistent_login_state",
+        "browser_state_management",
+        "form_interaction",
+        "file_upload",
+        "dialog_frame_handling",
+        "interactive_targeting",
+        "mouse_interaction",
+        "visual_capture",
+        "semantic_waits",
+        "menu_keyboard_flow",
+        "content_extraction",
+        "state_waits",
+        "page_diagnostics",
+    ]
+    assert checks["command_catalog"]["missing_required_agent_entrypoints"] == []
     assert checks["command_catalog"]["required_workflow_steps"]["setup_and_verify"] == [
         "inspect_skill_positioning",
         "inspect_usable_status",
@@ -5523,6 +5550,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ]
     assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
     assert checks["command_catalog"]["invalid_workflow_command_references"] == []
+    assert (
+        checks["command_catalog"]["invalid_agent_entrypoint_command_references"] == []
+    )
     assert checks["action_guides"]["status"] == "pass"
     assert checks["action_guides"]["schema_version"] == 1
     assert checks["action_guides"]["guide_count"] == 14
@@ -5931,6 +5961,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["schema_version"] == 1
     assert catalog["command_count"] == 3
     assert catalog["workflow_count"] == 0
+    assert catalog["agent_entrypoint_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
     assert "action.press-role" in catalog["missing_required_commands"]
     assert "action.press-key" in catalog["missing_required_commands"]
@@ -6050,7 +6081,33 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "state_waits",
         "page_diagnostics",
     ]
+    assert catalog["missing_required_agent_entrypoints"] == [
+        "setup",
+        "connect_from_codex_site_requirements",
+        "connect_from_codex_auth",
+        "device_code_auth",
+        "scoped_token_lifecycle",
+        "session_recovery",
+        "one_off_page_task",
+        "navigation_flow",
+        "link_navigation",
+        "case_file_task",
+        "persistent_login_state",
+        "browser_state_management",
+        "form_interaction",
+        "file_upload",
+        "dialog_frame_handling",
+        "interactive_targeting",
+        "mouse_interaction",
+        "visual_capture",
+        "semantic_waits",
+        "menu_keyboard_flow",
+        "content_extraction",
+        "state_waits",
+        "page_diagnostics",
+    ]
     assert catalog["missing_required_workflow_steps"] == {}
+    assert catalog["invalid_agent_entrypoint_command_references"] == []
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
@@ -6939,6 +6996,49 @@ def test_doctor_warns_when_agent_workflow_references_unknown_command(
             "workflow": "interactive_targeting",
             "step": "inspect_action_guide",
             "field": "fallback_commands",
+            "command": "browser-cli action missing-action --session-id <session_id>",
+            "command_name": "action.missing-action",
+        }
+    ]
+    assert catalog_check["fix"]["code"] == "upgrade_browser_cli_command_surface"
+    assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_agent_entrypoint_references_unknown_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    catalog = json.loads(json.dumps(cli_module._command_catalog()))
+    catalog["agent_entrypoints"]["interactive_targeting"].append(
+        "browser-cli action missing-action --session-id <session_id>"
+    )
+    monkeypatch.setattr("browser_cli.cli._command_catalog", lambda: catalog)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "warning"
+    assert "command_catalog" in payload["warning_checks"]
+    catalog_check = _checks_by_name(payload)["command_catalog"]
+    assert catalog_check["missing_required_commands"] == []
+    assert catalog_check["missing_required_workflows"] == []
+    assert catalog_check["missing_required_agent_entrypoints"] == []
+    assert catalog_check["missing_required_workflow_steps"] == {}
+    assert catalog_check["invalid_workflow_command_references"] == []
+    assert catalog_check["invalid_agent_entrypoint_command_references"] == [
+        {
+            "entrypoint": "interactive_targeting",
             "command": "browser-cli action missing-action --session-id <session_id>",
             "command_name": "action.missing-action",
         }

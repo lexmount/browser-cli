@@ -915,7 +915,9 @@ required surface includes selector actions, role-based text/existence/geometry
 checks, press/hover/scroll, select/check/uncheck, role/text/label actions,
 accessibility snapshot, interactive-only snapshot, and diagnostic commands. It
 also reports `invalid_workflow_command_references` when a workflow step points
-at a command missing from the parser-backed catalog. The
+at a command missing from the parser-backed catalog, and
+`invalid_agent_entrypoint_command_references` when a quick-start entrypoint does
+the same. The
 `action_guides` check verifies task-specific action guides such as
 `interactive_targeting`, `form_interaction`, `content_extraction`,
 `browser_state_management`, and `page_diagnostics`; it reports

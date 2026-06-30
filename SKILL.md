@@ -163,7 +163,7 @@ what to do:
   especially a manual `session close` command when `created` is true and
   `closed` is false.
 - `command_catalog` with `status: "warn"`: inspect
-  `missing_required_commands` and `invalid_workflow_command_references`; if `action_guides` warns, inspect `missing_required_action_guides`, `invalid_action_guides`, and `invalid_guide_command_references`; follow its `fix` guidance before relying on
+  `missing_required_commands`, `missing_required_agent_entrypoints`, `invalid_workflow_command_references`, and `invalid_agent_entrypoint_command_references`; if `action_guides` warns, inspect `missing_required_action_guides`, `invalid_action_guides`, and `invalid_guide_command_references`; follow its `fix` guidance before relying on
   the full Skill workflow.
 - `case_schema` with `status: "warn"`: inspect `missing_required_case_actions`,
   `missing_case_scaffold_templates`, `missing_action_schemas`, `invalid_action_schemas`; reinstall if needed.

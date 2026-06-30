@@ -315,6 +315,10 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
     assert "`required_workflow_steps`" in text
     assert "`missing_required_workflow_steps`" in text
     assert "`invalid_workflow_command_references`" in text
+    assert "`required_agent_entrypoints`" in text
+    assert "`missing_required_agent_entrypoints`" in text
+    assert "`invalid_agent_entrypoint_command_references`" in text
+    assert "`agent_entrypoint_count`" in text
     assert "`workflow_count`" in text
     assert "`action_guides`" in text
     assert "`required_action_guides`" in text

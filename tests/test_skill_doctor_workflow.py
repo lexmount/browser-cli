@@ -40,7 +40,9 @@ def test_skill_explains_doctor_status_decisions() -> None:
     assert "browser-cli example list" in text
     assert "`invalid_examples` and `checked_examples`" in text
     assert "`missing_required_commands`" in text
+    assert "`missing_required_agent_entrypoints`" in text
     assert "`invalid_workflow_command_references`" in text
+    assert "`invalid_agent_entrypoint_command_references`" in text
     assert "`missing_required_action_guides`" in text
     assert "`invalid_action_guides`" in text
     assert "`invalid_guide_command_references`" in text

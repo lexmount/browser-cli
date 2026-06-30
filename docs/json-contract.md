@@ -389,10 +389,12 @@ Default behavior:
   `missing_required_commands`, `required_workflows`,
   `missing_required_workflows`, `required_workflow_steps`,
   `missing_required_workflow_steps`, `invalid_workflow_command_references`,
-  `schema_version`, `command_count`, and `workflow_count` so agents can detect
-  an installed CLI that is too old for the Skill workflow, missing critical
-  workflow steps such as cleanup, or referencing commands absent from the
-  parser-backed catalog. The required command set covers setup commands, reference/example discovery, case
+  `required_agent_entrypoints`, `missing_required_agent_entrypoints`,
+  `invalid_agent_entrypoint_command_references`, `schema_version`,
+  `command_count`, `workflow_count`, and `agent_entrypoint_count` so agents can
+  detect an installed CLI that is too old for the Skill workflow, missing
+  critical workflow steps such as cleanup, or referencing commands absent from
+  the parser-backed catalog. The required command set covers setup commands, reference/example discovery, case
   scaffold/validate/run, and core browser actions such as press, press-role,
   press-key,
   hover, hover-role, scroll, scroll-into-view, scroll-into-view-role, set-viewport,
