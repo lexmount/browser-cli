@@ -157,6 +157,12 @@ def test_direct_url_masks_secret_by_default(
             "browser-cli",
         ),
         (
+            ["session", "create", "--browser-mode", "nope"],
+            "session.create",
+            "browser mode must be normal or light",
+            "browser-cli session create",
+        ),
+        (
             [],
             "browser-cli",
             "the following arguments are required: command",
@@ -198,6 +204,8 @@ def test_argument_errors_emit_json(
     assert payload["error"] == "argument_error"
     assert message_part in payload["message"]
     assert usage_part in payload["usage"]
+    if argv[:2] == ["session", "create"] and "--browser-mode" in argv:
+        assert "chrome" not in payload["message"].lower()
 
 
 def test_json_compatibility_flag_is_accepted_after_subcommands(
@@ -9521,6 +9529,45 @@ def test_session_create_passes_context_options(
     assert payload["ok"] is True
     assert payload["command"] == "session.create"
     assert payload["session"] == {"session_id": "s1", "status": "active"}
+
+
+def test_session_create_normalizes_deprecated_browser_mode_alias(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    class FakeAdmin:
+        def create_session(
+            self,
+            *,
+            context_id: str | None,
+            create_context: bool,
+            context_mode: str,
+            browser_mode: str,
+            metadata: dict[str, Any] | None,
+        ) -> DummyModel:
+            observed.update(
+                {
+                    "context_id": context_id,
+                    "create_context": create_context,
+                    "context_mode": context_mode,
+                    "browser_mode": browser_mode,
+                    "metadata": metadata,
+                }
+            )
+            return DummyModel({"session_id": "s1", "status": "active"})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "create", "--browser-mode", "chrome-light-docker"])
+
+    assert exc_info.value.code == 0
+    assert observed["browser_mode"] == "light"
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert "chrome" not in json.dumps(payload).lower()
 
 
 def test_session_create_can_reuse_context_by_metadata(

@@ -9,16 +9,29 @@ Use `browser-cli` as the primary interface for Lexmount browser automation.
 Prefer CLI commands and JSON output over importing Python internals or writing
 ad hoc Playwright scripts.
 
+## Use When
+
+Use this Skill for Lexmount remote browser tasks: navigation, inspection, forms,
+persistent login reuse, screenshots, content extraction, browser state setup,
+diagnostics, and repeatable case files through JSON CLI commands. Start with
+`browser-cli reference get --id usable_status`, `browser-cli auth status`,
+`browser-cli doctor --json`, then choose a workflow and
+`browser-cli action guide --task <task>` before custom code. Do not use this
+Skill for local desktop app control, local in-app browser tabs, or tasks that do
+not need Lexmount credentials.
+
+## Supported Operations
+
+Supports setup/auth/doctor; Sessions: create, list, get, keepalive, close;
+Contexts: create, list, get, status, pick, delete with availability/locked
+decisions; navigation/readiness waits; Inspection and extraction including
+accessibility and interactive-only snapshots; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser state storage/cookies; repeatable JSON/YAML cases.
+
 ## Setup
 
-Check that the CLI is available:
-```bash
-browser-cli --version
-browser-cli commands --names-only
-browser-cli commands --workflows-only
-browser-cli reference list
-browser-cli example list
-```
+Check availability with `browser-cli --version`, `browser-cli commands --names-only`,
+`browser-cli commands --workflows-only`, `browser-cli reference list`, and
+`browser-cli example list`.
 If it is not installed, install it with:
 
 ```bash
@@ -318,23 +331,10 @@ Always close temporary sessions created for automation unless the user asks to k
 
 ## Commands
 
-Authentication:
-
-```bash
-browser-cli auth status
-browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
-browser-cli auth scopes
-browser-cli auth scopes --scope browser:actions --include-site-contract
-browser-cli auth token-info --required-scope browser:actions
-browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
-browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
-browser-cli auth connect-requirements
-browser-cli auth login
-browser-cli auth login --open
-browser-cli auth login --device-code
-browser-cli auth export-env
-browser-cli auth export-env --from-current --include-base-url
-```
+Authentication commands include `browser-cli auth status`, `browser-cli auth scopes`,
+`browser-cli auth token-info`, `browser-cli auth refresh`,
+`browser-cli auth logout`, `browser-cli auth connect-requirements`,
+`browser-cli auth login`, and `browser-cli auth export-env`.
 
 Diagnostics:
 

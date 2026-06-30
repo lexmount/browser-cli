@@ -22,6 +22,25 @@ def test_skill_prefers_cli_workflow_over_custom_playwright() -> None:
     assert "Write custom Playwright only when the CLI cannot express the task" in text
 
 
+def test_skill_declares_when_to_use_and_supported_operations() -> None:
+    text = SKILL_MD.read_text()
+    normalized = _normalized_skill_text()
+
+    assert "## Use When" in text
+    assert "## Supported Operations" in text
+    assert "Lexmount remote browser" in text
+    assert "browser-cli reference get --id usable_status" in text
+    assert "browser-cli action guide --task <task>" in text
+    assert "Sessions: create, list, get, keepalive, close" in text
+    assert "Contexts: create, list, get, status, pick, delete" in text
+    assert "Inspection and extraction" in text
+    assert "click-label, click-text, click-role" in text
+    assert "interactive-only" in text
+    assert "Do not use this Skill for local desktop app control" in normalized
+    assert "Chrome" not in text
+    assert "chrome" not in text
+
+
 def test_skill_guides_safe_one_off_sessions() -> None:
     text = SKILL_MD.read_text()
     normalized = _normalized_skill_text()

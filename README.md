@@ -17,6 +17,50 @@ persistent context reuse, and the agent command discovery flow.
 Use [docs/usable-version.md](docs/usable-version.md) for the current mainline
 trial status, readiness checks, and browser.lexmount.cn integration boundaries.
 
+## When To Use This Skill
+
+Use `browser-cli` when Codex or another agent needs to control a Lexmount
+remote browser with machine-readable JSON, deterministic commands, and safe
+secret handling. It is the right first choice for:
+
+- Creating, listing, inspecting, keeping alive, and closing remote sessions.
+- Reusing persistent login state through contexts and metadata filters.
+- Opening pages, waiting for readiness, navigating history, and capturing
+  screenshots or page snapshots.
+- Inspecting page structure before acting: text, links, forms, tables, lists,
+  dialogs, frames, accessibility trees, interactive elements, console logs, and
+  network activity.
+- Clicking, typing, filling, selecting, checking, hovering, pressing keys,
+  scrolling, and targeting by selector, role, label, text, or index.
+- Reading and mutating browser state through storage and cookies.
+- Running repeatable JSON/YAML browser case files instead of ad hoc scripts.
+- Diagnosing setup, credential, API, selector, page, console, and network
+  failures with structured repair hints.
+
+Use the setup and auth commands first when credentials are missing or unclear:
+`browser-cli reference get --id usable_status`, `browser-cli auth status`,
+`browser-cli auth login`, `browser-cli auth export-env`, and
+`browser-cli doctor --json`. Use `browser-cli action guide --task <task>` before
+custom JavaScript. Write custom Playwright only when the action guide and
+catalog cannot express the browser task.
+
+## Supported Operation Map
+
+| Task | Start With | Use When |
+| --- | --- | --- |
+| Install and readiness | `browser-cli doctor --json` | Confirm the CLI, Python runtime, environment variables, packaged references, examples, and API connectivity are usable. |
+| First browser task | `browser-cli commands --workflow one_off_page_task` | Open a page, inspect it, act once, collect evidence, then close the temporary session. |
+| Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
+| Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
+| Interactive targets | `browser-cli action guide --task interactive_targeting` | Choose between role, label, text, selector, and index targeting for buttons, links, menus, and repeated controls. |
+| Content extraction | `browser-cli action guide --task content_extraction` | Prefer outline/text/link/table/list/accessibility snapshots and bounded text reads before custom JS. |
+| State and credentials | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies for setup, cleanup, or assertions. |
+| Diagnostics | `browser-cli commands --workflow page_diagnostics` | Capture console and network evidence around page failures, fetch/XHR issues, and runtime errors. |
+| Repeatable cases | `browser-cli commands --workflow case_file_task` | Validate, scaffold, and run browser tasks as JSON/YAML artifacts with cleanup and generated evidence. |
+
+For the current comparison against another cloud-browser agent interface, see
+[docs/skill-positioning.md](docs/skill-positioning.md).
+
 ## Codex Install Prompt
 
 Copy this prompt into Codex when you want Codex to install and configure the

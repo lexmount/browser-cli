@@ -3694,10 +3694,10 @@ def _normalize_context_mode(value: str) -> str:
 
 
 def _normalize_browser_mode(value: str) -> str:
-    if value not in {"normal", "light", "chrome-light-docker"}:
-        raise argparse.ArgumentTypeError(
-            "browser mode must be normal, light, or chrome-light-docker"
-        )
+    if value == "chrome-light-docker":
+        return "light"
+    if value not in {"normal", "light"}:
+        raise argparse.ArgumentTypeError("browser mode must be normal or light")
     return value
 
 

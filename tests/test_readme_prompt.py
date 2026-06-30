@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 README = Path(__file__).resolve().parents[1] / "README.md"
+DOCS = Path(__file__).resolve().parents[1] / "docs"
 
 
 def _codex_install_prompt() -> str:
@@ -141,3 +142,31 @@ def test_readme_documents_doctor_connect_from_codex_blockers() -> None:
     assert "`required_token_lifecycle`" in text
     assert "`site_capability_status`" in text
     assert "browser.lexmount.cn, SDK, API, and gateway blockers" in text
+
+
+def test_readme_homepage_positions_skill_and_supported_operations() -> None:
+    text = README.read_text()
+
+    assert "## When To Use This Skill" in text
+    assert "## Supported Operation Map" in text
+    assert "Use `browser-cli` when Codex or another agent needs" in text
+    assert "persistent_login_state" in text
+    assert "interactive_targeting" in text
+    assert "content_extraction" in text
+    assert "page_diagnostics" in text
+    assert "docs/skill-positioning.md" in text
+    assert "Chrome" not in text
+    assert "chrome" not in text
+
+
+def test_skill_positioning_doc_compares_browserbase_mcp() -> None:
+    text = (DOCS / "skill-positioning.md").read_text()
+    docs_index = (DOCS / "README.md").read_text()
+
+    assert "Browserbase MCP Server" in text
+    assert "https://github.com/browserbase/mcp-server-browserbase" in text
+    assert "`start`, `end`, `navigate`, `act`, `observe`, and `extract`" in text
+    assert "Current Gap" in text
+    assert "hosted MCP" in text
+    assert "Connect from Codex" in text
+    assert "Skill positioning and cloud-browser comparison" in docs_index
