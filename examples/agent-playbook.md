@@ -404,6 +404,9 @@ Use case files when the task is repeatable or should leave artifacts:
 ```bash
 browser-cli commands --workflow case_file_task
 browser-cli case schema
+browser-cli case schema --action observe
+browser-cli case schema --action act
+browser-cli case schema --action extract
 browser-cli case schema --action fill-label
 browser-cli example get --id form_fill_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
@@ -418,7 +421,7 @@ browser-cli case run --file examples/cases/page-inspection.yaml --close-created-
 
 Case files are good for smoke tests, regression checks, and demos because they
 produce structured JSON summaries and event logs. `case schema` includes
-semantic form and targeting steps such as `act`, `fill`, `fill-label`, `click-label`, `click-role`,
+agent primitives and semantic form/targeting steps such as `observe`, `act`, `extract`, `fill`, `fill-label`, `click-label`, `click-role`,
 `wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `interactive-snapshot`,

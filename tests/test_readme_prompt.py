@@ -74,6 +74,9 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli example get --id interactive_targeting_case" in prompt
     assert "browser-cli example get --id page_diagnostics_case" in prompt
     assert "browser-cli case schema" in prompt
+    assert "browser-cli case schema --action observe" in prompt
+    assert "browser-cli case schema --action act" in prompt
+    assert "browser-cli case schema --action extract" in prompt
     assert "browser-cli case scaffold --template page-inspection" in prompt
     assert "browser-cli case scaffold --template form-fill" in prompt
     assert "browser-cli case scaffold --template interactive-targeting" in prompt

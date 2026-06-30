@@ -448,6 +448,18 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
+        "browser-cli case schema --action observe"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action act"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action extract"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
@@ -1153,7 +1165,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "supported_actions" in case_steps[1]["read"]
     assert "required_fields" in case_steps[1]["read"]
     assert "top_level" in case_steps[1]["read"]
-    assert case_steps[2]["command"] == "browser-cli case schema --action fill-label"
+    assert case_steps[2]["command"] == "browser-cli case schema --action act"
+    assert "browser-cli case schema --action observe" in case_steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action extract" in case_steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action fill-label" in case_steps[2]["fallback_commands"]
     assert "action_schema.result_fields" in case_steps[2]["read"]
     assert case_steps[3]["command"] == (
         "browser-cli example get --id form_fill_case --metadata-only"
@@ -3646,6 +3661,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "eval",
         "exists",
         "exists-role",
+        "extract",
         "fill",
         "fill-label",
         "fill-role",
@@ -3667,6 +3683,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "link-snapshot",
         "list-snapshot",
         "network-snapshot",
+        "observe",
         "open-url",
         "outline-snapshot",
         "page-info",
@@ -3720,6 +3737,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "wait-value-role",
     ]
     assert payload["required_fields"]["act"] == ["kind"]
+    assert payload["required_fields"]["observe"] == []
+    assert payload["required_fields"]["extract"] == []
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
@@ -3750,6 +3769,20 @@ def test_case_schema_returns_supported_actions_and_fields(
         "kind": "click",
         "role": "button",
         "name": "Submit",
+    }
+    assert "surface" in payload["actions"]["observe"]["optional_fields"]
+    assert "snapshots" in payload["actions"]["observe"]["result_fields"]
+    assert payload["actions"]["observe"]["example_step"] == {
+        "action": "observe",
+        "surface": ["interactive", "text"],
+        "selector": "main",
+    }
+    assert "surface" in payload["actions"]["extract"]["optional_fields"]
+    assert "extractions" in payload["actions"]["extract"]["result_fields"]
+    assert payload["actions"]["extract"]["example_step"] == {
+        "action": "extract",
+        "surface": ["text", "links"],
+        "selector": "main",
     }
     assert payload["required_fields"]["wait-load-state"] == []
     assert payload["required_fields"]["wait-state"] == ["selector", "state"]
@@ -3885,7 +3918,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 103,
+        "action_count": 105,
         "supported_actions": [
             "accessibility-snapshot",
             "act",
@@ -3918,6 +3951,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "eval",
             "exists",
             "exists-role",
+            "extract",
             "fill",
             "fill-label",
             "fill-role",
@@ -3939,6 +3973,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "link-snapshot",
             "list-snapshot",
             "network-snapshot",
+            "observe",
             "open-url",
             "outline-snapshot",
             "page-info",
@@ -4362,6 +4397,33 @@ def test_case_validate_diagnostic_wait_actions_reject_invalid_match_modes(
     )
 
 
+def test_case_validate_agent_primitives_reject_invalid_surfaces(tmp_path: Any) -> None:
+    invalid = tmp_path / "invalid-agent-primitives.json"
+    invalid.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {"action": "observe", "surface": "tables"},
+                    {"action": "extract", "surface": ["text", "forms"]},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_case_file(invalid)
+
+    assert result.valid is False
+    assert any(
+        error.startswith("steps[0].surface must be one of")
+        for error in result.errors
+    )
+    assert any(
+        error.startswith("steps[1].surface must be one of")
+        for error in result.errors
+    )
+
+
 def test_case_validate_dispatch_event_rejects_unknown_events(tmp_path: Any) -> None:
     invalid = tmp_path / "invalid-dispatch-events.json"
     invalid.write_text(
@@ -4711,6 +4773,111 @@ def test_extended_case_step_act_returns_deterministic_plan(tmp_path: Any) -> Non
     assert result["plan"]["custom_javascript"] is False
     assert result["action_result"]["clicked"] is True
     assert result["url"] == "https://example.test/act"
+
+
+def test_extended_case_step_observe_collects_requested_surfaces(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/observe"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            if "body_text_length" in expression:
+                return {
+                    "url": self.url,
+                    "title": "Observe",
+                    "ready_state": "complete",
+                }
+            if 'kind: "interactive"' in expression:
+                return {"kind": "interactive", "node_count": 1, "nodes": []}
+            if 'kind: "text"' in expression:
+                return {"kind": "text", "text_count": 2, "texts": []}
+            raise AssertionError("unexpected observe expression")
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "observe",
+            "surface": ["interactive", "text"],
+            "selector": "main",
+            "max_nodes": 12,
+            "max_chars": 80,
+        },
+        tmp_path,
+        0,
+    )
+
+    assert len(page.expressions) == 3
+    assert result["kind"] == "observe"
+    assert result["url"] == "https://example.test/observe"
+    assert result["ready_state"] == "complete"
+    assert result["surface_count"] == 2
+    assert result["surfaces"] == ["interactive", "text"]
+    assert result["page_info"]["title"] == "Observe"
+    assert result["snapshots"]["interactive"]["node_count"] == 1
+    assert result["snapshots"]["text"]["text_count"] == 2
+
+
+def test_extended_case_step_extract_collects_requested_surfaces(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/extract"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            if "body_text_length" in expression:
+                return {
+                    "url": self.url,
+                    "title": "Extract",
+                    "ready_state": "complete",
+                }
+            if 'kind: "text"' in expression:
+                return {
+                    "kind": "text",
+                    "text_count": 2,
+                    "texts": [],
+                    "truncated": True,
+                }
+            if 'kind: "links"' in expression:
+                return {
+                    "kind": "links",
+                    "link_count": 3,
+                    "links": [],
+                    "truncated": False,
+                }
+            raise AssertionError("unexpected extract expression")
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "extract",
+            "surface": ["text", "links"],
+            "selector": "main",
+            "max_nodes": 12,
+            "max_chars": 80,
+            "same_origin_only": True,
+        },
+        tmp_path,
+        0,
+    )
+
+    assert len(page.expressions) == 3
+    assert result["kind"] == "extract"
+    assert result["url"] == "https://example.test/extract"
+    assert result["selector"] == "main"
+    assert result["surface_count"] == 2
+    assert result["surfaces"] == ["text", "links"]
+    assert result["truncated"] is True
+    assert result["truncated_surfaces"] == ["text"]
+    assert result["page_info"]["title"] == "Extract"
+    assert result["extractions"]["text"]["text_count"] == 2
+    assert result["extractions"]["links"]["link_count"] == 3
 
 
 @pytest.mark.parametrize(
@@ -5449,7 +5616,10 @@ def test_commands_catalog_returns_case_file_task_workflow(
     assert steps[1]["command"] == "browser-cli case schema"
     assert "supported_actions" in steps[1]["read"]
     assert "actions" in steps[1]["read"]
-    assert steps[2]["command"] == "browser-cli case schema --action fill-label"
+    assert steps[2]["command"] == "browser-cli case schema --action act"
+    assert "browser-cli case schema --action observe" in steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action extract" in steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action fill-label" in steps[2]["fallback_commands"]
     assert "action_schema.example_step" in steps[2]["read"]
     assert steps[3]["command"] == (
         "browser-cli example get --id form_fill_case --metadata-only"
@@ -5491,6 +5661,18 @@ def test_commands_catalog_returns_case_file_task_workflow(
     assert "artifacts_dir" in steps[11]["read"]
     assert "steps" in steps[11]["on_failure_read"]
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
+    assert (
+        "browser-cli case schema --action observe"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action act"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action extract"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
     assert (
         "browser-cli case schema --action fill-label"
         in payload["agent_entrypoints"]["case_file_task"]
@@ -6467,8 +6649,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 103
-    assert checks["case_schema"]["supported_action_count"] == 103
+    assert checks["case_schema"]["action_count"] == 105
+    assert checks["case_schema"]["supported_action_count"] == 105
     assert checks["case_schema"]["required_case_scaffold_templates"] == [
         "page-inspection",
         "form-fill",
@@ -6476,7 +6658,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "page-diagnostics",
     ]
     for case_action in (
+        "observe",
         "act",
+        "extract",
         "fill-label",
         "click-label",
         "click-role",

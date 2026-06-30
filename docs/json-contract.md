@@ -376,8 +376,9 @@ Default behavior:
 - `case schema` returns `supported_actions`, `required_fields`, per-action
   `actions`, top-level target/session schema, optional `--names-only`, and
   action-specific output with `--action`. Supported case actions include the
-  original page actions plus semantic form and targeting actions such as
-  `act`, `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
+  original page actions plus agent primitives and semantic form/targeting
+  actions such as `observe`, `act`, `extract`, `fill`, `fill-label`,
+  `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
   `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
   `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
   `scroll-into-view-role`, `form-snapshot`, `interactive-snapshot`, and
@@ -429,7 +430,7 @@ Default behavior:
   wait-state, wait-state-role, query, inspect,
   get-attribute, get-attribute-role, wait-attribute, wait-attribute-role, bounding-box, bounding-box-role,
   select-option, select-label, select-role, check, uncheck, check-label,
-  act, check-role, uncheck-label, uncheck-role, click-label, click-text, click-role, click-index,
+  observe, act, extract, check-role, uncheck-label, uncheck-role, click-label, click-text, click-role, click-index,
   double-click, double-click-role, drag-role-to-role, drag-to, right-click, right-click-role,
   focus, focus-role, fill, fill-label, fill-role, get-value, get-value-role,
   wait-value, wait-value-role,

@@ -352,6 +352,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "eval",
     "exists",
     "exists-role",
+    "extract",
     "fill",
     "fill-label",
     "fill-role",
@@ -373,6 +374,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "link-snapshot",
     "list-snapshot",
     "network-snapshot",
+    "observe",
     "open-url",
     "outline-snapshot",
     "page-info",
@@ -2028,6 +2030,9 @@ def _command_catalog() -> dict[str, Any]:
             "case_file_task": [
                 "browser-cli commands --group case",
                 "browser-cli case schema",
+                "browser-cli case schema --action observe",
+                "browser-cli case schema --action act",
+                "browser-cli case schema --action extract",
                 "browser-cli case schema --action fill-label",
                 "browser-cli example get --id form_fill_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
@@ -3276,7 +3281,12 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "inspect_semantic_case_action",
-                        "command": "browser-cli case schema --action fill-label",
+                        "command": "browser-cli case schema --action act",
+                        "fallback_commands": [
+                            "browser-cli case schema --action observe",
+                            "browser-cli case schema --action extract",
+                            "browser-cli case schema --action fill-label",
+                        ],
                         "read": [
                             "action_schema.required_fields",
                             "action_schema.optional_fields",
@@ -5542,7 +5552,9 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                 "verify_case_schema",
                 commands=[
                     "browser-cli case schema --names-only",
-                    "browser-cli case schema --action fill-label",
+                    "browser-cli case schema --action act",
+                    "browser-cli case schema --action observe",
+                    "browser-cli case schema --action extract",
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
@@ -5617,6 +5629,9 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                 "upgrade_browser_cli_case_schema",
                 commands=[
                     "browser-cli case schema --names-only",
+                    "browser-cli case schema --action act",
+                    "browser-cli case schema --action observe",
+                    "browser-cli case schema --action extract",
                     "browser-cli case schema --action fill-label",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
@@ -23332,6 +23347,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "drag-role-to-role": ("source_role", "target_role"),
     "exists": ("selector",),
     "exists-role": ("role",),
+    "extract": tuple(),
     "fill": ("selector", "text"),
     "fill-label": ("label", "text"),
     "fill-role": ("role", "text"),
@@ -23353,6 +23369,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "link-snapshot": tuple(),
     "list-snapshot": tuple(),
     "network-snapshot": tuple(),
+    "observe": tuple(),
     "outline-snapshot": tuple(),
     "page-info": tuple(),
     "performance-snapshot": tuple(),
@@ -23414,6 +23431,12 @@ BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
         "inline": frozenset({"start", "center", "end", "nearest"}),
         "behavior": frozenset({"auto", "smooth"}),
     },
+    "extract": {
+        "surface": frozenset([*EXTRACT_SURFACE_CHOICES, "all"]),
+    },
+    "observe": {
+        "surface": frozenset([*OBSERVE_SURFACE_CHOICES, "all"]),
+    },
     "cookie-set": {"same_site": frozenset({"lax", "strict", "none"})},
     "storage-clear": {"area": frozenset({"local", "session"})},
     "storage-get": {"area": frozenset({"local", "session"})},
@@ -23474,7 +23497,10 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
         ).items():
             if field not in step:
                 continue
-            allow_list = str(action) == "dispatch-event" and field == "event"
+            allow_list = (
+                (str(action) == "dispatch-event" and field == "event")
+                or (str(action) in {"extract", "observe"} and field == "surface")
+            )
             raw_values = (
                 step[field]
                 if allow_list and isinstance(step[field], list)
@@ -23943,6 +23969,18 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "exists": [],
         "exists-role": ["name", "exact", "case_sensitive", "include_hidden"],
+        "extract": [
+            "surface",
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_chars",
+            "include_empty_links",
+            "same_origin_only",
+            "max_rows",
+            "max_cells",
+            "max_items",
+        ],
         "fill-label": ["exact", "case_sensitive"],
         "fill-role": ["name", "exact", "case_sensitive"],
         "focus": ["prevent_scroll"],
@@ -23980,6 +24018,13 @@ def _case_action_schema() -> dict[str, Any]:
             "source",
             "method",
             "failed_only",
+        ],
+        "observe": [
+            "surface",
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_chars",
         ],
         "outline-snapshot": ["selector", "include_hidden", "max_nodes"],
         "page-info": [],
@@ -24405,6 +24450,19 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "url",
         ],
+        "extract": [
+            "kind",
+            "url",
+            "title",
+            "ready_state",
+            "surface_count",
+            "surfaces",
+            "selector",
+            "truncated",
+            "truncated_surfaces",
+            "page_info",
+            "extractions",
+        ],
         "fill": [
             "selector",
             "found",
@@ -24562,6 +24620,16 @@ def _case_action_schema() -> dict[str, Any]:
             "entries",
             "url",
             "title",
+        ],
+        "observe": [
+            "kind",
+            "url",
+            "title",
+            "ready_state",
+            "surface_count",
+            "surfaces",
+            "page_info",
+            "snapshots",
         ],
         "outline-snapshot": [
             "headings",
@@ -25131,6 +25199,11 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "exists": {"action": "exists", "selector": ".toast"},
         "exists-role": {"action": "exists-role", "role": "alert", "name": "Saved"},
+        "extract": {
+            "action": "extract",
+            "surface": ["text", "links"],
+            "selector": "main",
+        },
         "fill": {
             "action": "fill",
             "selector": "input[name=email]",
@@ -25184,6 +25257,11 @@ def _case_action_schema() -> dict[str, Any]:
             "action": "network-snapshot",
             "max_entries": 50,
             "source": "fetch",
+        },
+        "observe": {
+            "action": "observe",
+            "surface": ["interactive", "text"],
+            "selector": "main",
         },
         "outline-snapshot": {"action": "outline-snapshot", "selector": "main"},
         "page-info": {"action": "page-info"},
@@ -25542,6 +25620,12 @@ def _case_step_string_list(step: dict[str, Any], name: str) -> list[str]:
     return [str(item) for item in values]
 
 
+def _case_step_optional_string_list(step: dict[str, Any], name: str) -> list[str]:
+    if name not in step:
+        return []
+    return _case_step_string_list(step, name)
+
+
 def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
     if isinstance(result, dict):
         payload = dict(result)
@@ -25600,6 +25684,81 @@ def _case_act_result(page: Any, step: dict[str, Any]) -> dict[str, Any]:
         "plan": plan,
         "action_result": action_result,
         "url": action_result.get("url", page.url),
+    }
+
+
+def _case_observe_args(step: dict[str, Any]) -> argparse.Namespace:
+    return argparse.Namespace(
+        surface=_case_step_optional_string_list(step, "surface"),
+        selector=_case_step_optional_str(step, "selector"),
+        include_hidden=_case_step_bool(step, "include_hidden"),
+        max_nodes=_case_step_int(step, "max_nodes", default=80),
+        max_chars=_case_step_int(step, "max_chars", default=1000),
+    )
+
+
+def _case_observe_result(page: Any, step: dict[str, Any]) -> dict[str, Any]:
+    args = _case_observe_args(step)
+    page_info = _case_eval_expression(page, _page_info_expression())
+    surfaces = _normalize_observe_surfaces(args.surface)
+    snapshots = {
+        surface: _case_eval_expression(
+            page,
+            _observe_surface_expression(surface, args),
+        )
+        for surface in surfaces
+    }
+    return {
+        "kind": "observe",
+        "url": page_info.get("url", page.url),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "page_info": page_info,
+        "snapshots": snapshots,
+    }
+
+
+def _case_extract_args(step: dict[str, Any]) -> argparse.Namespace:
+    return argparse.Namespace(
+        surface=_case_step_optional_string_list(step, "surface"),
+        selector=_case_step_optional_str(step, "selector"),
+        include_hidden=_case_step_bool(step, "include_hidden"),
+        max_nodes=_case_step_int(step, "max_nodes", default=80),
+        max_chars=_case_step_int(step, "max_chars", default=1000),
+        include_empty_links=_case_step_bool(step, "include_empty_links"),
+        same_origin_only=_case_step_bool(step, "same_origin_only"),
+        max_rows=_case_step_int(step, "max_rows", default=20),
+        max_cells=_case_step_int(step, "max_cells", default=200),
+        max_items=_case_step_int(step, "max_items", default=50),
+    )
+
+
+def _case_extract_result(page: Any, step: dict[str, Any]) -> dict[str, Any]:
+    args = _case_extract_args(step)
+    page_info = _case_eval_expression(page, _page_info_expression())
+    surfaces = _normalize_extract_surfaces(args.surface)
+    extractions = {
+        surface: _case_eval_expression(
+            page,
+            _extract_surface_expression(surface, args),
+        )
+        for surface in surfaces
+    }
+    truncated_surfaces = _extract_truncated_surfaces(extractions)
+    return {
+        "kind": "extract",
+        "url": page_info.get("url", page.url),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "selector": args.selector,
+        "truncated": bool(truncated_surfaces),
+        "truncated_surfaces": truncated_surfaces,
+        "page_info": page_info,
+        "extractions": extractions,
     }
 
 
@@ -25743,6 +25902,10 @@ def _run_browser_cli_case_step(
     action = step["action"]
     if action == "act":
         return _case_act_result(page, step)
+    if action == "observe":
+        return _case_observe_result(page, step)
+    if action == "extract":
+        return _case_extract_result(page, step)
     if action in SUPPORTED_CASE_ACTIONS:
         return _runtime_run_case_step(page, step, artifacts_dir, index)
 

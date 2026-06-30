@@ -153,6 +153,9 @@ CLI for you:
    browser-cli example get --id interactive_targeting_case
    browser-cli example get --id page_diagnostics_case
    browser-cli case schema
+   browser-cli case schema --action observe
+   browser-cli case schema --action act
+   browser-cli case schema --action extract
    browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
    browser-cli case scaffold --template form-fill --output form-case.yaml
    browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
@@ -1027,6 +1030,9 @@ browser-cli commands --workflow session_recovery
 browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow case_file_task
 browser-cli case schema
+browser-cli case schema --action observe
+browser-cli case schema --action act
+browser-cli case schema --action extract
 browser-cli case schema --action fill-label
 browser-cli example get --id form_fill_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
@@ -1059,8 +1065,8 @@ browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
 ```
 
-`case schema` supports repeatable semantic form and targeting steps such as
-`act`, `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
+`case schema` supports repeatable agent primitives and semantic form/targeting steps such as
+`observe`, `act`, `extract`, `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `form-snapshot`,

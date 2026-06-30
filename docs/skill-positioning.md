@@ -41,8 +41,9 @@ Codex browser surface.
   drag, type, fill, clear, set value, file input, dispatch event, submit,
   select, check, and uncheck.
 - Browser state: local/session storage and cookie get/set/remove/clear flows.
-- Repeatable tasks: JSON/YAML case schema, scaffold, validate, run, artifacts,
-  events, expectations, and automatic cleanup for created sessions.
+- Repeatable tasks: JSON/YAML case schema, scaffold, validate, run,
+  observe/act/extract primitive steps, artifacts, events, expectations, and
+  automatic cleanup for created sessions.
 
 ## When Agents Should Start Here
 
