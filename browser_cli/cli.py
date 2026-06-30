@@ -368,6 +368,11 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "wait-value",
     "wait-value-role",
 )
+DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
+    "page-inspection",
+    "form-fill",
+    "interactive-targeting",
+)
 DOCTOR_REQUIRED_REFERENCES = ("action_playbook", "usable_status", "skill_positioning")
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
@@ -4156,6 +4161,9 @@ def _doctor_case_schema_check() -> dict[str, Any]:
             "Case schema could not be built.",
             error=exc.__class__.__name__,
             required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+            required_case_scaffold_templates=list(
+                DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
+            ),
             fix=_doctor_fix(
                 "verify_case_schema",
                 commands=[
@@ -4184,6 +4192,12 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         for action in DOCTOR_REQUIRED_CASE_ACTIONS
         if action in set(missing_supported_actions) | set(missing_action_schemas)
     ]
+    scaffold_templates = set(CASE_SCAFFOLD_TEMPLATES)
+    missing_case_scaffold_templates = [
+        template
+        for template in DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
+        if template not in scaffold_templates
+    ]
     invalid_action_schemas = (
         _doctor_invalid_case_action_schemas(actions)
         if isinstance(actions, dict)
@@ -4196,18 +4210,27 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         ]
     )
 
-    if missing_supported_actions or missing_action_schemas or invalid_action_schemas:
+    if (
+        missing_supported_actions
+        or missing_action_schemas
+        or missing_case_scaffold_templates
+        or invalid_action_schemas
+    ):
         return _doctor_check(
             "case_schema",
             "warn",
-            "Case schema is missing actions or schema fields expected by the Codex Skill.",
+            "Case schema is missing actions, scaffold templates, or schema fields expected by the Codex Skill.",
             schema_version=1,
             action_count=len(action_names),
             supported_action_count=len(supported_actions),
             required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+            required_case_scaffold_templates=list(
+                DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
+            ),
             missing_required_case_actions=missing_required_case_actions,
             missing_supported_actions=missing_supported_actions,
             missing_action_schemas=missing_action_schemas,
+            missing_case_scaffold_templates=missing_case_scaffold_templates,
             invalid_action_schemas=invalid_action_schemas,
             fix=_doctor_fix(
                 "upgrade_browser_cli_case_schema",
@@ -4215,12 +4238,14 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case schema --names-only",
                     "browser-cli case schema --action fill-label",
                     "browser-cli case schema --action network-snapshot",
+                    "browser-cli case scaffold --template interactive-targeting --format json",
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
                     "Upgrade browser-cli before relying on case files for the full Codex Skill workflow.",
                     "Use `browser-cli case schema --names-only` to inspect repeatable case actions.",
                     "Use `browser-cli case schema --action <action>` to inspect required fields, result fields, and example steps.",
+                    "Use `browser-cli case scaffold --template <template>` to verify packaged starter cases are available.",
                 ],
             ),
         )
@@ -4233,9 +4258,11 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         action_count=len(action_names),
         supported_action_count=len(supported_actions),
         required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+        required_case_scaffold_templates=list(DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES),
         missing_required_case_actions=[],
         missing_supported_actions=[],
         missing_action_schemas=[],
+        missing_case_scaffold_templates=[],
         invalid_action_schemas=[],
     )
 

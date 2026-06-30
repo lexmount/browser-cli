@@ -5628,6 +5628,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["case_schema"]["schema_version"] == 1
     assert checks["case_schema"]["action_count"] == 102
     assert checks["case_schema"]["supported_action_count"] == 102
+    assert checks["case_schema"]["required_case_scaffold_templates"] == [
+        "page-inspection",
+        "form-fill",
+        "interactive-targeting",
+    ]
     for case_action in (
         "fill-label",
         "click-label",
@@ -5643,6 +5648,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["case_schema"]["missing_required_case_actions"] == []
     assert checks["case_schema"]["missing_supported_actions"] == []
     assert checks["case_schema"]["missing_action_schemas"] == []
+    assert checks["case_schema"]["missing_case_scaffold_templates"] == []
     assert checks["case_schema"]["invalid_action_schemas"] == []
     assert checks["auth_export_env_contract"]["status"] == "pass"
     assert checks["auth_export_env_contract"]["required_fields"] == [
@@ -6076,6 +6082,48 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
     assert "browser-cli case schema --names-only" in payload["repair_plan"]["commands"]
     assert (
         "browser-cli case schema --action network-snapshot"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_case_schema_misses_scaffold_templates(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.CASE_SCAFFOLD_TEMPLATES",
+        ("page-inspection",),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "case_schema" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    case_schema = checks["case_schema"]
+    assert case_schema["status"] == "warn"
+    assert case_schema["missing_required_case_actions"] == []
+    assert case_schema["missing_supported_actions"] == []
+    assert case_schema["missing_action_schemas"] == []
+    assert case_schema["missing_case_scaffold_templates"] == [
+        "form-fill",
+        "interactive-targeting",
+    ]
+    assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
+    assert (
+        "browser-cli case scaffold --template interactive-targeting --format json"
         in payload["repair_plan"]["commands"]
     )
     assert "api_connectivity" in payload["skipped_checks"]

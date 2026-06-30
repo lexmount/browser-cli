@@ -315,6 +315,9 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
     assert "`required_workflow_steps`" in text
     assert "`missing_required_workflow_steps`" in text
     assert "`workflow_count`" in text
+    assert "`required_case_actions`" in text
+    assert "`required_case_scaffold_templates`" in text
+    assert "`missing_case_scaffold_templates`" in text
 
 
 def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:

@@ -416,11 +416,12 @@ Default behavior:
   form-snapshot,
   accessibility snapshot, and interactive-only snapshot.
 - `doctor` reports a `case_schema` check with `required_case_actions`,
-  `missing_required_case_actions`, `missing_supported_actions`,
-  `missing_action_schemas`, `invalid_action_schemas`, `schema_version`,
-  `action_count`, and `supported_action_count` so agents can detect an
-  installed CLI whose case runner is too old for repeatable semantic,
-  storage/cookie, content, and diagnostic smoke tests.
+  `required_case_scaffold_templates`, `missing_required_case_actions`,
+  `missing_supported_actions`, `missing_action_schemas`,
+  `missing_case_scaffold_templates`, `invalid_action_schemas`,
+  `schema_version`, `action_count`, and `supported_action_count` so agents can
+  detect an installed CLI whose case runner is too old for repeatable semantic,
+  storage/cookie, content, interactive-targeting, and diagnostic smoke tests.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
   `connect_from_codex` with safe `/connect/codex` URLs, `open_command`,
   `device_code_url`, requested scopes, `site_capability_status`,
