@@ -66,14 +66,17 @@ surface. It returns `schema_version`, `selection_policy`, and `tasks`; with
 with `error=unknown_action_guide_task`, `available_tasks`, and a `fix` object
 with commands for inspecting valid guide tasks.
 `agent_references` describes optional Skill reference files such as
-`references/quickstart.md`, `references/skill-positioning.md`,
-`references/usable-status.md`, and `references/action-playbook.md`, with
-`content_command`, `package_resource`, `load_when`, `related_workflows`,
-`covers`, and `grep_patterns` so agents can load setup, positioning, or action
-guidance only when needed.
+`references/connect-from-codex.md`, `references/quickstart.md`,
+`references/skill-positioning.md`, `references/usable-status.md`, and
+`references/action-playbook.md`, with `content_command`, `package_resource`,
+`load_when`, `related_workflows`, `covers`, and `grep_patterns` so agents can
+load setup, positioning, site-implementation, or action guidance only when
+needed.
 `browser-cli reference list` returns packaged reference metadata;
 `browser-cli reference get --id skill_positioning` returns the installed Skill
 positioning and cloud-browser comparison reference,
+`browser-cli reference get --id connect_from_codex` returns the installed
+browser.lexmount.cn implementation guide,
 `browser-cli reference get --id quickstart` returns the installed minimum setup
 and first browser task path,
 `browser-cli reference get --id usable_status` returns the installed usable
@@ -392,6 +395,7 @@ Default behavior:
   `missing_required_references`, `invalid_references`, and
   `checked_references`. Treat `status=warn` as a signal to run
   `browser-cli reference get --id skill_positioning`,
+  `browser-cli reference get --id connect_from_codex`,
   `browser-cli reference get --id quickstart`,
   `browser-cli reference get --id usable_status`,
   `browser-cli reference get --id action_playbook`, or reinstall browser-cli

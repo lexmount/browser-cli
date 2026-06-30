@@ -4,6 +4,20 @@ from pathlib import Path
 
 
 DOC = Path(__file__).resolve().parents[1] / "docs" / "connect-from-codex.md"
+REFERENCE = (
+    Path(__file__).resolve().parents[1] / "references" / "connect-from-codex.md"
+)
+PACKAGED_REFERENCE = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "connect-from-codex.md"
+)
+
+
+def test_connect_from_codex_packaged_references_match_doc() -> None:
+    assert REFERENCE.read_text() == DOC.read_text()
+    assert PACKAGED_REFERENCE.read_text() == DOC.read_text()
 
 
 def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:

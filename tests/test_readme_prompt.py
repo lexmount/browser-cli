@@ -55,6 +55,8 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli reference list" in prompt
     assert "browser-cli reference get --id quickstart --metadata-only" in prompt
     assert "browser-cli reference get --id quickstart" in prompt
+    assert "browser-cli reference get --id connect_from_codex --metadata-only" in prompt
+    assert "browser-cli reference get --id connect_from_codex" in prompt
     assert "browser-cli reference get --id usable_status --metadata-only" in prompt
     assert "browser-cli reference get --id usable_status" in prompt
     assert "browser-cli reference get --id action_playbook --metadata-only" in prompt

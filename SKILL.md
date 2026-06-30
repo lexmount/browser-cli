@@ -72,7 +72,7 @@ browser-cli commands --workflow scoped_token_lifecycle
 ```
 
 When the task is to inspect or explain what browser.lexmount.cn must implement, run
-`browser-cli auth scopes --include-site-contract`, `browser-cli auth connect-requirements`,
+`browser-cli reference get --id connect_from_codex`, `browser-cli auth scopes --include-site-contract`,
 `browser-cli auth connect-requirements --checklist`, or `browser-cli commands --workflow connect_from_codex_site_requirements` first.
 Read `browser_site_contract.scope_ui_fields`,
 `browser_site_contract.browser_site_acceptance_tests`, `known_scopes`,
@@ -168,7 +168,7 @@ what to do:
 - `auth_login_contract` or `device_code_contract` with `status: "warn"`: inspect
   `missing_handoff_fields`, `missing_setup_blocks`, `missing_required_device_code_endpoints`, `missing_required_browser_site_support`, `invalid_fields`, and `secret_policy`; reinstall if needed.
 - `agent_references` with `status: "warn"`: run
-  `browser-cli reference get --id usable_status`,
+  `browser-cli reference get --id quickstart`,
   `browser-cli reference get --id action_playbook`, or follow its `fix`
   commands before relying on detailed setup or action guidance.
 - `agent_examples` with `status: "warn"`: run `browser-cli example list`, inspect
@@ -196,9 +196,7 @@ uncertain or before writing custom JavaScript.
 Use the catalog's `browser_target.exactly_one_of`, `required_options`,
 `required_one_of`, `json_output`, `secret_policy`, `agent_references`,
 `agent_examples`, `agent_entrypoints`, and `agent_workflows` fields instead of
-parsing `--help` text. Follow `agent_references` when detailed action guidance is needed; use
-`agent_references.usable_status.content_command` or
-`browser-cli reference get --id usable_status` for the current usable baseline,
+parsing `--help` text. Follow `agent_references` when detailed action guidance is needed; use `browser-cli reference get --id connect_from_codex` for browser.lexmount.cn requirements, `browser-cli reference get --id usable_status` for the current usable baseline,
 and `agent_references.action_playbook.content_command` or
 `browser-cli reference get --id action_playbook` for action guidance from an
 installed CLI. Use `browser-cli example list` and

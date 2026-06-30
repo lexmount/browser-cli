@@ -119,6 +119,8 @@ CLI for you:
    browser-cli reference list
    browser-cli reference get --id quickstart --metadata-only
    browser-cli reference get --id quickstart
+   browser-cli reference get --id connect_from_codex --metadata-only
+   browser-cli reference get --id connect_from_codex
    browser-cli reference get --id skill_positioning --metadata-only
    browser-cli reference get --id skill_positioning
    browser-cli reference get --id usable_status --metadata-only
@@ -138,6 +140,7 @@ CLI for you:
 8. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
 9. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先读取权限目录和站点契约：
+   browser-cli reference get --id connect_from_codex
    browser-cli auth scopes --include-site-contract
    browser-cli auth connect-requirements
    browser-cli auth connect-requirements --checklist
@@ -855,11 +858,14 @@ Use `--names-only` for compact command discovery and `--group action` when
 choosing a browser action. Use `browser-cli action guide --task <task>` for
 compact task-specific action selection before reading larger references. Use
 `agent_references` to load detailed Skill references such as
-`references/skill-positioning.md` when deciding when to use this Skill or
+`references/connect-from-codex.md` when coordinating browser.lexmount.cn site
+work, `references/skill-positioning.md` when deciding when to use this Skill or
 comparing cloud-browser agent gaps, `references/usable-status.md` when checking
 the current usable baseline, and `references/action-playbook.md` when action
-selection, structured result parsing, masking, or browser-target details are
-needed.
+selection, structured result parsing, masking, or browser-target details are needed.
+`agent_references.connect_from_codex.content_command` points to
+`browser-cli reference get --id connect_from_codex`, which returns the packaged
+browser.lexmount.cn implementation guide.
 `agent_references.skill_positioning.content_command` points to
 `browser-cli reference get --id skill_positioning`, which returns the packaged
 Skill positioning, supported operations, Browserbase MCP comparison, and product

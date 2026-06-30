@@ -423,6 +423,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
 )
 DOCTOR_REQUIRED_REFERENCES = (
     "action_playbook",
+    "connect_from_codex",
     "quickstart",
     "usable_status",
     "skill_positioning",
@@ -449,6 +450,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "page_diagnostics",
     "workflow read arrays",
     "required_runtime_auth",
+    "connect_from_codex",
     "quickstart",
     "reference get",
     "example get",
@@ -562,6 +564,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "doctor",
     ),
     "connect_from_codex_site_requirements": (
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -1195,6 +1198,51 @@ def _agent_references() -> dict[str, Any]:
                 "Target Contract",
             ],
         },
+        "connect_from_codex": {
+            "path": "references/connect-from-codex.md",
+            "content_command": "browser-cli reference get --id connect_from_codex",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:connect-from-codex.md",
+            "format": "markdown",
+            "purpose": (
+                "Guide browser.lexmount.cn implementation for Connect from Codex, "
+                "scoped agent keys, doctor verification, context reuse UX, and "
+                "device-code/OAuth authorization."
+            ),
+            "load_when": [
+                "Explaining what browser.lexmount.cn must implement for agent authorization.",
+                "Planning /connect/codex page sections, scoped keys, or copyable setup blocks.",
+                "Coordinating device-code/OAuth, refresh, revoke, or runtime bearer-token support.",
+                "Mapping doctor repair output to browser-site UI and troubleshooting guidance.",
+            ],
+            "related_workflows": [
+                "connect_from_codex_site_requirements",
+                "connect_from_codex_auth",
+                "device_code_auth",
+                "scoped_token_lifecycle",
+                "persistent_login_state",
+                "setup_and_verify",
+            ],
+            "covers": [
+                "browser.lexmount.cn page requirements",
+                "scoped agent API keys",
+                "local CLI contract",
+                "implementation checklist JSON",
+                "device-code/OAuth flow",
+                "doctor integration",
+                "security requirements",
+            ],
+            "grep_patterns": [
+                "Goals",
+                "Page",
+                "Scoped Agent API Keys",
+                "Local CLI Contract",
+                "Implementation Checklist JSON",
+                "Device-Code/OAuth Flow",
+                "Doctor Integration",
+                "Security Requirements",
+            ],
+        },
         "quickstart": {
             "path": "references/quickstart.md",
             "content_command": "browser-cli reference get --id quickstart",
@@ -1543,6 +1591,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli reference list",
                 "browser-cli reference get --id quickstart --metadata-only",
                 "browser-cli reference get --id quickstart",
+                "browser-cli reference get --id connect_from_codex --metadata-only",
+                "browser-cli reference get --id connect_from_codex",
                 "browser-cli reference get --id skill_positioning --metadata-only",
                 "browser-cli reference get --id skill_positioning",
                 "browser-cli reference get --id usable_status --metadata-only",
@@ -1557,6 +1607,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli doctor --smoke-session",
             ],
             "connect_from_codex_site_requirements": [
+                "browser-cli reference get --id connect_from_codex --metadata-only",
+                "browser-cli reference get --id connect_from_codex",
                 "browser-cli auth scopes --include-site-contract",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth connect-requirements --checklist",
@@ -1953,6 +2005,26 @@ def _command_catalog() -> dict[str, Any]:
             "connect_from_codex_site_requirements": {
                 "purpose": "Inspect the browser.lexmount.cn /connect/codex frontend, API, token lifecycle, and verification requirements before implementing or diagnosing Connect from Codex.",
                 "steps": [
+                    {
+                        "id": "inspect_connect_from_codex_reference",
+                        "command": (
+                            "browser-cli reference get --id connect_from_codex --metadata-only"
+                        ),
+                        "read": [
+                            "reference_id",
+                            "reference.content_command",
+                            "reference.purpose",
+                            "reference.load_when",
+                            "reference.covers",
+                        ],
+                        "follow_up_command": (
+                            "browser-cli reference get --id connect_from_codex"
+                        ),
+                        "use_when": (
+                            "The task is to implement, review, or explain "
+                            "browser.lexmount.cn Connect from Codex behavior."
+                        ),
+                    },
                     {
                         "id": "inspect_scope_catalog",
                         "command": "browser-cli auth scopes --include-site-contract",

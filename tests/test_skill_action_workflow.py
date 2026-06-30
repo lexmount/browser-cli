@@ -38,6 +38,15 @@ PACKAGED_QUICKSTART = (
     / "agent_references"
     / "quickstart.md"
 )
+CONNECT_FROM_CODEX = (
+    Path(__file__).resolve().parents[1] / "references" / "connect-from-codex.md"
+)
+PACKAGED_CONNECT_FROM_CODEX = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "connect-from-codex.md"
+)
 
 
 def _normalized_skill_text() -> str:
@@ -84,6 +93,10 @@ def test_packaged_skill_positioning_matches_skill_reference() -> None:
 
 def test_packaged_quickstart_matches_skill_reference() -> None:
     assert PACKAGED_QUICKSTART.read_text() == QUICKSTART.read_text()
+
+
+def test_packaged_connect_from_codex_matches_skill_reference() -> None:
+    assert PACKAGED_CONNECT_FROM_CODEX.read_text() == CONNECT_FROM_CODEX.read_text()
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:

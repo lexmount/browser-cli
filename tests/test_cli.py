@@ -302,6 +302,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser_cli.agent_references:quickstart.md"
     )
     assert "first browser task" in references["quickstart"]["covers"]
+    assert references["connect_from_codex"]["path"] == (
+        "references/connect-from-codex.md"
+    )
+    assert references["connect_from_codex"]["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert references["connect_from_codex"]["package_resource"] == (
+        "browser_cli.agent_references:connect-from-codex.md"
+    )
+    assert "doctor integration" in references["connect_from_codex"]["covers"]
     assert "setup_and_verify" in references["usable_status"]["related_workflows"]
     assert "doctor readiness checks" in references["usable_status"]["covers"]
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
@@ -345,6 +355,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert (
         "browser-cli reference get --id quickstart"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex"
         in payload["agent_entrypoints"]["setup"]
     )
     assert (
@@ -663,6 +681,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     site_steps = workflows["connect_from_codex_site_requirements"]["steps"]
     assert [step["id"] for step in site_steps] == [
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -671,32 +690,38 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "doctor_after_credentials",
     ]
     assert site_steps[0]["command"] == (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+    )
+    assert site_steps[0]["follow_up_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert site_steps[1]["command"] == (
         "browser-cli auth scopes --include-site-contract"
     )
-    assert "browser_site_contract.scope_ui_fields" in site_steps[0]["read"]
+    assert "browser_site_contract.scope_ui_fields" in site_steps[1]["read"]
     assert (
-        "browser_site_contract.browser_site_acceptance_tests" in site_steps[0]["read"]
+        "browser_site_contract.browser_site_acceptance_tests" in site_steps[1]["read"]
     )
-    assert site_steps[1]["command"] == "browser-cli auth connect-requirements"
-    assert "connect_from_codex.device_code_url" in site_steps[1]["read"]
-    assert "required_device_code_endpoints" in site_steps[1]["read"]
-    assert "required_token_lifecycle" in site_steps[1]["read"]
-    assert "required_runtime_auth" in site_steps[1]["read"]
-    assert "browser_site_acceptance_tests" in site_steps[1]["read"]
+    assert site_steps[2]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.device_code_url" in site_steps[2]["read"]
+    assert "required_device_code_endpoints" in site_steps[2]["read"]
+    assert "required_token_lifecycle" in site_steps[2]["read"]
+    assert "required_runtime_auth" in site_steps[2]["read"]
+    assert "browser_site_acceptance_tests" in site_steps[2]["read"]
     assert (
-        site_steps[2]["command"] == "browser-cli auth connect-requirements --checklist"
+        site_steps[3]["command"] == "browser-cli auth connect-requirements --checklist"
     )
-    assert "implementation_checklist.phases" in site_steps[2]["read"]
+    assert "implementation_checklist.phases" in site_steps[3]["read"]
     assert (
-        "implementation_checklist.blocked_until.runtime_auth" in site_steps[2]["read"]
+        "implementation_checklist.blocked_until.runtime_auth" in site_steps[3]["read"]
     )
-    assert site_steps[3]["optional"] is True
-    assert "connect_from_codex.required_runtime_auth" in site_steps[3]["read"]
-    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[3]["read"]
-    assert site_steps[4]["command"] == "browser-cli auth login --device-code"
+    assert site_steps[4]["optional"] is True
     assert "connect_from_codex.required_runtime_auth" in site_steps[4]["read"]
     assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[4]["read"]
-    assert site_steps[5]["command"] == "browser-cli doctor --json"
+    assert site_steps[5]["command"] == "browser-cli auth login --device-code"
+    assert "connect_from_codex.required_runtime_auth" in site_steps[5]["read"]
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[5]["read"]
+    assert site_steps[6]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[0]["command"] == "browser-cli auth status"
     assert "runtime_auth.usable" in auth_steps[0]["read"]
@@ -2376,7 +2401,7 @@ def test_commands_catalog_returns_workflows_only(
     assert (
         "required_token_lifecycle"
         in payload["agent_workflows"]["connect_from_codex_site_requirements"]["steps"][
-            1
+            2
         ]["read"]
     )
     assert (
@@ -2750,7 +2775,7 @@ def test_reference_list_returns_packaged_agent_references(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 4
+    assert payload["reference_count"] == 5
     reference = payload["references"]["action_playbook"]
     assert reference["id"] == "action_playbook"
     assert reference["path"] == "references/action-playbook.md"
@@ -2778,6 +2803,17 @@ def test_reference_list_returns_packaged_agent_references(
     )
     assert "Verify Readiness" in quickstart["grep_patterns"]
     assert "first browser task" in quickstart["covers"]
+    connect = payload["references"]["connect_from_codex"]
+    assert connect["id"] == "connect_from_codex"
+    assert connect["path"] == "references/connect-from-codex.md"
+    assert connect["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert connect["package_resource"] == (
+        "browser_cli.agent_references:connect-from-codex.md"
+    )
+    assert "Doctor Integration" in connect["grep_patterns"]
+    assert "browser.lexmount.cn page requirements" in connect["covers"]
     positioning = payload["references"]["skill_positioning"]
     assert positioning["id"] == "skill_positioning"
     assert positioning["path"] == "references/skill-positioning.md"
@@ -2799,9 +2835,10 @@ def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 4
+    assert payload["reference_count"] == 5
     assert payload["references"] == [
         "action_playbook",
+        "connect_from_codex",
         "quickstart",
         "skill_positioning",
         "usable_status",
@@ -2869,6 +2906,27 @@ def test_reference_get_returns_packaged_quickstart(
     assert "browser-cli doctor --json" in payload["content"]
 
 
+def test_reference_get_returns_packaged_connect_from_codex(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "connect_from_codex"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.get"
+    assert payload["reference_id"] == "connect_from_codex"
+    assert payload["reference"]["id"] == "connect_from_codex"
+    assert payload["content_format"] == "markdown"
+    assert payload["content_included"] is True
+    assert payload["content_length"] == len(payload["content"])
+    assert "# Connect from Codex for browser.lexmount.cn" in payload["content"]
+    assert "Implementation Checklist JSON" in payload["content"]
+    assert "Device-Code/OAuth Flow" in payload["content"]
+    assert "Doctor Integration" in payload["content"]
+
+
 def test_reference_get_returns_packaged_skill_positioning(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2921,6 +2979,7 @@ def test_reference_get_fails_unknown_reference_as_json(
     assert payload["reference_id"] == "missing"
     assert payload["available_references"] == [
         "action_playbook",
+        "connect_from_codex",
         "quickstart",
         "skill_positioning",
         "usable_status",
@@ -4514,6 +4573,7 @@ def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
     assert "agent_workflows" not in payload
     steps = payload["workflow"]["steps"]
     assert [step["id"] for step in steps] == [
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -4521,18 +4581,32 @@ def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
         "verify_device_code_handoff",
         "doctor_after_credentials",
     ]
-    assert steps[0]["command"] == "browser-cli auth scopes --include-site-contract"
-    assert "browser_site_contract.scope_ui_fields" in steps[0]["read"]
-    assert steps[1]["command"] == "browser-cli auth connect-requirements"
-    assert "connect_from_codex.site_capabilities" in steps[1]["read"]
-    assert "required_device_code_endpoints" in steps[1]["read"]
-    assert steps[2]["command"] == "browser-cli auth connect-requirements --checklist"
-    assert "implementation_checklist.phases" in steps[2]["read"]
-    assert steps[3]["optional"] is True
-    assert "handoff.setup_blocks" in steps[3]["read"]
-    assert steps[4]["command"] == "browser-cli auth login --device-code"
-    assert "device_code.required_endpoints" in steps[4]["read"]
-    assert steps[5]["command"] == "browser-cli doctor --json"
+    assert steps[0]["command"] == (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+    )
+    assert steps[0]["follow_up_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert steps[1]["command"] == "browser-cli auth scopes --include-site-contract"
+    assert "browser_site_contract.scope_ui_fields" in steps[1]["read"]
+    assert steps[2]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.site_capabilities" in steps[2]["read"]
+    assert "required_device_code_endpoints" in steps[2]["read"]
+    assert steps[3]["command"] == "browser-cli auth connect-requirements --checklist"
+    assert "implementation_checklist.phases" in steps[3]["read"]
+    assert steps[4]["optional"] is True
+    assert "handoff.setup_blocks" in steps[4]["read"]
+    assert steps[5]["command"] == "browser-cli auth login --device-code"
+    assert "device_code.required_endpoints" in steps[5]["read"]
+    assert steps[6]["command"] == "browser-cli doctor --json"
+    assert (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
+    )
     assert (
         "browser-cli auth scopes --include-site-contract"
         in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
@@ -5424,6 +5498,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["required_workflow_steps"][
         "connect_from_codex_site_requirements"
     ] == [
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -5976,9 +6051,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["agent_prompt"]["missing_patterns"] == []
     assert checks["agent_prompt"]["mismatched_fields"] == []
     assert checks["agent_references"]["status"] == "pass"
-    assert checks["agent_references"]["reference_count"] == 4
+    assert checks["agent_references"]["reference_count"] == 5
     assert checks["agent_references"]["required_references"] == [
         "action_playbook",
+        "connect_from_codex",
         "quickstart",
         "usable_status",
         "skill_positioning",
@@ -6020,6 +6096,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert quickstart_reference["content_length"] > 1000
     assert quickstart_reference["missing_patterns"] == []
+    connect_reference = checked_references["connect_from_codex"]
+    assert connect_reference["status"] == "pass"
+    assert connect_reference["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert connect_reference["package_resource"] == (
+        "browser_cli.agent_references:connect-from-codex.md"
+    )
+    assert connect_reference["content_length"] > 1000
+    assert connect_reference["missing_patterns"] == []
     skill_positioning_reference = checked_references["skill_positioning"]
     assert skill_positioning_reference["status"] == "pass"
     assert skill_positioning_reference["content_command"] == (
@@ -6953,6 +7039,17 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
                 "Agent Discovery\n"
                 "Current Limits\n"
             )
+        if reference_id == "connect_from_codex":
+            return (
+                "Goals\n"
+                "Page\n"
+                "Scoped Agent API Keys\n"
+                "Local CLI Contract\n"
+                "Implementation Checklist JSON\n"
+                "Device-Code/OAuth Flow\n"
+                "Doctor Integration\n"
+                "Security Requirements\n"
+            )
         assert reference_id == "skill_positioning"
         return (
             "Primary Use Case\n"
@@ -6976,6 +7073,7 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     assert references["status"] == "warn"
     assert references["required_references"] == [
         "action_playbook",
+        "connect_from_codex",
         "quickstart",
         "usable_status",
         "skill_positioning",
@@ -7002,6 +7100,10 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     )
     assert (
         "browser-cli reference get --id quickstart"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex"
         in payload["repair_plan"]["commands"]
     )
     assert (
@@ -7341,6 +7443,9 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
             "inspect_quickstart",
             "inspect_usable_status",
             "smoke_session",
+        ],
+        "connect_from_codex_site_requirements": [
+            "inspect_connect_from_codex_reference"
         ],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],

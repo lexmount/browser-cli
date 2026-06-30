@@ -126,6 +126,12 @@ def test_commands_catalog_output_contract(
     assert payload["agent_references"]["usable_status"]["content_command"] == (
         "browser-cli reference get --id usable_status"
     )
+    assert payload["agent_references"]["connect_from_codex"]["path"] == (
+        "references/connect-from-codex.md"
+    )
+    assert payload["agent_references"]["connect_from_codex"]["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
     assert payload["agent_examples"]["page_inspection_case"]["content_command"] == (
         "browser-cli example get --id page_inspection_case"
     )
@@ -220,6 +226,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`content_command`" in text
     assert "`package_resource`" in text
     assert "`browser-cli reference list`" in text
+    assert "`browser-cli reference get --id connect_from_codex`" in text
     assert "`browser-cli reference get --id quickstart`" in text
     assert "`browser-cli reference get --id usable_status`" in text
     assert "`browser-cli reference get --id action_playbook`" in text
