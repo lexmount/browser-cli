@@ -35,5 +35,11 @@ Run a page inspection case:
 browser-cli case run --file examples/cases/page-inspection.yaml --close-created-session
 ```
 
+Run an interactive targeting case:
+
+```bash
+browser-cli case run --file examples/cases/interactive-targeting.yaml --close-created-session
+```
+
 Case runs create browser artifacts under `/tmp/lexmount-runs` unless
 `--artifacts-dir` is provided.

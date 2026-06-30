@@ -78,8 +78,9 @@ baseline/status reference, and `browser-cli reference get --id action_playbook`
 returns the installed action playbook as JSON.
 `agent_examples` describes packaged common-task examples and case files.
 `browser-cli example list` returns example metadata, and
-`browser-cli example get --id page_inspection_case` returns an installed example
-case file or playbook as JSON.
+`browser-cli example get --id page_inspection_case` or
+`browser-cli example get --id interactive_targeting_case` returns an installed
+example case file or playbook as JSON.
 `agent_workflows` describes ordered setup, Connect from Codex site requirements,
 Connect from Codex auth, device-code auth, scoped token lifecycle, session
 recovery, one-off page, case file task, persistent login state, form
@@ -126,7 +127,8 @@ The session recovery workflow includes active session listing, single-session
 inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.
 The case file task workflow includes case command discovery, `case schema`
-inspection, action-specific schema lookup, `form_fill_case` example discovery,
+inspection, action-specific schema lookup, `form_fill_case` and
+`interactive_targeting_case` example discovery,
 optional page/form `case scaffold` generation, case validation, and
 `--close-created-session` case runs with `supported_actions`,
 `required_fields`, `next_commands`, `events_path`, `artifacts_dir`, `session`,

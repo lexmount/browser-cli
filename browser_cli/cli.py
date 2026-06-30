@@ -373,6 +373,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "page_inspection_case",
     "form_fill_case",
+    "interactive_targeting_case",
 )
 DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "$browser-cli",
@@ -502,6 +503,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_case_schema",
         "inspect_semantic_case_action",
         "inspect_form_case_example",
+        "inspect_interactive_targeting_case_example",
         "scaffold_case_file",
         "scaffold_form_case_file",
         "validate_case_file",
@@ -1270,6 +1272,35 @@ def _agent_examples() -> dict[str, Any]:
                 "action: screenshot",
             ],
         },
+        "interactive_targeting_case": {
+            "path": "examples/cases/interactive-targeting.yaml",
+            "content_command": "browser-cli example get --id interactive_targeting_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:interactive-targeting.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local interactive-targeting case that builds "
+                "a tiny page, inspects actionable targets, clicks by role, verifies "
+                "text, and screenshots."
+            ),
+            "related_workflows": ["case_file_task", "interactive_targeting"],
+            "load_when": [
+                "Creating a repeatable interactive targeting smoke test.",
+                "Needing a case file template for snapshots, role-based clicks, and text verification.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: interactive-targeting",
+                "action: interactive-snapshot",
+                "action: accessibility-snapshot",
+                "action: click-role",
+                "action: wait-text",
+                "action: get-text",
+                "action: screenshot",
+            ],
+        },
     }
 
 
@@ -1439,6 +1470,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case schema",
                 "browser-cli case schema --action fill-label",
                 "browser-cli example get --id form_fill_case --metadata-only",
+                "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
@@ -2327,6 +2359,16 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "inspect_form_case_example",
                         "command": "browser-cli example get --id form_fill_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_interactive_targeting_case_example",
+                        "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
                         "read": [
                             "example.content_command",
                             "example.grep_patterns",
@@ -4972,8 +5014,11 @@ def _doctor_agent_examples_check() -> dict[str, Any]:
                 commands=[
                     "browser-cli example list",
                     "browser-cli example get --id agent_playbook --metadata-only",
-                    "browser-cli example get --id page_inspection_case",
-                    "browser-cli example get --id form_fill_case",
+                    *[
+                        f"browser-cli example get --id {example_id}"
+                        for example_id in DOCTOR_REQUIRED_EXAMPLES
+                        if example_id != "agent_playbook"
+                    ],
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[

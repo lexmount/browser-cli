@@ -37,6 +37,19 @@ def test_form_fill_case_uses_semantic_case_actions() -> None:
     assert "action: type" not in text
 
 
+def test_interactive_targeting_case_uses_semantic_targets() -> None:
+    text = (
+        REPO_ROOT / "examples" / "cases" / "interactive-targeting.yaml"
+    ).read_text()
+
+    assert "action: interactive-snapshot" in text
+    assert "action: accessibility-snapshot" in text
+    assert "action: click-role" in text
+    assert "action: wait-text" in text
+    assert "action: get-text" in text
+    assert "action: click\n" not in text
+
+
 def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     text = (REPO_ROOT / "examples" / "agent-playbook.md").read_text()
 
@@ -95,6 +108,10 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli example list" in text
     assert "browser-cli example get --id page_inspection_case --metadata-only" in text
+    assert (
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
+        in text
+    )
     assert "browser-cli commands --group action" in text
     assert "browser-cli commands --group action --names-only" in text
     assert "action guide --task <task>" in text

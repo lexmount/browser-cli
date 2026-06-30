@@ -19,8 +19,9 @@ Codex browser surface.
 ## Supported Today
 
 - Setup and readiness: version JSON, command discovery, packaged references,
-  packaged examples, auth status/login/export-env helpers, scoped-token
-  metadata inspection, Connect from Codex site requirements, and doctor checks.
+  packaged page-inspection, form-fill, and interactive-targeting examples,
+  auth status/login/export-env helpers, scoped-token metadata inspection,
+  Connect from Codex site requirements, and doctor checks.
 - Session lifecycle: create, list, inspect, keep alive, close, recover from
   stale sessions, and run smoke-session validation.
 - Persistent contexts: create, list, inspect, pick, delete, reuse by metadata,
@@ -79,7 +80,7 @@ MCP server plus a self-hostable version, and exposes six tools:
 | Setup | MCP client configuration with hosted or local transports. | `uv tool install`, local env credentials, `auth login`, and `doctor`. | Setup is more verbose until browser.lexmount.cn provides Connect from Codex and device-code authorization. |
 | Auth UX | Project/API key env vars for self-hosting; hosted flow is externally managed. | Manual env path today, with scoped-token/device-code contracts exposed but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, revoke/expire UI, and device-code/OAuth. |
 | Determinism | Natural-language `act` and `extract` can be concise but model-dependent. | Explicit commands and JSON fields make behavior auditable and testable. | We should keep deterministic commands as the core and add higher-level wrappers later. |
-| Reproducibility | MCP tools are interactive; repeatable flows depend on the client. | Case schema, scaffold, validate, run, artifacts, and events are first-class. | We should surface case-file workflows more prominently in the Skill prompt. |
+| Reproducibility | MCP tools are interactive; repeatable flows depend on the client. | Case schema, scaffold, validate, run, artifacts, events, and packaged page/form/interactive examples are first-class. | We need a broader case library for common agent tasks. |
 | Diagnostics | Cloud service and MCP errors are surfaced through tool results. | `doctor`, repair plans, command catalog checks, page diagnostics, console/network snapshots. | Diagnostics are strong, but the docs need shorter decision paths for agents. |
 
 ## Defects To Fix Next

@@ -130,6 +130,7 @@ def test_commands_catalog_output_contract(
         "browser-cli example get --id page_inspection_case"
     )
     assert payload["agent_examples"]["form_fill_case"]["format"] == "yaml"
+    assert payload["agent_examples"]["interactive_targeting_case"]["format"] == "yaml"
     assert all(command["group"] == "action" for command in payload["commands"])
     open_url = next(
         command
@@ -224,6 +225,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`agent_examples`" in text
     assert "`browser-cli example list`" in text
     assert "`browser-cli example get --id page_inspection_case`" in text
+    assert "`browser-cli example get --id interactive_targeting_case`" in text
     assert "`load_when`" in text
     assert "`related_workflows`" in text
     assert "`grep_patterns`" in text

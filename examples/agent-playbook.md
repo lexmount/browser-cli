@@ -52,6 +52,7 @@ browser-cli reference get --id usable_status --metadata-only
 browser-cli reference get --id usable_status
 browser-cli example list
 browser-cli example get --id page_inspection_case --metadata-only
+browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli auth status
@@ -392,6 +393,7 @@ browser-cli commands --workflow case_file_task
 browser-cli case schema
 browser-cli case schema --action fill-label
 browser-cli example get --id form_fill_case --metadata-only
+browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case validate --file examples/cases/page-inspection.yaml
