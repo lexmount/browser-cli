@@ -19,7 +19,7 @@ Skill for local desktop app control, already-open local browser tabs, static doc
 ## Supported Operations
 
 Supports setup/auth/doctor; Sessions: create, list, get, keepalive, close; Contexts: create, list, get, status, pick, delete with availability/locked
-decisions; navigation/readiness waits; Inspection and extraction with observe, accessibility, form, link, table, list, dialog, frame, network, console, and
+decisions; navigation/readiness waits; Inspection and extraction with observe, extract, accessibility, form, link, table, list, dialog, frame, network, console, and
 interactive-only snapshots; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
 state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, and repeatable JSON/YAML cases.
 
@@ -232,7 +232,7 @@ browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow agent_browser_primitives
 ```
 
-Then follow the returned steps; use `browser-cli action observe --session-id <session_id> --surface interactive --surface text` before choosing targets, typically:
+Then follow the returned steps; use `browser-cli action observe --session-id <session_id> --surface interactive --surface text` before choosing targets and `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` for bounded content, typically:
 
 ```bash
 browser-cli session create
@@ -265,7 +265,7 @@ browser-cli action guide --task form_interaction
 Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`, and `custom_js_boundary`, then follow workflow `read` fields for `form-snapshot`, semantic fill/select/check/click commands, `click-label`, `wait-role`, `wait-state-role`, `click-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before custom JavaScript.
 
 For visible labeled controls, buttons, links, menus, double-clicks, right-click context menus, drag/drop, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, `drag-role-to-role`, `drag-to`, `double-click`, or `right-click`; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions such as `click-label`, `click-role`, and `click-text` before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
-For page content extraction, prefer `browser-cli commands --workflow content_extraction` and `browser-cli action guide --task content_extraction`; choose outline/text/link/table/list/accessibility snapshots before bounded `snapshot` or custom JS.
+For page content extraction, prefer `browser-cli commands --workflow content_extraction`, `browser-cli action guide --task content_extraction`, and `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main`; choose narrower outline/text/link/table/list/accessibility snapshots only when the bundled extract result is too broad or truncated.
 For browser state setup or cleanup, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands for local/session storage and document.cookie-visible cookies before custom JS.
 For file uploads, prefer `browser-cli commands --workflow file_upload` and `browser-cli action guide --task file_upload`; inspect controls, then use `set-file-input` before custom JS or OS file picker workarounds.
 For dialogs, cookie banners, confirmation prompts, and iframes, prefer `browser-cli commands --workflow dialog_frame_handling` and `browser-cli action guide --task dialog_frame_handling`; use dialog/frame snapshots and waits before custom JS.

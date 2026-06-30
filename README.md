@@ -56,12 +56,12 @@ catalog cannot express the browser task.
 | --- | --- | --- |
 | Install and readiness | `browser-cli doctor --json` | Confirm the CLI, Python runtime, environment variables, packaged references, examples, and API connectivity are usable. |
 | First browser task | `browser-cli commands --workflow first_browser_task` | Verify readiness, open a page, inspect targets, act once, collect evidence, then close the temporary session. |
-| Agent primitives | `browser-cli commands --workflow agent_browser_primitives` | Cover the observe, act, extract, and verify loop: use `action observe` to collect page info plus bounded surfaces, then map intent to deterministic commands. |
+| Agent primitives | `browser-cli commands --workflow agent_browser_primitives` | Cover the observe, act, extract, and verify loop: use `action observe` before targets and `action extract` for bounded page content, then map intent to deterministic commands. |
 | Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
 | Navigation and readiness | `browser-cli commands --workflow navigation_flow` | Open URLs, reload, move through history, and wait for URL, title, load state, or network idle before acting. |
 | Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
 | Interactive targets | `browser-cli action guide --task interactive_targeting` | Choose between role, label, text, selector, and index targeting for buttons, links, menus, and repeated controls. |
-| Content extraction | `browser-cli action guide --task content_extraction` | Prefer outline/text/link/table/list/accessibility snapshots and bounded text reads before custom JS. |
+| Content extraction | `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` | Extract bounded text, links, tables, lists, outline, and accessibility surfaces before custom JS. |
 | Visual evidence | `browser-cli action guide --task visual_capture` | Set a viewport, capture a full page, selector, or role screenshot, and gather bounded text as supporting evidence. |
 | Dialogs, frames, uploads | `browser-cli action guide --task dialog_frame_handling` | Detect modals, prompts, embedded frames, cookie banners, and file upload controls before custom workarounds. |
 | State and credentials | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies for setup, cleanup, or assertions. |
@@ -107,6 +107,7 @@ CLI for you:
 6. 读取 action guide 和 packaged agent reference 目录；后续选择浏览器 action 前，优先读取机器可读 guide 和 action_playbook，不要先写自定义 Playwright/JS：
    browser-cli action guide --names-only
    browser-cli action observe --session-id <session_id> --surface interactive --surface text
+   browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
    browser-cli action guide --task interactive_targeting
    browser-cli action guide --task content_extraction
    browser-cli action guide --task browser_state_management
@@ -199,6 +200,7 @@ CLI for you:
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
    browser-cli action observe --session-id <session_id> --surface interactive --surface text
+   browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
    browser-cli action guide --task form_interaction
    browser-cli action guide --task interactive_targeting
    browser-cli action guide --task content_extraction
@@ -1109,9 +1111,12 @@ Common agent recipes:
   `query` -> choose a zero-based candidate -> `click-index` when the list is not
   semantic.
 - Page content/data: run `browser-cli commands --workflow content_extraction`,
-  then choose `outline-snapshot`, `text-snapshot`, `link-snapshot`,
-  `table-snapshot`, `list-snapshot`, or `accessibility-snapshot` before
-  falling back to `snapshot` or custom JavaScript.
+  then start with `action extract --surface text --surface links --selector main`;
+  use `--surface all` when one bounded result should include outline, tables,
+  lists, and accessibility nodes. Choose narrower `outline-snapshot`,
+  `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, or
+  `accessibility-snapshot` when the bundled extract result is too broad or
+  truncated before falling back to `snapshot` or custom JavaScript.
 - Manage browser state: run `browser-cli commands --workflow browser_state_management`,
   then choose `storage-get`, `storage-set`, `cookie-get`, `cookie-set`,
   `wait-storage`, or `wait-cookie` before using custom JavaScript. Use these

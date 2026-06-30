@@ -45,6 +45,7 @@ browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task mouse_interaction
 browser-cli action guide --task content_extraction
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
@@ -253,7 +254,7 @@ console/page error entries and the reported page URL.
 ## Action Selection Order
 
 1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
-   are unclear; use `outline-snapshot` for page structure; use `form-snapshot`
+   are unclear; use `action extract` for bundled bounded content; use `outline-snapshot` for page structure; use `form-snapshot`
    before filling complex forms; use `list-snapshot` before choosing from
    menus, search results, listboxes, or task lists; use `text-snapshot` for
    bounded visible text, alerts, and status messages; use `wait-dialog` or
@@ -350,10 +351,13 @@ visible text, href, `same_origin`, `external`, `download`, `href_masked`, and
 then verify with `wait-url`, `wait-title`, `wait-load-state`, and `page-info`.
 3. Extract page content or data: run `browser-cli commands --workflow
    content_extraction` and `browser-cli action guide --task content_extraction`,
-   then choose `outline-snapshot`, `text-snapshot`, `link-snapshot`,
-   `table-snapshot`, `list-snapshot`, or `accessibility-snapshot` before
-   bounded `snapshot`; use custom JS only after first-class extraction commands
-   cannot express the requested read.
+   then use `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main`;
+   use `--surface all` when the task needs outline, table, list, or accessibility
+   evidence in one bounded result. Choose narrower `outline-snapshot`,
+   `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, or
+   `accessibility-snapshot` when the bundled extract result is too broad or
+   truncated; use custom JS only after first-class extraction commands cannot
+   express the requested read.
 4. Wait for deterministic state: run `browser-cli commands --workflow
    state_waits` and `browser-cli action guide --task state_waits`, then choose
    the narrowest `wait-*` command such as `wait-load-state`, `wait-url`,

@@ -97,6 +97,7 @@ Use `session.session_id` or top-level `session_id` from the JSON output:
 ```bash
 browser-cli action open-url --session-id <session_id> --url https://example.com
 browser-cli action page-info --session-id <session_id>
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 browser-cli action snapshot --session-id <session_id> --max-chars 4000
 browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png
 ```
@@ -145,10 +146,11 @@ browser-cli commands --workflow content_extraction
 browser-cli commands --workflow page_diagnostics
 ```
 
-Use the first-class observe primitive before choosing page targets:
+Use the first-class observe and extract primitives before choosing targets or custom JavaScript:
 
 ```bash
 browser-cli action observe --session-id <session_id> --surface interactive --surface text
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 ```
 
 Before writing custom JavaScript, inspect the action guide and packaged

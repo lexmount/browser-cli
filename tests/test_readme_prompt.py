@@ -109,6 +109,10 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
         "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
         in prompt
     )
+    assert (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+        in prompt
+    )
     assert "browser-cli action guide --task form_interaction" in prompt
     assert "browser-cli action guide --task interactive_targeting" in prompt
     assert "browser-cli action guide --task content_extraction" in prompt
@@ -178,6 +182,7 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "navigation_flow" in text
     assert "agent_browser_primitives" in text
     assert "observe, act, extract, and verify" in text
+    assert "browser-cli action extract --session-id <session_id>" in text
     assert "interactive_targeting" in text
     assert "content_extraction" in text
     assert "visual_capture" in text
@@ -206,8 +211,9 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     assert "element refs" in text
     assert "agent_browser_primitives" in text
     assert "browser-cli action observe --session-id <session_id>" in text
-    assert "MCP-style `act`/`extract` wrappers" in normalized
-    assert "no one-command `act`/`extract` wrapper yet" in normalized
+    assert "browser-cli action extract --session-id <session_id>" in text
+    assert "MCP-style `act` wrappers" in normalized
+    assert "no one-command `act` wrapper yet" in normalized
     assert "Current Gap" in text
     assert "plugin package" in text
     assert "capability panel" in text

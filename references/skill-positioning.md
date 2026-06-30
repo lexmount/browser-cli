@@ -33,8 +33,9 @@ Codex browser surface.
   accessibility, interactive-only, form, link, table, list, dialog, frame,
   performance, network, and console snapshots.
 - Agent primitives: `action observe` returns page info plus bounded observation
-  surfaces, while `agent_browser_primitives` maps act, extract, and verify
-  intent to deterministic commands.
+  surfaces, `action extract` bundles bounded content surfaces, and
+  `agent_browser_primitives` maps act and verify intent to deterministic
+  commands.
 - Interaction: click, click-label, click-text, click-role, click-index,
   double-click, right-click, hover, press, focus, blur, scroll, bounding box,
   drag, type, fill, clear, set value, file input, dispatch event, submit,
@@ -65,6 +66,7 @@ browser-cli doctor --json
 browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow agent_browser_primitives
 browser-cli action observe --session-id <session_id> --surface interactive --surface text
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 browser-cli action guide --task interactive_targeting
 ```
 
@@ -86,11 +88,11 @@ state, act using element refs, confirm with another snapshot, and stop.
 | Area | Browserbase Skill Shape | browser-cli Shape | Current Gap |
 | --- | --- | --- | --- |
 | Skill distribution | Marketplace/plugin install paths and an official skill collection. | Local CLI plus `SKILL.md`, README prompt, packaged references, and examples. | We do not yet provide a one-step Codex connector, plugin package, or skill marketplace install path. |
-| First action path | A compact `browse open`, `browse snapshot`, interact, snapshot, stop loop. | `first_browser_task` gives agents a short doctor, open, inspect, act, verify/capture, close path while `action observe` and `agent_browser_primitives` cover the first observe/act/extract/verify loop. | We still need single-command or natural-language wrappers for act/extract tasks. |
+| First action path | A compact `browse open`, `browse snapshot`, interact, snapshot, stop loop. | `first_browser_task` gives agents a short doctor, open, inspect, act, verify/capture, close path while `action observe`, `action extract`, and `agent_browser_primitives` cover the first observe/act/extract/verify loop. | We still need a single-command or natural-language wrapper for act tasks. |
 | Environment choice | The Skill explains local, remote Browserbase, and CDP-style modes and when to switch. | `browser-cli` is intentionally focused on Lexmount remote browsers plus persistent contexts. | We should state this boundary more clearly and expose platform capability signals when remote behavior is required. |
 | Remote platform features | Browserbase advertises Identity, verified browsers, CAPTCHA solving, residential proxies, and session persistence. | Lexmount has remote sessions, contexts, action evidence, structured doctor checks, and case files. | browser.lexmount.cn should surface comparable capability labels, limits, region/proxy choices, and context persistence status if supported. |
 | Auth UX | The Skill points users to account settings and uses environment credentials for remote sessions. | Manual env credentials work today; Connect from Codex, scoped tokens, and device-code contracts are documented but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, revoke/expire UI, and device-code/OAuth. |
-| Determinism | Simple element-ref interaction is fast to explain; natural-language layers are concise but less auditable. | Explicit commands, JSON fields, `action observe`, and `agent_browser_primitives` make behavior auditable, testable, and repairable. | We still need one-command or MCP-style `act`/`extract` wrappers that return the underlying deterministic plan and evidence. |
+| Determinism | Simple element-ref interaction is fast to explain; natural-language layers are concise but less auditable. | Explicit commands, JSON fields, `action observe`, `action extract`, and `agent_browser_primitives` make behavior auditable, testable, and repairable. | We still need one-command or MCP-style `act` wrappers that return the underlying deterministic plan and evidence. |
 | Ecosystem breadth | The skill collection includes adjacent skills for tracing, cookie sync, fetch/search, testing, and automation improvement. | `browser-cli` packages references, examples, action guides, and case scaffolds in one CLI. | We need more packaged case examples and, later, companion skills for trace analysis, search/fetch, and site-specific workflows. |
 | Diagnostics | The Browserbase ecosystem includes tracing and troubleshooting guidance. | `doctor`, repair plans, command catalog checks, page diagnostics, console/network snapshots, events, and artifacts are first-class. | Diagnostics are strong, but the first-step docs must stay short enough that agents actually choose them. |
 
@@ -103,13 +105,13 @@ state, act using element refs, confirm with another snapshot, and stop.
 2. `browser-cli` has no one-step plugin/marketplace package, hosted MCP, local
    MCP adapter, or native Codex connector. The Skill works, but users still
    install a CLI and follow a prompt.
-3. The `first_browser_task`, `action observe`, and `agent_browser_primitives`
+3. The `first_browser_task`, `action observe`, `action extract`, and `agent_browser_primitives`
    path now gives agents a compact first-task and observe/act/extract/verify
-   entrypoint, but act/extract are still workflow contracts rather than single
-   natural-language tools.
-4. There is no one-command `act`/`extract` wrapper yet for users who expect
-   natural language browser control. The deterministic command catalog is
-   powerful, but verbose for quick exploratory work.
+   entrypoint, but act is still a workflow contract rather than a single
+   natural-language tool.
+4. There is no one-command `act` wrapper yet for users who expect natural
+   language browser control. The deterministic command catalog is powerful, but
+   verbose for quick exploratory work.
 5. The product does not yet expose a clear remote capability matrix in the
    Skill: identity/session persistence, region/proxy options, anti-bot support,
    quotas, and browser availability should be visible from browser.lexmount.cn
@@ -129,8 +131,8 @@ interface on top later:
 
 - A packaged Codex/plugin install path so users do not copy a long prompt.
 - A hosted or local MCP adapter that maps simple tools to existing CLI commands.
-- Optional one-command `act` and `extract` wrappers that return the underlying
-  command plan and evidence from `agent_browser_primitives`.
+- Optional one-command `act` wrapper that returns the underlying command plan
+  and evidence from `agent_browser_primitives`.
 - A browser.lexmount.cn Connect from Codex flow that removes manual secret
   handling from normal onboarding.
 - A browser.lexmount.cn capability panel that tells agents which remote browser

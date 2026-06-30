@@ -204,6 +204,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "session.close",
     "action.guide",
     "action.observe",
+    "action.extract",
     "action.open-url",
     "action.wait-selector",
     "action.click",
@@ -425,6 +426,14 @@ OBSERVE_SURFACE_CHOICES = (
     "forms",
     "outline",
 )
+EXTRACT_SURFACE_CHOICES = (
+    "outline",
+    "text",
+    "links",
+    "tables",
+    "lists",
+    "accessibility",
+)
 DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
     "form-fill",
@@ -471,6 +480,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "example get",
     "action guide",
     "action observe",
+    "action extract",
     "click-label",
     "fill before custom JavaScript",
     "custom JavaScript",
@@ -1789,6 +1799,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli commands --workflow agent_browser_primitives",
                 "browser-cli action guide --names-only",
                 "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                 "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                 "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
@@ -1949,6 +1960,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "content_extraction": [
                 "browser-cli action guide --task content_extraction",
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                 "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
@@ -2732,10 +2744,11 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "extract_content",
-                        "command": "<choose a bounded extraction command before snapshot or eval>",
+                        "command": "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                         "agent_action": True,
                         "optional": True,
                         "selection_order": [
+                            "extract",
                             "text-snapshot",
                             "link-snapshot",
                             "table-snapshot",
@@ -2745,6 +2758,8 @@ def _command_catalog() -> dict[str, Any]:
                             "snapshot",
                         ],
                         "preferred_commands": [
+                            "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                            "browser-cli action extract --session-id <session_id> --surface all --selector main",
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
                             "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20",
@@ -2752,6 +2767,13 @@ def _command_catalog() -> dict[str, Any]:
                             "browser-cli action outline-snapshot --session-id <session_id> --selector body",
                             "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
+                        ],
+                        "read": [
+                            "result.surfaces",
+                            "result.extractions.text.texts",
+                            "result.extractions.links.links",
+                            "result.truncated",
+                            "result.truncated_surfaces",
                         ],
                         "fallback_commands": [
                             "browser-cli commands --workflow content_extraction",
@@ -3704,9 +3726,10 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "choose_extraction_surface",
-                        "command": "<choose the narrowest snapshot/read command for the requested content>",
+                        "command": "<choose action extract or the narrowest snapshot/read command for the requested content>",
                         "agent_action": True,
                         "selection_order": [
+                            "extract",
                             "outline-snapshot",
                             "text-snapshot",
                             "link-snapshot",
@@ -3718,6 +3741,8 @@ def _command_catalog() -> dict[str, Any]:
                             "snapshot",
                         ],
                         "preferred_commands": [
+                            "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                            "browser-cli action extract --session-id <session_id> --surface all --selector main",
                             "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
                             "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
@@ -3730,12 +3755,21 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "extract_content",
-                        "command": "<run the selected extraction command>",
+                        "command": "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                         "agent_action": True,
                         "read": [
                             "url",
                             "title",
                             "result.kind",
+                            "result.surfaces",
+                            "result.extractions",
+                            "result.extractions.text.texts",
+                            "result.extractions.links.links",
+                            "result.extractions.tables.tables",
+                            "result.extractions.lists.lists",
+                            "result.extractions.outline.headings",
+                            "result.extractions.outline.landmarks",
+                            "result.truncated_surfaces",
                             "result.texts",
                             "result.text_count",
                             "result.links",
@@ -3757,9 +3791,10 @@ def _command_catalog() -> dict[str, Any]:
                             "result.truncated",
                         ],
                         "fallback_commands": [
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+                            "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
                             "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
-                            "browser-cli action text-snapshot --session-id <session_id> --max-nodes 80 --max-chars 1000",
                         ],
                     },
                     {
@@ -3768,6 +3803,7 @@ def _command_catalog() -> dict[str, Any]:
                         "agent_action": True,
                         "read": [
                             "result.truncated",
+                            "result.truncated_surfaces",
                             "result.max_nodes",
                             "result.max_chars",
                             "result.max_rows",
@@ -10241,6 +10277,69 @@ def _observe_surface_expression(
     raise BrowserRuntimeError(f"Unsupported observe surface: {surface}")
 
 
+def _normalize_extract_surfaces(values: list[str]) -> list[str]:
+    requested = values or ["text", "links"]
+    if "all" in requested:
+        requested = list(EXTRACT_SURFACE_CHOICES)
+    return _dedupe_preserving_order(requested)
+
+
+def _extract_surface_expression(
+    surface: str,
+    args: argparse.Namespace,
+) -> str:
+    if surface == "outline":
+        return _outline_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    if surface == "text":
+        return _text_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_chars=args.max_chars,
+        )
+    if surface == "links":
+        return _link_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            include_empty=args.include_empty_links,
+            same_origin_only=args.same_origin_only,
+        )
+    if surface == "tables":
+        return _table_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_rows=args.max_rows,
+            max_cells=args.max_cells,
+        )
+    if surface == "lists":
+        return _list_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_items=args.max_items,
+        )
+    if surface == "accessibility":
+        return _accessibility_snapshot_expression(
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    raise BrowserRuntimeError(f"Unsupported extract surface: {surface}")
+
+
+def _extract_truncated_surfaces(extractions: dict[str, dict[str, Any]]) -> list[str]:
+    return [
+        surface
+        for surface, payload in extractions.items()
+        if bool(payload.get("truncated"))
+    ]
+
+
 def cmd_action_observe(args: argparse.Namespace) -> None:
     command = "action.observe"
     try:
@@ -10270,6 +10369,51 @@ def cmd_action_observe(args: argparse.Namespace) -> None:
         "surfaces": surfaces,
         "page_info": page_info,
         "snapshots": snapshots,
+    }
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def cmd_action_extract(args: argparse.Namespace) -> None:
+    command = "action.extract"
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        page_info = _run_eval_expression_result(
+            connect_url=connect_url,
+            expression=_page_info_expression(),
+        )
+        surfaces = _normalize_extract_surfaces(args.surface)
+        extractions = {
+            surface: _run_eval_expression_result(
+                connect_url=connect_url,
+                expression=_extract_surface_expression(surface, args),
+            )
+            for surface in surfaces
+        }
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    truncated_surfaces = _extract_truncated_surfaces(extractions)
+    result = {
+        "kind": "extract",
+        "url": page_info.get("url"),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "selector": args.selector,
+        "truncated": bool(truncated_surfaces),
+        "truncated_surfaces": truncated_surfaces,
+        "page_info": page_info,
+        "extractions": extractions,
     }
     _success(
         command,
@@ -18736,6 +18880,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "selection_order": [
                 "page-info",
+                "extract",
                 "outline-snapshot",
                 "text-snapshot",
                 "link-snapshot",
@@ -18748,10 +18893,13 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "inspect_commands": [
                 "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                 "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
             ],
             "preferred_commands": [
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                "browser-cli action extract --session-id <session_id> --surface all --selector main",
                 "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
                 "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
@@ -18775,6 +18923,11 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "title",
                 "ready_state",
                 "result.kind",
+                "result.surfaces",
+                "result.extractions",
+                "result.extractions.text.texts",
+                "result.extractions.links.links",
+                "result.truncated_surfaces",
                 "result.texts",
                 "result.text_count",
                 "result.links",
@@ -18796,9 +18949,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.truncated",
             ],
             "custom_js_boundary": (
-                "Use action eval only after page-info plus outline/text/link/"
-                "table/list/accessibility snapshots and get-text commands cannot "
-                "express the requested extraction."
+                "Use action eval only after action extract plus page-info, "
+                "outline/text/link/table/list/accessibility snapshots, and "
+                "get-text commands cannot express the requested extraction."
             ),
         },
         "browser_state_management": {
@@ -26110,6 +26263,72 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Include hidden DOM nodes in supported surfaces.",
     )
     action_observe.set_defaults(func=cmd_action_observe)
+
+    action_extract = action_subparsers.add_parser(
+        "extract",
+        help="Extract bounded page content surfaces for agents",
+    )
+    _add_session_target_args(action_extract)
+    action_extract.add_argument(
+        "--surface",
+        action="append",
+        choices=[*EXTRACT_SURFACE_CHOICES, "all"],
+        default=[],
+        help=(
+            "Extraction surface to include. Repeat for multiple surfaces; "
+            "default is text and links."
+        ),
+    )
+    action_extract.add_argument(
+        "--selector",
+        help="Optional container selector used to scope extractable content.",
+    )
+    action_extract.add_argument(
+        "--max-nodes",
+        type=_non_negative_int,
+        default=80,
+        help="Maximum nodes returned per bounded surface.",
+    )
+    action_extract.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters returned per text block.",
+    )
+    action_extract.add_argument(
+        "--max-rows",
+        type=_non_negative_int,
+        default=20,
+        help="Maximum rows returned per table.",
+    )
+    action_extract.add_argument(
+        "--max-cells",
+        type=_non_negative_int,
+        default=20,
+        help="Maximum cells returned per table row.",
+    )
+    action_extract.add_argument(
+        "--max-items",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum items returned per list.",
+    )
+    action_extract.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in supported surfaces.",
+    )
+    action_extract.add_argument(
+        "--include-empty-links",
+        action="store_true",
+        help="Include links without visible text or accessible name.",
+    )
+    action_extract.add_argument(
+        "--same-origin-only",
+        action="store_true",
+        help="Only return links whose resolved URL has the same origin as the current page.",
+    )
+    action_extract.set_defaults(func=cmd_action_extract)
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)

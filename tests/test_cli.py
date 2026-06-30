@@ -424,6 +424,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
     assert (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
         "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000"
         in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
@@ -639,6 +643,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert (
         "browser-cli action guide --task content_extraction"
+        in payload["agent_entrypoints"]["content_extraction"]
+    )
+    assert (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
         in payload["agent_entrypoints"]["content_extraction"]
     )
     assert (
@@ -947,7 +955,12 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "click-role" in primitive_steps[3]["selection_order"]
     assert "browser-cli commands --workflow form_interaction" in primitive_steps[3]["fallback_commands"]
     assert primitive_steps[4]["optional"] is True
+    assert primitive_steps[4]["command"] == (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+    )
+    assert "extract" in primitive_steps[4]["selection_order"]
     assert "text-snapshot" in primitive_steps[4]["selection_order"]
+    assert "result.extractions.text.texts" in primitive_steps[4]["read"]
     assert "browser-cli commands --workflow content_extraction" in primitive_steps[4]["fallback_commands"]
     assert primitive_steps[5]["agent_action"] is True
     assert "result.link_count" in primitive_steps[5]["read"]
@@ -1485,6 +1498,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "visibility_state" in extraction_steps[1]["read"]
     assert extraction_steps[2]["agent_action"] is True
     assert extraction_steps[2]["selection_order"] == [
+        "extract",
         "outline-snapshot",
         "text-snapshot",
         "link-snapshot",
@@ -1497,14 +1511,19 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     ]
     assert (
         "browser-cli action table-snapshot"
-        in extraction_steps[2]["preferred_commands"][3]
+        in extraction_steps[2]["preferred_commands"][5]
     )
     assert extraction_steps[3]["agent_action"] is True
+    assert extraction_steps[3]["command"] == (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+    )
+    assert "result.extractions.text.texts" in extraction_steps[3]["read"]
     assert "result.tables" in extraction_steps[3]["read"]
     assert "result.headings" in extraction_steps[3]["read"]
-    assert "browser-cli action snapshot" in extraction_steps[3]["fallback_commands"][0]
+    assert "browser-cli action text-snapshot" in extraction_steps[3]["fallback_commands"][0]
     assert extraction_steps[4]["agent_action"] is True
     assert "result.truncated" in extraction_steps[4]["read"]
+    assert "result.truncated_surfaces" in extraction_steps[4]["read"]
     state_steps = workflows["state_waits"]["steps"]
     assert [step["id"] for step in state_steps] == [
         "inspect_action_guide",
@@ -1669,6 +1688,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.console-snapshot",
         "action.wait-console",
         "action.outline-snapshot",
+        "action.extract",
         "action.interactive-snapshot",
         "action.interactive-only-snapshot",
         "direct-url",
@@ -1684,6 +1704,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any("--surface" in option["flags"] for option in observe["options"])
     assert any("--selector" in option["flags"] for option in observe["options"])
     assert any("--max-nodes" in option["flags"] for option in observe["options"])
+    extract = commands["action.extract"]
+    assert extract["required_options"] == []
+    assert extract["browser_target"] == observe["browser_target"]
+    assert any("--surface" in option["flags"] for option in extract["options"])
+    assert any("--selector" in option["flags"] for option in extract["options"])
+    assert any("--max-rows" in option["flags"] for option in extract["options"])
+    assert any("--max-cells" in option["flags"] for option in extract["options"])
+    assert any("--max-items" in option["flags"] for option in extract["options"])
     open_url = commands["action.open-url"]
     assert open_url["browser_target"] == {
         "required": True,
@@ -2362,13 +2390,18 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["guide"]["related_workflows"] == ["content_extraction"]
-    assert payload["guide"]["selection_order"][:4] == [
+    assert payload["guide"]["selection_order"][:5] == [
         "page-info",
+        "extract",
         "outline-snapshot",
         "text-snapshot",
         "link-snapshot",
     ]
     assert "table-snapshot" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action extract" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
     assert any(
         "browser-cli action table-snapshot" in command
         for command in payload["guide"]["preferred_commands"]
@@ -2382,7 +2415,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "result.tables" in payload["guide"]["read_fields"]
     assert "result.headings" in payload["guide"]["read_fields"]
     assert "result.truncated" in payload["guide"]["read_fields"]
-    assert "snapshots and get-text commands" in payload["guide"]["custom_js_boundary"]
+    assert "action extract plus page-info" in payload["guide"]["custom_js_boundary"]
     assert payload["next_commands"] == [
         "browser-cli commands --workflow content_extraction"
     ]
@@ -2566,7 +2599,9 @@ def test_commands_catalog_returns_workflows_only(
     assert primitive_steps[3]["optional"] is True
     assert "fill-label" in primitive_steps[3]["selection_order"]
     assert primitive_steps[4]["optional"] is True
+    assert "extract" in primitive_steps[4]["selection_order"]
     assert "table-snapshot" in primitive_steps[4]["selection_order"]
+    assert "result.extractions.links.links" in primitive_steps[4]["read"]
     assert "result.link_count" in primitive_steps[5]["read"]
     assert (
         "required_token_lifecycle"
@@ -2792,7 +2827,9 @@ def test_commands_catalog_returns_agent_browser_primitives_workflow(
     assert steps[3]["optional"] is True
     assert "click-role" in steps[3]["selection_order"]
     assert steps[4]["optional"] is True
+    assert "extract" in steps[4]["selection_order"]
     assert "text-snapshot" in steps[4]["selection_order"]
+    assert "result.extractions.text.texts" in steps[4]["read"]
     assert steps[5]["agent_action"] is True
     assert "result.node_count" in steps[5]["read"]
     assert (
@@ -5518,18 +5555,24 @@ def test_commands_catalog_returns_content_extraction_workflow(
     assert "ready_state" in steps[1]["read"]
     assert steps[2]["agent_action"] is True
     assert steps[2]["selection_order"][:4] == [
+        "extract",
         "outline-snapshot",
         "text-snapshot",
         "link-snapshot",
-        "table-snapshot",
     ]
-    assert "browser-cli action text-snapshot" in steps[2]["preferred_commands"][1]
+    assert "browser-cli action extract" in steps[2]["preferred_commands"][0]
+    assert "browser-cli action text-snapshot" in steps[2]["preferred_commands"][3]
     assert steps[3]["agent_action"] is True
+    assert steps[3]["command"] == (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+    )
+    assert "result.extractions.links.links" in steps[3]["read"]
     assert "result.links" in steps[3]["read"]
     assert "result.landmarks" in steps[3]["read"]
-    assert "browser-cli action snapshot" in steps[3]["fallback_commands"][0]
+    assert "browser-cli action text-snapshot" in steps[3]["fallback_commands"][0]
     assert steps[-1]["id"] == "verify_extraction_bounds"
     assert "result.truncated" in steps[-1]["read"]
+    assert "result.truncated_surfaces" in steps[-1]["read"]
     assert "browser-cli action table-snapshot" in steps[-1]["fallback_commands"][1]
 
 
@@ -6141,6 +6184,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["action_guides"]["invalid_guide_command_references"] == []
     for command_name in (
         "action.observe",
+        "action.extract",
         "action.press",
         "action.press-role",
         "action.press-key",
@@ -6739,6 +6783,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-load-state" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.observe" in catalog["missing_required_commands"]
+    assert "action.extract" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
     assert "action.wait-state-role" in catalog["missing_required_commands"]
@@ -14408,6 +14453,159 @@ def test_action_observe_collects_page_info_and_requested_surfaces(
     assert payload["result"]["snapshots"]["links"]["link_count"] == 4
     assert payload["result"]["snapshots"]["forms"]["field_count"] == 5
     assert payload["result"]["snapshots"]["outline"]["node_count"] == 6
+
+
+def test_action_extract_collects_bounded_content_surfaces(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expressions: list[str] = []
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert connect_url == "wss://example.test/devtools"
+        assert action == "eval"
+        expression = request.expression
+        expressions.append(expression)
+        if "body_text_length" in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "url": "https://example.test",
+                        "title": "Example",
+                        "ready_state": "complete",
+                    }
+                }
+            )
+        if 'kind: "outline"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "outline",
+                        "heading_count": 1,
+                        "landmark_count": 1,
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "text"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "text",
+                        "text_count": 2,
+                        "texts": [],
+                        "truncated": True,
+                    }
+                }
+            )
+        if 'kind: "links"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "links",
+                        "link_count": 3,
+                        "links": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "tables"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "tables",
+                        "table_count": 4,
+                        "tables": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "lists"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "lists",
+                        "list_count": 5,
+                        "lists": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "dom-accessibility"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "dom-accessibility",
+                        "node_count": 6,
+                        "nodes": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        raise AssertionError("unexpected extract expression")
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "extract",
+                "--session-id",
+                "s1",
+                "--surface",
+                "all",
+                "--selector",
+                "main",
+                "--max-nodes",
+                "12",
+                "--max-chars",
+                "80",
+                "--max-rows",
+                "10",
+                "--max-cells",
+                "40",
+                "--max-items",
+                "20",
+                "--same-origin-only",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert len(expressions) == 7
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.extract"
+    assert payload["result"]["kind"] == "extract"
+    assert payload["result"]["url"] == "https://example.test"
+    assert payload["result"]["selector"] == "main"
+    assert payload["result"]["surface_count"] == 6
+    assert payload["result"]["surfaces"] == [
+        "outline",
+        "text",
+        "links",
+        "tables",
+        "lists",
+        "accessibility",
+    ]
+    assert payload["result"]["truncated"] is True
+    assert payload["result"]["truncated_surfaces"] == ["text"]
+    assert payload["result"]["page_info"]["title"] == "Example"
+    assert payload["result"]["extractions"]["outline"]["heading_count"] == 1
+    assert payload["result"]["extractions"]["text"]["text_count"] == 2
+    assert payload["result"]["extractions"]["links"]["link_count"] == 3
+    assert payload["result"]["extractions"]["tables"]["table_count"] == 4
+    assert payload["result"]["extractions"]["lists"]["list_count"] == 5
+    assert payload["result"]["extractions"]["accessibility"]["node_count"] == 6
 
 
 @pytest.mark.parametrize(

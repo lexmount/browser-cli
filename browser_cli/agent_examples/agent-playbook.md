@@ -163,6 +163,7 @@ browser-cli commands --workflow one_off_page_task
 browser-cli session create --browser-mode light
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action observe --session-id <session_id> --surface interactive --surface text
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 browser-cli action snapshot --session-id <session_id>
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli session close --session-id <session_id>
@@ -215,6 +216,8 @@ writing page-specific JavaScript:
 ```bash
 browser-cli commands --workflow content_extraction
 browser-cli action guide --task content_extraction
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
+browser-cli action extract --session-id <session_id> --surface all --selector main
 browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80
 browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000
 browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80

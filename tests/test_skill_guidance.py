@@ -40,6 +40,7 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "interactive-only" in text
     assert "observe/act/extract planning" in text
     assert "browser-cli action observe --session-id <session_id>" in text
+    assert "browser-cli action extract --session-id <session_id>" in text
     assert "browser-cli commands --workflow agent_browser_primitives" in text
     assert "dialogs/frames" in text
     assert "file uploads" in text
