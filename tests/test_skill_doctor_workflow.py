@@ -50,8 +50,11 @@ def test_skill_explains_doctor_status_decisions() -> None:
     assert "`checked_case_scaffold_templates`" in text
     assert "`invalid_case_scaffold_templates`" in text
     assert "`auth_login_contract`" in text
+    assert "`device_code_contract`" in text
     assert "`missing_handoff_fields`" in text
     assert "`missing_setup_blocks`" in text
+    assert "`missing_required_device_code_endpoints`" in text
+    assert "`missing_required_browser_site_support`" in text
     assert "`repair_plan`" in text
     assert "`warnings > 0`" in text
     assert "`ok: false`" in text

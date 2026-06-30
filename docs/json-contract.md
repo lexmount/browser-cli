@@ -334,6 +334,13 @@ Default behavior:
   `required_setup_blocks`, `missing_setup_blocks`, `invalid_fields`,
   `setup_block_ids`, `copyable_commands`, `local_env_names`, `verification`,
   `secret_policy`, `connect_from_codex_url`, and `missing_runtime_auth`.
+- `doctor` includes a `device_code_contract` check so missing or invalid
+  `auth login --device-code` pending/fallback metadata becomes actionable. It
+  reports `missing_device_code_fields`,
+  `missing_required_device_code_endpoints`,
+  `missing_required_browser_site_support`, `fallback_handoff_setup_block_ids`,
+  `missing_fallback_setup_blocks`, `site_capability_status`, and
+  `missing_runtime_auth`.
 - `doctor` includes a `connect_from_codex_contract` check so missing
   browser-site capabilities, `browser_site_acceptance_tests`, token lifecycle,
   runtime auth, or device-code API contract fields become actionable warnings

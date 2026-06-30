@@ -948,6 +948,9 @@ The `auth_login_contract` check verifies that `auth login` still exposes the
 handoff fields agents need for safe setup, including `setup_blocks`,
 `copyable_commands`, `local_env`, `verification`, `secret_policy`,
 `connect_from_codex_url`, and runtime-auth blockers.
+The `device_code_contract` check verifies that `auth login --device-code`
+still exposes the pending approval contract, required device-code endpoints,
+required browser-site support, fallback setup blocks, and runtime-auth blockers.
 The `connect_from_codex_contract` check verifies that browser.lexmount.cn
 handoff fields such as capabilities, `browser_site_acceptance_tests`, token
 lifecycle, runtime auth, and device-code API contracts are still present.

@@ -165,8 +165,8 @@ what to do:
   `missing_case_scaffold_templates`, `checked_case_scaffold_templates`,
   `invalid_case_scaffold_templates`, `missing_action_schemas`,
   `invalid_action_schemas`; reinstall if needed.
-- `auth_login_contract` with `status: "warn"`: inspect `missing_handoff_fields`,
-  `missing_setup_blocks`, `invalid_fields`, and `secret_policy`; reinstall if needed.
+- `auth_login_contract` or `device_code_contract` with `status: "warn"`: inspect
+  `missing_handoff_fields`, `missing_setup_blocks`, `missing_required_device_code_endpoints`, `missing_required_browser_site_support`, `invalid_fields`, and `secret_policy`; reinstall if needed.
 - `agent_references` with `status: "warn"`: run
   `browser-cli reference get --id usable_status`,
   `browser-cli reference get --id action_playbook`, or follow its `fix`

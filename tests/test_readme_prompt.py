@@ -144,8 +144,10 @@ def test_readme_documents_doctor_connect_from_codex_blockers() -> None:
 
     assert "`repair_plan.connect_from_codex.required_runtime_auth`" in text
     assert "`auth_login_contract`" in text
+    assert "`device_code_contract`" in text
     assert "`required_token_lifecycle`" in text
     assert "`site_capability_status`" in text
+    assert "required device-code endpoints" in text
     assert "browser.lexmount.cn, SDK, API, and gateway blockers" in text
 
 

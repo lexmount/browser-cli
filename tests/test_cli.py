@@ -5825,6 +5825,55 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["auth_login_contract"]["verification"]["doctor_command"] == (
         "browser-cli doctor --json"
     )
+    assert checks["device_code_contract"]["status"] == "pass"
+    assert checks["device_code_contract"]["available"] is False
+    assert checks["device_code_contract"]["device_code_available"] is False
+    assert checks["device_code_contract"]["selected_flow"] == "device_code"
+    assert checks["device_code_contract"]["reason"] == "browser_site_endpoint_missing"
+    assert checks["device_code_contract"]["missing_device_code_fields"] == []
+    assert checks["device_code_contract"]["required_device_code_endpoints"] == [
+        "POST /api/auth/device/code",
+        "POST /api/auth/device/token",
+    ]
+    assert (
+        checks["device_code_contract"]["missing_required_device_code_endpoints"]
+        == []
+    )
+    assert (
+        checks["device_code_contract"]["missing_required_browser_site_support"]
+        == []
+    )
+    assert checks["device_code_contract"]["required_site_capabilities"] == [
+        "device_code_oauth"
+    ]
+    assert checks["device_code_contract"]["missing_required_site_capabilities"] == []
+    assert checks["device_code_contract"]["fallback_handoff_setup_block_ids"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert checks["device_code_contract"]["missing_fallback_setup_blocks"] == []
+    assert checks["device_code_contract"]["missing_runtime_auth"] == []
+    assert checks["device_code_contract"]["invalid_fields"] == []
+    assert checks["device_code_contract"]["connect_from_codex_url"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert (
+        checks["device_code_contract"]["connect_from_codex_url_masked"] is False
+    )
+    assert checks["device_code_contract"]["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert checks["device_code_contract"]["requested_expires_in"] == "7d"
+    assert "raw device_code" in checks["device_code_contract"]["secret_policy"][
+        "do_not_paste_in_chat"
+    ]
+    assert checks["device_code_contract"]["verification"]["workflow_command"] == (
+        "browser-cli commands --workflow device_code_auth"
+    )
     assert checks["connect_from_codex_contract"]["status"] == "pass"
     assert checks["connect_from_codex_contract"]["capability_ids"] == [
         "project_id_display",
@@ -6625,6 +6674,66 @@ def test_doctor_warns_when_auth_login_contract_is_incomplete(
         "browser-cli commands --workflow connect_from_codex_auth"
         in payload["repair_plan"]["commands"]
     )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_device_code_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._device_code_required_endpoints",
+        lambda: ["POST /api/auth/device/code"],
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._device_code_required_browser_site_support",
+        lambda: ["Show user_code approval UI on /connect/codex."],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "device_code_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["device_code_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_required_device_code_endpoints"] == [
+        "POST /api/auth/device/token"
+    ]
+    assert "Issue scoped, project-bound, short-lived access tokens." in contract[
+        "missing_required_browser_site_support"
+    ]
+    assert "required_endpoints" in contract["invalid_fields"]
+    assert "required_browser_site_support" in contract["invalid_fields"]
+    assert contract["fallback_handoff_setup_block_ids"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert contract["missing_fallback_setup_blocks"] == []
+    assert contract["fix"]["code"] == "repair_device_code_contract"
+    assert "browser-cli auth login --device-code" in payload["repair_plan"][
+        "commands"
+    ]
+    assert (
+        "browser-cli commands --workflow device_code_auth"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "connect_from_codex" in payload["repair_plan"]
     assert "api_connectivity" in payload["skipped_checks"]
 
 

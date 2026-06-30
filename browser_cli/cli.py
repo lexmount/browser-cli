@@ -135,6 +135,31 @@ DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH = (
     "api_accepts_bearer_token",
     "browser_gateway_accepts_bearer_token",
 )
+DOCTOR_REQUIRED_DEVICE_CODE_FIELDS = (
+    "available",
+    "reason",
+    "verification_uri",
+    "connect_from_codex_url",
+    "project_id",
+    "project_id_source",
+    "requested_scopes",
+    "requested_scope_details",
+    "requested_expires_in",
+    "required_endpoints",
+    "required_browser_site_support",
+)
+DOCTOR_REQUIRED_DEVICE_CODE_ENDPOINTS = (
+    "POST /api/auth/device/code",
+    "POST /api/auth/device/token",
+)
+DOCTOR_REQUIRED_DEVICE_CODE_BROWSER_SITE_SUPPORT = (
+    "Show user_code approval UI on /connect/codex.",
+    "Issue scoped, project-bound, short-lived access tokens.",
+    "Issue refresh tokens with revoke and expiration metadata.",
+    "Expose token refresh and revoke endpoints for browser-cli.",
+    "Enable browser runtime bearer-token authentication.",
+)
+DOCTOR_REQUIRED_DEVICE_CODE_SITE_CAPABILITIES = ("device_code_oauth",)
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
@@ -5119,6 +5144,292 @@ def _doctor_auth_login_contract_check() -> dict[str, Any]:
     )
 
 
+def _doctor_device_code_contract_check() -> dict[str, Any]:
+    try:
+        project_id = None
+        project_id_source = "unset"
+        scopes = list(DEFAULT_CODEX_CONNECT_SCOPES)
+        scope_details = _scope_details(scopes)
+        expires_in = DEFAULT_CODEX_CONNECT_EXPIRES_IN
+        connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=scopes,
+            expires_in=expires_in,
+            response="device_code",
+        )
+        fallback_connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        fallback_handoff = _auth_login_handoff(
+            connect_url=fallback_connect_url,
+            project_id=project_id,
+            project_id_source=project_id_source,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        required_endpoints = _device_code_required_endpoints()
+        required_browser_site_support = _device_code_required_browser_site_support()
+        device_code = {
+            "available": False,
+            "reason": "browser_site_endpoint_missing",
+            "verification_uri": LEXMOUNT_CODEX_CONNECT_URL,
+            "connect_from_codex_url": connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": scopes,
+            "requested_scope_details": scope_details,
+            "requested_expires_in": expires_in,
+            "required_endpoints": required_endpoints,
+            "required_browser_site_support": required_browser_site_support,
+        }
+        site_capabilities = _connect_from_codex_site_capabilities()
+        site_capability_status = _connect_from_codex_site_capability_status(
+            site_capabilities
+        )
+        runtime_auth = _connect_from_codex_required_runtime_auth()
+    except Exception as exc:
+        return _doctor_check(
+            "device_code_contract",
+            "warn",
+            "auth login --device-code contract could not be built.",
+            error=exc.__class__.__name__,
+            required_device_code_fields=list(DOCTOR_REQUIRED_DEVICE_CODE_FIELDS),
+            fix=_doctor_fix(
+                "repair_device_code_contract",
+                commands=[
+                    "browser-cli auth login --device-code",
+                    "browser-cli auth connect-requirements",
+                    "browser-cli commands --workflow device_code_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents rely on auth login --device-code metadata to decide between approval and manual-env fallback.",
+                    "Upgrade or reinstall browser-cli if device-code login cannot produce JSON.",
+                ],
+                connect_from_codex=_doctor_connect_from_codex_fix(),
+            ),
+        )
+
+    missing_device_code_fields = [
+        field for field in DOCTOR_REQUIRED_DEVICE_CODE_FIELDS if field not in device_code
+    ]
+    invalid_fields: list[str] = []
+    if device_code.get("available") is not False:
+        invalid_fields.append("available")
+    if device_code.get("reason") != "browser_site_endpoint_missing":
+        invalid_fields.append("reason")
+    if device_code.get("verification_uri") != LEXMOUNT_CODEX_CONNECT_URL:
+        invalid_fields.append("verification_uri")
+    if device_code.get("project_id") is not None:
+        invalid_fields.append("project_id")
+    if device_code.get("project_id_source") != "unset":
+        invalid_fields.append("project_id_source")
+    if device_code.get("requested_scopes") != list(DEFAULT_CODEX_CONNECT_SCOPES):
+        invalid_fields.append("requested_scopes")
+    if device_code.get("requested_expires_in") != DEFAULT_CODEX_CONNECT_EXPIRES_IN:
+        invalid_fields.append("requested_expires_in")
+
+    split_url = urlsplit(str(device_code.get("connect_from_codex_url", "")))
+    query_pairs = parse_qsl(split_url.query)
+    query_values = {key: value for key, value in query_pairs if key != "scope"}
+    scope_values = [value for key, value in query_pairs if key == "scope"]
+    if f"{split_url.scheme}://{split_url.netloc}{split_url.path}" != (
+        LEXMOUNT_CODEX_CONNECT_URL
+    ):
+        invalid_fields.append("connect_from_codex_url.base")
+    expected_query = {
+        "source": "browser-cli",
+        "intent": "agent-browser-control",
+        "response": "device_code",
+        "expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+    }
+    for key, expected in expected_query.items():
+        if query_values.get(key) != expected:
+            invalid_fields.append(f"connect_from_codex_url.{key}")
+    if scope_values != list(DEFAULT_CODEX_CONNECT_SCOPES):
+        invalid_fields.append("connect_from_codex_url.scope")
+
+    device_code_endpoints = device_code.get("required_endpoints")
+    if not isinstance(device_code_endpoints, list):
+        invalid_fields.append("required_endpoints")
+        device_code_endpoints = []
+    missing_required_device_code_endpoints = [
+        endpoint
+        for endpoint in DOCTOR_REQUIRED_DEVICE_CODE_ENDPOINTS
+        if endpoint not in device_code_endpoints
+    ]
+    if missing_required_device_code_endpoints:
+        invalid_fields.append("required_endpoints")
+
+    browser_site_support = device_code.get("required_browser_site_support")
+    if not isinstance(browser_site_support, list):
+        invalid_fields.append("required_browser_site_support")
+        browser_site_support = []
+    missing_required_browser_site_support = [
+        support
+        for support in DOCTOR_REQUIRED_DEVICE_CODE_BROWSER_SITE_SUPPORT
+        if support not in browser_site_support
+    ]
+    if missing_required_browser_site_support:
+        invalid_fields.append("required_browser_site_support")
+
+    fallback_setup_blocks = fallback_handoff.get("setup_blocks")
+    fallback_setup_block_ids: list[str] = []
+    missing_fallback_setup_blocks = list(DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS)
+    fallback_setup_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(fallback_setup_blocks, list):
+        fallback_setup_by_id = {
+            str(block.get("id")): block
+            for block in fallback_setup_blocks
+            if isinstance(block, dict) and block.get("id") is not None
+        }
+        fallback_setup_block_ids = list(fallback_setup_by_id)
+        missing_fallback_setup_blocks = [
+            block_id
+            for block_id in DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS
+            if block_id not in fallback_setup_by_id
+        ]
+    else:
+        invalid_fields.append("fallback_handoff.setup_blocks")
+
+    local_env_block = fallback_setup_by_id.get("local_env", {})
+    if local_env_block.get("safe_to_paste_in_chat") is not False:
+        invalid_fields.append(
+            "fallback_handoff.setup_blocks.local_env.safe_to_paste_in_chat"
+        )
+    if local_env_block.get("local_shell_only") is not True:
+        invalid_fields.append(
+            "fallback_handoff.setup_blocks.local_env.local_shell_only"
+        )
+    if local_env_block.get("contains_secret_values") is not False:
+        invalid_fields.append(
+            "fallback_handoff.setup_blocks.local_env.contains_secret_values"
+        )
+    verify_block = fallback_setup_by_id.get("verify", {})
+    if AGENT_DOCTOR_COMMAND not in (verify_block.get("commands") or []):
+        invalid_fields.append("fallback_handoff.setup_blocks.verify.commands")
+
+    capability_ids = [
+        str(item.get("id")) for item in site_capabilities if isinstance(item, dict)
+    ]
+    missing_required_site_capabilities = [
+        capability
+        for capability in DOCTOR_REQUIRED_DEVICE_CODE_SITE_CAPABILITIES
+        if capability not in capability_ids
+    ]
+    if missing_required_site_capabilities:
+        invalid_fields.append("site_capabilities")
+
+    runtime_auth_ids = [
+        str(item.get("id")) for item in runtime_auth if isinstance(item, dict)
+    ]
+    missing_runtime_auth = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH
+        if item not in runtime_auth_ids
+    ]
+    if missing_runtime_auth:
+        invalid_fields.append("required_runtime_auth")
+
+    secret_policy = {
+        "contains_secret_values": False,
+        "do_not_paste_in_chat": [
+            "access_token",
+            "refresh_token",
+            "raw device_code",
+        ],
+        "safe_to_share": [
+            "browser-cli auth login --device-code output with unavailable pending contract",
+            "browser-cli doctor output with default masking",
+        ],
+    }
+    verification = {
+        "login_command": "browser-cli auth login --device-code",
+        "workflow_command": "browser-cli commands --workflow device_code_auth",
+        "doctor_command": AGENT_DOCTOR_COMMAND,
+        "success_condition": (
+            "available=false falls back to manual_env until device-code endpoints "
+            "and bearer-token runtime auth are implemented"
+        ),
+    }
+
+    invalid_fields = _dedupe_preserving_order(invalid_fields)
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "required_device_code_fields": list(DOCTOR_REQUIRED_DEVICE_CODE_FIELDS),
+        "missing_device_code_fields": missing_device_code_fields,
+        "available": device_code.get("available"),
+        "selected_flow": "device_code",
+        "device_code_available": device_code.get("available"),
+        "reason": device_code.get("reason"),
+        "verification_uri": device_code.get("verification_uri"),
+        "connect_from_codex_url": device_code.get("connect_from_codex_url"),
+        "connect_from_codex_url_masked": False,
+        "requested_scopes": device_code.get("requested_scopes"),
+        "requested_expires_in": device_code.get("requested_expires_in"),
+        "required_device_code_endpoints": device_code_endpoints,
+        "missing_required_device_code_endpoints": (
+            missing_required_device_code_endpoints
+        ),
+        "required_browser_site_support": browser_site_support,
+        "missing_required_browser_site_support": (
+            missing_required_browser_site_support
+        ),
+        "required_site_capabilities": list(
+            DOCTOR_REQUIRED_DEVICE_CODE_SITE_CAPABILITIES
+        ),
+        "site_capability_ids": capability_ids,
+        "missing_required_site_capabilities": missing_required_site_capabilities,
+        "site_capability_status": site_capability_status,
+        "fallback_handoff_setup_block_ids": fallback_setup_block_ids,
+        "missing_fallback_setup_blocks": missing_fallback_setup_blocks,
+        "runtime_auth_ids": runtime_auth_ids,
+        "missing_runtime_auth": missing_runtime_auth,
+        "invalid_fields": invalid_fields,
+        "secret_policy": secret_policy,
+        "verification": verification,
+    }
+
+    if (
+        missing_device_code_fields
+        or missing_required_device_code_endpoints
+        or missing_required_browser_site_support
+        or missing_required_site_capabilities
+        or missing_fallback_setup_blocks
+        or missing_runtime_auth
+        or invalid_fields
+    ):
+        return _doctor_check(
+            "device_code_contract",
+            "warn",
+            "auth login --device-code metadata is missing or invalid.",
+            fix=_doctor_fix(
+                "repair_device_code_contract",
+                commands=[
+                    "browser-cli auth login --device-code",
+                    "browser-cli auth connect-requirements",
+                    "browser-cli commands --workflow device_code_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Keep auth login --device-code, auth connect-requirements, README, and docs/json-contract.md in sync.",
+                    "browser.lexmount.cn needs device-code endpoints plus bearer-token runtime support before agents can prefer approval over manual_env fallback.",
+                ],
+                connect_from_codex=_doctor_connect_from_codex_fix(),
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "device_code_contract",
+        "pass",
+        "auth login --device-code exposes a safe pending/fallback contract for agents.",
+        **common_details,
+    )
+
+
 def _doctor_connect_from_codex_contract_check() -> dict[str, Any]:
     try:
         capabilities = _connect_from_codex_site_capabilities()
@@ -7529,20 +7840,11 @@ def _connect_from_codex_site_capability_status(
 
 
 def _device_code_required_endpoints() -> list[str]:
-    return [
-        "POST /api/auth/device/code",
-        "POST /api/auth/device/token",
-    ]
+    return list(DOCTOR_REQUIRED_DEVICE_CODE_ENDPOINTS)
 
 
 def _device_code_required_browser_site_support() -> list[str]:
-    return [
-        "Show user_code approval UI on /connect/codex.",
-        "Issue scoped, project-bound, short-lived access tokens.",
-        "Issue refresh tokens with revoke and expiration metadata.",
-        "Expose token refresh and revoke endpoints for browser-cli.",
-        "Enable browser runtime bearer-token authentication.",
-    ]
+    return list(DOCTOR_REQUIRED_DEVICE_CODE_BROWSER_SITE_SUPPORT)
 
 
 def _connect_from_codex_browser_site_requirements() -> list[str]:
@@ -19577,6 +19879,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     checks.append(_doctor_case_schema_check())
     checks.append(_doctor_auth_export_env_contract_check())
     checks.append(_doctor_auth_login_contract_check())
+    checks.append(_doctor_device_code_contract_check())
     checks.append(_doctor_connect_from_codex_contract_check())
     checks.append(_doctor_agent_prompt_check())
     checks.append(_doctor_agent_references_check())
