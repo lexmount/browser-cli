@@ -139,6 +139,7 @@ Smoke success means `browser_smoke_session.status=pass`, `created=true`, and
 After doctor passes, inspect the task workflow before acting:
 
 ```bash
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow persistent_login_state
 browser-cli action guide --task interactive_targeting

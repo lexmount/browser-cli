@@ -314,6 +314,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "doctor integration" in references["connect_from_codex"]["covers"]
     assert "setup_and_verify" in references["usable_status"]["related_workflows"]
     assert "doctor readiness checks" in references["usable_status"]["covers"]
+    assert "first_browser_task" in references["quickstart"]["related_workflows"]
+    assert "first_browser_task" in references["usable_status"]["related_workflows"]
+    assert "first_browser_task" in references["action_playbook"]["related_workflows"]
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "mouse_interaction" in references["action_playbook"]["related_workflows"]
@@ -335,8 +338,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert examples["agent_playbook"]["content_command"] == (
         "browser-cli example get --id agent_playbook"
     )
+    assert "first_browser_task" in examples["agent_playbook"]["related_workflows"]
+    assert (
+        "first_browser_task"
+        in examples["setup_verification_playbook"]["related_workflows"]
+    )
     assert examples["page_inspection_case"]["format"] == "yaml"
     assert "case_file_task" in examples["page_inspection_case"]["related_workflows"]
+    assert "first_browser_task" in examples["page_inspection_case"]["related_workflows"]
     assert examples["page_diagnostics_case"]["format"] == "yaml"
     assert "page_diagnostics" in examples["page_diagnostics_case"]["related_workflows"]
     assert examples["form_fill_case"]["package_resource"] == (
@@ -395,6 +404,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
+    assert (
+        "browser-cli commands --workflow first_browser_task"
+        in payload["agent_entrypoints"]["first_browser_task"]
+    )
+    assert (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+        in payload["agent_entrypoints"]["first_browser_task"]
+    )
     assert (
         "browser-cli action page-info --session-id <session_id>"
         in payload["agent_entrypoints"]["one_off_page_task"]
@@ -849,6 +866,43 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "closed" in session_steps[3]["read"]
     assert "context_reuse.availability" in session_steps[4]["read"]
     assert "browser-cli doctor --json" in session_steps[4]["fallback_commands"]
+    first_steps = workflows["first_browser_task"]["steps"]
+    assert [step["id"] for step in first_steps] == [
+        "check_readiness",
+        "create_session",
+        "open_url",
+        "inspect_page",
+        "inspect_targets",
+        "choose_first_action",
+        "verify_or_capture",
+        "close_session",
+    ]
+    assert first_steps[0]["command"] == "browser-cli doctor --json"
+    assert "ready_for_browser_actions" in first_steps[0]["read"]
+    assert "repair_plan.guidance" in first_steps[0]["read"]
+    assert first_steps[0]["success_condition"] == (
+        "ok=true and ready_for_browser_actions=true"
+    )
+    assert first_steps[4]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in first_steps[4]["read"]
+    assert "browser-cli action accessibility-snapshot" in first_steps[4]["fallback_commands"][0]
+    assert first_steps[5]["agent_action"] is True
+    assert first_steps[5]["selection_order"][:4] == [
+        "wait-text",
+        "click-role",
+        "click-text",
+        "fill-label",
+    ]
+    assert "browser-cli action guide --task interactive_targeting" in first_steps[5]["fallback_commands"]
+    assert first_steps[6]["agent_action"] is True
+    assert "result.matched" in first_steps[6]["read"]
+    assert first_steps[-1] == {
+        "id": "close_session",
+        "command": "browser-cli session close --session-id <session_id>",
+        "cleanup": True,
+    }
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
     assert "result.nodes" in one_off_steps[3]["read"]
@@ -1938,6 +1992,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["guide"]["related_workflows"] == [
         "navigation_flow",
         "state_waits",
+        "first_browser_task",
         "one_off_page_task",
     ]
     assert payload["guide"]["selection_order"][:5] == [
@@ -1965,6 +2020,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["next_commands"] == [
         "browser-cli commands --workflow navigation_flow",
         "browser-cli commands --workflow state_waits",
+        "browser-cli commands --workflow first_browser_task",
         "browser-cli commands --workflow one_off_page_task",
     ]
 
@@ -2398,7 +2454,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 23
+    assert payload["workflow_count"] == 24
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -2410,6 +2466,7 @@ def test_commands_catalog_returns_workflows_only(
         "page_diagnostics"
         in payload["agent_references"]["action_playbook"]["related_workflows"]
     )
+    assert "first_browser_task" in payload["agent_workflows"]
     setup_steps = {
         step["id"]: step
         for step in payload["agent_workflows"]["setup_and_verify"]["steps"]
@@ -2428,6 +2485,15 @@ def test_commands_catalog_returns_workflows_only(
         "browser_smoke_session.status"
         in setup_steps["smoke_session"]["read"]
     )
+    first_steps = payload["agent_workflows"]["first_browser_task"]["steps"]
+    assert first_steps[0]["command"] == "browser-cli doctor --json"
+    assert first_steps[0]["success_condition"] == (
+        "ok=true and ready_for_browser_actions=true"
+    )
+    assert first_steps[5]["agent_action"] is True
+    assert "click-role" in first_steps[5]["selection_order"]
+    assert "result.matched" in first_steps[6]["read"]
+    assert first_steps[-1]["cleanup"] is True
     assert (
         "required_token_lifecycle"
         in payload["agent_workflows"]["connect_from_codex_site_requirements"]["steps"][
@@ -2573,6 +2639,51 @@ def test_commands_catalog_returns_single_workflow(
     assert (
         "browser-cli session create"
         in payload["agent_entrypoints"]["one_off_page_task"]
+    )
+
+
+def test_commands_catalog_returns_first_browser_task_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "first_browser_task"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "commands"
+    assert payload["workflow_id"] == "first_browser_task"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "check_readiness",
+        "create_session",
+        "open_url",
+        "inspect_page",
+        "inspect_targets",
+        "choose_first_action",
+        "verify_or_capture",
+        "close_session",
+    ]
+    assert steps[0]["command"] == "browser-cli doctor --json"
+    assert "ready_for_browser_actions" in steps[0]["read"]
+    assert steps[4]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in steps[4]["read"]
+    assert steps[5]["agent_action"] is True
+    assert "fill-label" in steps[5]["selection_order"]
+    assert "browser-cli action guide --task form_interaction" in steps[5]["fallback_commands"]
+    assert steps[6]["agent_action"] is True
+    assert "result.matched" in steps[6]["read"]
+    assert steps[-1] == {
+        "id": "close_session",
+        "command": "browser-cli session close --session-id <session_id>",
+        "cleanup": True,
+    }
+    assert (
+        "browser-cli commands --workflow first_browser_task"
+        in payload["agent_entrypoints"]["first_browser_task"]
     )
 
 
@@ -5414,6 +5525,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "device_code_auth",
         "dialog_frame_handling",
         "file_upload",
+        "first_browser_task",
         "form_interaction",
         "interactive_targeting",
         "link_navigation",
@@ -5585,8 +5697,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 23
-    assert checks["command_catalog"]["agent_entrypoint_count"] == 23
+    assert checks["command_catalog"]["workflow_count"] == 24
+    assert checks["command_catalog"]["agent_entrypoint_count"] == 24
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -5594,6 +5706,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
+        "first_browser_task",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -5620,6 +5733,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
+        "first_browser_task",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -5689,6 +5803,18 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "keepalive_session",
         "close_stale_session",
         "create_replacement_session",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "first_browser_task"
+    ] == [
+        "check_readiness",
+        "create_session",
+        "open_url",
+        "inspect_page",
+        "inspect_targets",
+        "choose_first_action",
+        "verify_or_capture",
+        "close_session",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "one_off_page_task"
@@ -6539,6 +6665,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
+        "first_browser_task",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -6564,6 +6691,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
+        "first_browser_task",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -7458,6 +7586,16 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "create_replacement_session"},
                     ],
                 },
+                "first_browser_task": {
+                    "steps": [
+                        {"id": "check_readiness"},
+                        {"id": "create_session"},
+                        {"id": "open_url"},
+                        {"id": "inspect_page"},
+                        {"id": "inspect_targets"},
+                        {"id": "choose_first_action"},
+                    ],
+                },
                 "one_off_page_task": {
                     "steps": [
                         {"id": "create_session"},
@@ -7637,6 +7775,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "scaffold_page_diagnostics_case_file",
             ],
         "one_off_page_task": ["close_session"],
+        "first_browser_task": ["verify_or_capture", "close_session"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
         "setup_and_verify": [

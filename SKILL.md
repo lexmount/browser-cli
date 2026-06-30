@@ -225,10 +225,10 @@ browser-cli commands --workflow session_recovery
 Use its `read` fields for `sessions`, `session.status`, `final_status`,
 `closed`, and replacement `session.session_id`.
 
-For a one-off task:
+For a first browser task:
 
 ```bash
-browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow first_browser_task
 ```
 
 Then follow the returned steps, typically:
@@ -349,6 +349,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state

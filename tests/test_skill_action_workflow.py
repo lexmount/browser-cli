@@ -345,14 +345,14 @@ def test_skill_uses_json_argument_errors_for_command_repairs() -> None:
     assert "do not parse stderr" in normalized
 
 
-def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
+def test_skill_uses_first_browser_workflow_before_manual_session_steps() -> None:
     normalized = _normalized_skill_text()
 
     assert "If an existing session is stale, inactive" in normalized
     assert "browser-cli commands --workflow session_recovery" in normalized
     assert "`sessions`, `session.status`, `final_status`" in normalized
-    assert "For a one-off task" in normalized
-    assert "browser-cli commands --workflow one_off_page_task" in normalized
+    assert "For a first browser task" in normalized
+    assert "browser-cli commands --workflow first_browser_task" in normalized
     assert "Then follow the returned steps" in normalized
     assert "For repeatable smoke tests, demos, or regression checks" in normalized
     assert "browser-cli commands --workflow case_file_task" in normalized

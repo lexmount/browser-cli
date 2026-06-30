@@ -59,7 +59,7 @@ browser-cli reference get --id skill_positioning
 browser-cli reference get --id usable_status
 browser-cli auth status
 browser-cli doctor --json
-browser-cli commands --workflow one_off_page_task
+browser-cli commands --workflow first_browser_task
 browser-cli action guide --task interactive_targeting
 ```
 
@@ -78,7 +78,7 @@ state, act using element refs, confirm with another snapshot, and stop.
 | Area | Browserbase Skill Shape | browser-cli Shape | Current Gap |
 | --- | --- | --- | --- |
 | Skill distribution | Marketplace/plugin install paths and an official skill collection. | Local CLI plus `SKILL.md`, README prompt, packaged references, and examples. | We do not yet provide a one-step Codex connector, plugin package, or skill marketplace install path. |
-| First action path | A compact `browse open`, `browse snapshot`, interact, snapshot, stop loop. | Parser-backed workflows, action guides, and deterministic command contracts. | We need a shorter "happy path" for agents while keeping detailed workflows for reliability. |
+| First action path | A compact `browse open`, `browse snapshot`, interact, snapshot, stop loop. | `first_browser_task` gives agents a short doctor, open, inspect, act, verify/capture, close path while deeper workflows remain available. | We still need a single-command or natural-language wrapper for the simplest exploratory tasks. |
 | Environment choice | The Skill explains local, remote Browserbase, and CDP-style modes and when to switch. | `browser-cli` is intentionally focused on Lexmount remote browsers plus persistent contexts. | We should state this boundary more clearly and expose platform capability signals when remote behavior is required. |
 | Remote platform features | Browserbase advertises Identity, verified browsers, CAPTCHA solving, residential proxies, and session persistence. | Lexmount has remote sessions, contexts, action evidence, structured doctor checks, and case files. | browser.lexmount.cn should surface comparable capability labels, limits, region/proxy choices, and context persistence status if supported. |
 | Auth UX | The Skill points users to account settings and uses environment credentials for remote sessions. | Manual env credentials work today; Connect from Codex, scoped tokens, and device-code contracts are documented but not runtime-default. | browser.lexmount.cn still needs project display, scoped key wizard, copyable env/install blocks, revoke/expire UI, and device-code/OAuth. |
@@ -95,9 +95,9 @@ state, act using element refs, confirm with another snapshot, and stop.
 2. `browser-cli` has no one-step plugin/marketplace package, hosted MCP, local
    MCP adapter, or native Codex connector. The Skill works, but users still
    install a CLI and follow a prompt.
-3. The first browser-task path is still more verbose than Browserbase's browser
-   Skill. We need a compact "open, inspect, act, verify, close" entrypoint for
-   agents.
+3. The `first_browser_task` workflow now gives agents a compact "open, inspect,
+   act, verify, close" entrypoint, but it is still a workflow contract rather
+   than a single natural-language action tool.
 4. There is no simple `observe`/`act`/`extract` layer for tasks where a user
    expects natural language browser control. The deterministic command catalog
    is powerful, but verbose for quick exploratory work.

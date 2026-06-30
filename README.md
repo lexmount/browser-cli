@@ -55,7 +55,7 @@ catalog cannot express the browser task.
 | Task | Start With | Use When |
 | --- | --- | --- |
 | Install and readiness | `browser-cli doctor --json` | Confirm the CLI, Python runtime, environment variables, packaged references, examples, and API connectivity are usable. |
-| First browser task | `browser-cli commands --workflow one_off_page_task` | Open a page, inspect it, act once, collect evidence, then close the temporary session. |
+| First browser task | `browser-cli commands --workflow first_browser_task` | Verify readiness, open a page, inspect targets, act once, collect evidence, then close the temporary session. |
 | Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
 | Navigation and readiness | `browser-cli commands --workflow navigation_flow` | Open URLs, reload, move through history, and wait for URL, title, load state, or network idle before acting. |
 | Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
@@ -176,6 +176,7 @@ CLI for you:
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
 19. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约；选择具体 action 时先查 action guide、action_playbook、packaged examples 和 commands catalog，只有 CLI 无法表达时才写自定义 Playwright/JS：
    browser-cli commands --workflow session_recovery
+   browser-cli commands --workflow first_browser_task
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow case_file_task
    browser-cli commands --workflow persistent_login_state
@@ -381,6 +382,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
@@ -543,6 +545,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
@@ -997,6 +1000,7 @@ For a new browser task, agents should prefer this sequence:
 
 ```bash
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow case_file_task
 browser-cli case schema
 browser-cli case schema --action fill-label
