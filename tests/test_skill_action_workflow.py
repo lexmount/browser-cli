@@ -22,6 +22,15 @@ PACKAGED_USABLE_STATUS = (
     / "agent_references"
     / "usable-status.md"
 )
+SKILL_POSITIONING = (
+    Path(__file__).resolve().parents[1] / "references" / "skill-positioning.md"
+)
+PACKAGED_SKILL_POSITIONING = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "skill-positioning.md"
+)
 
 
 def _normalized_skill_text() -> str:
@@ -59,6 +68,10 @@ def test_packaged_action_playbook_matches_skill_reference() -> None:
 
 def test_packaged_usable_status_matches_skill_reference() -> None:
     assert PACKAGED_USABLE_STATUS.read_text() == USABLE_STATUS.read_text()
+
+
+def test_packaged_skill_positioning_matches_skill_reference() -> None:
+    assert PACKAGED_SKILL_POSITIONING.read_text() == SKILL_POSITIONING.read_text()
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:

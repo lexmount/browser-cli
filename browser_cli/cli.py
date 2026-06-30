@@ -368,7 +368,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "wait-value",
     "wait-value-role",
 )
-DOCTOR_REQUIRED_REFERENCES = ("action_playbook", "usable_status")
+DOCTOR_REQUIRED_REFERENCES = ("action_playbook", "usable_status", "skill_positioning")
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "page_inspection_case",
@@ -1117,6 +1117,46 @@ def _agent_references() -> dict[str, Any]:
                 "browser.lexmount.cn Work Needed",
             ],
         },
+        "skill_positioning": {
+            "path": "references/skill-positioning.md",
+            "content_command": "browser-cli reference get --id skill_positioning",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:skill-positioning.md",
+            "format": "markdown",
+            "purpose": (
+                "Explain when agents should use browser-cli, what operations it "
+                "supports, and how its gaps compare with Browserbase MCP."
+            ),
+            "load_when": [
+                "Evaluating browser-cli as a Codex Skill.",
+                "Explaining supported operations or when to choose this Skill.",
+                "Comparing browser-cli with another cloud-browser agent interface.",
+                "Planning product gaps such as hosted MCP, act/observe/extract, or Connect from Codex.",
+            ],
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_site_requirements",
+                "one_off_page_task",
+                "case_file_task",
+                "persistent_login_state",
+                "interactive_targeting",
+                "content_extraction",
+                "page_diagnostics",
+            ],
+            "covers": [
+                "Skill use cases",
+                "supported operation map",
+                "Browserbase MCP comparison",
+                "current product gaps",
+                "browser.lexmount.cn onboarding direction",
+            ],
+            "grep_patterns": [
+                "Primary Use Case",
+                "Supported Today",
+                "Comparison: Browserbase MCP Server",
+                "Defects To Fix Next",
+            ],
+        },
     }
 
 
@@ -1311,6 +1351,8 @@ def _command_catalog() -> dict[str, Any]:
         "agent_entrypoints": {
             "setup": [
                 "browser-cli reference list",
+                "browser-cli reference get --id skill_positioning --metadata-only",
+                "browser-cli reference get --id skill_positioning",
                 "browser-cli reference get --id usable_status --metadata-only",
                 "browser-cli reference get --id usable_status",
                 "browser-cli auth status",
@@ -4767,10 +4809,14 @@ def _doctor_agent_references_check() -> dict[str, Any]:
                 "repair_packaged_agent_references",
                 commands=[
                     "browser-cli reference list",
-                    "browser-cli reference get --id action_playbook --metadata-only",
-                    "browser-cli reference get --id action_playbook",
-                    "browser-cli reference get --id usable_status --metadata-only",
-                    "browser-cli reference get --id usable_status",
+                    *[
+                        command
+                        for reference_id in DOCTOR_REQUIRED_REFERENCES
+                        for command in (
+                            f"browser-cli reference get --id {reference_id} --metadata-only",
+                            f"browser-cli reference get --id {reference_id}",
+                        )
+                    ],
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[

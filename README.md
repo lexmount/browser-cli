@@ -108,6 +108,8 @@ CLI for you:
    browser-cli action guide --task mouse_interaction
    browser-cli action guide --task state_waits
    browser-cli reference list
+   browser-cli reference get --id skill_positioning --metadata-only
+   browser-cli reference get --id skill_positioning
    browser-cli reference get --id usable_status --metadata-only
    browser-cli reference get --id usable_status
    browser-cli reference get --id action_playbook --metadata-only
@@ -837,9 +839,15 @@ Use `--names-only` for compact command discovery and `--group action` when
 choosing a browser action. Use `browser-cli action guide --task <task>` for
 compact task-specific action selection before reading larger references. Use
 `agent_references` to load detailed Skill references such as
-`references/usable-status.md` when checking the current usable baseline, and
-`references/action-playbook.md` when action selection, structured result
-parsing, masking, or browser-target details are needed.
+`references/skill-positioning.md` when deciding when to use this Skill or
+comparing cloud-browser agent gaps, `references/usable-status.md` when checking
+the current usable baseline, and `references/action-playbook.md` when action
+selection, structured result parsing, masking, or browser-target details are
+needed.
+`agent_references.skill_positioning.content_command` points to
+`browser-cli reference get --id skill_positioning`, which returns the packaged
+Skill positioning, supported operations, Browserbase MCP comparison, and product
+gap notes.
 `agent_references.usable_status.content_command` points to
 `browser-cli reference get --id usable_status`, which returns the installed
 setup/readiness boundary reference.
@@ -885,8 +893,9 @@ direct URL, API connectivity, and optional browser smoke-session checks. The
 reports `version_source` so agents can distinguish installed package metadata
 from the package fallback version.
 The `agent_references` check verifies packaged Skill reference docs such as
-`usable_status` and `action_playbook` are readable from the installed CLI and reports
-`missing_required_references`, `invalid_references`, and `checked_references`
+`skill_positioning`, `usable_status`, and `action_playbook` are readable from
+the installed CLI and reports `missing_required_references`,
+`invalid_references`, and `checked_references`
 with `content_command`/`package_resource` metadata. The `agent_examples` check
 verifies packaged playbooks and case examples are readable, validates YAML case
 examples, and reports `missing_required_examples`, `invalid_examples`,

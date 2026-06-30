@@ -107,6 +107,8 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli action guide --task page_diagnostics" in prompt
     assert "workflow.steps" in prompt
     assert "connect_from_codex.url" in prompt
+    assert "browser-cli reference get --id skill_positioning --metadata-only" in prompt
+    assert "browser-cli reference get --id skill_positioning" in prompt
     assert "browser-cli auth export-env" in prompt
     assert "browser-cli auth export-env --reveal-secrets" in prompt
     assert "browser-cli doctor --json" in prompt
@@ -165,6 +167,7 @@ def test_skill_positioning_doc_compares_browserbase_mcp() -> None:
 
     assert "Browserbase MCP Server" in text
     assert "https://github.com/browserbase/mcp-server-browserbase" in text
+    assert "browser-cli reference get --id skill_positioning" in text
     assert "`start`, `end`, `navigate`, `act`, `observe`, and `extract`" in text
     assert "Current Gap" in text
     assert "hosted MCP" in text
