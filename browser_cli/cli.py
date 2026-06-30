@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from importlib import resources as importlib_resources
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, Iterable, NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -205,6 +205,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.guide",
     "action.observe",
     "action.extract",
+    "action.act",
     "action.open-url",
     "action.wait-selector",
     "action.click",
@@ -434,6 +435,17 @@ EXTRACT_SURFACE_CHOICES = (
     "lists",
     "accessibility",
 )
+ACT_KIND_CHOICES = (
+    "click",
+    "fill",
+    "select",
+    "check",
+    "uncheck",
+    "hover",
+    "press",
+    "scroll-into-view",
+    "scroll",
+)
 DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
     "form-fill",
@@ -480,6 +492,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "example get",
     "action guide",
     "action observe",
+    "action act",
     "action extract",
     "click-label",
     "fill before custom JavaScript",
@@ -1804,6 +1817,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                 "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
+                'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"',
+                'browser-cli action act --session-id <session_id> --kind fill --label "<label>" --value "<value>"',
                 'browser-cli action click-role --session-id <session_id> --role button --name "<name>"',
                 'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
                 "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
@@ -2710,10 +2725,11 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "act_semantically",
-                        "command": "<choose the smallest semantic action before selectors or eval>",
+                        "command": 'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"',
                         "agent_action": True,
                         "optional": True,
                         "selection_order": [
+                            "act",
                             "click-role",
                             "click-text",
                             "fill-label",
@@ -2725,6 +2741,14 @@ def _command_catalog() -> dict[str, Any]:
                             "scroll-into-view-role",
                         ],
                         "preferred_commands": [
+                            'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"',
+                            'browser-cli action act --session-id <session_id> --kind click --text "<visible text>"',
+                            'browser-cli action act --session-id <session_id> --kind fill --label "<field label>" --value "<value>"',
+                            'browser-cli action act --session-id <session_id> --kind select --role combobox --name "<field name>" --option-label "<option label>"',
+                            'browser-cli action act --session-id <session_id> --kind check --role checkbox --name "<label>"',
+                            'browser-cli action act --session-id <session_id> --kind press --role textbox --name "<field name>" --key Enter',
+                            'browser-cli action act --session-id <session_id> --kind hover --role button --name "<menu name>"',
+                            'browser-cli action act --session-id <session_id> --kind scroll-into-view --role link --name "<link name>"',
                             'browser-cli action click-role --session-id <session_id> --role button --name "<button name>"',
                             'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
                             'browser-cli action fill-label --session-id <session_id> --label "<field label>" --text "<value>"',
@@ -2740,6 +2764,19 @@ def _command_catalog() -> dict[str, Any]:
                             "browser-cli commands --workflow form_interaction",
                             "browser-cli action guide --task interactive_targeting",
                             "browser-cli action guide --task form_interaction",
+                        ],
+                        "read": [
+                            "result.intent",
+                            "result.plan.selection",
+                            "result.plan.underlying_command",
+                            "result.action_result.found",
+                            "result.action_result.clicked",
+                            "result.action_result.filled",
+                            "result.action_result.selected",
+                            "result.action_result.checked",
+                            "result.action_result.pressed",
+                            "result.action_result.hovered",
+                            "result.action_result.scrolled",
                         ],
                     },
                     {
@@ -10414,6 +10451,495 @@ def cmd_action_extract(args: argparse.Namespace) -> None:
         "truncated_surfaces": truncated_surfaces,
         "page_info": page_info,
         "extractions": extractions,
+    }
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def _act_argument_error(
+    command: str,
+    message: str,
+    **payload: Any,
+) -> NoReturn:
+    _failure(command, "argument_error", message, exit_code=2, **payload)
+
+
+def _act_present(value: Any) -> bool:
+    return value is not None and value != ""
+
+
+def _act_target_modes(args: argparse.Namespace, allowed: Iterable[str]) -> list[str]:
+    allowed_set = set(allowed)
+    modes: list[str] = []
+    for mode in ("role", "label", "text", "selector"):
+        if mode not in allowed_set:
+            continue
+        if _act_present(getattr(args, mode, None)):
+            modes.append(mode)
+    return modes
+
+
+def _act_validate_unused_targets(
+    command: str,
+    args: argparse.Namespace,
+    allowed: Iterable[str],
+) -> None:
+    allowed_set = set(allowed)
+    provided = [
+        mode
+        for mode in ("role", "label", "text", "selector")
+        if mode not in allowed_set
+        and not (args.kind == "fill" and mode == "text")
+        and _act_present(getattr(args, mode, None))
+    ]
+    if provided:
+        _act_argument_error(
+            command,
+            f"--kind {args.kind} does not support target option(s): "
+            + ", ".join(f"--{mode}" for mode in provided),
+            kind=args.kind,
+            unsupported_targets=provided,
+        )
+    if _act_present(getattr(args, "name", None)) and not _act_present(args.role):
+        _act_argument_error(
+            command,
+            "--name requires --role.",
+            kind=args.kind,
+            name=args.name,
+        )
+
+
+def _act_select_target(
+    command: str,
+    args: argparse.Namespace,
+    *,
+    allowed: Iterable[str],
+    required: bool = True,
+) -> str | None:
+    _act_validate_unused_targets(command, args, allowed)
+    modes = _act_target_modes(args, allowed)
+    if len(modes) > 1:
+        _act_argument_error(
+            command,
+            "Pass only one target mode for action act.",
+            kind=args.kind,
+            target_modes=modes,
+        )
+    if not modes:
+        if required:
+            _act_argument_error(
+                command,
+                f"--kind {args.kind} requires one of: "
+                + ", ".join(f"--{mode}" for mode in allowed),
+                kind=args.kind,
+                allowed_targets=list(allowed),
+            )
+        return None
+    return modes[0]
+
+
+def _act_click_selection(command: str, args: argparse.Namespace) -> str:
+    _act_validate_unused_targets(
+        command,
+        args,
+        allowed=("role", "label", "text", "selector"),
+    )
+    primary_modes = [
+        mode
+        for mode in ("role", "label", "text")
+        if _act_present(getattr(args, mode, None))
+    ]
+    selector_present = _act_present(args.selector)
+    if len(primary_modes) > 1:
+        _act_argument_error(
+            command,
+            "Pass only one semantic target mode for action act click.",
+            kind=args.kind,
+            target_modes=primary_modes,
+        )
+    if primary_modes:
+        selection = primary_modes[0]
+        if selector_present and selection != "text":
+            _act_argument_error(
+                command,
+                "--selector can only be combined with --text for --kind click.",
+                kind=args.kind,
+                target_modes=[selection, "selector"],
+            )
+        return selection
+    if selector_present:
+        return "selector"
+    _act_argument_error(
+        command,
+        "--kind click requires --role, --label, --text, or --selector.",
+        kind=args.kind,
+        allowed_targets=["role", "label", "text", "selector"],
+    )
+
+
+def _act_fill_text(command: str, args: argparse.Namespace) -> str:
+    has_value = _act_present(args.value)
+    has_text = _act_present(args.text)
+    if has_value and has_text:
+        _act_argument_error(
+            command,
+            "--kind fill accepts either --value or --text, not both.",
+            kind=args.kind,
+        )
+    if has_value:
+        return str(args.value)
+    if has_text:
+        return str(args.text)
+    _act_argument_error(
+        command,
+        "--kind fill requires --value.",
+        kind=args.kind,
+        accepted_alias="--text",
+    )
+
+
+def _act_select_value(command: str, args: argparse.Namespace) -> tuple[str | None, str | None]:
+    has_value = _act_present(args.value)
+    has_option_label = _act_present(args.option_label)
+    if has_value and has_option_label:
+        _act_argument_error(
+            command,
+            "--kind select accepts either --value or --option-label, not both.",
+            kind=args.kind,
+        )
+    if not has_value and not has_option_label:
+        _act_argument_error(
+            command,
+            "--kind select requires --value or --option-label.",
+            kind=args.kind,
+        )
+    return (
+        str(args.value) if has_value else None,
+        str(args.option_label) if has_option_label else None,
+    )
+
+
+def _act_target_payload(args: argparse.Namespace, selection: str | None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"selection": selection or "page"}
+    if selection == "role":
+        payload.update(
+            role=args.role,
+            name=args.name,
+            exact=bool(args.exact),
+            case_sensitive=bool(args.case_sensitive),
+        )
+    elif selection == "label":
+        payload.update(
+            label=args.label,
+            exact=bool(args.exact),
+            case_sensitive=bool(args.case_sensitive),
+        )
+    elif selection == "text":
+        payload.update(
+            text=args.text,
+            selector=args.selector,
+            exact=bool(args.exact),
+            case_sensitive=bool(args.case_sensitive),
+        )
+    elif selection == "selector":
+        payload.update(selector=args.selector)
+    return payload
+
+
+def _act_plan(
+    command: str,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    kind = args.kind
+    if kind == "click":
+        selection = _act_click_selection(command, args)
+        if selection == "role":
+            underlying_command = "action.click-role"
+            expression = _click_role_expression(
+                role=args.role,
+                name=args.name,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "label":
+            underlying_command = "action.click-label"
+            expression = _click_label_expression(
+                label=args.label,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "text":
+            underlying_command = "action.click-text"
+            expression = _click_text_expression(
+                text=args.text,
+                selector=args.selector,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.click-index"
+            expression = _click_index_expression(
+                selector=args.selector,
+                index=args.index,
+                include_hidden=args.include_hidden,
+            )
+    elif kind == "fill":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("label", "role", "selector"),
+        )
+        text = _act_fill_text(command, args)
+        if selection == "label":
+            underlying_command = "action.fill-label"
+            expression = _fill_label_expression(
+                label=args.label,
+                text=text,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "role":
+            underlying_command = "action.fill-role"
+            expression = _fill_role_expression(
+                role=args.role,
+                name=args.name,
+                text=text,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.fill"
+            expression = _fill_expression(selector=args.selector, text=text)
+    elif kind == "select":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("label", "role", "selector"),
+        )
+        value, option_label = _act_select_value(command, args)
+        if selection == "label":
+            underlying_command = "action.select-label"
+            expression = _select_label_expression(
+                label=args.label,
+                value=value,
+                option_label=option_label,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "role":
+            underlying_command = "action.select-role"
+            expression = _select_role_expression(
+                role=args.role,
+                name=args.name,
+                value=value,
+                option_label=option_label,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            if option_label is not None:
+                _act_argument_error(
+                    command,
+                    "--kind select with --selector requires --value; "
+                    "--option-label is supported with --label or --role.",
+                    kind=args.kind,
+                    target="selector",
+                )
+            underlying_command = "action.select-option"
+            expression = _select_option_expression(selector=args.selector, value=value or "")
+    elif kind in {"check", "uncheck"}:
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("label", "role", "selector"),
+        )
+        checked = kind == "check"
+        if selection == "label":
+            underlying_command = "action.check-label" if checked else "action.uncheck-label"
+            expression = _check_label_expression(
+                label=args.label,
+                checked=checked,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "role":
+            underlying_command = "action.check-role" if checked else "action.uncheck-role"
+            expression = _check_role_expression(
+                role=args.role,
+                name=args.name,
+                checked=checked,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.check" if checked else "action.uncheck"
+            expression = _checkbox_action_expression(
+                selector=args.selector,
+                checked=checked,
+            )
+    elif kind == "hover":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("role", "selector"),
+        )
+        if selection == "role":
+            underlying_command = "action.hover-role"
+            expression = _hover_role_expression(
+                role=args.role,
+                name=args.name,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.hover"
+            expression = _hover_expression(args.selector)
+    elif kind == "press":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("role", "selector"),
+            required=False,
+        )
+        if not _act_present(args.key):
+            _act_argument_error(command, "--kind press requires --key.", kind=args.kind)
+        if selection == "role":
+            underlying_command = "action.press-role"
+            expression = _press_role_expression(
+                role=args.role,
+                name=args.name,
+                key=args.key,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "selector":
+            underlying_command = "action.press"
+            expression = _press_expression(selector=args.selector, key=args.key)
+        else:
+            underlying_command = "action.press-key"
+            expression = _press_key_expression(
+                key=args.key,
+                code=args.code,
+                alt_key=args.alt_key,
+                ctrl_key=args.ctrl_key,
+                meta_key=args.meta_key,
+                shift_key=args.shift_key,
+            )
+    elif kind == "scroll-into-view":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("role", "selector"),
+        )
+        if selection == "role":
+            underlying_command = "action.scroll-into-view-role"
+            expression = _scroll_into_view_role_expression(
+                role=args.role,
+                name=args.name,
+                block=args.block,
+                inline=args.inline,
+                behavior=args.behavior,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.scroll-into-view"
+            expression = _scroll_into_view_expression(
+                selector=args.selector,
+                block=args.block,
+                inline=args.inline,
+                behavior=args.behavior,
+            )
+    elif kind == "scroll":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("selector",),
+            required=False,
+        )
+        underlying_command = "action.scroll"
+        expression = _scroll_expression(
+            selector=args.selector if selection == "selector" else None,
+            x=args.x,
+            y=args.y,
+            behavior=args.behavior,
+        )
+    else:
+        _act_argument_error(
+            command,
+            f"Unsupported action act kind: {kind}",
+            kind=kind,
+            available_kinds=list(ACT_KIND_CHOICES),
+        )
+
+    target = _act_target_payload(args, selection)
+    if selection == "selector" and kind == "click":
+        target["index"] = args.index
+        target["include_hidden"] = bool(args.include_hidden)
+    if kind in {"fill", "press", "select", "scroll", "scroll-into-view"}:
+        target.update(
+            {
+                key: value
+                for key, value in {
+                    "value_present": kind == "fill" and (
+                        _act_present(args.value) or _act_present(args.text)
+                    ),
+                    "key": args.key if kind == "press" else None,
+                    "option_label": args.option_label if kind == "select" else None,
+                    "x": args.x if kind == "scroll" else None,
+                    "y": args.y if kind == "scroll" else None,
+                    "block": args.block if kind == "scroll-into-view" else None,
+                    "inline": args.inline if kind == "scroll-into-view" else None,
+                    "behavior": args.behavior
+                    if kind in {"scroll", "scroll-into-view"}
+                    else None,
+                }.items()
+                if value is not None
+            }
+        )
+
+    return {
+        "underlying_command": underlying_command,
+        "selection": selection or "page",
+        "target": target,
+        "expression_backed": True,
+        "deterministic": True,
+        "custom_javascript": False,
+        "verify_after": [
+            "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
+            "browser-cli action page-info --session-id <session_id>",
+        ],
+        "expression": expression,
+    }
+
+
+def cmd_action_act(args: argparse.Namespace) -> None:
+    command = "action.act"
+    try:
+        plan = _act_plan(command, args)
+        expression = str(plan.pop("expression"))
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        action_result = _run_eval_expression_result(
+            connect_url=connect_url,
+            expression=expression,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    result = {
+        "kind": "act",
+        "intent": args.kind,
+        "target": plan["target"],
+        "plan": plan,
+        "action_result": action_result,
     }
     _success(
         command,
@@ -26329,6 +26855,76 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Only return links whose resolved URL has the same origin as the current page.",
     )
     action_extract.set_defaults(func=cmd_action_extract)
+
+    action_act = action_subparsers.add_parser(
+        "act",
+        help="Run one deterministic semantic browser action and return its plan",
+    )
+    _add_session_target_args(action_act)
+    action_act.add_argument(
+        "--kind",
+        required=True,
+        choices=ACT_KIND_CHOICES,
+        help="Deterministic action intent to run.",
+    )
+    action_act.add_argument("--role", help="Accessible role target.")
+    action_act.add_argument("--name", help="Optional accessible name for --role.")
+    action_act.add_argument("--label", help="Visible label or accessible label target.")
+    action_act.add_argument(
+        "--text",
+        help="Visible text target for click, or fill text alias when --kind fill.",
+    )
+    action_act.add_argument("--selector", help="CSS selector target or text scope.")
+    action_act.add_argument(
+        "--index",
+        type=_non_negative_int,
+        default=0,
+        help="Zero-based selector index for --kind click with --selector.",
+    )
+    action_act.add_argument(
+        "--value",
+        help="Fill value or native select option value.",
+    )
+    action_act.add_argument(
+        "--option-label",
+        help="Visible option label for --kind select with --label or --role.",
+    )
+    action_act.add_argument("--key", help="Keyboard key for --kind press.")
+    action_act.add_argument(
+        "--code",
+        help="KeyboardEvent.code for --kind press without role/selector. Defaults to --key.",
+    )
+    action_act.add_argument("--alt-key", action="store_true")
+    action_act.add_argument("--ctrl-key", action="store_true")
+    action_act.add_argument("--meta-key", action="store_true")
+    action_act.add_argument("--shift-key", action="store_true")
+    action_act.add_argument("--x", type=float, default=0)
+    action_act.add_argument("--y", type=float, default=600)
+    action_act.add_argument(
+        "--block",
+        choices=["start", "center", "end", "nearest"],
+        default="center",
+        help="Vertical alignment for --kind scroll-into-view.",
+    )
+    action_act.add_argument(
+        "--inline",
+        choices=["start", "center", "end", "nearest"],
+        default="nearest",
+        help="Horizontal alignment for --kind scroll-into-view.",
+    )
+    action_act.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+        help="Scroll behavior for --kind scroll or scroll-into-view.",
+    )
+    action_act.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Allow hidden DOM nodes for selector-index clicks.",
+    )
+    _add_text_match_args(action_act)
+    action_act.set_defaults(func=cmd_action_act)
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)

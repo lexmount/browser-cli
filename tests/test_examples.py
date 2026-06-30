@@ -98,6 +98,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow first_browser_task" in text
     assert "browser-cli commands --workflow agent_browser_primitives" in text
     assert "browser-cli action observe --session-id <session_id>" in text
+    assert "browser-cli action act --session-id <session_id>" in text
     assert "browser-cli action extract --session-id <session_id>" in text
     assert "browser-cli commands --workflow one_off_page_task" in text
     assert "browser-cli commands --workflow persistent_login_state" in text

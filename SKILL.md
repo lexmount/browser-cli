@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
+description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, act/click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
 ---
 
 # browser-cli
@@ -20,7 +20,7 @@ Skill for local desktop app control, already-open local browser tabs, static doc
 
 Supports setup/auth/doctor before browser work; Sessions: create, list, get, keepalive, close; Contexts: create, list, get, status, pick, delete with availability/locked
 decisions; navigation/readiness waits after page changes; Inspection and extraction with observe, extract, accessibility, form, link, table, list, dialog, frame, network, console, and
-interactive-only snapshots before choosing targets; Interaction including click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
+interactive-only snapshots before choosing targets; Interaction including act, click-label, click-text, click-role, fill, select, check/uncheck, hover, press, scroll, drag; Browser
 state storage/cookies, dialogs/frames, file uploads, screenshots, diagnostics, and repeatable JSON/YAML cases for reproducible tasks.
 
 ## Setup
@@ -232,7 +232,7 @@ browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow agent_browser_primitives
 ```
 
-Then follow the returned steps; use `browser-cli action observe --session-id <session_id> --surface interactive --surface text` before choosing targets and `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` for bounded content, typically:
+Then follow the returned steps; use `browser-cli action observe --session-id <session_id> --surface interactive --surface text` before choosing targets, `browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"` for deterministic act plans, and `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` for bounded content, typically:
 
 ```bash
 browser-cli session create

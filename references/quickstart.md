@@ -1,82 +1,83 @@
 # Browser CLI Quickstart
 
-Use this reference when an agent has an installed `browser-cli` and needs the
-shortest safe path from setup to a first remote-browser task.
+This guide is the shortest path to a usable `browser-cli` install for Codex or
+another agent. The current MVP uses `LEXMOUNT_API_KEY` and
+`LEXMOUNT_PROJECT_ID` from your local shell. Do not paste real secrets into
+chat, issues, commits, or PR descriptions.
 
 ## Install
 
-Install the current mainline package:
+For mainline/default-branch usage, install from GitHub:
 
 ```bash
 uv tool install --force git+https://github.com/lexmount/browser-cli.git
 ```
 
-Verify JSON command discovery:
+Verify that command discovery returns JSON:
 
 ```bash
 browser-cli --version
 browser-cli version
 browser-cli commands --names-only
 browser-cli commands --workflows-only
-browser-cli reference list
+browser-cli reference get --id quickstart --metadata-only
+```
+
+After installation, agents can read this same minimum path from the packaged
+reference:
+
+```bash
+browser-cli reference get --id quickstart
 ```
 
 ## Configure Credentials
 
-Get the API key and Project ID from `https://browser.lexmount.cn`. Keep the real
-values in the local shell only; do not paste them into chat, issues, commits,
-PR descriptions, screenshots, or test fixtures.
+Open [browser.lexmount.cn](https://browser.lexmount.cn), choose the project you
+want Codex to control, and copy an API key plus Project ID. Put the real values
+only in your local terminal:
 
 ```bash
 export LEXMOUNT_API_KEY="<api-key-from-browser.lexmount.cn>"
 export LEXMOUNT_PROJECT_ID="<project-id-from-browser.lexmount.cn>"
 ```
 
-China region defaults to `https://api.lexmount.cn`; most users do not need
-`LEXMOUNT_BASE_URL`.
+China users normally do not need `LEXMOUNT_BASE_URL`; the default API endpoint
+is `https://api.lexmount.cn`.
 
-Use safe auth helpers instead of asking the user to reveal secrets:
+To generate a safe local-shell template:
 
 ```bash
-browser-cli auth login
 browser-cli auth export-env
+```
+
+To inspect whether credentials are configured without revealing secret values:
+
+```bash
 browser-cli auth status
 ```
 
-Read `auth login` fields such as `selected_flow`, `handoff`,
-`copyable_commands`, `local_env`, `verification`, `secret_policy`,
-`manual_env_available`, and `device_code_available`. For device-code setup,
-run `browser-cli auth login --device-code`; while `available=false`, use
-`fallback_handoff` and the manual env path.
-
 ## Verify Readiness
 
-Run doctor before the first browser action:
+Run doctor before browser work:
 
 ```bash
 browser-cli doctor --json
 ```
 
-Treat browser work as ready only when doctor reports:
+Ready for normal browser actions means:
 
 - `ok=true`
 - `failed=0`
 - `ready_for_browser_actions=true`
 
-If doctor returns warnings, inspect `warning_checks`, each check's `fix`, and
-the top-level `repair_plan` before creating sessions. Important setup checks
-include `auth_login_contract`, `device_code_contract`,
-`connect_from_codex_contract`, `agent_references`, `agent_examples`, and
-`case_schema`.
-
-Optionally prove live API/session behavior:
+Optionally run a live smoke session:
 
 ```bash
 browser-cli doctor --smoke-session
 ```
 
-Smoke success means `browser_smoke_session.status=pass`, `created=true`, and
-`closed=true`.
+Smoke success means `browser_smoke_session.status=pass`, with the temporary
+session created and closed.
 
 ## First Browser Task
 
@@ -86,13 +87,14 @@ Inspect the shortest safe workflow before acting:
 browser-cli commands --workflow first_browser_task
 ```
 
-Create a temporary session:
+Create a session:
 
 ```bash
 browser-cli session create
 ```
 
-Use `session.session_id` or top-level `session_id` from the JSON output:
+Save `session.session_id` or top-level `session_id` from the JSON output, then
+use it in action commands:
 
 ```bash
 browser-cli action open-url --session-id <session_id> --url https://example.com
@@ -102,7 +104,7 @@ browser-cli action snapshot --session-id <session_id> --max-chars 4000
 browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png
 ```
 
-Always close temporary sessions unless the user asked to keep them open:
+Close the session when done:
 
 ```bash
 browser-cli session close --session-id <session_id>
@@ -110,16 +112,27 @@ browser-cli session close --session-id <session_id>
 
 ## Persistent Login State
 
-For login state, inspect reusable contexts first:
+For sites that need login cookies or local storage, use a persistent context.
+Start by inspecting reusable contexts without mutating anything:
+
+```bash
+browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
+```
+
+Read these fields:
+
+- `reuse_candidates`
+- `recommended_context_id`
+- `selection_summary.recommended_next_action`
+- `selection_summary.reusable_matches`
+- `selection_summary.locked_matches`
+- `metadata_values_redacted`
+
+Dry-run selection before creating a session:
 
 ```bash
 browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing --dry-run
 ```
-
-Read `selection_summary.recommended_next_action`, `reusable_matches`,
-`locked_matches`, `metadata_values_redacted`, and candidate `availability`.
-Treat `availability=locked` or `locked=true` as busy; wait, choose another
-context, or create a new one.
 
 Create or reuse a context-backed session:
 
@@ -127,12 +140,12 @@ Create or reuse a context-backed session:
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing --context-mode read_write
 ```
 
-Use `read_write` for login/setup work that should update state, and `read_only`
-when inspecting existing logged-in state.
+If a context is busy, treat `availability=locked` or `locked=true` as a signal
+to wait, choose another context, or create a new one.
 
-## Agent Discovery
+## Agent Discovery And Command Selection
 
-Before choosing actions, inspect the machine-readable workflows:
+Agents should inspect machine-readable workflows before choosing actions:
 
 ```bash
 browser-cli commands --workflow setup_and_verify
@@ -146,45 +159,99 @@ browser-cli commands --workflow content_extraction
 browser-cli commands --workflow page_diagnostics
 ```
 
-Use the first-class observe and extract primitives before choosing targets or custom JavaScript:
+Use the first-class observe, act, and extract primitives before choosing targets or custom JavaScript:
 
 ```bash
 browser-cli action observe --session-id <session_id> --surface interactive --surface text
+browser-cli action act --session-id <session_id> --kind click --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
 browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 ```
 
-Before writing custom JavaScript, inspect the action guide and packaged
-playbook:
+Before writing custom JavaScript, inspect the action guide:
 
 ```bash
 browser-cli action guide --names-only
 browser-cli action guide --task interactive_targeting
 browser-cli action guide --task form_interaction
 browser-cli action guide --task content_extraction
-browser-cli reference get --id action_playbook
+browser-cli action guide --task state_waits
 ```
 
-Prefer first-class semantic actions such as `click-role`, `click-text`,
-`fill-label`, `select-role`, `check-role`, `get-text-role`, `exists-role`,
-`interactive-snapshot`, and `accessibility-snapshot` before selectors or
-custom JavaScript.
+Useful first-class actions include:
 
-For repeatable work, scaffold and run a case file:
+```bash
+browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind click --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
+browser-cli action click-role --session-id <session_id> --role button --name "Submit"
+browser-cli action click-text --session-id <session_id> --text "Submit"
+browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
+browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
+browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
+browser-cli action get-text-role --session-id <session_id> --role alert --name "Saved"
+browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
+browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
+browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80
+browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120
+```
+
+For repeatable tasks, inspect and run case files:
 
 ```bash
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml --close-created-session
 ```
 
+## Troubleshooting
+
+If a command fails, parse the JSON fields instead of scraping text:
+
+- `ok`
+- `error`
+- `message`
+- `fix.code`
+- `fix.commands`
+- `next_steps`
+
+Common checks:
+
+```bash
+uv tool list
+browser-cli auth status
+browser-cli doctor --json
+browser-cli session list --status active
+browser-cli commands --group action --names-only
+```
+
+If credentials are missing or wrong:
+
+```bash
+browser-cli reference get --id usable_status --metadata-only
+browser-cli reference get --id usable_status
+browser-cli auth login
+browser-cli auth export-env
+browser-cli auth status
+browser-cli doctor --json
+```
+
+If a live smoke created but did not close a session, inspect and close it:
+
+```bash
+browser-cli session list --status active
+browser-cli session close --session-id <session_id>
+```
+
 ## Current Limits
 
-- The MVP credential path is local env setup with `LEXMOUNT_API_KEY` and
-  `LEXMOUNT_PROJECT_ID`.
-- `auth login --device-code`, scoped token refresh, and revoke expose
+- The MVP credential path is manual local-shell env setup with API key and
+  Project ID.
+- `auth login --device-code`, scoped tokens, refresh, and revoke already expose
   machine-readable contracts, but they should become the default only after
-  browser.lexmount.cn, the API, SDK, and browser gateway support bearer-token
-  runtime auth.
-- Never paste API keys, access tokens, refresh tokens, or direct connect URLs
-  containing raw `api_key` into chat.
+  browser.lexmount.cn, the API, SDK, and browser gateway support the full
+  runtime auth flow.
+- Never paste revealed API keys, access tokens, refresh tokens, or direct
+  connect URLs containing raw `api_key` into chat.

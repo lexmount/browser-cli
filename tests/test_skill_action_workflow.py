@@ -396,6 +396,7 @@ def test_skill_uses_first_browser_workflow_before_manual_session_steps() -> None
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
+    assert "browser-cli action act --session-id <session_id>" in normalized
     assert "browser-cli action extract --session-id <session_id>" in normalized
     assert "For browser state setup or cleanup" in normalized
     assert "browser-cli commands --workflow browser_state_management" in normalized

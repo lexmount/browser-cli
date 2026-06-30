@@ -110,6 +110,10 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
         in prompt
     )
     assert (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"'
+        in prompt
+    )
+    assert (
         "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
         in prompt
     )
@@ -184,6 +188,8 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "navigation_flow" in text
     assert "agent_browser_primitives" in text
     assert "observe, act, extract, and verify" in text
+    assert "action act` for deterministic click/fill/select/check/press/hover/scroll plans" in text
+    assert "browser-cli action act --session-id <session_id>" in text
     assert "browser-cli action extract --session-id <session_id>" in text
     assert "interactive_targeting" in text
     assert "content_extraction" in text
@@ -205,9 +211,8 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     assert "Browserbase Skills" in text
     assert "https://github.com/browserbase/skills" in text
     assert "https://raw.githubusercontent.com/browserbase/skills/main/skills/browser/SKILL.md" in text
-    assert "https://docs.browserbase.com/welcome/quickstarts/skills" in text
-    assert "https://docs.browserbase.com/welcome/quickstarts/browse" in text
-    assert "https://docs.browserbase.com/welcome/quickstarts/stagehand" in text
+    assert "https://docs.browserbase.com/integrations/mcp/introduction" in text
+    assert "https://docs.browserbase.com/integrations/mcp/setup" in text
     assert "browser-cli reference get --id skill_positioning" in text
     assert "short default loop" in text
     assert "element refs" in text
@@ -216,9 +221,11 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     assert "browse snapshot" in text
     assert "agent_browser_primitives" in text
     assert "browser-cli action observe --session-id <session_id>" in text
+    assert 'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"' in text
     assert "browser-cli action extract --session-id <session_id>" in text
-    assert "MCP-style `act` wrappers" in normalized
-    assert "no one-command `act` wrapper yet" in normalized
+    assert "deterministic `action act` plans" in normalized
+    assert "natural-language act still needs a wrapper above the CLI" in normalized
+    assert "MCP-style or natural-language wrappers" in normalized
     assert "Current Gap" in text
     assert "plugin package" in text
     assert "capability panel" in text

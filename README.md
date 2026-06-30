@@ -64,7 +64,7 @@ catalog cannot express the browser task.
 | --- | --- | --- |
 | Install and readiness | `browser-cli doctor --json` | Confirm the CLI, Python runtime, environment variables, packaged references, examples, and API connectivity are usable. |
 | First browser task | `browser-cli commands --workflow first_browser_task` | Verify readiness, open a page, inspect targets, act once, collect evidence, then close the temporary session. |
-| Agent primitives | `browser-cli commands --workflow agent_browser_primitives` | Cover the observe, act, extract, and verify loop: use `action observe` before targets and `action extract` for bounded page content, then map intent to deterministic commands. |
+| Agent primitives | `browser-cli commands --workflow agent_browser_primitives` | Cover the observe, act, extract, and verify loop: use `action observe` before targets, `action act` for deterministic click/fill/select/check/press/hover/scroll plans, and `action extract` for bounded page content. |
 | Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
 | Navigation and readiness | `browser-cli commands --workflow navigation_flow` | Open URLs, reload, move through history, and wait for URL, title, load state, or network idle before acting. |
 | Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
@@ -115,6 +115,8 @@ CLI for you:
 6. 读取 action guide 和 packaged agent reference 目录；后续选择浏览器 action 前，优先读取机器可读 guide 和 action_playbook，不要先写自定义 Playwright/JS：
    browser-cli action guide --names-only
    browser-cli action observe --session-id <session_id> --surface interactive --surface text
+   browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
+   browser-cli action act --session-id <session_id> --kind fill --label "<label>" --value "<value>"
    browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
    browser-cli action guide --task interactive_targeting
    browser-cli action guide --task content_extraction
@@ -208,6 +210,7 @@ CLI for you:
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
    browser-cli action observe --session-id <session_id> --surface interactive --surface text
+   browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
    browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
    browser-cli action guide --task form_interaction
    browser-cli action guide --task interactive_targeting

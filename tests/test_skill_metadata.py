@@ -84,6 +84,7 @@ def test_openai_yaml_default_prompt_matches_skill_workflow() -> None:
     assert "setup_verification_playbook" in prompt
     assert "example get" in prompt
     assert "action guide" in prompt
+    assert "action act" in prompt
     assert "click-label" in prompt
     assert "custom JavaScript" in prompt
     assert "status-check/dry-run" in prompt

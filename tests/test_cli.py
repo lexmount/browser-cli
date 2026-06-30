@@ -428,6 +428,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
     assert (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"'
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
         "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000"
         in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
@@ -952,7 +956,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "verify",
     ]
     assert primitive_steps[3]["optional"] is True
+    assert primitive_steps[3]["command"] == (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"'
+    )
+    assert primitive_steps[3]["selection_order"][0] == "act"
     assert "click-role" in primitive_steps[3]["selection_order"]
+    assert "result.plan.underlying_command" in primitive_steps[3]["read"]
+    assert "result.action_result.clicked" in primitive_steps[3]["read"]
     assert "browser-cli commands --workflow form_interaction" in primitive_steps[3]["fallback_commands"]
     assert primitive_steps[4]["optional"] is True
     assert primitive_steps[4]["command"] == (
@@ -1613,6 +1623,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "context.pick",
         "action.guide",
         "action.observe",
+        "action.act",
         "action.open-url",
         "action.page-info",
         "action.set-viewport",
@@ -1712,6 +1723,13 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert any("--max-rows" in option["flags"] for option in extract["options"])
     assert any("--max-cells" in option["flags"] for option in extract["options"])
     assert any("--max-items" in option["flags"] for option in extract["options"])
+    act = commands["action.act"]
+    assert act["required_options"] == ["--kind"]
+    assert act["browser_target"] == observe["browser_target"]
+    assert any("--role" in option["flags"] for option in act["options"])
+    assert any("--label" in option["flags"] for option in act["options"])
+    assert any("--value" in option["flags"] for option in act["options"])
+    assert any("--option-label" in option["flags"] for option in act["options"])
     open_url = commands["action.open-url"]
     assert open_url["browser_target"] == {
         "required": True,
@@ -2825,7 +2843,12 @@ def test_commands_catalog_returns_agent_browser_primitives_workflow(
     assert steps[2]["agent_action"] is True
     assert steps[2]["selection_order"] == ["observe", "act", "extract", "verify"]
     assert steps[3]["optional"] is True
+    assert steps[3]["command"] == (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"'
+    )
+    assert steps[3]["selection_order"][0] == "act"
     assert "click-role" in steps[3]["selection_order"]
+    assert "result.plan.selection" in steps[3]["read"]
     assert steps[4]["optional"] is True
     assert "extract" in steps[4]["selection_order"]
     assert "text-snapshot" in steps[4]["selection_order"]
@@ -6184,6 +6207,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["action_guides"]["invalid_guide_command_references"] == []
     for command_name in (
         "action.observe",
+        "action.act",
         "action.extract",
         "action.press",
         "action.press-role",
@@ -6783,6 +6807,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-load-state" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
     assert "action.observe" in catalog["missing_required_commands"]
+    assert "action.act" in catalog["missing_required_commands"]
     assert "action.extract" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
@@ -14606,6 +14631,195 @@ def test_action_extract_collects_bounded_content_surfaces(
     assert payload["result"]["extractions"]["tables"]["table_count"] == 4
     assert payload["result"]["extractions"]["lists"]["list_count"] == 5
     assert payload["result"]["extractions"]["accessibility"]["node_count"] == 6
+
+
+def test_action_act_routes_click_role_and_returns_plan(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert connect_url == "wss://example.test/devtools"
+        assert action == "eval"
+        observed["expression"] = request.expression
+        assert 'const requestedRole = "button";' in request.expression
+        assert 'const requestedName = "Submit";' in request.expression
+        return SimpleNamespace(
+            result={"value": {"found": True, "role_found": True, "clicked": True}}
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "click",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert "element.click()" in observed["expression"]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.act"
+    assert payload["result"]["kind"] == "act"
+    assert payload["result"]["intent"] == "click"
+    assert payload["result"]["target"]["selection"] == "role"
+    assert payload["result"]["target"]["role"] == "button"
+    assert payload["result"]["plan"]["selection"] == "role"
+    assert payload["result"]["plan"]["underlying_command"] == "action.click-role"
+    assert payload["result"]["plan"]["deterministic"] is True
+    assert payload["result"]["plan"]["custom_javascript"] is False
+    assert payload["result"]["action_result"]["clicked"] is True
+
+
+def test_action_act_routes_fill_label_value_without_exposing_value_in_plan(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert action == "eval"
+        assert 'const requestedLabel = "Email";' in request.expression
+        assert 'const text = "me@example.com";' in request.expression
+        return SimpleNamespace(
+            result={
+                "value": {
+                    "found": True,
+                    "filled": True,
+                    "text": "me@example.com",
+                    "text_masked": False,
+                }
+            }
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "fill",
+                "--label",
+                "Email",
+                "--value",
+                "me@example.com",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    result = payload["result"]
+    assert result["plan"]["underlying_command"] == "action.fill-label"
+    assert result["target"]["selection"] == "label"
+    assert result["target"]["value_present"] is True
+    assert "me@example.com" not in json.dumps(result["plan"])
+    assert result["action_result"]["filled"] is True
+
+
+def test_action_act_routes_press_without_target_to_press_key(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert action == "eval"
+        assert 'const key = "Escape";' in request.expression
+        assert "meta_key" in request.expression
+        return SimpleNamespace(result={"value": {"pressed": True, "key": "Escape"}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "press",
+                "--key",
+                "Escape",
+                "--meta-key",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    result = payload["result"]
+    assert result["plan"]["underlying_command"] == "action.press-key"
+    assert result["plan"]["selection"] == "page"
+    assert result["target"]["selection"] == "page"
+    assert result["target"]["key"] == "Escape"
+    assert result["action_result"]["pressed"] is True
+
+
+def test_action_act_rejects_ambiguous_targets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "click",
+                "--role",
+                "button",
+                "--label",
+                "Submit",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.act"
+    assert payload["error"] == "argument_error"
+    assert payload["target_modes"] == ["role", "label"]
 
 
 @pytest.mark.parametrize(

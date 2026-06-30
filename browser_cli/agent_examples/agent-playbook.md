@@ -163,6 +163,7 @@ browser-cli commands --workflow one_off_page_task
 browser-cli session create --browser-mode light
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action observe --session-id <session_id> --surface interactive --surface text
+browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
 browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 browser-cli action snapshot --session-id <session_id>
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
@@ -179,6 +180,7 @@ For forms, read the dedicated workflow before choosing fields:
 browser-cli commands --workflow form_interaction
 browser-cli action guide --task form_interaction
 browser-cli action form-snapshot --session-id <session_id> --selector form
+browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
@@ -448,6 +450,7 @@ Prefer built-in actions over writing JavaScript:
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-title --session-id <session_id> --title <title-or-fragment>
 browser-cli action wait-selector --session-id <session_id> --selector <selector>
+browser-cli action act --session-id <session_id> --kind click --role button --name Submit
 browser-cli action click --session-id <session_id> --selector <selector>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
 browser-cli action page-info --session-id <session_id>
@@ -466,7 +469,7 @@ options, checking boxes, hovering, double-clicking, right-clicking, drag/drop, p
 active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
-actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
+actions such as `act`, `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
 `fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `drag-role-to-role`, `drag-to`, `scroll-into-view-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 

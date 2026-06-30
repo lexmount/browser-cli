@@ -143,7 +143,7 @@ browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' -
 If a context is busy, treat `availability=locked` or `locked=true` as a signal
 to wait, choose another context, or create a new one.
 
-## Agent Command Discovery
+## Agent Discovery And Command Selection
 
 Agents should inspect machine-readable workflows before choosing actions:
 
@@ -159,10 +159,12 @@ browser-cli commands --workflow content_extraction
 browser-cli commands --workflow page_diagnostics
 ```
 
-Use the first-class observe and extract primitives before choosing targets or custom JavaScript:
+Use the first-class observe, act, and extract primitives before choosing targets or custom JavaScript:
 
 ```bash
 browser-cli action observe --session-id <session_id> --surface interactive --surface text
+browser-cli action act --session-id <session_id> --kind click --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
 browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 ```
 
@@ -180,6 +182,8 @@ Useful first-class actions include:
 
 ```bash
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind click --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"

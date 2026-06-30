@@ -419,7 +419,7 @@ Default behavior:
   detect an installed CLI that is too old for the Skill workflow, missing
   critical workflow steps such as cleanup, or referencing commands absent from
   the parser-backed catalog. The required command set covers setup commands, reference/example discovery, case
-  scaffold/validate/run, and core browser actions such as press, press-role,
+  scaffold/validate/run, and core browser actions such as act, press, press-role,
   press-key,
   hover, hover-role, scroll, scroll-into-view, scroll-into-view-role, set-viewport,
   reload, go-back, go-forward,

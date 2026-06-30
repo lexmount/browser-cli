@@ -45,6 +45,7 @@ browser-cli action guide --task semantic_waits
 browser-cli action guide --task menu_keyboard_flow
 browser-cli action guide --task mouse_interaction
 browser-cli action guide --task content_extraction
+browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
 browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 browser-cli action guide --task browser_state_management
 browser-cli action guide --task state_waits
@@ -93,6 +94,9 @@ browser-cli action wait-attribute-role --session-id <session_id> --role button -
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind click --role button --name "Submit"
+browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
+browser-cli action act --session-id <session_id> --kind select --role combobox --name "Plan" --option-label "Pro"
 browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action focus-role --session-id <session_id> --role textbox --name "Search"
 browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
