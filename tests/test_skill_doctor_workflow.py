@@ -39,6 +39,7 @@ def test_skill_explains_doctor_status_decisions() -> None:
     assert "browser-cli example list" in text
     assert "`invalid_examples` and `checked_examples`" in text
     assert "`missing_required_commands`" in text
+    assert "`missing_case_scaffold_templates`" in text
     assert "`repair_plan`" in text
     assert "`warnings > 0`" in text
     assert "`ok: false`" in text

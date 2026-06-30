@@ -166,7 +166,7 @@ what to do:
   `missing_required_commands` and follow its `fix` guidance before relying on
   the full Skill workflow.
 - `case_schema` with `status: "warn"`: inspect `missing_required_case_actions`,
-  `missing_action_schemas`, `invalid_action_schemas`; reinstall if needed.
+  `missing_case_scaffold_templates`, `missing_action_schemas`, `invalid_action_schemas`; reinstall if needed.
 - `agent_references` with `status: "warn"`: run
   `browser-cli reference get --id usable_status`,
   `browser-cli reference get --id action_playbook`, or follow its `fix`
@@ -253,7 +253,7 @@ browser-cli commands --workflow case_file_task
 Run `browser-cli case schema` before hand-writing a case file. Generate starters with
 `browser-cli case scaffold --template page-inspection`, `browser-cli case scaffold --template form-fill`, or `browser-cli case scaffold --template interactive-targeting`,
 validate, then run with `--close-created-session`. Read `supported_actions`, `required_fields`, `step_options.expect`,
-semantic/navigation/state actions such as `fill-label`, `fill`, `click-label`, `click-role`,
+`scaffold_templates`, semantic/navigation/state actions such as `fill-label`, `fill`, `click-label`, `click-role`,
 `select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-network`, `wait-console`, `wait-role`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,
 `events_path`, `artifacts_dir`, `session`, and `steps`.
 

@@ -56,6 +56,7 @@ def test_skill_routes_action_details_to_reference() -> None:
     )
     assert "Read that reference when selecting between semantic actions" in normalized
     assert "structured `result` fields" in normalized
+    assert "`scaffold_templates`" in normalized
     assert "Action command examples" in action_text
     assert "Common task recipes" in action_text
     assert "Target Contract" in ACTION_PLAYBOOK.read_text()
