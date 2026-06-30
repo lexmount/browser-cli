@@ -3514,7 +3514,8 @@ def test_example_get_returns_interactive_targeting_case_file(
     assert "name: interactive-targeting" in payload["content"]
     assert "action: interactive-snapshot" in payload["content"]
     assert "action: accessibility-snapshot" in payload["content"]
-    assert "action: click-role" in payload["content"]
+    assert "action: act" in payload["content"]
+    assert "kind: click" in payload["content"]
     assert "action: wait-text" in payload["content"]
 
 
@@ -3615,6 +3616,7 @@ def test_case_schema_returns_supported_actions_and_fields(
     ]
     assert payload["supported_actions"] == [
         "accessibility-snapshot",
+        "act",
         "blur",
         "blur-role",
         "bounding-box",
@@ -3717,6 +3719,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "wait-value",
         "wait-value-role",
     ]
+    assert payload["required_fields"]["act"] == ["kind"]
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
@@ -3740,6 +3743,14 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["actions"]["select-role"]["required_one_of"] == [
         ["value", "option_label"]
     ]
+    assert "role" in payload["actions"]["act"]["optional_fields"]
+    assert "option_label" in payload["actions"]["act"]["optional_fields"]
+    assert payload["actions"]["act"]["example_step"] == {
+        "action": "act",
+        "kind": "click",
+        "role": "button",
+        "name": "Submit",
+    }
     assert payload["required_fields"]["wait-load-state"] == []
     assert payload["required_fields"]["wait-state"] == ["selector", "state"]
     assert payload["required_fields"]["wait-state-role"] == ["role", "state"]
@@ -3874,9 +3885,10 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 102,
+        "action_count": 103,
         "supported_actions": [
             "accessibility-snapshot",
+            "act",
             "blur",
             "blur-role",
             "bounding-box",
@@ -4131,13 +4143,15 @@ def test_case_scaffold_writes_interactive_targeting_case_file(
     assert payload["wrote_file"] is True
     assert payload["case"]["steps"][2]["action"] == "interactive-snapshot"
     assert payload["case"]["steps"][3]["action"] == "accessibility-snapshot"
-    assert payload["case"]["steps"][4]["action"] == "click-role"
+    assert payload["case"]["steps"][4]["action"] == "act"
+    assert payload["case"]["steps"][4]["kind"] == "click"
     assert payload["case"]["steps"][7]["output"] == "interactive-targeting.png"
     content = output.read_text()
     assert "name: interactive-targeting" in content
     assert "action: interactive-snapshot" in content
     assert "action: accessibility-snapshot" in content
-    assert "action: click-role" in content
+    assert "action: act" in content
+    assert "kind: click" in content
     assert "action: wait-text" in content
     assert "action: get-text" in content
     assert "action: click\n" not in content
@@ -4661,6 +4675,42 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
     assert result["found"] is True
     assert result["url"] == "https://example.test/form"
     assert expression_snippet in page.expressions[0]
+
+
+def test_extended_case_step_act_returns_deterministic_plan(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/act"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True, "role_found": True, "clicked": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "act",
+            "kind": "click",
+            "role": "button",
+            "name": "Launch report",
+        },
+        tmp_path,
+        0,
+    )
+
+    assert "element.click()" in page.expressions[0]
+    assert result["kind"] == "act"
+    assert result["intent"] == "click"
+    assert result["target"]["selection"] == "role"
+    assert result["target"]["role"] == "button"
+    assert result["plan"]["underlying_command"] == "action.click-role"
+    assert result["plan"]["deterministic"] is True
+    assert result["plan"]["custom_javascript"] is False
+    assert result["action_result"]["clicked"] is True
+    assert result["url"] == "https://example.test/act"
 
 
 @pytest.mark.parametrize(
@@ -6417,8 +6467,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 102
-    assert checks["case_schema"]["supported_action_count"] == 102
+    assert checks["case_schema"]["action_count"] == 103
+    assert checks["case_schema"]["supported_action_count"] == 103
     assert checks["case_schema"]["required_case_scaffold_templates"] == [
         "page-inspection",
         "form-fill",
@@ -6426,6 +6476,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "page-diagnostics",
     ]
     for case_action in (
+        "act",
         "fill-label",
         "click-label",
         "click-role",
@@ -6458,7 +6509,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "eval",
         "interactive-snapshot",
         "accessibility-snapshot",
-        "click-role",
+        "act",
         "wait-text",
         "get-text",
         "screenshot",
@@ -7236,18 +7287,18 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
     assert case_schema["action_count"] == 1
     assert case_schema["supported_action_count"] == 1
     assert case_schema["missing_supported_actions"][:3] == [
+        "act",
         "accessibility-snapshot",
         "blur",
-        "blur-role",
     ]
     assert "fill" in case_schema["missing_required_case_actions"]
     assert "fill-label" in case_schema["missing_required_case_actions"]
     assert "network-snapshot" in case_schema["missing_required_case_actions"]
     assert "wait-console" in case_schema["missing_required_case_actions"]
     assert case_schema["missing_action_schemas"][:3] == [
+        "act",
         "accessibility-snapshot",
         "blur",
-        "blur-role",
     ]
     assert case_schema["invalid_action_schemas"] == []
     assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"

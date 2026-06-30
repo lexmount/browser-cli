@@ -1060,7 +1060,7 @@ browser-cli session close --session-id <session_id>
 ```
 
 `case schema` supports repeatable semantic form and targeting steps such as
-`fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
+`act`, `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `form-snapshot`,

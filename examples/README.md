@@ -13,7 +13,7 @@ browser-cli case scaffold --template interactive-targeting --output interactive-
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
 
-Case files can use semantic actions such as `fill`, `fill-label`, `click-role`,
+Case files can use semantic actions such as `act`, `fill`, `fill-label`, `click-role`,
 `wait-text`, `get-value-role`, `interactive-snapshot`,
 `accessibility-snapshot`, `console-snapshot`, and `network-snapshot`.
 

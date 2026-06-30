@@ -1,5 +1,5 @@
 name: interactive-targeting
-description: Build a tiny interactive fixture, inspect actionable targets, click by role, and verify the result.
+description: Build a tiny interactive fixture, inspect actionable targets, act by role, and verify the result.
 close_created_session: true
 session:
   create: true
@@ -32,7 +32,8 @@ steps:
     max_nodes: 20
   - action: accessibility-snapshot
     max_nodes: 40
-  - action: click-role
+  - action: act
+    kind: click
     role: button
     name: Launch report
   - action: wait-text

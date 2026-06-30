@@ -47,7 +47,8 @@ def test_interactive_targeting_case_uses_semantic_targets() -> None:
 
     assert "action: interactive-snapshot" in text
     assert "action: accessibility-snapshot" in text
-    assert "action: click-role" in text
+    assert "action: act" in text
+    assert "kind: click" in text
     assert "action: wait-text" in text
     assert "action: get-text" in text
     assert "action: click\n" not in text

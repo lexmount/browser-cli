@@ -321,6 +321,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.wait-console",
 )
 DOCTOR_REQUIRED_CASE_ACTIONS = (
+    "act",
     "accessibility-snapshot",
     "blur",
     "blur-role",
@@ -1644,20 +1645,21 @@ def _agent_examples() -> dict[str, Any]:
             "format": "yaml",
             "purpose": (
                 "Validate and run a local interactive-targeting case that builds "
-                "a tiny page, inspects actionable targets, clicks by role, verifies "
+                "a tiny page, inspects actionable targets, acts by role, verifies "
                 "text, and screenshots."
             ),
             "related_workflows": ["case_file_task", "interactive_targeting"],
             "load_when": [
                 "Creating a repeatable interactive targeting smoke test.",
-                "Needing a case file template for snapshots, role-based clicks, and text verification.",
+                "Needing a case file template for snapshots, deterministic act, and text verification.",
             ],
             "case_file": True,
             "grep_patterns": [
                 "name: interactive-targeting",
                 "action: interactive-snapshot",
                 "action: accessibility-snapshot",
-                "action: click-role",
+                "action: act",
+                "kind: click",
                 "action: wait-text",
                 "action: get-text",
                 "action: screenshot",
@@ -10731,6 +10733,18 @@ def _act_argument_error(
     message: str,
     **payload: Any,
 ) -> NoReturn:
+    if command == "case.run":
+        detail = {
+            key: _sanitize_failure_value(value)
+            for key, value in payload.items()
+            if value is not None
+        }
+        suffix = (
+            " " + json.dumps(detail, ensure_ascii=False, sort_keys=True, default=str)
+            if detail
+            else ""
+        )
+        raise BrowserConfigError(f"{message}{suffix}")
     _failure(command, "argument_error", message, exit_code=2, **payload)
 
 
@@ -23289,6 +23303,7 @@ CASE_SCAFFOLD_TEMPLATES = (
 )
 
 EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "act": ("kind",),
     "accessibility-snapshot": tuple(),
     "blur": ("selector",),
     "blur-role": ("role",),
@@ -23393,6 +23408,12 @@ BROWSER_CLI_REQUIRED_CASE_FIELDS: dict[str, tuple[str, ...]] = {
     **EXTENDED_CASE_REQUIRED_FIELDS,
 }
 BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
+    "act": {
+        "kind": frozenset(ACT_KIND_CHOICES),
+        "block": frozenset({"start", "center", "end", "nearest"}),
+        "inline": frozenset({"start", "center", "end", "nearest"}),
+        "behavior": frozenset({"auto", "smooth"}),
+    },
     "cookie-set": {"same_site": frozenset({"lax", "strict", "none"})},
     "storage-clear": {"area": frozenset({"local", "session"})},
     "storage-get": {"area": frozenset({"local", "session"})},
@@ -23638,7 +23659,7 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
             "name": name,
             "description": (
                 "Build a tiny interactive fixture, inspect actionable targets, "
-                "click by role, and verify the result with first-class browser-cli actions."
+                "act by role, and verify the result with first-class browser-cli actions."
             ),
             "close_created_session": True,
             "session": {
@@ -23683,7 +23704,8 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                     "max_nodes": 40,
                 },
                 {
-                    "action": "click-role",
+                    "action": "act",
+                    "kind": "click",
                     "role": "button",
                     "name": "Launch report",
                 },
@@ -23851,6 +23873,30 @@ def _case_scaffold_next_commands(output: str | None) -> list[str]:
 
 def _case_action_schema() -> dict[str, Any]:
     optional_fields: dict[str, list[str]] = {
+        "act": [
+            "role",
+            "name",
+            "label",
+            "text",
+            "selector",
+            "index",
+            "value",
+            "option_label",
+            "key",
+            "code",
+            "alt_key",
+            "ctrl_key",
+            "meta_key",
+            "shift_key",
+            "x",
+            "y",
+            "block",
+            "inline",
+            "behavior",
+            "include_hidden",
+            "exact",
+            "case_sensitive",
+        ],
         "open-url": ["wait_until", "timeout_ms"],
         "wait-selector": ["state", "timeout_ms"],
         "click": ["timeout_ms", "wait_after_ms"],
@@ -24122,6 +24168,7 @@ def _case_action_schema() -> dict[str, Any]:
         "select-role": [["value", "option_label"]],
     }
     result_fields: dict[str, list[str]] = {
+        "act": ["kind", "intent", "target", "plan", "action_result", "url"],
         "open-url": ["url", "title", "status"],
         "wait-selector": ["selector", "state", "text", "url"],
         "click": ["selector", "clicked", "url"],
@@ -24998,6 +25045,12 @@ def _case_action_schema() -> dict[str, Any]:
         "wait-text": ["found", "text", "selector", "waited_ms", "url"],
     }
     examples: dict[str, dict[str, Any]] = {
+        "act": {
+            "action": "act",
+            "kind": "click",
+            "role": "button",
+            "name": "Submit",
+        },
         "open-url": {
             "action": "open-url",
             "url": "https://example.com",
@@ -25502,6 +25555,54 @@ def _case_eval_expression(page: Any, expression: str) -> dict[str, Any]:
     return _case_step_result(page, page.evaluate(expression))
 
 
+def _case_step_optional_str(step: dict[str, Any], name: str) -> str | None:
+    value = step.get(name)
+    return str(value) if value is not None else None
+
+
+def _case_act_args(step: dict[str, Any]) -> argparse.Namespace:
+    return argparse.Namespace(
+        kind=str(step["kind"]),
+        role=_case_step_optional_str(step, "role"),
+        name=_case_step_optional_str(step, "name"),
+        label=_case_step_optional_str(step, "label"),
+        text=_case_step_optional_str(step, "text"),
+        selector=_case_step_optional_str(step, "selector"),
+        index=_case_step_int(step, "index", default=0),
+        value=_case_step_optional_str(step, "value"),
+        option_label=_case_step_optional_str(step, "option_label"),
+        key=_case_step_optional_str(step, "key"),
+        code=_case_step_optional_str(step, "code"),
+        alt_key=_case_step_bool(step, "alt_key"),
+        ctrl_key=_case_step_bool(step, "ctrl_key"),
+        meta_key=_case_step_bool(step, "meta_key"),
+        shift_key=_case_step_bool(step, "shift_key"),
+        x=_case_step_float(step, "x", default=0),
+        y=_case_step_float(step, "y", default=600),
+        block=str(step.get("block", "center")),
+        inline=str(step.get("inline", "nearest")),
+        behavior=str(step.get("behavior", "auto")),
+        include_hidden=_case_step_bool(step, "include_hidden"),
+        exact=_case_step_bool(step, "exact"),
+        case_sensitive=_case_step_bool(step, "case_sensitive"),
+    )
+
+
+def _case_act_result(page: Any, step: dict[str, Any]) -> dict[str, Any]:
+    args = _case_act_args(step)
+    plan = _act_plan("case.run", args)
+    expression = str(plan.pop("expression"))
+    action_result = _case_eval_expression(page, expression)
+    return {
+        "kind": "act",
+        "intent": args.kind,
+        "target": plan["target"],
+        "plan": plan,
+        "action_result": action_result,
+        "url": action_result.get("url", page.url),
+    }
+
+
 def _case_result_path(result: Any, path: str) -> tuple[bool, Any]:
     current = result
     for part in path.split("."):
@@ -25640,6 +25741,8 @@ def _run_browser_cli_case_step(
     index: int,
 ) -> dict[str, Any]:
     action = step["action"]
+    if action == "act":
+        return _case_act_result(page, step)
     if action in SUPPORTED_CASE_ACTIONS:
         return _runtime_run_case_step(page, step, artifacts_dir, index)
 
