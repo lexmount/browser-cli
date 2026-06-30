@@ -84,7 +84,8 @@ baseline/status reference, and `browser-cli reference get --id action_playbook`
 returns the installed action playbook as JSON.
 `agent_examples` describes packaged common-task examples and case files.
 `browser-cli example list` returns example metadata, and
-`browser-cli example get --id page_inspection_case` or
+`browser-cli example get --id setup_verification_playbook`,
+`browser-cli example get --id page_inspection_case`, or
 `browser-cli example get --id interactive_targeting_case` returns an installed
 example case file or playbook as JSON.
 `agent_workflows` describes ordered setup, Connect from Codex site requirements,
@@ -403,7 +404,8 @@ Default behavior:
 - `doctor` reports an `agent_examples` check with `required_examples`,
   `missing_required_examples`, `invalid_examples`, and `checked_examples`.
   YAML case examples include `case_valid` and `case_errors`; treat
-  `status=warn` as a signal to run `browser-cli example list`, inspect the
+  `status=warn` as a signal to run `browser-cli example list`, inspect
+  `browser-cli example get --id setup_verification_playbook` or the
   invalid example, or reinstall browser-cli before relying on packaged
   playbooks or case examples.
 - `doctor` reports a `command_catalog` check with `required_commands`,

@@ -22,6 +22,9 @@ def test_packaged_examples_match_repo_examples() -> None:
     assert (PACKAGED_EXAMPLES / "agent-playbook.md").read_text() == (
         REPO_ROOT / "examples" / "agent-playbook.md"
     ).read_text()
+    assert (PACKAGED_EXAMPLES / "setup-verification-playbook.md").read_text() == (
+        REPO_ROOT / "examples" / "setup-verification-playbook.md"
+    ).read_text()
     for case_file in sorted((REPO_ROOT / "examples" / "cases").glob("*.yaml")):
         packaged_case = PACKAGED_EXAMPLES / "cases" / case_file.name
         assert packaged_case.read_text() == case_file.read_text()
@@ -158,6 +161,27 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
         '\'{"purpose":"login"}\' --selection newest --create-if-missing --dry-run'
     ) in text
     assert "browser-cli context status --context-id <context_id>" in text
+
+
+def test_setup_verification_playbook_guides_safe_setup_before_actions() -> None:
+    text = (REPO_ROOT / "examples" / "setup-verification-playbook.md").read_text()
+
+    assert "Inspect The Installed CLI" in text
+    assert "Check Auth Without Revealing Secrets" in text
+    assert "Guide Manual Env Setup" in text
+    assert "Handle Device-Code Requests" in text
+    assert "Verify Readiness" in text
+    assert "browser-cli reference get --id quickstart" in text
+    assert "browser-cli reference get --id usable_status" in text
+    assert "browser-cli auth status" in text
+    assert "browser-cli auth login" in text
+    assert "browser-cli auth export-env" in text
+    assert "browser-cli auth login --device-code" in text
+    assert "browser-cli doctor --json" in text
+    assert "browser-cli doctor --smoke-session" in text
+    assert "repair_plan.commands" in text
+    assert "ready_for_browser_actions=true" in text
+    assert "browser-cli session close --session-id <session_id>" in text
     assert "browser-cli session create --context-metadata-json" in text
     assert "`availability` is `locked` or `unavailable`" in text
     assert "selection_summary.recommended_next_action" in text

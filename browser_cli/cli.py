@@ -430,6 +430,7 @@ DOCTOR_REQUIRED_REFERENCES = (
 )
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
+    "setup_verification_playbook",
     "page_inspection_case",
     "form_fill_case",
     "interactive_targeting_case",
@@ -453,6 +454,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "connect_from_codex",
     "quickstart",
     "reference get",
+    "setup_verification_playbook",
     "example get",
     "action guide",
     "click-label",
@@ -1427,6 +1429,46 @@ def _agent_examples() -> dict[str, Any]:
                 "browser-cli case scaffold",
             ],
         },
+        "setup_verification_playbook": {
+            "path": "examples/setup-verification-playbook.md",
+            "content_command": (
+                "browser-cli example get --id setup_verification_playbook"
+            ),
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples:setup-verification-playbook.md"
+            ),
+            "format": "markdown",
+            "purpose": (
+                "Show a safe setup, auth, doctor, smoke-session, and repair "
+                "workflow before an agent creates browser sessions."
+            ),
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_auth",
+                "connect_from_codex_site_requirements",
+                "device_code_auth",
+                "scoped_token_lifecycle",
+                "one_off_page_task",
+                "persistent_login_state",
+            ],
+            "load_when": [
+                "Installing or validating browser-cli for the first time.",
+                "Repairing missing credentials, PATH, API connectivity, or doctor warnings.",
+                "Explaining secret-safe setup without asking for API keys in chat.",
+            ],
+            "grep_patterns": [
+                "Inspect The Installed CLI",
+                "Check Auth Without Revealing Secrets",
+                "Guide Manual Env Setup",
+                "Handle Device-Code Requests",
+                "Verify Readiness",
+                "browser-cli auth login --device-code",
+                "browser-cli doctor --json",
+                "browser-cli doctor --smoke-session",
+                "repair_plan.commands",
+            ],
+        },
         "page_inspection_case": {
             "path": "examples/cases/page-inspection.yaml",
             "content_command": "browser-cli example get --id page_inspection_case",
@@ -1597,6 +1639,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli reference get --id skill_positioning",
                 "browser-cli reference get --id usable_status --metadata-only",
                 "browser-cli reference get --id usable_status",
+                "browser-cli example get --id setup_verification_playbook --metadata-only",
+                "browser-cli example get --id setup_verification_playbook",
                 "browser-cli auth status",
                 "browser-cli auth scopes",
                 "browser-cli auth refresh",

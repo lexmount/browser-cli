@@ -130,6 +130,7 @@ CLI for you:
 7. 读取 packaged examples；如果要做可重复任务或 case file，优先参考这些示例：
    browser-cli example list
    browser-cli example get --id agent_playbook --metadata-only
+   browser-cli example get --id setup_verification_playbook --metadata-only
    browser-cli example get --id page_inspection_case
    browser-cli example get --id form_fill_case
    browser-cli example get --id interactive_targeting_case
@@ -877,7 +878,8 @@ setup/readiness boundary reference.
 `browser-cli reference get --id action_playbook`, which returns the packaged
 markdown content from an installed CLI. `agent_examples` points to packaged
 playbook and case-file examples, readable with `browser-cli example list` and
-`browser-cli example get --id page_inspection_case` or
+`browser-cli example get --id setup_verification_playbook`,
+`browser-cli example get --id page_inspection_case`, or
 `browser-cli example get --id interactive_targeting_case`. Use `--workflows-only` when
 you only need the structured setup,
 Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page

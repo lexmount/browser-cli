@@ -200,7 +200,7 @@ parsing `--help` text. Follow `agent_references` when detailed action guidance i
 and `agent_references.action_playbook.content_command` or
 `browser-cli reference get --id action_playbook` for action guidance from an
 installed CLI. Use `browser-cli example list` and
-`browser-cli example get --id page_inspection_case` when a common task or case
+`browser-cli example get --id setup_verification_playbook` or `browser-cli example get --id page_inspection_case` when a common task or case
 file template would help. Use `browser-cli case scaffold --template page-inspection` or `browser-cli case scaffold --template interactive-targeting`
 to generate a valid starter case before hand-writing YAML, then follow each workflow step's `read` array first;
 it names the auth availability, export usability, and context reuse fields that

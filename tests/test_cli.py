@@ -381,6 +381,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli reference get --id usable_status"
         in payload["agent_entrypoints"]["setup"]
     )
+    assert (
+        "browser-cli example get --id setup_verification_playbook --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli example get --id setup_verification_playbook"
+        in payload["agent_entrypoints"]["setup"]
+    )
     assert "browser-cli auth scopes" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
@@ -2997,12 +3005,13 @@ def test_example_list_returns_packaged_agent_examples(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 4
+    assert payload["example_count"] == 5
     assert sorted(payload["examples"]) == [
         "agent_playbook",
         "form_fill_case",
         "interactive_targeting_case",
         "page_inspection_case",
+        "setup_verification_playbook",
     ]
     playbook = payload["examples"]["agent_playbook"]
     assert playbook["id"] == "agent_playbook"
@@ -3014,6 +3023,19 @@ def test_example_list_returns_packaged_agent_examples(
         "browser_cli.agent_examples:agent-playbook.md"
     )
     assert "case_file_task" in playbook["related_workflows"]
+    setup = payload["examples"]["setup_verification_playbook"]
+    assert setup["id"] == "setup_verification_playbook"
+    assert setup["path"] == "examples/setup-verification-playbook.md"
+    assert setup["content_command"] == (
+        "browser-cli example get --id setup_verification_playbook"
+    )
+    assert setup["package_resource"] == (
+        "browser_cli.agent_examples:setup-verification-playbook.md"
+    )
+    assert "setup_and_verify" in setup["related_workflows"]
+    assert "browser-cli doctor --json" in setup["grep_patterns"]
+    assert "browser-cli auth login --device-code" in setup["grep_patterns"]
+    assert "repair_plan.commands" in setup["grep_patterns"]
     assert payload["examples"]["page_inspection_case"]["format"] == "yaml"
     assert payload["examples"]["form_fill_case"]["format"] == "yaml"
     assert payload["examples"]["interactive_targeting_case"]["format"] == "yaml"
@@ -3031,12 +3053,13 @@ def test_example_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 4
+    assert payload["example_count"] == 5
     assert payload["examples"] == [
         "agent_playbook",
         "form_fill_case",
         "interactive_targeting_case",
         "page_inspection_case",
+        "setup_verification_playbook",
     ]
 
 
@@ -3079,6 +3102,24 @@ def test_example_get_returns_interactive_targeting_case_file(
     assert "action: wait-text" in payload["content"]
 
 
+def test_example_get_returns_setup_verification_playbook(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "setup_verification_playbook"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "setup_verification_playbook"
+    assert payload["content_format"] == "markdown"
+    assert "# Setup Verification Playbook" in payload["content"]
+    assert "browser-cli doctor --json" in payload["content"]
+    assert "browser-cli auth login --device-code" in payload["content"]
+    assert "repair_plan.commands" in payload["content"]
+
+
 def test_example_get_metadata_only_omits_content(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -3114,6 +3155,7 @@ def test_example_get_fails_unknown_example_as_json(
         "form_fill_case",
         "interactive_targeting_case",
         "page_inspection_case",
+        "setup_verification_playbook",
     ]
     assert payload["fix"]["code"] == "inspect_available_agent_examples"
 
@@ -6117,9 +6159,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert skill_positioning_reference["content_length"] > 1000
     assert skill_positioning_reference["missing_patterns"] == []
     assert checks["agent_examples"]["status"] == "pass"
-    assert checks["agent_examples"]["example_count"] == 4
+    assert checks["agent_examples"]["example_count"] == 5
     assert checks["agent_examples"]["required_examples"] == [
         "agent_playbook",
+        "setup_verification_playbook",
         "page_inspection_case",
         "form_fill_case",
         "interactive_targeting_case",
@@ -6135,6 +6178,12 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert checked_examples["agent_playbook"]["content_length"] > 1000
     assert checked_examples["agent_playbook"]["missing_patterns"] == []
+    assert checked_examples["setup_verification_playbook"]["status"] == "pass"
+    assert checked_examples["setup_verification_playbook"]["content_command"] == (
+        "browser-cli example get --id setup_verification_playbook"
+    )
+    assert checked_examples["setup_verification_playbook"]["content_length"] > 1000
+    assert checked_examples["setup_verification_playbook"]["missing_patterns"] == []
     assert checked_examples["page_inspection_case"]["case_valid"] is True
     assert checked_examples["page_inspection_case"]["case_errors"] == []
     assert checked_examples["form_fill_case"]["case_valid"] is True
@@ -7155,6 +7204,7 @@ steps:
     assert examples["status"] == "warn"
     assert examples["required_examples"] == [
         "agent_playbook",
+        "setup_verification_playbook",
         "page_inspection_case",
         "form_fill_case",
         "interactive_targeting_case",

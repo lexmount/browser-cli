@@ -232,6 +232,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`browser-cli reference get --id action_playbook`" in text
     assert "`agent_examples`" in text
     assert "`browser-cli example list`" in text
+    assert "`browser-cli example get --id setup_verification_playbook`" in text
     assert "`browser-cli example get --id page_inspection_case`" in text
     assert "`browser-cli example get --id interactive_targeting_case`" in text
     assert "`scaffold_templates`" in text
