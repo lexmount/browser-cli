@@ -584,6 +584,20 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     setup_steps = {
         step["id"]: step for step in workflows["setup_and_verify"]["steps"]
     }
+    assert workflows["setup_and_verify"]["steps"][0]["id"] == (
+        "inspect_skill_positioning"
+    )
+    assert setup_steps["inspect_skill_positioning"]["command"] == (
+        "browser-cli reference get --id skill_positioning --metadata-only"
+    )
+    assert (
+        setup_steps["inspect_skill_positioning"]["follow_up_command"]
+        == "browser-cli reference get --id skill_positioning"
+    )
+    assert (
+        "reference.content_command"
+        in setup_steps["inspect_skill_positioning"]["read"]
+    )
     assert setup_steps["inspect_usable_status"]["command"] == (
         "browser-cli reference get --id usable_status --metadata-only"
     )
@@ -2296,6 +2310,9 @@ def test_commands_catalog_returns_workflows_only(
         step["id"]: step
         for step in payload["agent_workflows"]["setup_and_verify"]["steps"]
     }
+    assert setup_steps["inspect_skill_positioning"]["command"] == (
+        "browser-cli reference get --id skill_positioning --metadata-only"
+    )
     assert setup_steps["inspect_usable_status"]["command"] == (
         "browser-cli reference get --id usable_status --metadata-only"
     )
@@ -5180,6 +5197,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
     assert checks["command_catalog"]["required_workflow_steps"]["setup_and_verify"] == [
+        "inspect_skill_positioning",
         "inspect_usable_status",
         "auth_status",
         "doctor",
@@ -6504,7 +6522,11 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "one_off_page_task": ["close_session"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
-        "setup_and_verify": ["inspect_usable_status", "smoke_session"],
+        "setup_and_verify": [
+            "inspect_skill_positioning",
+            "inspect_usable_status",
+            "smoke_session",
+        ],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
         "dialog_frame_handling": ["verify_result"],
