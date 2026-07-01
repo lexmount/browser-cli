@@ -471,6 +471,7 @@ DOCTOR_REQUIRED_REFERENCES = (
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "setup_verification_playbook",
+    "persistent_context_playbook",
     "page_inspection_case",
     "agent_primitives_case",
     "page_diagnostics_case",
@@ -713,6 +714,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "run_case_file",
     ),
     "persistent_login_state": (
+        "inspect_persistent_context_playbook",
         "dry_run_context_pick",
         "inspect_context_status",
         "create_session_with_context",
@@ -1558,6 +1560,44 @@ def _agent_examples() -> dict[str, Any]:
                 "repair_plan.commands",
             ],
         },
+        "persistent_context_playbook": {
+            "path": "examples/persistent-context-playbook.md",
+            "content_command": (
+                "browser-cli example get --id persistent_context_playbook"
+            ),
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples:persistent-context-playbook.md"
+            ),
+            "format": "markdown",
+            "purpose": (
+                "Show how an agent should dry-run context selection, interpret "
+                "available/locked/unavailable reuse state, create read-write or "
+                "read-only sessions, and clean up temporary sessions without "
+                "losing persistent login state."
+            ),
+            "related_workflows": [
+                "persistent_login_state",
+                "setup_and_verify",
+                "first_browser_task",
+                "browser_state_management",
+            ],
+            "load_when": [
+                "Reusing login state, cookies, or storage across browser sessions.",
+                "Explaining locked or unavailable persistent contexts before creating a session.",
+                "Choosing read_write versus read_only context mode.",
+            ],
+            "grep_patterns": [
+                "Persistent Context Playbook",
+                "Dry-Run Context Selection",
+                "availability=available",
+                "availability=locked",
+                "metadata_values_redacted",
+                "context_reuse.selected",
+                "context-mode read_write",
+                "context-mode read_only",
+            ],
+        },
         "page_inspection_case": {
             "path": "examples/cases/page-inspection.yaml",
             "content_command": "browser-cli example get --id page_inspection_case",
@@ -2086,6 +2126,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
             "persistent_login_state": [
+                "browser-cli example get --id persistent_context_playbook --metadata-only",
+                "browser-cli example get --id persistent_context_playbook",
                 'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
                 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                 "browser-cli context status --context-id <context_id>",
@@ -4129,6 +4171,16 @@ def _command_catalog() -> dict[str, Any]:
             "persistent_login_state": {
                 "purpose": "Reuse or create a persistent context for login state, cookies, and storage.",
                 "steps": [
+                    {
+                        "id": "inspect_persistent_context_playbook",
+                        "command": "browser-cli example get --id persistent_context_playbook --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.load_when",
+                        ],
+                    },
                     {
                         "id": "list_reuse_candidates",
                         "command": 'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',

@@ -53,6 +53,7 @@ browser-cli reference list
 browser-cli reference get --id usable_status --metadata-only
 browser-cli reference get --id usable_status
 browser-cli example list
+browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id page_inspection_case --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
@@ -410,6 +411,7 @@ browser-cli case schema --action observe
 browser-cli case schema --action act
 browser-cli case schema --action extract
 browser-cli case schema --action fill-label
+browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id form_fill_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only

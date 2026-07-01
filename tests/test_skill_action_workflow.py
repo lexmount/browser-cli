@@ -320,6 +320,7 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "`available` can be reused" in normalized
     assert "`locked` means busy" in normalized
     assert "`unavailable` needs a different context" in normalized
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in normalized
     assert "browser-cli context pick --metadata-json" in normalized
     assert "browser-cli context status --context-id <context_id>" in normalized
     assert "candidates include `locked: true`" in normalized

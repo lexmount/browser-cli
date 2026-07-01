@@ -69,6 +69,10 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
         "browser-cli example get --id setup_verification_playbook --metadata-only"
         in prompt
     )
+    assert (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
+        in prompt
+    )
     assert "browser-cli example get --id page_inspection_case" in prompt
     assert "browser-cli example get --id agent_primitives_case" in prompt
     assert "browser-cli example get --id form_fill_case" in prompt

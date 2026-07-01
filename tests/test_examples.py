@@ -25,6 +25,9 @@ def test_packaged_examples_match_repo_examples() -> None:
     assert (PACKAGED_EXAMPLES / "setup-verification-playbook.md").read_text() == (
         REPO_ROOT / "examples" / "setup-verification-playbook.md"
     ).read_text()
+    assert (PACKAGED_EXAMPLES / "persistent-context-playbook.md").read_text() == (
+        REPO_ROOT / "examples" / "persistent-context-playbook.md"
+    ).read_text()
     for case_file in sorted((REPO_ROOT / "examples" / "cases").glob("*.yaml")):
         packaged_case = PACKAGED_EXAMPLES / "cases" / case_file.name
         assert packaged_case.read_text() == case_file.read_text()
@@ -104,6 +107,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow case_file_task" in text
     assert "browser-cli case schema" in text
     assert "browser-cli case schema --action fill-label" in text
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
     assert "browser-cli example get --id agent_primitives_case --metadata-only" in text
     assert "browser-cli example get --id form_fill_case --metadata-only" in text
     assert "browser-cli case scaffold --template page-inspection" in text
@@ -153,6 +157,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli reference get --id usable_status --metadata-only" in text
     assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli example list" in text
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
     assert "browser-cli example get --id page_inspection_case --metadata-only" in text
     assert (
         "browser-cli example get --id interactive_targeting_case --metadata-only"
@@ -277,3 +282,19 @@ def test_setup_verification_playbook_guides_safe_setup_before_actions() -> None:
     assert "interactive-snapshot" in text
     assert "context resolve" not in text
     assert "browser-cli direct-url" not in text
+
+
+def test_persistent_context_playbook_guides_reuse_decisions() -> None:
+    text = (REPO_ROOT / "examples" / "persistent-context-playbook.md").read_text()
+
+    assert "browser-cli commands --workflow persistent_login_state" in text
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
+    assert "browser-cli context pick" in text
+    assert "--dry-run" in text
+    assert "availability=available" in text
+    assert "availability=locked" in text
+    assert "metadata_values_redacted" in text
+    assert "context_reuse.selected" in text
+    assert "context-mode read_write" in text
+    assert "context-mode read_only" in text
+    assert "browser-cli session close --session-id <session_id>" in text
