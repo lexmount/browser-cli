@@ -461,6 +461,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "content-extraction",
     "browser-state",
     "navigation-flow",
+    "file-upload",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -481,6 +482,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "content_extraction_case",
     "browser_state_case",
     "navigation_flow_case",
+    "file_upload_case",
     "page_diagnostics_case",
     "form_fill_case",
     "interactive_targeting_case",
@@ -714,6 +716,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_content_extraction_case_example",
         "inspect_browser_state_case_example",
         "inspect_navigation_flow_case_example",
+        "inspect_file_upload_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
@@ -722,6 +725,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "scaffold_content_extraction_case_file",
         "scaffold_browser_state_case_file",
         "scaffold_navigation_flow_case_file",
+        "scaffold_file_upload_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -1835,6 +1839,36 @@ def _agent_examples() -> dict[str, Any]:
                 "action: screenshot",
             ],
         },
+        "file_upload_case": {
+            "path": "examples/cases/file-upload.yaml",
+            "content_command": "browser-cli example get --id file_upload_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:file-upload.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a self-contained file-upload case that builds "
+                "a form fixture, attaches an inline test file with set-file-input, "
+                "submits it, and saves evidence."
+            ),
+            "related_workflows": ["case_file_task", "file_upload", "form_interaction"],
+            "load_when": [
+                "Creating a repeatable upload or attachment smoke test.",
+                "Needing a case file template that avoids OS file pickers and local fixture files.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: file-upload",
+                "action: form-snapshot",
+                "action: set-file-input",
+                "inline_files:",
+                "lexmount-upload.txt",
+                "action: submit",
+                "action: wait-text",
+                "action: screenshot",
+            ],
+        },
         "form_fill_case": {
             "path": "examples/cases/form-fill.yaml",
             "content_command": "browser-cli example get --id form_fill_case",
@@ -2271,6 +2305,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli example get --id content_extraction_case --metadata-only",
                 "browser-cli example get --id browser_state_case --metadata-only",
                 "browser-cli example get --id navigation_flow_case --metadata-only",
+                "browser-cli example get --id file_upload_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
@@ -2279,6 +2314,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
                 "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
                 "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml",
+                "browser-cli case scaffold --template file-upload --output upload-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                 "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
@@ -3587,6 +3623,16 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_file_upload_case_example",
+                        "command": "browser-cli example get --id file_upload_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "inspect_interactive_targeting_case_example",
                         "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
                         "read": [
@@ -3683,6 +3729,21 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "scaffold_navigation_flow_case_file",
                         "command": "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_file_upload_case_file",
+                        "command": "browser-cli case scaffold --template file-upload --output upload-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -5990,6 +6051,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case scaffold --template content-extraction --format json",
                     "browser-cli case scaffold --template browser-state --format json",
                     "browser-cli case scaffold --template navigation-flow --format json",
+                    "browser-cli case scaffold --template file-upload --format json",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
                     "browser-cli case scaffold --template page-diagnostics --format json",
@@ -10847,6 +10909,111 @@ def _read_file_input_payloads(
                 "size": len(data),
                 "last_modified": int(stat.st_mtime * 1000),
                 "data_base64": base64.b64encode(data).decode("ascii"),
+            }
+        )
+    return payloads
+
+
+def _inline_file_input_payloads(
+    *,
+    command: str,
+    inline_files: list[Any],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    if max_bytes < 0:
+        _failure(
+            command,
+            "argument_error",
+            "max_bytes must be zero or greater.",
+            exit_code=2,
+            max_bytes=max_bytes,
+        )
+
+    payloads: list[dict[str, Any]] = []
+    total_bytes = 0
+    for index, inline_file in enumerate(inline_files):
+        if not isinstance(inline_file, dict):
+            _failure(
+                command,
+                "argument_error",
+                "inline_files entries must be objects.",
+                exit_code=2,
+                index=index,
+            )
+        name = inline_file.get("name")
+        if not isinstance(name, str) or not name:
+            _failure(
+                command,
+                "argument_error",
+                "inline_files entries require a non-empty name.",
+                exit_code=2,
+                index=index,
+            )
+        if "data_base64" in inline_file:
+            data_base64 = inline_file["data_base64"]
+            if not isinstance(data_base64, str):
+                _failure(
+                    command,
+                    "argument_error",
+                    "inline_files data_base64 must be a string.",
+                    exit_code=2,
+                    index=index,
+                )
+            try:
+                data = base64.b64decode(data_base64, validate=True)
+            except Exception as exc:
+                _failure(
+                    command,
+                    "argument_error",
+                    "inline_files data_base64 must be valid base64.",
+                    exit_code=2,
+                    index=index,
+                    error_class=exc.__class__.__name__,
+                )
+        else:
+            content = inline_file.get("content")
+            if not isinstance(content, str):
+                _failure(
+                    command,
+                    "argument_error",
+                    "inline_files entries require string content or data_base64.",
+                    exit_code=2,
+                    index=index,
+                )
+            data = content.encode("utf-8")
+            data_base64 = base64.b64encode(data).decode("ascii")
+
+        total_bytes += len(data)
+        if total_bytes > max_bytes:
+            _failure(
+                command,
+                "file_payload_too_large",
+                "Total inline file input payload exceeds max_bytes.",
+                exit_code=2,
+                max_bytes=max_bytes,
+                total_bytes=total_bytes,
+            )
+        mime_type = inline_file.get("type")
+        if not isinstance(mime_type, str) or not mime_type:
+            mime_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        raw_last_modified = inline_file.get("last_modified", 0) or 0
+        try:
+            last_modified = int(raw_last_modified)
+        except (TypeError, ValueError):
+            _failure(
+                command,
+                "argument_error",
+                "inline_files last_modified must be an integer.",
+                exit_code=2,
+                index=index,
+            )
+        payloads.append(
+            {
+                "name": name,
+                "type": mime_type,
+                "size": len(data),
+                "last_modified": last_modified,
+                "data_base64": data_base64,
             }
         )
     return payloads
@@ -23674,6 +23841,7 @@ CASE_SCAFFOLD_TEMPLATES = (
     "content-extraction",
     "browser-state",
     "navigation-flow",
+    "file-upload",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -23749,7 +23917,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "select-label": ("label",),
     "select-option": ("selector", "value"),
     "select-role": ("role",),
-    "set-file-input": ("selector", "file"),
+    "set-file-input": ("selector",),
     "set-value": ("selector", "value"),
     "storage-clear": tuple(),
     "storage-get": tuple(),
@@ -23900,6 +24068,44 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"steps[{index}] must not set both 'value' and 'option_label'"
                 )
+        if action == "set-file-input":
+            has_file = "file" in step
+            has_inline_files = "inline_files" in step
+            if not has_file and not has_inline_files:
+                errors.append(f"steps[{index}] missing one of 'file' or 'inline_files'")
+            if has_inline_files:
+                inline_files = step["inline_files"]
+                if not isinstance(inline_files, list) or not inline_files:
+                    errors.append(f"steps[{index}].inline_files must be a non-empty array")
+                else:
+                    for file_index, inline_file in enumerate(inline_files):
+                        path = f"steps[{index}].inline_files[{file_index}]"
+                        if not isinstance(inline_file, dict):
+                            errors.append(f"{path} must be an object")
+                            continue
+                        name = inline_file.get("name")
+                        if not isinstance(name, str) or not name:
+                            errors.append(f"{path}.name must be a non-empty string")
+                        has_content = "content" in inline_file
+                        has_data_base64 = "data_base64" in inline_file
+                        if not has_content and not has_data_base64:
+                            errors.append(
+                                f"{path} missing one of 'content' or 'data_base64'"
+                            )
+                        if has_content and not isinstance(inline_file["content"], str):
+                            errors.append(f"{path}.content must be a string")
+                        if has_data_base64:
+                            data_base64 = inline_file["data_base64"]
+                            if not isinstance(data_base64, str):
+                                errors.append(f"{path}.data_base64 must be a string")
+                            else:
+                                try:
+                                    base64.b64decode(data_base64, validate=True)
+                                except Exception:
+                                    errors.append(f"{path}.data_base64 must be valid base64")
+                        mime_type = inline_file.get("type")
+                        if mime_type is not None and not isinstance(mime_type, str):
+                            errors.append(f"{path}.type must be a string")
 
     if "target" in spec and not isinstance(spec["target"], dict):
         errors.append("target must be an object when present")
@@ -24438,6 +24644,109 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
             ],
         }
 
+    if template == "file-upload":
+        stem = _case_artifact_stem(name)
+        upload_name = "lexmount-upload.txt"
+        upload_content = args.text or "lexmount browser upload fixture"
+        uploaded_text = f"Uploaded: {upload_name}"
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny upload fixture, attach an inline file with "
+                "set-file-input, submit the form, and save evidence."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>File upload fixture</h1>
+      <form id="upload-form">
+        <label for="upload-file">Receipt file</label>
+        <input id="upload-file" name="receipt" type="file" />
+        <button type="submit">Upload</button>
+        <output id="upload-status" role="status" aria-live="polite">Waiting</output>
+      </form>
+    </main>
+  `;
+  const form = document.querySelector("#upload-form");
+  const input = document.querySelector("#upload-file");
+  const status = document.querySelector("#upload-status");
+  const fileNames = () => [...(input.files || [])].map((file) => file.name).join(", ");
+  input.addEventListener("change", () => {
+    status.textContent = "Selected: " + fileNames();
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const names = fileNames();
+    status.textContent = names ? "Uploaded: " + names : "No file uploaded";
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "form-snapshot",
+                    "selector": "form",
+                    "max_nodes": 30,
+                },
+                {
+                    "action": "set-file-input",
+                    "selector": "#upload-file",
+                    "inline_files": [
+                        {
+                            "name": upload_name,
+                            "type": "text/plain",
+                            "content": upload_content,
+                        }
+                    ],
+                    "expect": {
+                        "set": True,
+                        "file_count": 1,
+                    },
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#upload-status",
+                    "text": f"Selected: {upload_name}",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "submit",
+                    "selector": "#upload-form",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#upload-status",
+                    "text": uploaded_text,
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#upload-status",
+                    "expect": {
+                        "text": uploaded_text,
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
     if template == "interactive-targeting":
         stem = _case_artifact_stem(name)
         return {
@@ -24820,7 +25129,7 @@ def _case_action_schema() -> dict[str, Any]:
             "exact",
             "case_sensitive",
         ],
-        "set-file-input": ["max_bytes", "no_events"],
+        "set-file-input": ["file", "inline_files", "max_bytes", "no_events"],
         "set-value": ["no_events"],
         "storage-clear": ["area", "prefix"],
         "storage-get": ["area", "key", "prefix", "max_items"],
@@ -24973,6 +25282,7 @@ def _case_action_schema() -> dict[str, Any]:
     required_one_of: dict[str, list[list[str]]] = {
         "select-label": [["value", "option_label"]],
         "select-role": [["value", "option_label"]],
+        "set-file-input": [["file"], ["inline_files"]],
     }
     result_fields: dict[str, list[str]] = {
         "act": ["kind", "intent", "target", "plan", "action_result", "url"],
@@ -27359,15 +27669,46 @@ def _run_browser_cli_case_step(
             ),
         )
     if action == "set-file-input":
-        files = _read_file_input_payloads(
-            command="case.run",
-            files=_case_step_string_list(step, "file"),
-            max_bytes=_case_step_int(
-                step,
-                "max_bytes",
-                default=DEFAULT_FILE_INPUT_MAX_BYTES,
-            ),
+        max_bytes = _case_step_int(
+            step,
+            "max_bytes",
+            default=DEFAULT_FILE_INPUT_MAX_BYTES,
         )
+        files: list[dict[str, Any]] = []
+        if "file" in step:
+            files.extend(
+                _read_file_input_payloads(
+                    command="case.run",
+                    files=_case_step_string_list(step, "file"),
+                    max_bytes=max_bytes,
+                )
+            )
+        if "inline_files" in step:
+            inline_files = step["inline_files"]
+            files.extend(
+                _inline_file_input_payloads(
+                    command="case.run",
+                    inline_files=inline_files if isinstance(inline_files, list) else [],
+                    max_bytes=max_bytes,
+                )
+            )
+        if not files:
+            _failure(
+                "case.run",
+                "argument_error",
+                "set-file-input requires file or inline_files.",
+                exit_code=2,
+            )
+        total_bytes = sum(int(file.get("size", 0)) for file in files)
+        if total_bytes > max_bytes:
+            _failure(
+                "case.run",
+                "file_payload_too_large",
+                "Total file input payload exceeds max_bytes.",
+                exit_code=2,
+                max_bytes=max_bytes,
+                total_bytes=total_bytes,
+            )
         return _case_eval_expression(
             page,
             _set_file_input_expression(

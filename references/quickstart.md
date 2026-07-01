@@ -213,6 +213,7 @@ browser-cli case scaffold --template agent-primitives --output agent-primitives-
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
 browser-cli case scaffold --template browser-state --output browser-state-case.yaml
 browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml --close-created-session

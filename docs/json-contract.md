@@ -92,6 +92,7 @@ returns the installed action playbook as JSON.
 `browser-cli example get --id content_extraction_case`,
 `browser-cli example get --id browser_state_case`,
 `browser-cli example get --id navigation_flow_case`,
+`browser-cli example get --id file_upload_case`,
 `browser-cli example get --id interactive_targeting_case`, or
 `browser-cli example get --id page_diagnostics_case` returns an installed
 example case file or playbook as JSON.
@@ -143,8 +144,8 @@ creation steps so agents can avoid leaking sessions or consuming quota.
 The case file task workflow includes case command discovery, `case schema`
 inspection, action-specific schema lookup, `form_fill_case`,
 `content_extraction_case`, `browser_state_case`, `navigation_flow_case`,
-`interactive_targeting_case`, and `page_diagnostics_case` example discovery,
-optional page/form/content/state/navigation/interactive/diagnostic `case scaffold` generation, `scaffold_templates`,
+`file_upload_case`, `interactive_targeting_case`, and `page_diagnostics_case`
+example discovery, optional page/form/content/state/navigation/upload/interactive/diagnostic `case scaffold` generation, `scaffold_templates`,
 case validation, and
 `--close-created-session` case runs with `supported_actions`,
 `required_fields`, `next_commands`, `events_path`, `artifacts_dir`, `session`,

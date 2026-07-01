@@ -13,6 +13,7 @@ browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
 browser-cli case scaffold --template browser-state --output browser-state-case.yaml
 browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
@@ -22,7 +23,8 @@ Case files can use agent primitives and semantic actions such as `observe`, `act
 `fill`, `fill-label`, `click-role`,
 `wait-text`, `get-value-role`, `interactive-snapshot`,
 `accessibility-snapshot`, `go-back`, `go-forward`, `reload`,
-`console-snapshot`, and `network-snapshot`.
+`set-file-input`, `inline_files`, `submit`, `console-snapshot`, and
+`network-snapshot`.
 
 Validate all case files:
 
@@ -66,6 +68,12 @@ Run a navigation flow case:
 
 ```bash
 browser-cli case run --file examples/cases/navigation-flow.yaml --close-created-session
+```
+
+Run a file upload case:
+
+```bash
+browser-cli case run --file examples/cases/file-upload.yaml --close-created-session
 ```
 
 Run a page diagnostics case:

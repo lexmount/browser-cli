@@ -124,6 +124,21 @@ def test_navigation_flow_case_uses_navigation_actions() -> None:
     assert "action: eval" not in text
 
 
+def test_file_upload_case_uses_inline_file_upload_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "file-upload.yaml").read_text()
+
+    assert "name: file-upload" in text
+    assert "action: form-snapshot" in text
+    assert "action: set-file-input" in text
+    assert "inline_files:" in text
+    assert "lexmount-upload.txt" in text
+    assert "action: submit" in text
+    assert "action: wait-text" in text
+    assert "action: get-text" in text
+    assert "action: screenshot" in text
+    assert "./upload.txt" not in text
+
+
 def test_page_diagnostics_case_uses_console_and_network_actions() -> None:
     text = (REPO_ROOT / "examples" / "cases" / "page-diagnostics.yaml").read_text()
 
@@ -168,12 +183,14 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli example get --id content_extraction_case --metadata-only" in text
     assert "browser-cli example get --id browser_state_case --metadata-only" in text
     assert "browser-cli example get --id navigation_flow_case --metadata-only" in text
+    assert "browser-cli example get --id file_upload_case --metadata-only" in text
     assert "browser-cli case scaffold --template page-inspection" in text
     assert "browser-cli case scaffold --template agent-primitives" in text
     assert "browser-cli case scaffold --template form-fill" in text
     assert "browser-cli case scaffold --template content-extraction" in text
     assert "browser-cli case scaffold --template browser-state" in text
     assert "browser-cli case scaffold --template navigation-flow" in text
+    assert "browser-cli case scaffold --template file-upload" in text
     assert "browser-cli case scaffold --template interactive-targeting" in text
     assert "browser-cli case scaffold --template page-diagnostics" in text
     assert "browser-cli commands --workflow first_browser_task" in text
@@ -221,6 +238,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
     assert "browser-cli example get --id page_inspection_case --metadata-only" in text
     assert "browser-cli example get --id navigation_flow_case --metadata-only" in text
+    assert "browser-cli example get --id file_upload_case --metadata-only" in text
     assert (
         "browser-cli example get --id interactive_targeting_case --metadata-only"
         in text

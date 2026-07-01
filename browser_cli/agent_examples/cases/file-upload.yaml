@@ -1,0 +1,67 @@
+name: file-upload
+description: Build a tiny upload fixture, attach an inline file with set-file-input,
+  submit the form, and save evidence.
+close_created_session: true
+session:
+  create: true
+  browser_mode: light
+steps:
+- action: open-url
+  url: about:blank
+  wait_until: load
+- action: eval
+  expression: |-
+    () => {
+      document.body.innerHTML = `
+        <main>
+          <h1>File upload fixture</h1>
+          <form id="upload-form">
+            <label for="upload-file">Receipt file</label>
+            <input id="upload-file" name="receipt" type="file" />
+            <button type="submit">Upload</button>
+            <output id="upload-status" role="status" aria-live="polite">Waiting</output>
+          </form>
+        </main>
+      `;
+      const form = document.querySelector("#upload-form");
+      const input = document.querySelector("#upload-file");
+      const status = document.querySelector("#upload-status");
+      const fileNames = () => [...(input.files || [])].map((file) => file.name).join(", ");
+      input.addEventListener("change", () => {
+        status.textContent = "Selected: " + fileNames();
+      });
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const names = fileNames();
+        status.textContent = names ? "Uploaded: " + names : "No file uploaded";
+      });
+      return true;
+    }
+- action: form-snapshot
+  selector: form
+  max_nodes: 30
+- action: set-file-input
+  selector: '#upload-file'
+  inline_files:
+  - name: lexmount-upload.txt
+    type: text/plain
+    content: lexmount browser
+  expect:
+    set: true
+    file_count: 1
+- action: wait-text
+  selector: '#upload-status'
+  text: 'Selected: lexmount-upload.txt'
+  timeout_ms: 5000
+- action: submit
+  selector: '#upload-form'
+- action: wait-text
+  selector: '#upload-status'
+  text: 'Uploaded: lexmount-upload.txt'
+  timeout_ms: 5000
+- action: get-text
+  selector: '#upload-status'
+  expect:
+    text: 'Uploaded: lexmount-upload.txt'
+- action: screenshot
+  output: file-upload.png
