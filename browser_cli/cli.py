@@ -458,6 +458,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
     "agent-primitives",
     "form-fill",
+    "content-extraction",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -475,6 +476,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "persistent_context_playbook",
     "page_inspection_case",
     "agent_primitives_case",
+    "content_extraction_case",
     "page_diagnostics_case",
     "form_fill_case",
     "interactive_targeting_case",
@@ -705,11 +707,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_semantic_case_action",
         "inspect_agent_primitives_case_example",
         "inspect_form_case_example",
+        "inspect_content_extraction_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
         "scaffold_agent_primitives_case_file",
         "scaffold_form_case_file",
+        "scaffold_content_extraction_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -1731,6 +1735,35 @@ def _agent_examples() -> dict[str, Any]:
                 "action: screenshot",
             ],
         },
+        "content_extraction_case": {
+            "path": "examples/cases/content-extraction.yaml",
+            "content_command": "browser-cli example get --id content_extraction_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:content-extraction.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local content-extraction case that builds "
+                "a tiny page, extracts bounded text/link/table/list data, "
+                "verifies text, and saves artifacts."
+            ),
+            "related_workflows": ["case_file_task", "content_extraction"],
+            "load_when": [
+                "Creating a repeatable content extraction smoke test.",
+                "Needing a case file template for text, links, tables, lists, and bounded extraction.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: content-extraction",
+                "action: extract",
+                "action: text-snapshot",
+                "action: link-snapshot",
+                "action: table-snapshot",
+                "action: list-snapshot",
+                "action: get-text",
+            ],
+        },
         "form_fill_case": {
             "path": "examples/cases/form-fill.yaml",
             "content_command": "browser-cli example get --id form_fill_case",
@@ -2164,11 +2197,13 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case schema --action fill-label",
                 "browser-cli example get --id agent_primitives_case --metadata-only",
                 "browser-cli example get --id form_fill_case --metadata-only",
+                "browser-cli example get --id content_extraction_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                 "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
@@ -3447,6 +3482,16 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_content_extraction_case_example",
+                        "command": "browser-cli example get --id content_extraction_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "inspect_interactive_targeting_case_example",
                         "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
                         "read": [
@@ -3498,6 +3543,21 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "scaffold_form_case_file",
                         "command": "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_content_extraction_case_file",
+                        "command": "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -5801,6 +5861,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case schema --action extract",
                     "browser-cli case schema --action fill-label",
                     "browser-cli case scaffold --template agent-primitives --format json",
+                    "browser-cli case scaffold --template content-extraction --format json",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
                     "browser-cli case scaffold --template page-diagnostics --format json",
@@ -23482,6 +23543,7 @@ CASE_SCAFFOLD_TEMPLATES = (
     "page-inspection",
     "agent-primitives",
     "form-fill",
+    "content-extraction",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -23925,6 +23987,104 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                 {
                     "action": "screenshot",
                     "output": f"{stem}-filled.png",
+                },
+            ],
+        }
+
+    if template == "content-extraction":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny content fixture, extract bounded text/link/table/list "
+                "data, and save artifacts without custom scraping code."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Quarterly report</h1>
+      <p class="summary">Revenue grew to $84 with 3 active regions.</p>
+      <a href="/reports/q2">Read Q2 report</a>
+      <ul aria-label="Region highlights">
+        <li>North: $42</li>
+        <li>South: $28</li>
+        <li>West: $14</li>
+      </ul>
+      <table aria-label="Revenue by region">
+        <thead><tr><th>Region</th><th>Revenue</th></tr></thead>
+        <tbody>
+          <tr><td>North</td><td>$42</td></tr>
+          <tr><td>South</td><td>$28</td></tr>
+        </tbody>
+      </table>
+    </main>
+  `;
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "main",
+                    "text": "Quarterly report",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "extract",
+                    "surface": ["text", "links", "tables", "lists"],
+                    "selector": "main",
+                    "max_nodes": 80,
+                    "max_chars": 2000,
+                    "output": f"{stem}.json",
+                },
+                {
+                    "action": "text-snapshot",
+                    "selector": "main",
+                    "max_chars": 1000,
+                    "output": f"{stem}-text.json",
+                },
+                {
+                    "action": "link-snapshot",
+                    "selector": "main",
+                    "max_nodes": 20,
+                    "output": f"{stem}-links.json",
+                },
+                {
+                    "action": "table-snapshot",
+                    "selector": "table",
+                    "max_nodes": 20,
+                    "output": f"{stem}-table.json",
+                },
+                {
+                    "action": "list-snapshot",
+                    "selector": "ul",
+                    "max_nodes": 20,
+                    "output": f"{stem}-list.json",
+                },
+                {
+                    "action": "get-text",
+                    "selector": ".summary",
+                    "expect": {
+                        "text": "Revenue grew to $84 with 3 active regions.",
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
                 },
             ],
         }

@@ -73,6 +73,26 @@ def test_agent_primitives_case_uses_observe_act_extract() -> None:
     assert "action: click\n" not in text
 
 
+def test_content_extraction_case_uses_bounded_extraction_actions() -> None:
+    text = (
+        REPO_ROOT / "examples" / "cases" / "content-extraction.yaml"
+    ).read_text()
+
+    assert "name: content-extraction" in text
+    assert "action: extract" in text
+    assert "- text" in text
+    assert "- links" in text
+    assert "- tables" in text
+    assert "- lists" in text
+    assert "action: text-snapshot" in text
+    assert "action: link-snapshot" in text
+    assert "action: table-snapshot" in text
+    assert "action: list-snapshot" in text
+    assert "action: get-text" in text
+    assert "action: screenshot" in text
+    assert "action: click\n" not in text
+
+
 def test_page_diagnostics_case_uses_console_and_network_actions() -> None:
     text = (REPO_ROOT / "examples" / "cases" / "page-diagnostics.yaml").read_text()
 
@@ -114,9 +134,11 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
     assert "browser-cli example get --id agent_primitives_case --metadata-only" in text
     assert "browser-cli example get --id form_fill_case --metadata-only" in text
+    assert "browser-cli example get --id content_extraction_case --metadata-only" in text
     assert "browser-cli case scaffold --template page-inspection" in text
     assert "browser-cli case scaffold --template agent-primitives" in text
     assert "browser-cli case scaffold --template form-fill" in text
+    assert "browser-cli case scaffold --template content-extraction" in text
     assert "browser-cli case scaffold --template interactive-targeting" in text
     assert "browser-cli case scaffold --template page-diagnostics" in text
     assert "browser-cli commands --workflow first_browser_task" in text

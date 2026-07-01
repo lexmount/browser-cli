@@ -89,6 +89,7 @@ returns the installed action playbook as JSON.
 `browser-cli example get --id persistent_context_playbook`,
 `browser-cli example get --id page_inspection_case`,
 `browser-cli example get --id agent_primitives_case`,
+`browser-cli example get --id content_extraction_case`,
 `browser-cli example get --id interactive_targeting_case`, or
 `browser-cli example get --id page_diagnostics_case` returns an installed
 example case file or playbook as JSON.
@@ -138,9 +139,10 @@ The session recovery workflow includes active session listing, single-session
 inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.
 The case file task workflow includes case command discovery, `case schema`
-inspection, action-specific schema lookup, `form_fill_case` and
-`interactive_targeting_case` plus `page_diagnostics_case` example discovery,
-optional page/form/interactive/diagnostic `case scaffold` generation, `scaffold_templates`,
+inspection, action-specific schema lookup, `form_fill_case`,
+`content_extraction_case`, `interactive_targeting_case`, and
+`page_diagnostics_case` example discovery,
+optional page/form/content/interactive/diagnostic `case scaffold` generation, `scaffold_templates`,
 case validation, and
 `--close-created-session` case runs with `supported_actions`,
 `required_fields`, `next_commands`, `events_path`, `artifacts_dir`, `session`,

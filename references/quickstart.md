@@ -210,6 +210,7 @@ For repeatable tasks, inspect and run case files:
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
+browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml --close-created-session

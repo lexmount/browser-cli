@@ -10,12 +10,14 @@ browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
+browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
 
 Case files can use agent primitives and semantic actions such as `observe`, `act`,
-`extract`, `fill`, `fill-label`, `click-role`,
+`extract`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
+`fill`, `fill-label`, `click-role`,
 `wait-text`, `get-value-role`, `interactive-snapshot`,
 `accessibility-snapshot`, `console-snapshot`, and `network-snapshot`.
 
@@ -43,6 +45,12 @@ Run an interactive targeting case:
 
 ```bash
 browser-cli case run --file examples/cases/interactive-targeting.yaml --close-created-session
+```
+
+Run a content extraction case:
+
+```bash
+browser-cli case run --file examples/cases/content-extraction.yaml --close-created-session
 ```
 
 Run a page diagnostics case:

@@ -1,0 +1,70 @@
+name: content-extraction
+description: Build a tiny content fixture, extract bounded text/link/table/list data, and save artifacts without custom scraping code.
+close_created_session: true
+session:
+  create: true
+  browser_mode: null
+steps:
+- action: open-url
+  url: about:blank
+  wait_until: load
+- action: eval
+  expression: |
+    () => {
+      document.body.innerHTML = `
+        <main>
+          <h1>Quarterly report</h1>
+          <p class="summary">Revenue grew to $84 with 3 active regions.</p>
+          <a href="/reports/q2">Read Q2 report</a>
+          <ul aria-label="Region highlights">
+            <li>North: $42</li>
+            <li>South: $28</li>
+            <li>West: $14</li>
+          </ul>
+          <table aria-label="Revenue by region">
+            <thead><tr><th>Region</th><th>Revenue</th></tr></thead>
+            <tbody>
+              <tr><td>North</td><td>$42</td></tr>
+              <tr><td>South</td><td>$28</td></tr>
+            </tbody>
+          </table>
+        </main>
+      `;
+      return true;
+    }
+- action: wait-text
+  selector: main
+  text: Quarterly report
+  timeout_ms: 5000
+- action: extract
+  surface:
+  - text
+  - links
+  - tables
+  - lists
+  selector: main
+  max_nodes: 80
+  max_chars: 2000
+  output: content-extraction.json
+- action: text-snapshot
+  selector: main
+  max_chars: 1000
+  output: content-extraction-text.json
+- action: link-snapshot
+  selector: main
+  max_nodes: 20
+  output: content-extraction-links.json
+- action: table-snapshot
+  selector: table
+  max_nodes: 20
+  output: content-extraction-table.json
+- action: list-snapshot
+  selector: ul
+  max_nodes: 20
+  output: content-extraction-list.json
+- action: get-text
+  selector: .summary
+  expect:
+    text: Revenue grew to $84 with 3 active regions.
+- action: screenshot
+  output: content-extraction.png
