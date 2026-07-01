@@ -364,6 +364,7 @@ def test_skill_uses_first_browser_workflow_before_manual_session_steps() -> None
     assert "For repeatable smoke tests, demos, or regression checks" in normalized
     assert "browser-cli commands --workflow case_file_task" in normalized
     assert "browser-cli case schema" in normalized
+    assert "browser-cli example get --id agent_primitives_case" in normalized
     assert "browser-cli case scaffold --template page-inspection" in normalized
     assert "browser-cli case scaffold --template agent-primitives" in normalized
     assert "browser-cli case scaffold --template form-fill" in normalized
