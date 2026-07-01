@@ -12,6 +12,7 @@ browser-cli case scaffold --template agent-primitives --output agent-primitives-
 browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
 browser-cli case scaffold --template browser-state --output browser-state-case.yaml
+browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
@@ -20,7 +21,8 @@ Case files can use agent primitives and semantic actions such as `observe`, `act
 `extract`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
 `fill`, `fill-label`, `click-role`,
 `wait-text`, `get-value-role`, `interactive-snapshot`,
-`accessibility-snapshot`, `console-snapshot`, and `network-snapshot`.
+`accessibility-snapshot`, `go-back`, `go-forward`, `reload`,
+`console-snapshot`, and `network-snapshot`.
 
 Validate all case files:
 
@@ -58,6 +60,12 @@ Run a browser state case:
 
 ```bash
 browser-cli case run --file examples/cases/browser-state.yaml --close-created-session
+```
+
+Run a navigation flow case:
+
+```bash
+browser-cli case run --file examples/cases/navigation-flow.yaml --close-created-session
 ```
 
 Run a page diagnostics case:

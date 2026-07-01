@@ -460,6 +460,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "form-fill",
     "content-extraction",
     "browser-state",
+    "navigation-flow",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -479,6 +480,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "agent_primitives_case",
     "content_extraction_case",
     "browser_state_case",
+    "navigation_flow_case",
     "page_diagnostics_case",
     "form_fill_case",
     "interactive_targeting_case",
@@ -711,6 +713,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_form_case_example",
         "inspect_content_extraction_case_example",
         "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
@@ -718,6 +721,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "scaffold_form_case_file",
         "scaffold_content_extraction_case_file",
         "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -1799,6 +1803,38 @@ def _agent_examples() -> dict[str, Any]:
                 "action: cookie-delete",
             ],
         },
+        "navigation_flow_case": {
+            "path": "examples/cases/navigation-flow.yaml",
+            "content_command": "browser-cli example get --id navigation_flow_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:navigation-flow.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a navigation-flow case that opens a stable "
+                "page, asserts URL/title/load readiness, moves through browser "
+                "history, reloads, and saves evidence."
+            ),
+            "related_workflows": ["case_file_task", "navigation_flow"],
+            "load_when": [
+                "Creating a repeatable navigation or history smoke test.",
+                "Needing a case file template for URL, title, load-state, back, and forward assertions.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: navigation-flow",
+                "action: open-url",
+                "action: wait-load-state",
+                "action: wait-url",
+                "action: wait-title",
+                "action: go-back",
+                "action: go-forward",
+                "action: reload",
+                "action: page-info",
+                "action: screenshot",
+            ],
+        },
         "form_fill_case": {
             "path": "examples/cases/form-fill.yaml",
             "content_command": "browser-cli example get --id form_fill_case",
@@ -2234,6 +2270,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli example get --id form_fill_case --metadata-only",
                 "browser-cli example get --id content_extraction_case --metadata-only",
                 "browser-cli example get --id browser_state_case --metadata-only",
+                "browser-cli example get --id navigation_flow_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
@@ -2241,6 +2278,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
                 "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
                 "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
+                "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                 "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
@@ -3539,6 +3577,16 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_navigation_flow_case_example",
+                        "command": "browser-cli example get --id navigation_flow_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "inspect_interactive_targeting_case_example",
                         "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
                         "read": [
@@ -3620,6 +3668,21 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "scaffold_browser_state_case_file",
                         "command": "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_navigation_flow_case_file",
+                        "command": "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -5757,6 +5820,7 @@ def _doctor_case_scaffold_args(template: str) -> argparse.Namespace:
         name=None,
         url=None,
         selector=None,
+        title=None,
         text="lexmount browser",
         browser_mode="light",
         max_chars=2000,
@@ -5925,6 +5989,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case scaffold --template agent-primitives --format json",
                     "browser-cli case scaffold --template content-extraction --format json",
                     "browser-cli case scaffold --template browser-state --format json",
+                    "browser-cli case scaffold --template navigation-flow --format json",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
                     "browser-cli case scaffold --template page-diagnostics --format json",
@@ -23608,6 +23673,7 @@ CASE_SCAFFOLD_TEMPLATES = (
     "form-fill",
     "content-extraction",
     "browser-state",
+    "navigation-flow",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -23650,6 +23716,8 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "focus-role": ("role",),
     "frame-snapshot": tuple(),
     "form-snapshot": tuple(),
+    "go-back": tuple(),
+    "go-forward": tuple(),
     "get-attribute": ("selector", "name"),
     "get-attribute-role": ("role", "attribute"),
     "get-text": ("selector",),
@@ -23672,6 +23740,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "press-key": ("key",),
     "press-role": ("role", "key"),
     "query": ("selector",),
+    "reload": tuple(),
     "right-click": ("selector",),
     "right-click-role": ("role",),
     "scroll": tuple(),
@@ -24282,6 +24351,93 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
             ],
         }
 
+    if template == "navigation-flow":
+        base_url = (args.url or "https://example.com").split("#", 1)[0]
+        home_url = f"{base_url}#home"
+        details_url = f"{base_url}#details"
+        title = getattr(args, "title", None) or "Example Domain"
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Open a stable page, assert URL/title/load readiness, move "
+                "back and forward through history, reload, and save evidence."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": home_url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-load-state",
+                    "state": "complete",
+                    "timeout_ms": 10000,
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#home",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "wait-title",
+                    "title": title,
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "open-url",
+                    "url": details_url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#details",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "go-back",
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#home",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "go-forward",
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#details",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "reload",
+                },
+                {
+                    "action": "wait-load-state",
+                    "state": "complete",
+                    "timeout_ms": 10000,
+                },
+                {
+                    "action": "page-info",
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
     if template == "interactive-targeting":
         stem = _case_artifact_stem(name)
         return {
@@ -24595,6 +24751,8 @@ def _case_action_schema() -> dict[str, Any]:
             "max_nodes",
             "reveal_sensitive_values",
         ],
+        "go-back": [],
+        "go-forward": [],
         "get-attribute": [],
         "get-attribute-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "get-text": [],
@@ -24640,6 +24798,7 @@ def _case_action_schema() -> dict[str, Any]:
         "press-key": ["code", "alt_key", "ctrl_key", "meta_key", "shift_key"],
         "press-role": ["name", "exact", "case_sensitive"],
         "query": ["include_hidden", "max_nodes"],
+        "reload": [],
         "right-click": [],
         "right-click-role": ["name", "exact", "case_sensitive"],
         "scroll": ["selector", "x", "y", "behavior"],
@@ -24823,6 +24982,22 @@ def _case_action_schema() -> dict[str, Any]:
         "type": ["selector", "typed", "press_enter", "url"],
         "screenshot": ["path", "full_page", "url"],
         "eval": ["expression", "value", "url"],
+        "go-back": [
+            "action",
+            "navigation_requested",
+            "before_url",
+            "url",
+            "title",
+            "history_length",
+        ],
+        "go-forward": [
+            "action",
+            "navigation_requested",
+            "before_url",
+            "url",
+            "title",
+            "history_length",
+        ],
         "snapshot": ["url", "title", "html", "text"],
         "accessibility-snapshot": ["nodes", "node_count", "url", "title"],
         "blur": ["selector", "found", "blurred", "focused", "url"],
@@ -25301,6 +25476,14 @@ def _case_action_schema() -> dict[str, Any]:
             "truncated",
             "nodes",
             "url",
+        ],
+        "reload": [
+            "action",
+            "navigation_requested",
+            "reloaded",
+            "before_url",
+            "url",
+            "title",
         ],
         "right-click": [
             "found",
@@ -25846,6 +26029,8 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "get-text": {"action": "get-text", "selector": ".status"},
         "get-text-role": {"action": "get-text-role", "role": "alert", "name": "Saved"},
+        "go-back": {"action": "go-back"},
+        "go-forward": {"action": "go-forward"},
         "hover": {"action": "hover", "selector": ".menu-button"},
         "hover-role": {"action": "hover-role", "role": "button", "name": "Menu"},
         "inspect": {"action": "inspect", "selector": "button[type=submit]"},
@@ -25878,6 +26063,7 @@ def _case_action_schema() -> dict[str, Any]:
             "key": "Enter",
         },
         "query": {"action": "query", "selector": ".result", "max_nodes": 10},
+        "reload": {"action": "reload"},
         "right-click": {"action": "right-click", "selector": ".item"},
         "right-click-role": {
             "action": "right-click-role",
@@ -26515,6 +26701,12 @@ def _run_browser_cli_case_step(
     exact = _case_step_bool(step, "exact")
     case_sensitive = _case_step_bool(step, "case_sensitive")
 
+    if action == "go-back":
+        return _case_eval_expression(page, _history_expression("back"))
+    if action == "go-forward":
+        return _case_eval_expression(page, _history_expression("forward"))
+    if action == "reload":
+        return _case_eval_expression(page, _reload_expression())
     if action == "blur":
         return _case_eval_expression(page, _blur_expression(str(step["selector"])))
     if action == "blur-role":
@@ -29942,6 +30134,10 @@ def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--text",
         default="lexmount browser",
         help="Text used by the form-fill template.",
+    )
+    case_scaffold.add_argument(
+        "--title",
+        help="Expected title fragment for the navigation-flow template. Defaults to Example Domain.",
     )
     case_scaffold.add_argument(
         "--browser-mode",

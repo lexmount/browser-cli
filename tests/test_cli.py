@@ -370,6 +370,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser_state_management"
         in examples["browser_state_case"]["related_workflows"]
     )
+    assert examples["navigation_flow_case"]["format"] == "yaml"
+    assert "navigation_flow" in examples["navigation_flow_case"]["related_workflows"]
     assert examples["page_diagnostics_case"]["format"] == "yaml"
     assert "page_diagnostics" in examples["page_diagnostics_case"]["related_workflows"]
     assert examples["form_fill_case"]["package_resource"] == (
@@ -512,6 +514,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
@@ -529,6 +535,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert (
         "browser-cli example get --id browser_state_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id navigation_flow_case --metadata-only"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
@@ -1221,6 +1231,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "inspect_form_case_example",
         "inspect_content_extraction_case_example",
         "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
@@ -1228,6 +1239,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "scaffold_form_case_file",
         "scaffold_content_extraction_case_file",
         "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -1261,63 +1273,73 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "example.case_file" in case_steps[6]["read"]
     assert case_steps[7]["command"] == (
-        "browser-cli example get --id interactive_targeting_case --metadata-only"
+        "browser-cli example get --id navigation_flow_case --metadata-only"
     )
     assert "example.case_file" in case_steps[7]["read"]
     assert case_steps[8]["command"] == (
-        "browser-cli example get --id page_diagnostics_case --metadata-only"
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
     )
     assert "example.case_file" in case_steps[8]["read"]
     assert case_steps[9]["command"] == (
+        "browser-cli example get --id page_diagnostics_case --metadata-only"
+    )
+    assert "example.case_file" in case_steps[9]["read"]
+    assert case_steps[10]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert case_steps[9]["optional"] is True
-    assert case_steps[9]["success_condition"] == "valid=true and wrote_file=true"
-    assert "next_commands" in case_steps[9]["read"]
-    assert case_steps[10]["command"] == (
-        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
-    )
     assert case_steps[10]["optional"] is True
-    assert "case.steps" in case_steps[10]["read"]
-    assert "supported_actions" in case_steps[10]["read"]
+    assert case_steps[10]["success_condition"] == "valid=true and wrote_file=true"
+    assert "next_commands" in case_steps[10]["read"]
     assert case_steps[11]["command"] == (
-        "browser-cli case scaffold --template form-fill --output form-case.yaml"
+        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
     )
     assert case_steps[11]["optional"] is True
     assert "case.steps" in case_steps[11]["read"]
     assert "supported_actions" in case_steps[11]["read"]
     assert case_steps[12]["command"] == (
-        "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml"
+        "browser-cli case scaffold --template form-fill --output form-case.yaml"
     )
     assert case_steps[12]["optional"] is True
     assert "case.steps" in case_steps[12]["read"]
     assert "supported_actions" in case_steps[12]["read"]
     assert case_steps[13]["command"] == (
-        "browser-cli case scaffold --template browser-state --output browser-state-case.yaml"
+        "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml"
     )
     assert case_steps[13]["optional"] is True
     assert "case.steps" in case_steps[13]["read"]
     assert "supported_actions" in case_steps[13]["read"]
     assert case_steps[14]["command"] == (
-        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+        "browser-cli case scaffold --template browser-state --output browser-state-case.yaml"
     )
     assert case_steps[14]["optional"] is True
     assert "case.steps" in case_steps[14]["read"]
     assert "supported_actions" in case_steps[14]["read"]
     assert case_steps[15]["command"] == (
-        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
     )
     assert case_steps[15]["optional"] is True
     assert "case.steps" in case_steps[15]["read"]
     assert "supported_actions" in case_steps[15]["read"]
-    assert case_steps[16]["command"] == "browser-cli case validate --file <case.yaml>"
-    assert case_steps[16]["success_condition"] == "valid=true"
-    assert "errors" in case_steps[16]["read"]
+    assert case_steps[16]["command"] == (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+    )
+    assert case_steps[16]["optional"] is True
+    assert "case.steps" in case_steps[16]["read"]
+    assert "supported_actions" in case_steps[16]["read"]
     assert case_steps[17]["command"] == (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+    )
+    assert case_steps[17]["optional"] is True
+    assert "case.steps" in case_steps[17]["read"]
+    assert "supported_actions" in case_steps[17]["read"]
+    assert case_steps[18]["command"] == "browser-cli case validate --file <case.yaml>"
+    assert case_steps[18]["success_condition"] == "valid=true"
+    assert "errors" in case_steps[18]["read"]
+    assert case_steps[19]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "events_path" in case_steps[17]["read"]
-    assert "message" in case_steps[17]["on_failure_read"]
+    assert "events_path" in case_steps[19]["read"]
+    assert "message" in case_steps[19]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
     assert context_steps[0]["id"] == "inspect_persistent_context_playbook"
     assert context_steps[0]["command"] == (
@@ -2797,7 +2819,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "events_path"
-        in payload["agent_workflows"]["case_file_task"]["steps"][17]["read"]
+        in payload["agent_workflows"]["case_file_task"]["steps"][19]["read"]
     )
     assert (
         "selection_summary.recommended_next_action"
@@ -3538,7 +3560,7 @@ def test_example_list_returns_packaged_agent_examples(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 11
+    assert payload["example_count"] == 12
     assert sorted(payload["examples"]) == [
         "agent_playbook",
         "agent_primitives_case",
@@ -3547,6 +3569,7 @@ def test_example_list_returns_packaged_agent_examples(
         "content_extraction_case",
         "form_fill_case",
         "interactive_targeting_case",
+        "navigation_flow_case",
         "page_diagnostics_case",
         "page_inspection_case",
         "persistent_context_playbook",
@@ -3619,6 +3642,11 @@ def test_example_list_returns_packaged_agent_examples(
         "browser_state_management"
         in payload["examples"]["browser_state_case"]["related_workflows"]
     )
+    assert payload["examples"]["navigation_flow_case"]["format"] == "yaml"
+    assert (
+        "navigation_flow"
+        in payload["examples"]["navigation_flow_case"]["related_workflows"]
+    )
     assert payload["examples"]["form_fill_case"]["format"] == "yaml"
     assert payload["examples"]["interactive_targeting_case"]["format"] == "yaml"
     assert (
@@ -3635,7 +3663,7 @@ def test_example_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 11
+    assert payload["example_count"] == 12
     assert payload["examples"] == [
         "agent_playbook",
         "agent_primitives_case",
@@ -3644,6 +3672,7 @@ def test_example_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "content_extraction_case",
         "form_fill_case",
         "interactive_targeting_case",
+        "navigation_flow_case",
         "page_diagnostics_case",
         "page_inspection_case",
         "persistent_context_playbook",
@@ -3753,6 +3782,29 @@ def test_example_get_returns_browser_state_case_file(
     assert "action: cookie-get" in payload["content"]
     assert "action: storage-remove" in payload["content"]
     assert "action: cookie-delete" in payload["content"]
+
+
+def test_example_get_returns_navigation_flow_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "navigation_flow_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "navigation_flow_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: navigation-flow" in payload["content"]
+    assert "action: open-url" in payload["content"]
+    assert "action: wait-load-state" in payload["content"]
+    assert "action: wait-url" in payload["content"]
+    assert "action: wait-title" in payload["content"]
+    assert "action: go-back" in payload["content"]
+    assert "action: go-forward" in payload["content"]
+    assert "action: reload" in payload["content"]
+    assert "action: page-info" in payload["content"]
 
 
 def test_example_get_returns_page_diagnostics_case_file(
@@ -3867,6 +3919,7 @@ def test_example_get_fails_unknown_example_as_json(
         "content_extraction_case",
         "form_fill_case",
         "interactive_targeting_case",
+        "navigation_flow_case",
         "page_diagnostics_case",
         "page_inspection_case",
         "persistent_context_playbook",
@@ -3892,6 +3945,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "form-fill",
         "content-extraction",
         "browser-state",
+        "navigation-flow",
         "interactive-targeting",
         "page-diagnostics",
     ]
@@ -3941,6 +3995,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "get-text-role",
         "get-value",
         "get-value-role",
+        "go-back",
+        "go-forward",
         "hover",
         "hover-role",
         "inspect",
@@ -3958,6 +4014,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "press-key",
         "press-role",
         "query",
+        "reload",
         "right-click",
         "right-click-role",
         "screenshot",
@@ -4083,6 +4140,9 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["wait-title"] == ["title"]
     assert payload["required_fields"]["wait-url"] == ["url"]
+    assert payload["required_fields"]["reload"] == []
+    assert payload["required_fields"]["go-back"] == []
+    assert payload["required_fields"]["go-forward"] == []
     assert payload["required_fields"]["wait-role"] == ["role"]
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
@@ -4121,6 +4181,14 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "requested_url" in payload["actions"]["wait-url"]["result_fields"]
     assert "requested_title" in payload["actions"]["wait-title"]["result_fields"]
     assert "requested_state" in payload["actions"]["wait-load-state"]["result_fields"]
+    assert "reloaded" in payload["actions"]["reload"]["result_fields"]
+    assert "navigation_requested" in payload["actions"]["go-back"]["result_fields"]
+    assert "history_length" in payload["actions"]["go-forward"]["result_fields"]
+    assert payload["actions"]["reload"]["example_step"] == {"action": "reload"}
+    assert payload["actions"]["go-back"]["example_step"] == {"action": "go-back"}
+    assert payload["actions"]["go-forward"]["example_step"] == {
+        "action": "go-forward"
+    }
     assert "matched" in payload["actions"]["wait-state-role"]["result_fields"]
     assert "attribute_found" in payload["actions"]["wait-attribute"]["result_fields"]
     assert "requested_count" in payload["actions"]["wait-count"]["result_fields"]
@@ -4184,7 +4252,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 105,
+        "action_count": 108,
         "supported_actions": [
             "accessibility-snapshot",
             "act",
@@ -4231,6 +4299,8 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "get-text-role",
             "get-value",
             "get-value-role",
+            "go-back",
+            "go-forward",
             "hover",
             "hover-role",
             "inspect",
@@ -4248,6 +4318,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "press-key",
             "press-role",
             "query",
+            "reload",
             "right-click",
             "right-click-role",
             "screenshot",
@@ -4615,6 +4686,60 @@ def test_case_scaffold_writes_browser_state_case_file(
     result = validate_case_file(output)
     assert result.valid is True
     assert result.step_count == 18
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_navigation_flow_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "navigation-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "navigation-flow",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "navigation-flow"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][0]["url"] == "https://example.com#home"
+    assert payload["case"]["steps"][1]["action"] == "wait-load-state"
+    assert payload["case"]["steps"][2]["url"] == "#home"
+    assert payload["case"]["steps"][3]["action"] == "wait-title"
+    assert payload["case"]["steps"][4]["url"] == "https://example.com#details"
+    assert payload["case"]["steps"][6]["action"] == "go-back"
+    assert payload["case"]["steps"][8]["action"] == "go-forward"
+    assert payload["case"]["steps"][10]["action"] == "reload"
+    assert payload["case"]["steps"][12]["action"] == "page-info"
+    assert payload["case"]["steps"][13]["output"] == "navigation-flow.png"
+    content = output.read_text()
+    assert "name: navigation-flow" in content
+    assert "action: open-url" in content
+    assert "action: wait-load-state" in content
+    assert "action: wait-url" in content
+    assert "action: wait-title" in content
+    assert "action: go-back" in content
+    assert "action: go-forward" in content
+    assert "action: reload" in content
+    assert "action: page-info" in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 14
     assert payload["next_commands"] == [
         f"browser-cli case validate --file {str(output)}",
         f"browser-cli case run --file {str(output)} --close-created-session",
@@ -6027,6 +6152,7 @@ def test_commands_catalog_returns_case_file_task_workflow(
         "inspect_form_case_example",
         "inspect_content_extraction_case_example",
         "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
@@ -6034,6 +6160,7 @@ def test_commands_catalog_returns_case_file_task_workflow(
         "scaffold_form_case_file",
         "scaffold_content_extraction_case_file",
         "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -6066,55 +6193,64 @@ def test_commands_catalog_returns_case_file_task_workflow(
     )
     assert "example.case_file" in steps[6]["read"]
     assert steps[7]["command"] == (
-        "browser-cli example get --id interactive_targeting_case --metadata-only"
+        "browser-cli example get --id navigation_flow_case --metadata-only"
     )
     assert "example.case_file" in steps[7]["read"]
     assert steps[8]["command"] == (
-        "browser-cli example get --id page_diagnostics_case --metadata-only"
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
     )
     assert "example.case_file" in steps[8]["read"]
     assert steps[9]["command"] == (
+        "browser-cli example get --id page_diagnostics_case --metadata-only"
+    )
+    assert "example.case_file" in steps[9]["read"]
+    assert steps[10]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert steps[9]["optional"] is True
-    assert "next_commands" in steps[9]["read"]
-    assert steps[10]["command"] == (
-        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
-    )
     assert steps[10]["optional"] is True
-    assert "case.steps" in steps[10]["read"]
+    assert "next_commands" in steps[10]["read"]
     assert steps[11]["command"] == (
-        "browser-cli case scaffold --template form-fill --output form-case.yaml"
+        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
     )
     assert steps[11]["optional"] is True
     assert "case.steps" in steps[11]["read"]
     assert steps[12]["command"] == (
-        "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml"
+        "browser-cli case scaffold --template form-fill --output form-case.yaml"
     )
     assert steps[12]["optional"] is True
     assert "case.steps" in steps[12]["read"]
     assert steps[13]["command"] == (
-        "browser-cli case scaffold --template browser-state --output browser-state-case.yaml"
+        "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml"
     )
     assert steps[13]["optional"] is True
     assert "case.steps" in steps[13]["read"]
     assert steps[14]["command"] == (
-        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+        "browser-cli case scaffold --template browser-state --output browser-state-case.yaml"
     )
     assert steps[14]["optional"] is True
     assert "case.steps" in steps[14]["read"]
     assert steps[15]["command"] == (
-        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
     )
     assert steps[15]["optional"] is True
     assert "case.steps" in steps[15]["read"]
-    assert steps[16]["success_condition"] == "valid=true"
-    assert "step_count" in steps[16]["read"]
+    assert steps[16]["command"] == (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+    )
+    assert steps[16]["optional"] is True
+    assert "case.steps" in steps[16]["read"]
     assert steps[17]["command"] == (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+    )
+    assert steps[17]["optional"] is True
+    assert "case.steps" in steps[17]["read"]
+    assert steps[18]["success_condition"] == "valid=true"
+    assert "step_count" in steps[18]["read"]
+    assert steps[19]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "artifacts_dir" in steps[17]["read"]
-    assert "steps" in steps[17]["on_failure_read"]
+    assert "artifacts_dir" in steps[19]["read"]
+    assert "steps" in steps[19]["on_failure_read"]
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
         "browser-cli case schema --action observe"
@@ -6141,6 +6277,10 @@ def test_commands_catalog_returns_case_file_task_workflow(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli example get --id navigation_flow_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli example get --id interactive_targeting_case --metadata-only"
         in payload["agent_entrypoints"]["case_file_task"]
     )
@@ -6158,6 +6298,10 @@ def test_commands_catalog_returns_case_file_task_workflow(
     )
     assert (
         "browser-cli case scaffold --template form-fill --output form-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
@@ -6839,6 +6983,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "inspect_form_case_example",
         "inspect_content_extraction_case_example",
         "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
@@ -6846,6 +6991,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "scaffold_form_case_file",
         "scaffold_content_extraction_case_file",
         "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -7119,14 +7265,15 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 105
-    assert checks["case_schema"]["supported_action_count"] == 105
+    assert checks["case_schema"]["action_count"] == 108
+    assert checks["case_schema"]["supported_action_count"] == 108
     assert checks["case_schema"]["required_case_scaffold_templates"] == [
         "page-inspection",
         "agent-primitives",
         "form-fill",
         "content-extraction",
         "browser-state",
+        "navigation-flow",
         "interactive-targeting",
         "page-diagnostics",
     ]
@@ -7159,6 +7306,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "content-extraction",
         "form-fill",
         "interactive-targeting",
+        "navigation-flow",
         "page-diagnostics",
         "page-inspection",
     ]
@@ -7214,6 +7362,22 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "act",
         "wait-text",
         "get-text",
+        "screenshot",
+    ]
+    assert checked_scaffolds["navigation-flow"]["actions"] == [
+        "open-url",
+        "wait-load-state",
+        "wait-url",
+        "wait-title",
+        "open-url",
+        "wait-url",
+        "go-back",
+        "wait-url",
+        "go-forward",
+        "wait-url",
+        "reload",
+        "wait-load-state",
+        "page-info",
         "screenshot",
     ]
     assert checked_scaffolds["page-diagnostics"]["actions"] == [
@@ -7493,7 +7657,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert skill_positioning_reference["content_length"] > 1000
     assert skill_positioning_reference["missing_patterns"] == []
     assert checks["agent_examples"]["status"] == "pass"
-    assert checks["agent_examples"]["example_count"] == 11
+    assert checks["agent_examples"]["example_count"] == 12
     assert checks["agent_examples"]["required_examples"] == [
         "agent_playbook",
         "setup_verification_playbook",
@@ -7503,6 +7667,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "agent_primitives_case",
         "content_extraction_case",
         "browser_state_case",
+        "navigation_flow_case",
         "page_diagnostics_case",
         "form_fill_case",
         "interactive_targeting_case",
@@ -7544,6 +7709,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checked_examples["content_extraction_case"]["case_errors"] == []
     assert checked_examples["browser_state_case"]["case_valid"] is True
     assert checked_examples["browser_state_case"]["case_errors"] == []
+    assert checked_examples["navigation_flow_case"]["case_valid"] is True
+    assert checked_examples["navigation_flow_case"]["case_errors"] == []
     assert checked_examples["page_diagnostics_case"]["case_valid"] is True
     assert checked_examples["page_diagnostics_case"]["case_errors"] == []
     assert checked_examples["form_fill_case"]["case_valid"] is True
@@ -8070,6 +8237,7 @@ def test_doctor_warns_when_case_schema_misses_scaffold_templates(
         "form-fill",
         "content-extraction",
         "browser-state",
+        "navigation-flow",
         "interactive-targeting",
         "page-diagnostics",
     ]
@@ -8088,6 +8256,10 @@ def test_doctor_warns_when_case_schema_misses_scaffold_templates(
     )
     assert (
         "browser-cli case scaffold --template browser-state --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template navigation-flow --format json"
         in payload["repair_plan"]["commands"]
     )
     assert (
@@ -8154,6 +8326,7 @@ def test_doctor_warns_when_case_scaffold_template_is_invalid(
     assert checked_scaffolds["agent-primitives"]["valid"] is True
     assert checked_scaffolds["content-extraction"]["valid"] is True
     assert checked_scaffolds["browser-state"]["valid"] is True
+    assert checked_scaffolds["navigation-flow"]["valid"] is True
     assert checked_scaffolds["interactive-targeting"]["valid"] is True
     assert checked_scaffolds["page-diagnostics"]["valid"] is True
     assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
@@ -8167,6 +8340,10 @@ def test_doctor_warns_when_case_scaffold_template_is_invalid(
     )
     assert (
         "browser-cli case scaffold --template browser-state --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template navigation-flow --format json"
         in payload["repair_plan"]["commands"]
     )
     assert (
@@ -8666,6 +8843,7 @@ steps:
         "agent_primitives_case",
         "content_extraction_case",
         "browser_state_case",
+        "navigation_flow_case",
         "page_diagnostics_case",
         "form_fill_case",
         "interactive_targeting_case",
@@ -8964,12 +9142,14 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "inspect_form_case_example",
                 "inspect_content_extraction_case_example",
                 "inspect_browser_state_case_example",
+                "inspect_navigation_flow_case_example",
                 "inspect_interactive_targeting_case_example",
                 "inspect_page_diagnostics_case_example",
                 "scaffold_agent_primitives_case_file",
                 "scaffold_form_case_file",
                 "scaffold_content_extraction_case_file",
                 "scaffold_browser_state_case_file",
+                "scaffold_navigation_flow_case_file",
                 "scaffold_interactive_targeting_case_file",
                 "scaffold_page_diagnostics_case_file",
             ],
