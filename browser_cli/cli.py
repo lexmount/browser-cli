@@ -462,6 +462,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "browser-state",
     "navigation-flow",
     "file-upload",
+    "checkout-flow",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -483,6 +484,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "browser_state_case",
     "navigation_flow_case",
     "file_upload_case",
+    "checkout_flow_case",
     "page_diagnostics_case",
     "form_fill_case",
     "interactive_targeting_case",
@@ -717,6 +719,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_browser_state_case_example",
         "inspect_navigation_flow_case_example",
         "inspect_file_upload_case_example",
+        "inspect_checkout_flow_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
@@ -726,6 +729,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "scaffold_browser_state_case_file",
         "scaffold_navigation_flow_case_file",
         "scaffold_file_upload_case_file",
+        "scaffold_checkout_flow_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -1869,6 +1873,37 @@ def _agent_examples() -> dict[str, Any]:
                 "action: screenshot",
             ],
         },
+        "checkout_flow_case": {
+            "path": "examples/cases/checkout-flow.yaml",
+            "content_command": "browser-cli example get --id checkout_flow_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:checkout-flow.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a self-contained multi-step checkout case "
+                "that fills shipping details, advances to payment, submits the "
+                "order, and saves evidence with first-class browser-cli actions."
+            ),
+            "related_workflows": ["case_file_task", "form_interaction"],
+            "load_when": [
+                "Creating a repeatable multi-step checkout or complex form smoke test.",
+                "Needing a case file template for semantic fill/select/check/click flows.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: checkout-flow",
+                "action: form-snapshot",
+                "action: fill-label",
+                "action: select-label",
+                "action: check-label",
+                "action: wait-state-role",
+                "action: click-role",
+                "Order confirmed",
+                "action: screenshot",
+            ],
+        },
         "form_fill_case": {
             "path": "examples/cases/form-fill.yaml",
             "content_command": "browser-cli example get --id form_fill_case",
@@ -2306,6 +2341,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli example get --id browser_state_case --metadata-only",
                 "browser-cli example get --id navigation_flow_case --metadata-only",
                 "browser-cli example get --id file_upload_case --metadata-only",
+                "browser-cli example get --id checkout_flow_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
@@ -2315,6 +2351,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
                 "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml",
                 "browser-cli case scaffold --template file-upload --output upload-case.yaml",
+                "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                 "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
@@ -3633,6 +3670,16 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_checkout_flow_case_example",
+                        "command": "browser-cli example get --id checkout_flow_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "inspect_interactive_targeting_case_example",
                         "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
                         "read": [
@@ -3744,6 +3791,21 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "scaffold_file_upload_case_file",
                         "command": "browser-cli case scaffold --template file-upload --output upload-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_checkout_flow_case_file",
+                        "command": "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -6052,6 +6114,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case scaffold --template browser-state --format json",
                     "browser-cli case scaffold --template navigation-flow --format json",
                     "browser-cli case scaffold --template file-upload --format json",
+                    "browser-cli case scaffold --template checkout-flow --format json",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
                     "browser-cli case scaffold --template page-diagnostics --format json",
@@ -23842,6 +23905,7 @@ CASE_SCAFFOLD_TEMPLATES = (
     "browser-state",
     "navigation-flow",
     "file-upload",
+    "checkout-flow",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -24738,6 +24802,167 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                     "selector": "#upload-status",
                     "expect": {
                         "text": uploaded_text,
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "checkout-flow":
+        stem = _case_artifact_stem(name)
+        confirmed_text = "Order confirmed for Ada Lovelace via Express"
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny multi-step checkout fixture, fill shipping and "
+                "payment details with semantic actions, submit, and save evidence."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Checkout fixture</h1>
+      <p id="checkout-status" role="status" aria-live="polite">Step 1: Shipping</p>
+      <form id="checkout-form">
+        <fieldset id="shipping-step">
+          <legend>Shipping</legend>
+          <label for="full-name">Full name</label>
+          <input id="full-name" name="fullName" autocomplete="name" />
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" />
+          <label for="delivery-speed">Delivery speed</label>
+          <select id="delivery-speed" name="deliverySpeed">
+            <option>Standard</option>
+            <option>Express</option>
+          </select>
+          <label for="gift-wrap">
+            <input id="gift-wrap" name="giftWrap" type="checkbox" />
+            Gift wrap
+          </label>
+          <button type="button" aria-label="Next: payment" disabled>Next: payment</button>
+        </fieldset>
+        <fieldset id="payment-step" hidden>
+          <legend>Payment</legend>
+          <label for="card-number">Card number</label>
+          <input id="card-number" name="cardNumber" inputmode="numeric" />
+          <label for="security-code">Security code</label>
+          <input id="security-code" name="securityCode" inputmode="numeric" />
+          <button type="submit">Place order</button>
+        </fieldset>
+      </form>
+    </main>
+  `;
+  const form = document.querySelector("#checkout-form");
+  const status = document.querySelector("#checkout-status");
+  const shipping = document.querySelector("#shipping-step");
+  const payment = document.querySelector("#payment-step");
+  const fullName = document.querySelector("#full-name");
+  const email = document.querySelector("#email");
+  const delivery = document.querySelector("#delivery-speed");
+  const next = document.querySelector("[aria-label='Next: payment']");
+  const updateNext = () => {
+    next.disabled = !(fullName.value.trim() && email.value.trim());
+  };
+  [fullName, email].forEach((input) => input.addEventListener("input", updateNext));
+  updateNext();
+  next.addEventListener("click", () => {
+    shipping.hidden = true;
+    payment.hidden = false;
+    status.textContent = "Step 2: Payment";
+    document.querySelector("#card-number").focus();
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    status.textContent = `Order confirmed for ${fullName.value} via ${delivery.value}`;
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "form-snapshot",
+                    "selector": "#checkout-form",
+                    "max_nodes": 80,
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Full name",
+                    "text": "Ada Lovelace",
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Email",
+                    "text": "ada@example.test",
+                },
+                {
+                    "action": "select-label",
+                    "label": "Delivery speed",
+                    "option_label": "Express",
+                },
+                {
+                    "action": "check-label",
+                    "label": "Gift wrap",
+                },
+                {
+                    "action": "wait-state-role",
+                    "role": "button",
+                    "name": "Next: payment",
+                    "state": "enabled",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "click-role",
+                    "role": "button",
+                    "name": "Next: payment",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#checkout-status",
+                    "text": "Step 2: Payment",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Card number",
+                    "text": "4242424242424242",
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Security code",
+                    "text": "123",
+                },
+                {
+                    "action": "click-role",
+                    "role": "button",
+                    "name": "Place order",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#checkout-status",
+                    "text": confirmed_text,
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#checkout-status",
+                    "expect": {
+                        "text": confirmed_text,
                     },
                 },
                 {

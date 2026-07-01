@@ -139,6 +139,7 @@ def test_commands_catalog_output_contract(
     assert payload["agent_examples"]["form_fill_case"]["format"] == "yaml"
     assert payload["agent_examples"]["navigation_flow_case"]["format"] == "yaml"
     assert payload["agent_examples"]["file_upload_case"]["format"] == "yaml"
+    assert payload["agent_examples"]["checkout_flow_case"]["format"] == "yaml"
     assert payload["agent_examples"]["interactive_targeting_case"]["format"] == "yaml"
     assert all(command["group"] == "action" for command in payload["commands"])
     open_url = next(
@@ -244,6 +245,7 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`browser-cli example get --id browser_state_case`" in text
     assert "`browser-cli example get --id navigation_flow_case`" in text
     assert "`browser-cli example get --id file_upload_case`" in text
+    assert "`browser-cli example get --id checkout_flow_case`" in text
     assert "`browser-cli example get --id interactive_targeting_case`" in text
     assert "`browser-cli example get --id page_diagnostics_case`" in text
     assert "`scaffold_templates`" in text
@@ -277,7 +279,10 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`supported_actions`" in text
     assert "`required_fields`" in text
     assert "`case scaffold`" in text
-    assert "page/form/content/state/navigation/upload/interactive/diagnostic" in text
+    assert (
+        "page/form/content/state/navigation/upload/checkout/interactive/diagnostic"
+        in text
+    )
     assert "`next_commands`" in text
     assert "`events_path`" in text
     assert "`artifacts_dir`" in text
