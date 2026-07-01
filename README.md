@@ -154,6 +154,7 @@ CLI for you:
    browser-cli example get --id agent_primitives_case
    browser-cli example get --id form_fill_case
    browser-cli example get --id content_extraction_case
+   browser-cli example get --id browser_state_case
    browser-cli example get --id interactive_targeting_case
    browser-cli example get --id page_diagnostics_case
    browser-cli case schema
@@ -164,6 +165,7 @@ CLI for you:
    browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
    browser-cli case scaffold --template form-fill --output form-case.yaml
    browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+   browser-cli case scaffold --template browser-state --output browser-state-case.yaml
    browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
    browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 8. 运行下面命令查看本机是否已经配置凭证：
@@ -444,12 +446,14 @@ browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id page_inspection_case --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
@@ -931,12 +935,13 @@ playbook and case-file examples, readable with `browser-cli example list` and
 `browser-cli example get --id page_inspection_case`,
 `browser-cli example get --id form_fill_case`,
 `browser-cli example get --id content_extraction_case`,
+`browser-cli example get --id browser_state_case`,
 `browser-cli example get --id interactive_targeting_case`, or
 `browser-cli example get --id page_diagnostics_case`. Use `--workflows-only` when
 you only need the structured setup,
 Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page
 task, persistent login state, session recovery, case file task, form interaction,
-interactive targeting, content extraction, state waits, and page diagnostics workflows, or
+interactive targeting, content extraction, browser state management, state waits, and page diagnostics workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,
@@ -1055,11 +1060,13 @@ browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id form_fill_case --metadata-only
 browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 browser-cli session create

@@ -1,0 +1,79 @@
+name: browser-state
+description: Open a stable origin, set browser storage and cookie state, verify reads,
+  then clean up without custom state scripts.
+close_created_session: true
+session:
+  create: true
+  browser_mode: light
+steps:
+- action: open-url
+  url: https://example.com
+  wait_until: load
+- action: wait-selector
+  selector: body
+  state: visible
+- action: page-info
+- action: storage-set
+  area: local
+  key: lexmount.localState
+  value: enabled
+- action: wait-storage
+  area: local
+  key: lexmount.localState
+  value: enabled
+  match: exact
+  timeout_ms: 5000
+- action: storage-get
+  area: local
+  key: lexmount.localState
+  expect:
+    value: enabled
+- action: storage-set
+  area: session
+  key: lexmount.sessionState
+  value: ready
+- action: wait-storage
+  area: session
+  key: lexmount.sessionState
+  value: ready
+  match: exact
+  timeout_ms: 5000
+- action: storage-get
+  area: session
+  key: lexmount.sessionState
+  expect:
+    value: ready
+- action: cookie-set
+  name: lexmount_state
+  value: enabled
+  path: /
+  same_site: lax
+- action: wait-cookie
+  name: lexmount_state
+  value: enabled
+  match: exact
+  timeout_ms: 5000
+- action: cookie-get
+  name: lexmount_state
+  expect:
+    value: enabled
+- action: storage-remove
+  area: local
+  key: lexmount.localState
+- action: wait-storage
+  area: local
+  key: lexmount.localState
+  state: absent
+  timeout_ms: 5000
+- action: storage-remove
+  area: session
+  key: lexmount.sessionState
+- action: cookie-delete
+  name: lexmount_state
+  path: /
+- action: wait-cookie
+  name: lexmount_state
+  state: absent
+  timeout_ms: 5000
+- action: screenshot
+  output: browser-state.png

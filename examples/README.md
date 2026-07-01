@@ -11,6 +11,7 @@ browser-cli case scaffold --template page-inspection --url https://example.com -
 browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
@@ -51,6 +52,12 @@ Run a content extraction case:
 
 ```bash
 browser-cli case run --file examples/cases/content-extraction.yaml --close-created-session
+```
+
+Run a browser state case:
+
+```bash
+browser-cli case run --file examples/cases/browser-state.yaml --close-created-session
 ```
 
 Run a page diagnostics case:

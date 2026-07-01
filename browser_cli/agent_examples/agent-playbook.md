@@ -58,12 +58,14 @@ browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id page_inspection_case --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 browser-cli auth status
@@ -418,12 +420,14 @@ browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id form_fill_case --metadata-only
 browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
 browser-cli example get --id interactive_targeting_case --metadata-only
 browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
 browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
 browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 browser-cli case validate --file examples/cases/page-inspection.yaml

@@ -93,6 +93,21 @@ def test_content_extraction_case_uses_bounded_extraction_actions() -> None:
     assert "action: click\n" not in text
 
 
+def test_browser_state_case_uses_storage_and_cookie_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "browser-state.yaml").read_text()
+
+    assert "name: browser-state" in text
+    assert "action: storage-set" in text
+    assert "action: wait-storage" in text
+    assert "action: storage-get" in text
+    assert "action: cookie-set" in text
+    assert "action: wait-cookie" in text
+    assert "action: cookie-get" in text
+    assert "action: storage-remove" in text
+    assert "action: cookie-delete" in text
+    assert "action: eval" not in text
+
+
 def test_page_diagnostics_case_uses_console_and_network_actions() -> None:
     text = (REPO_ROOT / "examples" / "cases" / "page-diagnostics.yaml").read_text()
 
@@ -135,10 +150,12 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli example get --id agent_primitives_case --metadata-only" in text
     assert "browser-cli example get --id form_fill_case --metadata-only" in text
     assert "browser-cli example get --id content_extraction_case --metadata-only" in text
+    assert "browser-cli example get --id browser_state_case --metadata-only" in text
     assert "browser-cli case scaffold --template page-inspection" in text
     assert "browser-cli case scaffold --template agent-primitives" in text
     assert "browser-cli case scaffold --template form-fill" in text
     assert "browser-cli case scaffold --template content-extraction" in text
+    assert "browser-cli case scaffold --template browser-state" in text
     assert "browser-cli case scaffold --template interactive-targeting" in text
     assert "browser-cli case scaffold --template page-diagnostics" in text
     assert "browser-cli commands --workflow first_browser_task" in text

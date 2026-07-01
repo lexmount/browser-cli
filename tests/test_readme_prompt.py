@@ -81,6 +81,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli example get --id agent_primitives_case" in prompt
     assert "browser-cli example get --id form_fill_case" in prompt
     assert "browser-cli example get --id content_extraction_case" in prompt
+    assert "browser-cli example get --id browser_state_case" in prompt
     assert "browser-cli example get --id interactive_targeting_case" in prompt
     assert "browser-cli example get --id page_diagnostics_case" in prompt
     assert "browser-cli case schema" in prompt
@@ -91,6 +92,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli case scaffold --template agent-primitives" in prompt
     assert "browser-cli case scaffold --template form-fill" in prompt
     assert "browser-cli case scaffold --template content-extraction" in prompt
+    assert "browser-cli case scaffold --template browser-state" in prompt
     assert "browser-cli case scaffold --template interactive-targeting" in prompt
     assert "browser-cli case scaffold --template page-diagnostics" in prompt
     assert "不要先写自定义 Playwright/JS" in prompt

@@ -19,7 +19,7 @@ Codex browser surface.
 ## Supported Today
 
 - Setup and readiness: version JSON, command discovery, packaged references,
-  packaged setup-verification, page-inspection, agent-primitives, content-extraction, page-diagnostics, form-fill, and interactive-targeting examples,
+  packaged setup-verification, page-inspection, agent-primitives, content-extraction, browser-state, page-diagnostics, form-fill, and interactive-targeting examples,
   auth status/login/export-env helpers, scoped-token metadata inspection,
   Connect from Codex site requirements, and doctor checks.
 - Session lifecycle: create, list, inspect, keep alive, close, recover from
@@ -148,8 +148,8 @@ What `browser-cli` should copy from that shape:
    bearer-token browser runtime support must land across the site, API, SDK, and
    gateway.
 7. Case files do not yet cover enough real agent tasks. Add examples for login
-   reuse, multi-step checkout/forms, file upload, navigation with assertions,
-   and page diagnostics so agents run artifacts instead of inventing scripts.
+   reuse, multi-step checkout/forms, file upload, and navigation with assertions
+   so agents run artifacts instead of inventing scripts.
 8. Skill docs are improving, but agents still need clearer first-step guidance:
    read `skill_positioning` and `usable_status`, run `auth status`, run
    `doctor`, then choose a workflow and action guide before custom code.

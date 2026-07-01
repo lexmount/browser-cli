@@ -459,6 +459,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "agent-primitives",
     "form-fill",
     "content-extraction",
+    "browser-state",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -477,6 +478,7 @@ DOCTOR_REQUIRED_EXAMPLES = (
     "page_inspection_case",
     "agent_primitives_case",
     "content_extraction_case",
+    "browser_state_case",
     "page_diagnostics_case",
     "form_fill_case",
     "interactive_targeting_case",
@@ -708,12 +710,14 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_agent_primitives_case_example",
         "inspect_form_case_example",
         "inspect_content_extraction_case_example",
+        "inspect_browser_state_case_example",
         "inspect_interactive_targeting_case_example",
         "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
         "scaffold_agent_primitives_case_file",
         "scaffold_form_case_file",
         "scaffold_content_extraction_case_file",
+        "scaffold_browser_state_case_file",
         "scaffold_interactive_targeting_case_file",
         "scaffold_page_diagnostics_case_file",
         "validate_case_file",
@@ -1764,6 +1768,37 @@ def _agent_examples() -> dict[str, Any]:
                 "action: get-text",
             ],
         },
+        "browser_state_case": {
+            "path": "examples/cases/browser-state.yaml",
+            "content_command": "browser-cli example get --id browser_state_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:browser-state.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a browser-state case that opens a stable "
+                "origin, sets local/session storage and a cookie, waits for "
+                "state, verifies reads, and cleans up."
+            ),
+            "related_workflows": ["case_file_task", "browser_state_management"],
+            "load_when": [
+                "Creating a repeatable browser state setup or cleanup smoke test.",
+                "Needing a case file template for storage and cookie assertions.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: browser-state",
+                "action: storage-set",
+                "action: wait-storage",
+                "action: storage-get",
+                "action: cookie-set",
+                "action: wait-cookie",
+                "action: cookie-get",
+                "action: storage-remove",
+                "action: cookie-delete",
+            ],
+        },
         "form_fill_case": {
             "path": "examples/cases/form-fill.yaml",
             "content_command": "browser-cli example get --id form_fill_case",
@@ -2198,12 +2233,14 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli example get --id agent_primitives_case --metadata-only",
                 "browser-cli example get --id form_fill_case --metadata-only",
                 "browser-cli example get --id content_extraction_case --metadata-only",
+                "browser-cli example get --id browser_state_case --metadata-only",
                 "browser-cli example get --id interactive_targeting_case --metadata-only",
                 "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
                 "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
                 "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
+                "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
                 "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
                 "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
@@ -3492,6 +3529,16 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_browser_state_case_example",
+                        "command": "browser-cli example get --id browser_state_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "inspect_interactive_targeting_case_example",
                         "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
                         "read": [
@@ -3558,6 +3605,21 @@ def _command_catalog() -> dict[str, Any]:
                     {
                         "id": "scaffold_content_extraction_case_file",
                         "command": "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_browser_state_case_file",
+                        "command": "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -5862,6 +5924,7 @@ def _doctor_case_schema_check() -> dict[str, Any]:
                     "browser-cli case schema --action fill-label",
                     "browser-cli case scaffold --template agent-primitives --format json",
                     "browser-cli case scaffold --template content-extraction --format json",
+                    "browser-cli case scaffold --template browser-state --format json",
                     "browser-cli case schema --action network-snapshot",
                     "browser-cli case scaffold --template interactive-targeting --format json",
                     "browser-cli case scaffold --template page-diagnostics --format json",
@@ -23544,6 +23607,7 @@ CASE_SCAFFOLD_TEMPLATES = (
     "agent-primitives",
     "form-fill",
     "content-extraction",
+    "browser-state",
     "interactive-targeting",
     "page-diagnostics",
 )
@@ -24081,6 +24145,135 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                     "expect": {
                         "text": "Revenue grew to $84 with 3 active regions.",
                     },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "browser-state":
+        url = args.url or "https://example.com"
+        selector = args.selector or "body"
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Open a stable origin, set browser storage and cookie state, "
+                "verify reads, then clean up without custom state scripts."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-selector",
+                    "selector": selector,
+                    "state": "visible",
+                },
+                {
+                    "action": "page-info",
+                },
+                {
+                    "action": "storage-set",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "value": "enabled",
+                },
+                {
+                    "action": "wait-storage",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "value": "enabled",
+                    "match": "exact",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "storage-get",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "expect": {
+                        "value": "enabled",
+                    },
+                },
+                {
+                    "action": "storage-set",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                    "value": "ready",
+                },
+                {
+                    "action": "wait-storage",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                    "value": "ready",
+                    "match": "exact",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "storage-get",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                    "expect": {
+                        "value": "ready",
+                    },
+                },
+                {
+                    "action": "cookie-set",
+                    "name": "lexmount_state",
+                    "value": "enabled",
+                    "path": "/",
+                    "same_site": "lax",
+                },
+                {
+                    "action": "wait-cookie",
+                    "name": "lexmount_state",
+                    "value": "enabled",
+                    "match": "exact",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "cookie-get",
+                    "name": "lexmount_state",
+                    "expect": {
+                        "value": "enabled",
+                    },
+                },
+                {
+                    "action": "storage-remove",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                },
+                {
+                    "action": "wait-storage",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "state": "absent",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "storage-remove",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                },
+                {
+                    "action": "cookie-delete",
+                    "name": "lexmount_state",
+                    "path": "/",
+                },
+                {
+                    "action": "wait-cookie",
+                    "name": "lexmount_state",
+                    "state": "absent",
+                    "timeout_ms": 5000,
                 },
                 {
                     "action": "screenshot",
