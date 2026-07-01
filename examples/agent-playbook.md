@@ -17,6 +17,8 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
+browser-cli commands --workflow agent_browser_primitives
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow form_interaction
 browser-cli commands --workflow file_upload
@@ -51,9 +53,27 @@ browser-cli reference list
 browser-cli reference get --id usable_status --metadata-only
 browser-cli reference get --id usable_status
 browser-cli example list
+browser-cli example get --id auth_lifecycle_playbook --metadata-only
+browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id page_inspection_case --metadata-only
+browser-cli example get --id agent_primitives_case --metadata-only
+browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
+browser-cli example get --id navigation_flow_case --metadata-only
+browser-cli example get --id file_upload_case --metadata-only
+browser-cli example get --id checkout_flow_case --metadata-only
+browser-cli example get --id interactive_targeting_case --metadata-only
+browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
+browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
+browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
+browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
+browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 browser-cli auth status
 browser-cli auth connect-requirements
 browser-cli auth login
@@ -151,9 +171,14 @@ Use a temporary session and close it when finished:
 
 ```bash
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
+browser-cli commands --workflow agent_browser_primitives
 browser-cli commands --workflow one_off_page_task
 browser-cli session create --browser-mode light
 browser-cli action open-url --session-id <session_id> --url <url>
+browser-cli action observe --session-id <session_id> --surface interactive --surface text
+browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
 browser-cli action snapshot --session-id <session_id>
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
 browser-cli session close --session-id <session_id>
@@ -169,6 +194,7 @@ For forms, read the dedicated workflow before choosing fields:
 browser-cli commands --workflow form_interaction
 browser-cli action guide --task form_interaction
 browser-cli action form-snapshot --session-id <session_id> --selector form
+browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action clear-role --session-id <session_id> --role textbox --name "Email"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
@@ -206,6 +232,8 @@ writing page-specific JavaScript:
 ```bash
 browser-cli commands --workflow content_extraction
 browser-cli action guide --task content_extraction
+browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
+browser-cli action extract --session-id <session_id> --surface all --selector main
 browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80
 browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000
 browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80
@@ -390,17 +418,37 @@ Use case files when the task is repeatable or should leave artifacts:
 ```bash
 browser-cli commands --workflow case_file_task
 browser-cli case schema
+browser-cli case schema --action observe
+browser-cli case schema --action act
+browser-cli case schema --action extract
 browser-cli case schema --action fill-label
+browser-cli example get --id persistent_context_playbook --metadata-only
+browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id form_fill_case --metadata-only
+browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
+browser-cli example get --id navigation_flow_case --metadata-only
+browser-cli example get --id file_upload_case --metadata-only
+browser-cli example get --id checkout_flow_case --metadata-only
+browser-cli example get --id interactive_targeting_case --metadata-only
+browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
+browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
+browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
+browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
+browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 browser-cli case validate --file examples/cases/page-inspection.yaml
 browser-cli case run --file examples/cases/page-inspection.yaml --close-created-session
 ```
 
 Case files are good for smoke tests, regression checks, and demos because they
 produce structured JSON summaries and event logs. `case schema` includes
-semantic form and targeting steps such as `fill`, `fill-label`, `click-label`, `click-role`,
+agent primitives and semantic form/targeting steps such as `observe`, `act`, `extract`, `fill`, `fill-label`, `click-label`, `click-role`,
 `wait-text`, `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `interactive-snapshot`,
@@ -432,6 +480,7 @@ Prefer built-in actions over writing JavaScript:
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-title --session-id <session_id> --title <title-or-fragment>
 browser-cli action wait-selector --session-id <session_id> --selector <selector>
+browser-cli action act --session-id <session_id> --kind click --role button --name Submit
 browser-cli action click --session-id <session_id> --selector <selector>
 browser-cli action type --session-id <session_id> --selector <selector> --text <text>
 browser-cli action page-info --session-id <session_id>
@@ -450,7 +499,7 @@ options, checking boxes, hovering, double-clicking, right-clicking, drag/drop, p
 active/global shortcut keys.
 
 Prefer `browser-cli commands --workflow interactive_targeting` and semantic
-actions such as `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
+actions such as `act`, `wait-role`, `wait-state-role`, `get-attribute-role`, `wait-attribute-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `click-label`, `click-role`, `click-text`,
 `fill-label`, `fill-role`, `focus-role`, `clear-role`, `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`, `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`, `double-click-role`, `right-click-role`, `drag-role-to-role`, `drag-to`, `scroll-into-view-role`, `interactive-snapshot`, and
 `accessibility-snapshot` before writing page-specific JavaScript.
 

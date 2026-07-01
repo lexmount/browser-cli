@@ -8,12 +8,24 @@ Generate a starter case file:
 ```bash
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
+browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
+browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
+browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
+browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
 
-Case files can use semantic actions such as `fill`, `fill-label`, `click-role`,
-`wait-text`, `get-value-role`, `interactive-snapshot`, and
-`accessibility-snapshot`.
+Case files can use agent primitives and semantic actions such as `observe`, `act`,
+`extract`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`,
+`fill`, `fill-label`, `click-role`,
+`wait-text`, `get-value-role`, `interactive-snapshot`,
+`accessibility-snapshot`, `go-back`, `go-forward`, `reload`,
+`set-file-input`, `inline_files`, `select-label`, `check-label`,
+`wait-state-role`, `submit`, `console-snapshot`, and `network-snapshot`.
 
 Validate all case files:
 
@@ -33,6 +45,48 @@ Run a page inspection case:
 
 ```bash
 browser-cli case run --file examples/cases/page-inspection.yaml --close-created-session
+```
+
+Run an interactive targeting case:
+
+```bash
+browser-cli case run --file examples/cases/interactive-targeting.yaml --close-created-session
+```
+
+Run a content extraction case:
+
+```bash
+browser-cli case run --file examples/cases/content-extraction.yaml --close-created-session
+```
+
+Run a browser state case:
+
+```bash
+browser-cli case run --file examples/cases/browser-state.yaml --close-created-session
+```
+
+Run a navigation flow case:
+
+```bash
+browser-cli case run --file examples/cases/navigation-flow.yaml --close-created-session
+```
+
+Run a file upload case:
+
+```bash
+browser-cli case run --file examples/cases/file-upload.yaml --close-created-session
+```
+
+Run a multi-step checkout case:
+
+```bash
+browser-cli case run --file examples/cases/checkout-flow.yaml --close-created-session
+```
+
+Run a page diagnostics case:
+
+```bash
+browser-cli case run --file examples/cases/page-diagnostics.yaml --close-created-session
 ```
 
 Case runs create browser artifacts under `/tmp/lexmount-runs` unless

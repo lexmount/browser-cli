@@ -4,6 +4,9 @@ from pathlib import Path
 
 
 SKILL_MD = Path(__file__).resolve().parents[1] / "SKILL.md"
+PACKAGED_SKILL_MD = (
+    Path(__file__).resolve().parents[1] / "browser_cli" / "agent_skill" / "SKILL.md"
+)
 ACTION_PLAYBOOK = (
     Path(__file__).resolve().parents[1] / "references" / "action-playbook.md"
 )
@@ -31,6 +34,22 @@ PACKAGED_SKILL_POSITIONING = (
     / "agent_references"
     / "skill-positioning.md"
 )
+QUICKSTART = Path(__file__).resolve().parents[1] / "references" / "quickstart.md"
+PACKAGED_QUICKSTART = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "quickstart.md"
+)
+CONNECT_FROM_CODEX = (
+    Path(__file__).resolve().parents[1] / "references" / "connect-from-codex.md"
+)
+PACKAGED_CONNECT_FROM_CODEX = (
+    Path(__file__).resolve().parents[1]
+    / "browser_cli"
+    / "agent_references"
+    / "connect-from-codex.md"
+)
 
 
 def _normalized_skill_text() -> str:
@@ -56,6 +75,7 @@ def test_skill_routes_action_details_to_reference() -> None:
     )
     assert "Read that reference when selecting between semantic actions" in normalized
     assert "structured `result` fields" in normalized
+    assert "`scaffold_templates`" in normalized
     assert "Action command examples" in action_text
     assert "Common task recipes" in action_text
     assert "Target Contract" in ACTION_PLAYBOOK.read_text()
@@ -66,12 +86,24 @@ def test_packaged_action_playbook_matches_skill_reference() -> None:
     assert PACKAGED_ACTION_PLAYBOOK.read_text() == ACTION_PLAYBOOK.read_text()
 
 
+def test_packaged_skill_md_matches_root_skill() -> None:
+    assert PACKAGED_SKILL_MD.read_text() == SKILL_MD.read_text()
+
+
 def test_packaged_usable_status_matches_skill_reference() -> None:
     assert PACKAGED_USABLE_STATUS.read_text() == USABLE_STATUS.read_text()
 
 
 def test_packaged_skill_positioning_matches_skill_reference() -> None:
     assert PACKAGED_SKILL_POSITIONING.read_text() == SKILL_POSITIONING.read_text()
+
+
+def test_packaged_quickstart_matches_skill_reference() -> None:
+    assert PACKAGED_QUICKSTART.read_text() == QUICKSTART.read_text()
+
+
+def test_packaged_connect_from_codex_matches_skill_reference() -> None:
+    assert PACKAGED_CONNECT_FROM_CODEX.read_text() == CONNECT_FROM_CODEX.read_text()
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:
@@ -288,6 +320,7 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "`available` can be reused" in normalized
     assert "`locked` means busy" in normalized
     assert "`unavailable` needs a different context" in normalized
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in normalized
     assert "browser-cli context pick --metadata-json" in normalized
     assert "browser-cli context status --context-id <context_id>" in normalized
     assert "candidates include `locked: true`" in normalized
@@ -320,20 +353,23 @@ def test_skill_uses_json_argument_errors_for_command_repairs() -> None:
     assert "do not parse stderr" in normalized
 
 
-def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
+def test_skill_uses_first_browser_workflow_before_manual_session_steps() -> None:
     normalized = _normalized_skill_text()
 
     assert "If an existing session is stale, inactive" in normalized
     assert "browser-cli commands --workflow session_recovery" in normalized
     assert "`sessions`, `session.status`, `final_status`" in normalized
-    assert "For a one-off task" in normalized
-    assert "browser-cli commands --workflow one_off_page_task" in normalized
+    assert "For a first browser task" in normalized
+    assert "browser-cli commands --workflow first_browser_task" in normalized
     assert "Then follow the returned steps" in normalized
     assert "For repeatable smoke tests, demos, or regression checks" in normalized
     assert "browser-cli commands --workflow case_file_task" in normalized
     assert "browser-cli case schema" in normalized
+    assert "browser-cli example get --id agent_primitives_case" in normalized
     assert "browser-cli case scaffold --template page-inspection" in normalized
+    assert "browser-cli case scaffold --template agent-primitives" in normalized
     assert "browser-cli case scaffold --template form-fill" in normalized
+    assert "browser-cli case scaffold --template interactive-targeting" in normalized
     assert "`supported_actions`, `required_fields`" in normalized
     assert "`page-info`, `wait-url`, `wait-title`, `wait-load-state`" in normalized
     assert (
@@ -370,6 +406,8 @@ def test_skill_uses_one_off_workflow_before_manual_session_steps() -> None:
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
+    assert "browser-cli action act --session-id <session_id>" in normalized
+    assert "browser-cli action extract --session-id <session_id>" in normalized
     assert "For browser state setup or cleanup" in normalized
     assert "browser-cli commands --workflow browser_state_management" in normalized
     assert "browser-cli action guide --task browser_state_management" in normalized

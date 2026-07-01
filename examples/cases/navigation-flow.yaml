@@ -1,0 +1,46 @@
+name: navigation-flow
+description: Open a stable page, assert URL/title/load readiness, move back and forward
+  through history, reload, and save evidence.
+close_created_session: true
+session:
+  create: true
+  browser_mode: light
+steps:
+- action: open-url
+  url: https://example.com#home
+  wait_until: load
+- action: wait-load-state
+  state: complete
+  timeout_ms: 10000
+- action: wait-url
+  url: '#home'
+  match: contains
+  timeout_ms: 5000
+- action: wait-title
+  title: Example Domain
+  match: contains
+  timeout_ms: 5000
+- action: open-url
+  url: https://example.com#details
+  wait_until: load
+- action: wait-url
+  url: '#details'
+  match: contains
+  timeout_ms: 5000
+- action: go-back
+- action: wait-url
+  url: '#home'
+  match: contains
+  timeout_ms: 5000
+- action: go-forward
+- action: wait-url
+  url: '#details'
+  match: contains
+  timeout_ms: 5000
+- action: reload
+- action: wait-load-state
+  state: complete
+  timeout_ms: 10000
+- action: page-info
+- action: screenshot
+  output: navigation-flow.png

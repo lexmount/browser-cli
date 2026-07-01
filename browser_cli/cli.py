@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import mimetypes
 import os
@@ -18,7 +19,7 @@ from datetime import datetime, timezone
 from importlib import resources as importlib_resources
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, Iterable, NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -73,6 +74,8 @@ AGENT_USABLE_STATUS_METADATA_COMMAND = (
     "browser-cli reference get --id usable_status --metadata-only"
 )
 AGENT_USABLE_STATUS_COMMAND = "browser-cli reference get --id usable_status"
+CODEX_HOME_ENV = "CODEX_HOME"
+DEFAULT_CODEX_SKILL_DIRECTORY_NAME = "lexmount-browser"
 DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
     "usable",
     "unusable_exports",
@@ -84,6 +87,29 @@ DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
     "safety",
     "setup_block",
     "verification",
+)
+DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS = (
+    "recommended_flow",
+    "login_url",
+    "connect_from_codex_url",
+    "connect_from_codex_available",
+    "open_command",
+    "open_url",
+    "install_command",
+    "setup_blocks",
+    "copyable_commands",
+    "local_env",
+    "requested_scopes",
+    "requested_scope_details",
+    "requested_expires_in",
+    "verification",
+    "secret_policy",
+)
+DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS = (
+    "install",
+    "open_connect",
+    "local_env",
+    "verify",
 )
 DOCTOR_REQUIRED_CONNECT_CAPABILITIES = (
     "project_id_display",
@@ -112,6 +138,31 @@ DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH = (
     "api_accepts_bearer_token",
     "browser_gateway_accepts_bearer_token",
 )
+DOCTOR_REQUIRED_DEVICE_CODE_FIELDS = (
+    "available",
+    "reason",
+    "verification_uri",
+    "connect_from_codex_url",
+    "project_id",
+    "project_id_source",
+    "requested_scopes",
+    "requested_scope_details",
+    "requested_expires_in",
+    "required_endpoints",
+    "required_browser_site_support",
+)
+DOCTOR_REQUIRED_DEVICE_CODE_ENDPOINTS = (
+    "POST /api/auth/device/code",
+    "POST /api/auth/device/token",
+)
+DOCTOR_REQUIRED_DEVICE_CODE_BROWSER_SITE_SUPPORT = (
+    "Show user_code approval UI on /connect/codex.",
+    "Issue scoped, project-bound, short-lived access tokens.",
+    "Issue refresh tokens with revoke and expiration metadata.",
+    "Expose token refresh and revoke endpoints for browser-cli.",
+    "Enable browser runtime bearer-token authentication.",
+)
+DOCTOR_REQUIRED_DEVICE_CODE_SITE_CAPABILITIES = ("device_code_oauth",)
 DEFAULT_FILE_INPUT_MAX_BYTES = 10 * 1024 * 1024
 DEVICE_TOKEN_CREDENTIALS_FILE_ENV = "LEXMOUNT_BROWSER_CREDENTIALS_FILE"
 DEVICE_CODE_BASE_URL_ENV = "LEXMOUNT_BROWSER_DEVICE_CODE_BASE_URL"
@@ -139,6 +190,8 @@ DOCTOR_REQUIRED_COMMANDS = (
     "reference.get",
     "example.list",
     "example.get",
+    "skill.status",
+    "skill.install",
     "version",
     "doctor",
     "case.schema",
@@ -155,6 +208,9 @@ DOCTOR_REQUIRED_COMMANDS = (
     "session.create",
     "session.close",
     "action.guide",
+    "action.observe",
+    "action.extract",
+    "action.act",
     "action.open-url",
     "action.wait-selector",
     "action.click",
@@ -265,6 +321,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.wait-console",
 )
 DOCTOR_REQUIRED_CASE_ACTIONS = (
+    "act",
     "accessibility-snapshot",
     "blur",
     "blur-role",
@@ -295,6 +352,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "eval",
     "exists",
     "exists-role",
+    "extract",
     "fill",
     "fill-label",
     "fill-role",
@@ -316,6 +374,7 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "link-snapshot",
     "list-snapshot",
     "network-snapshot",
+    "observe",
     "open-url",
     "outline-snapshot",
     "page-info",
@@ -368,11 +427,67 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "wait-value",
     "wait-value-role",
 )
-DOCTOR_REQUIRED_REFERENCES = ("action_playbook", "usable_status", "skill_positioning")
+OBSERVE_SURFACE_CHOICES = (
+    "interactive",
+    "accessibility",
+    "text",
+    "links",
+    "forms",
+    "outline",
+)
+EXTRACT_SURFACE_CHOICES = (
+    "outline",
+    "text",
+    "links",
+    "tables",
+    "lists",
+    "accessibility",
+)
+ACT_KIND_CHOICES = (
+    "click",
+    "fill",
+    "select",
+    "check",
+    "uncheck",
+    "hover",
+    "press",
+    "scroll-into-view",
+    "scroll",
+)
+DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
+    "page-inspection",
+    "agent-primitives",
+    "form-fill",
+    "content-extraction",
+    "browser-state",
+    "navigation-flow",
+    "file-upload",
+    "checkout-flow",
+    "interactive-targeting",
+    "page-diagnostics",
+)
+DOCTOR_REQUIRED_REFERENCES = (
+    "action_playbook",
+    "connect_from_codex",
+    "quickstart",
+    "usable_status",
+    "skill_positioning",
+)
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
+    "setup_verification_playbook",
+    "auth_lifecycle_playbook",
+    "persistent_context_playbook",
     "page_inspection_case",
+    "agent_primitives_case",
+    "content_extraction_case",
+    "browser_state_case",
+    "navigation_flow_case",
+    "file_upload_case",
+    "checkout_flow_case",
+    "page_diagnostics_case",
     "form_fill_case",
+    "interactive_targeting_case",
 )
 DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "$browser-cli",
@@ -382,6 +497,8 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "device_code_auth",
     "scoped_token_lifecycle",
     "session_recovery",
+    "first_browser_task",
+    "agent_browser_primitives",
     "case_file_task",
     "form_interaction",
     "interactive_targeting",
@@ -390,9 +507,16 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "page_diagnostics",
     "workflow read arrays",
     "required_runtime_auth",
+    "connect_from_codex",
+    "quickstart",
     "reference get",
+    "setup_verification_playbook",
+    "auth_lifecycle_playbook",
     "example get",
     "action guide",
+    "action observe",
+    "action act",
+    "action extract",
     "click-label",
     "fill before custom JavaScript",
     "custom JavaScript",
@@ -407,6 +531,16 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "JSON output",
     "secrets out of chat",
 )
+DOCTOR_REQUIRED_SKILL_PATTERNS = (
+    "Use When",
+    "Supported Operations",
+    "browser-cli reference get --id quickstart",
+    "browser-cli action observe --session-id <session_id>",
+    "browser-cli action act --session-id <session_id>",
+    "browser-cli action extract --session-id <session_id>",
+    "browser-cli doctor --json",
+    "Write custom Playwright only when the CLI cannot express the task",
+)
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
     "connect_from_codex_site_requirements",
@@ -414,6 +548,8 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "device_code_auth",
     "scoped_token_lifecycle",
     "session_recovery",
+    "first_browser_task",
+    "agent_browser_primitives",
     "one_off_page_task",
     "navigation_flow",
     "link_navigation",
@@ -432,10 +568,67 @@ DOCTOR_REQUIRED_WORKFLOWS = (
     "state_waits",
     "page_diagnostics",
 )
+DOCTOR_REQUIRED_AGENT_ENTRYPOINTS = (
+    "setup",
+    "connect_from_codex_site_requirements",
+    "connect_from_codex_auth",
+    "device_code_auth",
+    "scoped_token_lifecycle",
+    "session_recovery",
+    "first_browser_task",
+    "agent_browser_primitives",
+    "one_off_page_task",
+    "navigation_flow",
+    "link_navigation",
+    "case_file_task",
+    "persistent_login_state",
+    "browser_state_management",
+    "form_interaction",
+    "file_upload",
+    "dialog_frame_handling",
+    "interactive_targeting",
+    "mouse_interaction",
+    "visual_capture",
+    "semantic_waits",
+    "menu_keyboard_flow",
+    "content_extraction",
+    "state_waits",
+    "page_diagnostics",
+)
+DOCTOR_REQUIRED_ACTION_GUIDE_TASKS = (
+    "browser_state_management",
+    "content_extraction",
+    "dialog_frame_handling",
+    "file_upload",
+    "form_interaction",
+    "interactive_targeting",
+    "link_navigation",
+    "menu_keyboard_flow",
+    "mouse_interaction",
+    "navigation_flow",
+    "page_diagnostics",
+    "semantic_waits",
+    "state_waits",
+    "visual_capture",
+)
+DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS = (
+    "purpose",
+    "related_workflows",
+    "when_to_use",
+    "selection_order",
+    "inspect_commands",
+    "preferred_commands",
+    "fallback_commands",
+    "verify_commands",
+    "read_fields",
+    "custom_js_boundary",
+)
 DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "setup_and_verify": (
         "inspect_skill_positioning",
+        "inspect_quickstart",
         "inspect_usable_status",
+        "skill_status",
         "auth_status",
         "doctor",
         "smoke_session",
@@ -448,6 +641,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "doctor",
     ),
     "connect_from_codex_site_requirements": (
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -476,6 +670,24 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "close_stale_session",
         "create_replacement_session",
     ),
+    "first_browser_task": (
+        "check_readiness",
+        "create_session",
+        "open_url",
+        "inspect_page",
+        "inspect_targets",
+        "choose_first_action",
+        "verify_or_capture",
+        "close_session",
+    ),
+    "agent_browser_primitives": (
+        "inspect_action_surface",
+        "observe_page",
+        "choose_primitive",
+        "act_semantically",
+        "extract_content",
+        "verify_result",
+    ),
     "one_off_page_task": (
         "create_session",
         "open_url",
@@ -501,13 +713,30 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_case_commands",
         "inspect_case_schema",
         "inspect_semantic_case_action",
+        "inspect_agent_primitives_case_example",
         "inspect_form_case_example",
+        "inspect_content_extraction_case_example",
+        "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
+        "inspect_file_upload_case_example",
+        "inspect_checkout_flow_case_example",
+        "inspect_interactive_targeting_case_example",
+        "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
+        "scaffold_agent_primitives_case_file",
         "scaffold_form_case_file",
+        "scaffold_content_extraction_case_file",
+        "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
+        "scaffold_file_upload_case_file",
+        "scaffold_checkout_flow_case_file",
+        "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ),
     "persistent_login_state": (
+        "inspect_persistent_context_playbook",
         "dry_run_context_pick",
         "inspect_context_status",
         "create_session_with_context",
@@ -1051,6 +1280,8 @@ def _agent_references() -> dict[str, Any]:
                 "state_waits",
                 "content_extraction",
                 "browser_state_management",
+                "first_browser_task",
+                "agent_browser_primitives",
                 "one_off_page_task",
                 "navigation_flow",
                 "link_navigation",
@@ -1079,6 +1310,97 @@ def _agent_references() -> dict[str, Any]:
                 "Target Contract",
             ],
         },
+        "connect_from_codex": {
+            "path": "references/connect-from-codex.md",
+            "content_command": "browser-cli reference get --id connect_from_codex",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:connect-from-codex.md",
+            "format": "markdown",
+            "purpose": (
+                "Guide browser.lexmount.cn implementation for Connect from Codex, "
+                "scoped agent keys, doctor verification, context reuse UX, and "
+                "device-code/OAuth authorization."
+            ),
+            "load_when": [
+                "Explaining what browser.lexmount.cn must implement for agent authorization.",
+                "Planning /connect/codex page sections, scoped keys, or copyable setup blocks.",
+                "Coordinating device-code/OAuth, refresh, revoke, or runtime bearer-token support.",
+                "Mapping doctor repair output to browser-site UI and troubleshooting guidance.",
+            ],
+            "related_workflows": [
+                "connect_from_codex_site_requirements",
+                "connect_from_codex_auth",
+                "device_code_auth",
+                "scoped_token_lifecycle",
+                "persistent_login_state",
+                "setup_and_verify",
+            ],
+            "covers": [
+                "browser.lexmount.cn page requirements",
+                "scoped agent API keys",
+                "local CLI contract",
+                "implementation checklist JSON",
+                "device-code/OAuth flow",
+                "doctor integration",
+                "security requirements",
+            ],
+            "grep_patterns": [
+                "Goals",
+                "Page",
+                "Scoped Agent API Keys",
+                "Local CLI Contract",
+                "Implementation Checklist JSON",
+                "Device-Code/OAuth Flow",
+                "Doctor Integration",
+                "Security Requirements",
+            ],
+        },
+        "quickstart": {
+            "path": "references/quickstart.md",
+            "content_command": "browser-cli reference get --id quickstart",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:quickstart.md",
+            "format": "markdown",
+            "purpose": (
+                "Follow the shortest safe install, credential, doctor, first "
+                "browser task, persistent context, and command-discovery path."
+            ),
+            "load_when": [
+                "Starting from a fresh browser-cli install.",
+                "Guiding a user from install to the first remote-browser task.",
+                "Deciding which doctor fields prove browser work is ready.",
+                "Choosing between temporary sessions and persistent login contexts.",
+            ],
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_auth",
+                "first_browser_task",
+                "agent_browser_primitives",
+                "one_off_page_task",
+                "persistent_login_state",
+                "interactive_targeting",
+                "form_interaction",
+                "content_extraction",
+                "page_diagnostics",
+            ],
+            "covers": [
+                "mainline install command",
+                "manual env credential setup",
+                "doctor readiness fields",
+                "first browser task",
+                "persistent login context reuse",
+                "agent command discovery",
+            ],
+            "grep_patterns": [
+                "Install",
+                "Configure Credentials",
+                "Verify Readiness",
+                "First Browser Task",
+                "Persistent Login State",
+                "Agent Discovery",
+                "Current Limits",
+            ],
+        },
         "usable_status": {
             "path": "references/usable-status.md",
             "content_command": "browser-cli reference get --id usable_status",
@@ -1102,6 +1424,8 @@ def _agent_references() -> dict[str, Any]:
                 "device_code_auth",
                 "scoped_token_lifecycle",
                 "session_recovery",
+                "first_browser_task",
+                "agent_browser_primitives",
                 "one_off_page_task",
             ],
             "covers": [
@@ -1126,17 +1450,19 @@ def _agent_references() -> dict[str, Any]:
             "format": "markdown",
             "purpose": (
                 "Explain when agents should use browser-cli, what operations it "
-                "supports, and how its gaps compare with Browserbase MCP."
+                "supports, and how its gaps compare with Browserbase Skills."
             ),
             "load_when": [
                 "Evaluating browser-cli as a Codex Skill.",
                 "Explaining supported operations or when to choose this Skill.",
                 "Comparing browser-cli with another cloud-browser agent interface.",
-                "Planning product gaps such as hosted MCP, act/observe/extract, or Connect from Codex.",
+                "Planning product gaps such as plugin packaging, hosted MCP, act/observe/extract, or Connect from Codex.",
             ],
             "related_workflows": [
                 "setup_and_verify",
                 "connect_from_codex_site_requirements",
+                "first_browser_task",
+                "agent_browser_primitives",
                 "one_off_page_task",
                 "case_file_task",
                 "persistent_login_state",
@@ -1147,14 +1473,14 @@ def _agent_references() -> dict[str, Any]:
             "covers": [
                 "Skill use cases",
                 "supported operation map",
-                "Browserbase MCP comparison",
+                "Browserbase Skills comparison",
                 "current product gaps",
                 "browser.lexmount.cn onboarding direction",
             ],
             "grep_patterns": [
                 "Primary Use Case",
                 "Supported Today",
-                "Comparison: Browserbase MCP Server",
+                "Comparison: Browserbase Skills",
                 "Defects To Fix Next",
             ],
         },
@@ -1165,13 +1491,7 @@ def _read_agent_reference_content(reference_id: str) -> str:
     reference = _agent_references().get(reference_id)
     if reference is None:
         raise KeyError(reference_id)
-    package_resource = str(reference["package_resource"])
-    package, resource_name = package_resource.split(":", 1)
-    return (
-        importlib_resources.files(package)
-        .joinpath(resource_name)
-        .read_text(encoding="utf-8")
-    )
+    return _read_package_resource_text(str(reference["package_resource"]))
 
 
 def _agent_examples() -> dict[str, Any]:
@@ -1190,6 +1510,8 @@ def _agent_examples() -> dict[str, Any]:
                 "setup_and_verify",
                 "connect_from_codex_auth",
                 "session_recovery",
+                "first_browser_task",
+                "agent_browser_primitives",
                 "case_file_task",
                 "browser_state_management",
                 "navigation_flow",
@@ -1219,6 +1541,124 @@ def _agent_examples() -> dict[str, Any]:
                 "browser-cli case scaffold",
             ],
         },
+        "setup_verification_playbook": {
+            "path": "examples/setup-verification-playbook.md",
+            "content_command": (
+                "browser-cli example get --id setup_verification_playbook"
+            ),
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples:setup-verification-playbook.md"
+            ),
+            "format": "markdown",
+            "purpose": (
+                "Show a safe setup, auth, doctor, smoke-session, and repair "
+                "workflow before an agent creates browser sessions."
+            ),
+            "related_workflows": [
+                "setup_and_verify",
+                "connect_from_codex_auth",
+                "connect_from_codex_site_requirements",
+                "device_code_auth",
+                "scoped_token_lifecycle",
+                "first_browser_task",
+                "one_off_page_task",
+                "persistent_login_state",
+            ],
+            "load_when": [
+                "Installing or validating browser-cli for the first time.",
+                "Repairing missing credentials, PATH, API connectivity, or doctor warnings.",
+                "Explaining secret-safe setup without asking for API keys in chat.",
+            ],
+            "grep_patterns": [
+                "Inspect The Installed CLI",
+                "Check Auth Without Revealing Secrets",
+                "Guide Manual Env Setup",
+                "Handle Device-Code Requests",
+                "Verify Readiness",
+                "browser-cli auth login --device-code",
+                "browser-cli doctor --json",
+                "browser-cli doctor --smoke-session",
+                "repair_plan.commands",
+            ],
+        },
+        "auth_lifecycle_playbook": {
+            "path": "examples/auth-lifecycle-playbook.md",
+            "content_command": (
+                "browser-cli example get --id auth_lifecycle_playbook"
+            ),
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples:auth-lifecycle-playbook.md"
+            ),
+            "format": "markdown",
+            "purpose": (
+                "Show how an agent should guide Connect from Codex auth, "
+                "device-code fallback, safe export-env handling, scoped token "
+                "refresh/logout, doctor verification, and browser.lexmount.cn "
+                "site requirements without exposing secrets."
+            ),
+            "related_workflows": [
+                "connect_from_codex_auth",
+                "connect_from_codex_site_requirements",
+                "device_code_auth",
+                "scoped_token_lifecycle",
+                "setup_and_verify",
+            ],
+            "load_when": [
+                "Guiding a user from browser.lexmount.cn authorization to local browser-cli readiness.",
+                "Explaining scoped token refresh, revoke, or runtime-auth limitations.",
+                "Reviewing what browser.lexmount.cn must expose for Connect from Codex.",
+            ],
+            "grep_patterns": [
+                "Auth Lifecycle Playbook",
+                "Choose A Secret-Safe Login Path",
+                "Handle Device-Code Login",
+                "Export Local Env Commands Safely",
+                "Refresh Or Remove Saved Tokens",
+                "browser.lexmount.cn Requirements",
+                "runtime_auth.usable=false",
+                "safe_to_paste_in_chat",
+            ],
+        },
+        "persistent_context_playbook": {
+            "path": "examples/persistent-context-playbook.md",
+            "content_command": (
+                "browser-cli example get --id persistent_context_playbook"
+            ),
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples:persistent-context-playbook.md"
+            ),
+            "format": "markdown",
+            "purpose": (
+                "Show how an agent should dry-run context selection, interpret "
+                "available/locked/unavailable reuse state, create read-write or "
+                "read-only sessions, and clean up temporary sessions without "
+                "losing persistent login state."
+            ),
+            "related_workflows": [
+                "persistent_login_state",
+                "setup_and_verify",
+                "first_browser_task",
+                "browser_state_management",
+            ],
+            "load_when": [
+                "Reusing login state, cookies, or storage across browser sessions.",
+                "Explaining locked or unavailable persistent contexts before creating a session.",
+                "Choosing read_write versus read_only context mode.",
+            ],
+            "grep_patterns": [
+                "Persistent Context Playbook",
+                "Dry-Run Context Selection",
+                "availability=available",
+                "availability=locked",
+                "metadata_values_redacted",
+                "context_reuse.selected",
+                "context-mode read_write",
+                "context-mode read_only",
+            ],
+        },
         "page_inspection_case": {
             "path": "examples/cases/page-inspection.yaml",
             "content_command": "browser-cli example get --id page_inspection_case",
@@ -1231,7 +1671,11 @@ def _agent_examples() -> dict[str, Any]:
                 "Validate and run a temporary-session page inspection case "
                 "that opens example.com, snapshots content, and saves a screenshot."
             ),
-            "related_workflows": ["case_file_task", "one_off_page_task"],
+            "related_workflows": [
+                "case_file_task",
+                "first_browser_task",
+                "one_off_page_task",
+            ],
             "load_when": [
                 "Creating a repeatable page inspection smoke test.",
                 "Needing a small browser case file template with artifacts.",
@@ -1241,6 +1685,222 @@ def _agent_examples() -> dict[str, Any]:
                 "name: page-inspection",
                 "action: open-url",
                 "action: snapshot",
+                "action: screenshot",
+            ],
+        },
+        "agent_primitives_case": {
+            "path": "examples/cases/agent-primitives.yaml",
+            "content_command": "browser-cli example get --id agent_primitives_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:agent-primitives.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local agent-primitives case that observes "
+                "a tiny page, acts by role, extracts bounded content, verifies "
+                "text, and screenshots."
+            ),
+            "related_workflows": [
+                "case_file_task",
+                "agent_browser_primitives",
+                "content_extraction",
+                "interactive_targeting",
+            ],
+            "load_when": [
+                "Creating a repeatable observe/act/extract smoke test.",
+                "Needing a case file template for the default agent browser loop.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: agent-primitives",
+                "action: observe",
+                "action: act",
+                "kind: click",
+                "action: extract",
+                "action: wait-text",
+                "action: get-text",
+                "action: screenshot",
+            ],
+        },
+        "page_diagnostics_case": {
+            "path": "examples/cases/page-diagnostics.yaml",
+            "content_command": "browser-cli example get --id page_diagnostics_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:page-diagnostics.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local page diagnostics case that installs "
+                "console/network capture, reproduces a fixture issue, waits for "
+                "evidence, and saves artifacts."
+            ),
+            "related_workflows": ["case_file_task", "page_diagnostics"],
+            "load_when": [
+                "Creating a repeatable diagnostic smoke test for runtime errors.",
+                "Needing console and fetch/XHR evidence before custom probes.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: page-diagnostics",
+                "action: console-snapshot",
+                "action: network-snapshot",
+                "action: wait-console",
+                "action: wait-network",
+                "action: screenshot",
+            ],
+        },
+        "content_extraction_case": {
+            "path": "examples/cases/content-extraction.yaml",
+            "content_command": "browser-cli example get --id content_extraction_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:content-extraction.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local content-extraction case that builds "
+                "a tiny page, extracts bounded text/link/table/list data, "
+                "verifies text, and saves artifacts."
+            ),
+            "related_workflows": ["case_file_task", "content_extraction"],
+            "load_when": [
+                "Creating a repeatable content extraction smoke test.",
+                "Needing a case file template for text, links, tables, lists, and bounded extraction.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: content-extraction",
+                "action: extract",
+                "action: text-snapshot",
+                "action: link-snapshot",
+                "action: table-snapshot",
+                "action: list-snapshot",
+                "action: get-text",
+            ],
+        },
+        "browser_state_case": {
+            "path": "examples/cases/browser-state.yaml",
+            "content_command": "browser-cli example get --id browser_state_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:browser-state.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a browser-state case that opens a stable "
+                "origin, sets local/session storage and a cookie, waits for "
+                "state, verifies reads, and cleans up."
+            ),
+            "related_workflows": ["case_file_task", "browser_state_management"],
+            "load_when": [
+                "Creating a repeatable browser state setup or cleanup smoke test.",
+                "Needing a case file template for storage and cookie assertions.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: browser-state",
+                "action: storage-set",
+                "action: wait-storage",
+                "action: storage-get",
+                "action: cookie-set",
+                "action: wait-cookie",
+                "action: cookie-get",
+                "action: storage-remove",
+                "action: cookie-delete",
+            ],
+        },
+        "navigation_flow_case": {
+            "path": "examples/cases/navigation-flow.yaml",
+            "content_command": "browser-cli example get --id navigation_flow_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:navigation-flow.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a navigation-flow case that opens a stable "
+                "page, asserts URL/title/load readiness, moves through browser "
+                "history, reloads, and saves evidence."
+            ),
+            "related_workflows": ["case_file_task", "navigation_flow"],
+            "load_when": [
+                "Creating a repeatable navigation or history smoke test.",
+                "Needing a case file template for URL, title, load-state, back, and forward assertions.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: navigation-flow",
+                "action: open-url",
+                "action: wait-load-state",
+                "action: wait-url",
+                "action: wait-title",
+                "action: go-back",
+                "action: go-forward",
+                "action: reload",
+                "action: page-info",
+                "action: screenshot",
+            ],
+        },
+        "file_upload_case": {
+            "path": "examples/cases/file-upload.yaml",
+            "content_command": "browser-cli example get --id file_upload_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:file-upload.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a self-contained file-upload case that builds "
+                "a form fixture, attaches an inline test file with set-file-input, "
+                "submits it, and saves evidence."
+            ),
+            "related_workflows": ["case_file_task", "file_upload", "form_interaction"],
+            "load_when": [
+                "Creating a repeatable upload or attachment smoke test.",
+                "Needing a case file template that avoids OS file pickers and local fixture files.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: file-upload",
+                "action: form-snapshot",
+                "action: set-file-input",
+                "inline_files:",
+                "lexmount-upload.txt",
+                "action: submit",
+                "action: wait-text",
+                "action: screenshot",
+            ],
+        },
+        "checkout_flow_case": {
+            "path": "examples/cases/checkout-flow.yaml",
+            "content_command": "browser-cli example get --id checkout_flow_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:checkout-flow.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a self-contained multi-step checkout case "
+                "that fills shipping details, advances to payment, submits the "
+                "order, and saves evidence with first-class browser-cli actions."
+            ),
+            "related_workflows": ["case_file_task", "form_interaction"],
+            "load_when": [
+                "Creating a repeatable multi-step checkout or complex form smoke test.",
+                "Needing a case file template for semantic fill/select/check/click flows.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: checkout-flow",
+                "action: form-snapshot",
+                "action: fill-label",
+                "action: select-label",
+                "action: check-label",
+                "action: wait-state-role",
+                "action: click-role",
+                "Order confirmed",
                 "action: screenshot",
             ],
         },
@@ -1270,6 +1930,36 @@ def _agent_examples() -> dict[str, Any]:
                 "action: screenshot",
             ],
         },
+        "interactive_targeting_case": {
+            "path": "examples/cases/interactive-targeting.yaml",
+            "content_command": "browser-cli example get --id interactive_targeting_case",
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples.cases:interactive-targeting.yaml"
+            ),
+            "format": "yaml",
+            "purpose": (
+                "Validate and run a local interactive-targeting case that builds "
+                "a tiny page, inspects actionable targets, acts by role, verifies "
+                "text, and screenshots."
+            ),
+            "related_workflows": ["case_file_task", "interactive_targeting"],
+            "load_when": [
+                "Creating a repeatable interactive targeting smoke test.",
+                "Needing a case file template for snapshots, deterministic act, and text verification.",
+            ],
+            "case_file": True,
+            "grep_patterns": [
+                "name: interactive-targeting",
+                "action: interactive-snapshot",
+                "action: accessibility-snapshot",
+                "action: act",
+                "kind: click",
+                "action: wait-text",
+                "action: get-text",
+                "action: screenshot",
+            ],
+        },
     }
 
 
@@ -1277,13 +1967,7 @@ def _read_agent_example_content(example_id: str) -> str:
     example = _agent_examples().get(example_id)
     if example is None:
         raise KeyError(example_id)
-    package_resource = str(example["package_resource"])
-    package, resource_name = package_resource.split(":", 1)
-    return (
-        importlib_resources.files(package)
-        .joinpath(resource_name)
-        .read_text(encoding="utf-8")
-    )
+    return _read_package_resource_text(str(example["package_resource"]))
 
 
 def _agent_prompt_metadata() -> dict[str, Any]:
@@ -1303,13 +1987,178 @@ def _read_agent_prompt_metadata_content(metadata_id: str = "openai") -> str:
     metadata = _agent_prompt_metadata().get(metadata_id)
     if metadata is None:
         raise KeyError(metadata_id)
-    package_resource = str(metadata["package_resource"])
+    return _read_package_resource_text(str(metadata["package_resource"]))
+
+
+def _read_package_resource_text(package_resource: str) -> str:
     package, resource_name = package_resource.split(":", 1)
     return (
         importlib_resources.files(package)
         .joinpath(resource_name)
         .read_text(encoding="utf-8")
     )
+
+
+def _sha256_text(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _packaged_skill_resources() -> dict[str, str]:
+    resources = {
+        "SKILL.md": "browser_cli.agent_skill:SKILL.md",
+        "agents/openai.yaml": str(
+            _agent_prompt_metadata()["openai"]["package_resource"]
+        ),
+    }
+    for reference in _agent_references().values():
+        resources[str(reference["path"])] = str(reference["package_resource"])
+    return resources
+
+
+def _default_codex_skill_dir() -> Path:
+    codex_home = os.environ.get(CODEX_HOME_ENV)
+    if codex_home:
+        return (
+            Path(codex_home).expanduser()
+            / "skills"
+            / DEFAULT_CODEX_SKILL_DIRECTORY_NAME
+        )
+    return (
+        Path.home()
+        / ".codex"
+        / "skills"
+        / DEFAULT_CODEX_SKILL_DIRECTORY_NAME
+    )
+
+
+def _skill_dir_from_args(args: argparse.Namespace) -> Path:
+    configured = getattr(args, "skill_dir", None)
+    if configured:
+        return Path(str(configured)).expanduser()
+    return _default_codex_skill_dir()
+
+
+def _skill_install_command(skill_dir: Path, *, force: bool = False) -> str:
+    default_dir = _default_codex_skill_dir()
+    parts = ["browser-cli", "skill", "install"]
+    if skill_dir != default_dir:
+        parts.extend(["--skill-dir", str(skill_dir)])
+    if force:
+        parts.append("--force")
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def _skill_status_command(skill_dir: Path) -> str:
+    default_dir = _default_codex_skill_dir()
+    parts = ["browser-cli", "skill", "status"]
+    if skill_dir != default_dir:
+        parts.extend(["--skill-dir", str(skill_dir)])
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def _packaged_skill_resource_items() -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    items: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    for relative_path, package_resource in _packaged_skill_resources().items():
+        try:
+            content = _read_package_resource_text(package_resource)
+        except Exception as exc:
+            errors.append(
+                {
+                    "path": relative_path,
+                    "package_resource": package_resource,
+                    "error": exc.__class__.__name__,
+                }
+            )
+            continue
+        items.append(
+            {
+                "path": relative_path,
+                "package_resource": package_resource,
+                "content": content,
+                "sha256": _sha256_text(content),
+                "size": len(content.encode("utf-8")),
+            }
+        )
+    return items, errors
+
+
+def _skill_status_payload(skill_dir: Path) -> dict[str, Any]:
+    resource_items, package_errors = _packaged_skill_resource_items()
+    checked_files: list[dict[str, Any]] = []
+    missing_files: list[str] = []
+    stale_files: list[str] = []
+    unreadable_files: list[str] = []
+
+    for item in resource_items:
+        relative_path = str(item["path"])
+        target = skill_dir / relative_path
+        file_payload: dict[str, Any] = {
+            "path": relative_path,
+            "package_resource": item["package_resource"],
+            "target": str(target),
+            "expected_sha256": item["sha256"],
+        }
+        if not target.exists():
+            file_payload["status"] = "missing"
+            missing_files.append(relative_path)
+        elif not target.is_file():
+            file_payload["status"] = "unreadable"
+            file_payload["reason"] = "not_a_file"
+            unreadable_files.append(relative_path)
+        else:
+            try:
+                current = target.read_text(encoding="utf-8")
+            except Exception as exc:
+                file_payload["status"] = "unreadable"
+                file_payload["error"] = exc.__class__.__name__
+                unreadable_files.append(relative_path)
+            else:
+                current_hash = _sha256_text(current)
+                file_payload["current_sha256"] = current_hash
+                if current_hash == item["sha256"]:
+                    file_payload["status"] = "current"
+                else:
+                    file_payload["status"] = "stale"
+                    stale_files.append(relative_path)
+        checked_files.append(file_payload)
+
+    current = (
+        not package_errors
+        and not missing_files
+        and not stale_files
+        and not unreadable_files
+    )
+    if package_errors:
+        status = "packaged_resources_unavailable"
+    elif current:
+        status = "current"
+    elif stale_files:
+        status = "stale"
+    elif missing_files:
+        status = "missing"
+    else:
+        status = "unreadable"
+
+    return {
+        "skill_name": "browser-cli",
+        "install_directory_name": DEFAULT_CODEX_SKILL_DIRECTORY_NAME,
+        "skill_dir": str(skill_dir),
+        "codex_home_env": CODEX_HOME_ENV,
+        "codex_home": str(skill_dir.parent.parent),
+        "installed": (skill_dir / "SKILL.md").is_file(),
+        "status": status,
+        "current": current,
+        "resource_count": len(resource_items),
+        "checked_files": checked_files,
+        "missing_files": missing_files,
+        "stale_files": stale_files,
+        "unreadable_files": unreadable_files,
+        "package_errors": package_errors,
+        "install_command": _skill_install_command(skill_dir),
+        "force_install_command": _skill_install_command(skill_dir, force=True),
+        "status_command": _skill_status_command(skill_dir),
+    }
 
 
 def _quoted_yaml_field(text: str, key: str) -> str | None:
@@ -1352,10 +2201,20 @@ def _command_catalog() -> dict[str, Any]:
         "agent_entrypoints": {
             "setup": [
                 "browser-cli reference list",
+                "browser-cli reference get --id quickstart --metadata-only",
+                "browser-cli reference get --id quickstart",
+                "browser-cli reference get --id connect_from_codex --metadata-only",
+                "browser-cli reference get --id connect_from_codex",
                 "browser-cli reference get --id skill_positioning --metadata-only",
                 "browser-cli reference get --id skill_positioning",
                 "browser-cli reference get --id usable_status --metadata-only",
                 "browser-cli reference get --id usable_status",
+                "browser-cli example get --id setup_verification_playbook --metadata-only",
+                "browser-cli example get --id setup_verification_playbook",
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
+                "browser-cli skill status",
+                "browser-cli skill install --force",
                 "browser-cli auth status",
                 "browser-cli auth scopes",
                 "browser-cli auth refresh",
@@ -1366,6 +2225,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli doctor --smoke-session",
             ],
             "connect_from_codex_site_requirements": [
+                "browser-cli reference get --id connect_from_codex --metadata-only",
+                "browser-cli reference get --id connect_from_codex",
                 "browser-cli auth scopes --include-site-contract",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth connect-requirements --checklist",
@@ -1375,6 +2236,8 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
             ],
             "connect_from_codex_auth": [
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
                 "browser-cli auth status",
                 "browser-cli auth scopes",
                 "browser-cli auth connect-requirements",
@@ -1384,6 +2247,8 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
             ],
             "device_code_auth": [
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth login --device-code",
                 "browser-cli auth login",
@@ -1392,6 +2257,8 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
             ],
             "scoped_token_lifecycle": [
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
                 "browser-cli auth status",
                 "browser-cli auth scopes --scope browser:actions",
                 "browser-cli auth token-info --required-scope browser.actions:run",
@@ -1405,6 +2272,33 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive",
                 "browser-cli session close --session-id <session_id>",
                 "browser-cli session create",
+            ],
+            "first_browser_task": [
+                "browser-cli commands --workflow first_browser_task",
+                "browser-cli doctor --json",
+                "browser-cli session create",
+                "browser-cli action open-url --session-id <session_id> --url <url>",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action wait-text --session-id <session_id> --text <expected_text>",
+                "browser-cli action screenshot --session-id <session_id> --output <path>",
+                "browser-cli session close --session-id <session_id>",
+            ],
+            "agent_browser_primitives": [
+                "browser-cli commands --workflow agent_browser_primitives",
+                "browser-cli action guide --names-only",
+                "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
+                'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"',
+                'browser-cli action act --session-id <session_id> --kind fill --label "<label>" --value "<value>"',
+                'browser-cli action click-role --session-id <session_id> --role button --name "<name>"',
+                'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
+                "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                "browser-cli action screenshot --session-id <session_id> --output <path>",
             ],
             "one_off_page_task": [
                 "browser-cli session create",
@@ -1437,14 +2331,35 @@ def _command_catalog() -> dict[str, Any]:
             "case_file_task": [
                 "browser-cli commands --group case",
                 "browser-cli case schema",
+                "browser-cli case schema --action observe",
+                "browser-cli case schema --action act",
+                "browser-cli case schema --action extract",
                 "browser-cli case schema --action fill-label",
+                "browser-cli example get --id agent_primitives_case --metadata-only",
                 "browser-cli example get --id form_fill_case --metadata-only",
+                "browser-cli example get --id content_extraction_case --metadata-only",
+                "browser-cli example get --id browser_state_case --metadata-only",
+                "browser-cli example get --id navigation_flow_case --metadata-only",
+                "browser-cli example get --id file_upload_case --metadata-only",
+                "browser-cli example get --id checkout_flow_case --metadata-only",
+                "browser-cli example get --id interactive_targeting_case --metadata-only",
+                "browser-cli example get --id page_diagnostics_case --metadata-only",
                 "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml",
+                "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml",
                 "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
+                "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
+                "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml",
+                "browser-cli case scaffold --template file-upload --output upload-case.yaml",
+                "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml",
+                "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
+                "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                 "browser-cli case validate --file <case.yaml>",
                 "browser-cli case run --file <case.yaml> --close-created-session",
             ],
             "persistent_login_state": [
+                "browser-cli example get --id persistent_context_playbook --metadata-only",
+                "browser-cli example get --id persistent_context_playbook",
                 'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
                 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                 "browser-cli context status --context-id <context_id>",
@@ -1553,6 +2468,7 @@ def _command_catalog() -> dict[str, Any]:
             ],
             "content_extraction": [
                 "browser-cli action guide --task content_extraction",
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                 "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
@@ -1611,6 +2527,24 @@ def _command_catalog() -> dict[str, Any]:
                         ),
                     },
                     {
+                        "id": "inspect_quickstart",
+                        "command": (
+                            "browser-cli reference get --id quickstart --metadata-only"
+                        ),
+                        "read": [
+                            "reference_id",
+                            "reference.content_command",
+                            "reference.purpose",
+                            "reference.load_when",
+                            "reference.covers",
+                        ],
+                        "follow_up_command": "browser-cli reference get --id quickstart",
+                        "use_when": (
+                            "Starting a fresh install, guiding the first browser "
+                            "task, or explaining the minimum safe setup path."
+                        ),
+                    },
+                    {
                         "id": "inspect_usable_status",
                         "command": (
                             "browser-cli reference get --id usable_status --metadata-only"
@@ -1626,6 +2560,23 @@ def _command_catalog() -> dict[str, Any]:
                         "use_when": (
                             "Setup is unclear, the installed CLI version is new "
                             "to the agent, or the user asks what is usable now."
+                        ),
+                    },
+                    {
+                        "id": "skill_status",
+                        "command": "browser-cli skill status",
+                        "optional": True,
+                        "read": [
+                            "status",
+                            "current",
+                            "skill_dir",
+                            "missing_files",
+                            "stale_files",
+                            "force_install_command",
+                        ],
+                        "use_when": (
+                            "Codex appears to be using stale Skill instructions "
+                            "or the agent needs to refresh the local Skill directory."
                         ),
                     },
                     {
@@ -1742,6 +2693,26 @@ def _command_catalog() -> dict[str, Any]:
             "connect_from_codex_site_requirements": {
                 "purpose": "Inspect the browser.lexmount.cn /connect/codex frontend, API, token lifecycle, and verification requirements before implementing or diagnosing Connect from Codex.",
                 "steps": [
+                    {
+                        "id": "inspect_connect_from_codex_reference",
+                        "command": (
+                            "browser-cli reference get --id connect_from_codex --metadata-only"
+                        ),
+                        "read": [
+                            "reference_id",
+                            "reference.content_command",
+                            "reference.purpose",
+                            "reference.load_when",
+                            "reference.covers",
+                        ],
+                        "follow_up_command": (
+                            "browser-cli reference get --id connect_from_codex"
+                        ),
+                        "use_when": (
+                            "The task is to implement, review, or explain "
+                            "browser.lexmount.cn Connect from Codex behavior."
+                        ),
+                    },
                     {
                         "id": "inspect_scope_catalog",
                         "command": "browser-cli auth scopes --include-site-contract",
@@ -2075,6 +3046,315 @@ def _command_catalog() -> dict[str, Any]:
                     },
                 ],
             },
+            "first_browser_task": {
+                "purpose": "Shortest safe first browser task: verify readiness, open a URL, inspect targets, choose one action, verify or capture evidence, then close the session.",
+                "steps": [
+                    {
+                        "id": "check_readiness",
+                        "command": "browser-cli doctor --json",
+                        "read": [
+                            "ok",
+                            "failed",
+                            "ready_for_browser_actions",
+                            "failed_checks",
+                            "warning_checks",
+                            "repair_plan.commands",
+                            "repair_plan.guidance",
+                        ],
+                        "success_condition": "ok=true and ready_for_browser_actions=true",
+                    },
+                    {
+                        "id": "create_session",
+                        "command": "browser-cli session create",
+                        "read": [
+                            "session_id",
+                            "session.session_id",
+                            "session.status",
+                            "context_reuse.selected",
+                            "context_reuse.availability",
+                        ],
+                    },
+                    {
+                        "id": "open_url",
+                        "command": "browser-cli action open-url --session-id <session_id> --url <url>",
+                        "success_condition": "ok=true",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "result.url",
+                            "result.title",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page",
+                        "command": "browser-cli action page-info --session-id <session_id>",
+                        "read": [
+                            "url",
+                            "title",
+                            "ready_state",
+                            "visibility_state",
+                            "viewport",
+                            "scroll",
+                            "body_text_length",
+                        ],
+                    },
+                    {
+                        "id": "inspect_targets",
+                        "command": "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                        "read": [
+                            "result.nodes",
+                            "result.node_count",
+                            "result.truncated",
+                            "result.url",
+                            "result.title",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
+                        ],
+                    },
+                    {
+                        "id": "choose_first_action",
+                        "command": "<choose the smallest built-in action that matches the user's task intent>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "wait-text",
+                            "click-role",
+                            "click-text",
+                            "fill-label",
+                            "select-role",
+                            "check-role",
+                            "get-text-role",
+                            "screenshot",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
+                            'browser-cli action click-role --session-id <session_id> --role button --name "<button name>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action fill-label --session-id <session_id> --label "<field label>" --text "<value>"',
+                            'browser-cli action select-role --session-id <session_id> --role combobox --name "<field name>" --option-label "<option label>"',
+                            'browser-cli action check-role --session-id <session_id> --role checkbox --name "<label>"',
+                            'browser-cli action get-text-role --session-id <session_id> --role alert --name "<message>"',
+                            "browser-cli action screenshot --session-id <session_id> --output <path>",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action guide --task interactive_targeting",
+                            "browser-cli action guide --task form_interaction",
+                            "browser-cli action guide --task content_extraction",
+                            "browser-cli reference get --id action_playbook --metadata-only",
+                        ],
+                    },
+                    {
+                        "id": "verify_or_capture",
+                        "command": "<run a built-in verification or capture command after the chosen action>",
+                        "agent_action": True,
+                        "read": [
+                            "ok",
+                            "url",
+                            "title",
+                            "output",
+                            "result.found",
+                            "result.matched",
+                            "result.text",
+                            "result.clicked",
+                            "result.filled",
+                            "result.url",
+                            "result.title",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
+                            'browser-cli action page-info --session-id <session_id>',
+                            'browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80',
+                            "browser-cli action screenshot --session-id <session_id> --output <path>",
+                        ],
+                    },
+                    {
+                        "id": "close_session",
+                        "command": "browser-cli session close --session-id <session_id>",
+                        "cleanup": True,
+                    },
+                ],
+            },
+            "agent_browser_primitives": {
+                "purpose": "Map agent observe, act, extract, and verify intents to deterministic browser-cli commands before custom JavaScript.",
+                "steps": [
+                    {
+                        "id": "inspect_action_surface",
+                        "command": "browser-cli action guide --names-only",
+                        "read": [
+                            "tasks",
+                            "recommended_start",
+                            "custom_js_boundary",
+                            "next_commands",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli reference get --id action_playbook --metadata-only",
+                            "browser-cli commands --workflow first_browser_task",
+                        ],
+                    },
+                    {
+                        "id": "observe_page",
+                        "command": "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
+                        "read": [
+                            "result.url",
+                            "result.title",
+                            "result.ready_state",
+                            "result.page_info",
+                            "result.snapshots.interactive.nodes",
+                            "result.snapshots.interactive.node_count",
+                            "result.snapshots.interactive.truncated",
+                            "result.snapshots.text.texts",
+                            "result.snapshots.text.text_count",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli action page-info --session-id <session_id>",
+                            "browser-cli action observe --session-id <session_id> --surface all --selector main",
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                            "browser-cli action form-snapshot --session-id <session_id> --selector form",
+                            "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
+                        ],
+                    },
+                    {
+                        "id": "choose_primitive",
+                        "command": "<choose observe, act, extract, or verify from the user intent and observed page state>",
+                        "agent_action": True,
+                        "selection_order": [
+                            "observe",
+                            "act",
+                            "extract",
+                            "verify",
+                        ],
+                        "read": [
+                            "task_intent",
+                            "observed_targets",
+                            "custom_js_boundary",
+                        ],
+                    },
+                    {
+                        "id": "act_semantically",
+                        "command": 'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"',
+                        "agent_action": True,
+                        "optional": True,
+                        "selection_order": [
+                            "act",
+                            "click-role",
+                            "click-text",
+                            "fill-label",
+                            "fill-role",
+                            "select-role",
+                            "check-role",
+                            "press-role",
+                            "hover-role",
+                            "scroll-into-view-role",
+                        ],
+                        "preferred_commands": [
+                            'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"',
+                            'browser-cli action act --session-id <session_id> --kind click --text "<visible text>"',
+                            'browser-cli action act --session-id <session_id> --kind fill --label "<field label>" --value "<value>"',
+                            'browser-cli action act --session-id <session_id> --kind select --role combobox --name "<field name>" --option-label "<option label>"',
+                            'browser-cli action act --session-id <session_id> --kind check --role checkbox --name "<label>"',
+                            'browser-cli action act --session-id <session_id> --kind press --role textbox --name "<field name>" --key Enter',
+                            'browser-cli action act --session-id <session_id> --kind hover --role button --name "<menu name>"',
+                            'browser-cli action act --session-id <session_id> --kind scroll-into-view --role link --name "<link name>"',
+                            'browser-cli action click-role --session-id <session_id> --role button --name "<button name>"',
+                            'browser-cli action click-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action fill-label --session-id <session_id> --label "<field label>" --text "<value>"',
+                            'browser-cli action fill-role --session-id <session_id> --role textbox --name "<field name>" --text "<value>"',
+                            'browser-cli action select-role --session-id <session_id> --role combobox --name "<field name>" --option-label "<option label>"',
+                            'browser-cli action check-role --session-id <session_id> --role checkbox --name "<label>"',
+                            'browser-cli action press-role --session-id <session_id> --role textbox --name "<field name>" --key Enter',
+                            'browser-cli action hover-role --session-id <session_id> --role button --name "<menu name>"',
+                            'browser-cli action scroll-into-view-role --session-id <session_id> --role link --name "<link name>"',
+                        ],
+                        "fallback_commands": [
+                            "browser-cli commands --workflow interactive_targeting",
+                            "browser-cli commands --workflow form_interaction",
+                            "browser-cli action guide --task interactive_targeting",
+                            "browser-cli action guide --task form_interaction",
+                        ],
+                        "read": [
+                            "result.intent",
+                            "result.plan.selection",
+                            "result.plan.underlying_command",
+                            "result.action_result.found",
+                            "result.action_result.clicked",
+                            "result.action_result.filled",
+                            "result.action_result.selected",
+                            "result.action_result.checked",
+                            "result.action_result.pressed",
+                            "result.action_result.hovered",
+                            "result.action_result.scrolled",
+                        ],
+                    },
+                    {
+                        "id": "extract_content",
+                        "command": "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                        "agent_action": True,
+                        "optional": True,
+                        "selection_order": [
+                            "extract",
+                            "text-snapshot",
+                            "link-snapshot",
+                            "table-snapshot",
+                            "list-snapshot",
+                            "outline-snapshot",
+                            "accessibility-snapshot",
+                            "snapshot",
+                        ],
+                        "preferred_commands": [
+                            "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                            "browser-cli action extract --session-id <session_id> --surface all --selector main",
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
+                            "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
+                            "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20",
+                            "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
+                            "browser-cli action outline-snapshot --session-id <session_id> --selector body",
+                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
+                            "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
+                        ],
+                        "read": [
+                            "result.surfaces",
+                            "result.extractions.text.texts",
+                            "result.extractions.links.links",
+                            "result.truncated",
+                            "result.truncated_surfaces",
+                        ],
+                        "fallback_commands": [
+                            "browser-cli commands --workflow content_extraction",
+                            "browser-cli action guide --task content_extraction",
+                        ],
+                    },
+                    {
+                        "id": "verify_result",
+                        "command": "<verify with page-info, waits, a bounded snapshot, or screenshot>",
+                        "agent_action": True,
+                        "read": [
+                            "ok",
+                            "url",
+                            "title",
+                            "output",
+                            "result.found",
+                            "result.matched",
+                            "result.text",
+                            "result.clicked",
+                            "result.filled",
+                            "result.item_count",
+                            "result.link_count",
+                            "result.node_count",
+                        ],
+                        "preferred_commands": [
+                            "browser-cli action page-info --session-id <session_id>",
+                            'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
+                            'browser-cli action wait-role --session-id <session_id> --role button --name "<button name>"',
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
+                            "browser-cli action screenshot --session-id <session_id> --output <path>",
+                        ],
+                    },
+                ],
+            },
             "one_off_page_task": {
                 "purpose": "Create a temporary browser session, inspect or operate one page, then close the session.",
                 "steps": [
@@ -2316,7 +3596,12 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "inspect_semantic_case_action",
-                        "command": "browser-cli case schema --action fill-label",
+                        "command": "browser-cli case schema --action act",
+                        "fallback_commands": [
+                            "browser-cli case schema --action observe",
+                            "browser-cli case schema --action extract",
+                            "browser-cli case schema --action fill-label",
+                        ],
                         "read": [
                             "action_schema.required_fields",
                             "action_schema.optional_fields",
@@ -2325,8 +3610,88 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "inspect_agent_primitives_case_example",
+                        "command": "browser-cli example get --id agent_primitives_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
                         "id": "inspect_form_case_example",
                         "command": "browser-cli example get --id form_fill_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_content_extraction_case_example",
+                        "command": "browser-cli example get --id content_extraction_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_browser_state_case_example",
+                        "command": "browser-cli example get --id browser_state_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_navigation_flow_case_example",
+                        "command": "browser-cli example get --id navigation_flow_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_file_upload_case_example",
+                        "command": "browser-cli example get --id file_upload_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_checkout_flow_case_example",
+                        "command": "browser-cli example get --id checkout_flow_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_interactive_targeting_case_example",
+                        "command": "browser-cli example get --id interactive_targeting_case --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.case_file",
+                        ],
+                    },
+                    {
+                        "id": "inspect_page_diagnostics_case_example",
+                        "command": "browser-cli example get --id page_diagnostics_case --metadata-only",
                         "read": [
                             "example.content_command",
                             "example.grep_patterns",
@@ -2349,8 +3714,128 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
+                        "id": "scaffold_agent_primitives_case_file",
+                        "command": "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
                         "id": "scaffold_form_case_file",
                         "command": "browser-cli case scaffold --template form-fill --output form-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_content_extraction_case_file",
+                        "command": "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_browser_state_case_file",
+                        "command": "browser-cli case scaffold --template browser-state --output browser-state-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_navigation_flow_case_file",
+                        "command": "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_file_upload_case_file",
+                        "command": "browser-cli case scaffold --template file-upload --output upload-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_checkout_flow_case_file",
+                        "command": "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_interactive_targeting_case_file",
+                        "command": "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml",
+                        "optional": True,
+                        "success_condition": "valid=true and wrote_file=true",
+                        "read": [
+                            "template",
+                            "case.steps",
+                            "supported_actions",
+                            "valid",
+                            "errors",
+                            "step_count",
+                            "next_commands",
+                        ],
+                    },
+                    {
+                        "id": "scaffold_page_diagnostics_case_file",
+                        "command": "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml",
                         "optional": True,
                         "success_condition": "valid=true and wrote_file=true",
                         "read": [
@@ -2943,9 +4428,10 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "choose_extraction_surface",
-                        "command": "<choose the narrowest snapshot/read command for the requested content>",
+                        "command": "<choose action extract or the narrowest snapshot/read command for the requested content>",
                         "agent_action": True,
                         "selection_order": [
+                            "extract",
                             "outline-snapshot",
                             "text-snapshot",
                             "link-snapshot",
@@ -2957,6 +4443,8 @@ def _command_catalog() -> dict[str, Any]:
                             "snapshot",
                         ],
                         "preferred_commands": [
+                            "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                            "browser-cli action extract --session-id <session_id> --surface all --selector main",
                             "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
                             "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
@@ -2969,12 +4457,21 @@ def _command_catalog() -> dict[str, Any]:
                     },
                     {
                         "id": "extract_content",
-                        "command": "<run the selected extraction command>",
+                        "command": "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                         "agent_action": True,
                         "read": [
                             "url",
                             "title",
                             "result.kind",
+                            "result.surfaces",
+                            "result.extractions",
+                            "result.extractions.text.texts",
+                            "result.extractions.links.links",
+                            "result.extractions.tables.tables",
+                            "result.extractions.lists.lists",
+                            "result.extractions.outline.headings",
+                            "result.extractions.outline.landmarks",
+                            "result.truncated_surfaces",
                             "result.texts",
                             "result.text_count",
                             "result.links",
@@ -2996,9 +4493,10 @@ def _command_catalog() -> dict[str, Any]:
                             "result.truncated",
                         ],
                         "fallback_commands": [
+                            "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
+                            "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
                             "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
-                            "browser-cli action text-snapshot --session-id <session_id> --max-nodes 80 --max-chars 1000",
                         ],
                     },
                     {
@@ -3007,6 +4505,7 @@ def _command_catalog() -> dict[str, Any]:
                         "agent_action": True,
                         "read": [
                             "result.truncated",
+                            "result.truncated_surfaces",
                             "result.max_nodes",
                             "result.max_chars",
                             "result.max_rows",
@@ -3029,6 +4528,16 @@ def _command_catalog() -> dict[str, Any]:
             "persistent_login_state": {
                 "purpose": "Reuse or create a persistent context for login state, cookies, and storage.",
                 "steps": [
+                    {
+                        "id": "inspect_persistent_context_playbook",
+                        "command": "browser-cli example get --id persistent_context_playbook --metadata-only",
+                        "read": [
+                            "example.content_command",
+                            "example.grep_patterns",
+                            "example.related_workflows",
+                            "example.load_when",
+                        ],
+                    },
                     {
                         "id": "list_reuse_candidates",
                         "command": 'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
@@ -3956,6 +5465,87 @@ def _doctor_workflow_step_names(workflow: Any) -> set[str]:
     }
 
 
+def _doctor_workflow_command_references(
+    workflows: Any,
+    command_names: set[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(workflows, dict):
+        return []
+
+    invalid: list[dict[str, Any]] = []
+    scalar_fields = ("command", "follow_up_command")
+    list_fields = ("preferred_commands", "fallback_commands", "alternative_commands")
+    for workflow_id, workflow in workflows.items():
+        if not isinstance(workflow, dict):
+            continue
+        steps = workflow.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            step_id = str(step.get("id") or "")
+            for field in scalar_fields:
+                command = step.get(field)
+                if isinstance(command, str):
+                    command_name = _browser_cli_command_reference_name(command)
+                    if command_name is not None and command_name not in command_names:
+                        invalid.append(
+                            {
+                                "workflow": str(workflow_id),
+                                "step": step_id,
+                                "field": field,
+                                "command": command,
+                                "command_name": command_name,
+                            }
+                        )
+            for field in list_fields:
+                commands = step.get(field)
+                if not isinstance(commands, list):
+                    continue
+                for command in commands:
+                    if not isinstance(command, str):
+                        continue
+                    command_name = _browser_cli_command_reference_name(command)
+                    if command_name is not None and command_name not in command_names:
+                        invalid.append(
+                            {
+                                "workflow": str(workflow_id),
+                                "step": step_id,
+                                "field": field,
+                                "command": command,
+                                "command_name": command_name,
+                            }
+                        )
+    return invalid
+
+
+def _doctor_agent_entrypoint_command_references(
+    entrypoints: Any,
+    command_names: set[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(entrypoints, dict):
+        return []
+
+    invalid: list[dict[str, Any]] = []
+    for entrypoint_id, commands in entrypoints.items():
+        if not isinstance(commands, list):
+            continue
+        for command in commands:
+            if not isinstance(command, str):
+                continue
+            command_name = _browser_cli_command_reference_name(command)
+            if command_name is not None and command_name not in command_names:
+                invalid.append(
+                    {
+                        "entrypoint": str(entrypoint_id),
+                        "command": command,
+                        "command_name": command_name,
+                    }
+                )
+    return invalid
+
+
 def _doctor_command_catalog_check() -> dict[str, Any]:
     try:
         catalog = _command_catalog()
@@ -3983,8 +5573,12 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         for command in catalog.get("commands", [])
         if isinstance(command, dict)
     }
+    command_reference_names = set(command_names)
+    command_reference_names.update(COMMAND_ALIASES)
     workflows = catalog.get("agent_workflows")
+    entrypoints = catalog.get("agent_entrypoints")
     workflow_names = set(workflows) if isinstance(workflows, dict) else set()
+    entrypoint_names = set(entrypoints) if isinstance(entrypoints, dict) else set()
     missing_commands = [
         command for command in DOCTOR_REQUIRED_COMMANDS if command not in command_names
     ]
@@ -3992,6 +5586,11 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         workflow
         for workflow in DOCTOR_REQUIRED_WORKFLOWS
         if workflow not in workflow_names
+    ]
+    missing_agent_entrypoints = [
+        entrypoint
+        for entrypoint in DOCTOR_REQUIRED_AGENT_ENTRYPOINTS
+        if entrypoint not in entrypoint_names
     ]
     required_workflow_steps = {
         workflow: list(steps)
@@ -4006,21 +5605,45 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
             missing_steps = [step for step in required_steps if step not in step_names]
             if missing_steps:
                 missing_workflow_steps[workflow] = missing_steps
+    invalid_workflow_command_references = _doctor_workflow_command_references(
+        workflows,
+        command_reference_names,
+    )
+    invalid_agent_entrypoint_command_references = (
+        _doctor_agent_entrypoint_command_references(
+            entrypoints,
+            command_reference_names,
+        )
+    )
 
-    if missing_commands or missing_workflows or missing_workflow_steps:
+    if (
+        missing_commands
+        or missing_workflows
+        or missing_agent_entrypoints
+        or missing_workflow_steps
+        or invalid_workflow_command_references
+        or invalid_agent_entrypoint_command_references
+    ):
         return _doctor_check(
             "command_catalog",
             "warn",
-            "Command catalog is missing commands, workflows, or workflow steps expected by the Codex Skill.",
+            "Command catalog is missing commands, workflows, agent entrypoints, workflow steps, or command references expected by the Codex Skill.",
             schema_version=catalog.get("schema_version"),
             command_count=len(command_names),
             workflow_count=len(workflow_names),
+            agent_entrypoint_count=len(entrypoint_names),
             required_commands=list(DOCTOR_REQUIRED_COMMANDS),
             missing_required_commands=missing_commands,
             required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
             missing_required_workflows=missing_workflows,
+            required_agent_entrypoints=list(DOCTOR_REQUIRED_AGENT_ENTRYPOINTS),
+            missing_required_agent_entrypoints=missing_agent_entrypoints,
             required_workflow_steps=required_workflow_steps,
             missing_required_workflow_steps=missing_workflow_steps,
+            invalid_workflow_command_references=invalid_workflow_command_references,
+            invalid_agent_entrypoint_command_references=(
+                invalid_agent_entrypoint_command_references
+            ),
             fix=_doctor_fix(
                 "upgrade_browser_cli_command_surface",
                 commands=[
@@ -4043,12 +5666,240 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         schema_version=catalog.get("schema_version"),
         command_count=len(command_names),
         workflow_count=len(workflow_names),
+        agent_entrypoint_count=len(entrypoint_names),
         required_commands=list(DOCTOR_REQUIRED_COMMANDS),
         missing_required_commands=[],
         required_workflows=list(DOCTOR_REQUIRED_WORKFLOWS),
         missing_required_workflows=[],
+        required_agent_entrypoints=list(DOCTOR_REQUIRED_AGENT_ENTRYPOINTS),
+        missing_required_agent_entrypoints=[],
         required_workflow_steps=required_workflow_steps,
         missing_required_workflow_steps={},
+        invalid_workflow_command_references=[],
+        invalid_agent_entrypoint_command_references=[],
+    )
+
+
+def _doctor_invalid_action_guides(
+    guides: dict[str, Any],
+    command_names: set[str],
+) -> list[dict[str, Any]]:
+    invalid: list[dict[str, Any]] = []
+    list_fields = {
+        "related_workflows",
+        "when_to_use",
+        "selection_order",
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+        "read_fields",
+    }
+    text_fields = {"purpose", "custom_js_boundary"}
+    command_fields = {
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+    }
+    workflow_names = set(DOCTOR_REQUIRED_WORKFLOWS)
+
+    for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS:
+        guide = guides.get(task)
+        if not isinstance(guide, dict):
+            if guide is not None:
+                invalid.append({"task": task, "problems": ["guide_not_object"]})
+            continue
+
+        problems: list[str] = []
+        for field in DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS:
+            if field not in guide:
+                problems.append(f"{field}_missing")
+                continue
+            value = guide.get(field)
+            if field in list_fields and not isinstance(value, list):
+                problems.append(f"{field}_not_list")
+            elif field in list_fields and not value:
+                problems.append(f"{field}_empty")
+            elif field in text_fields and not (
+                isinstance(value, str) and value.strip()
+            ):
+                problems.append(f"{field}_empty")
+
+        related_workflows = guide.get("related_workflows")
+        if isinstance(related_workflows, list):
+            unknown_workflows = [
+                str(workflow)
+                for workflow in related_workflows
+                if str(workflow) not in workflow_names
+            ]
+            if unknown_workflows:
+                problems.append("related_workflows_unknown")
+
+        invalid_command_references: list[dict[str, Any]] = []
+        for field in command_fields:
+            commands = guide.get(field)
+            if not isinstance(commands, list):
+                continue
+            for command in commands:
+                if not isinstance(command, str):
+                    continue
+                command_name = _browser_cli_command_reference_name(command)
+                if command_name is None:
+                    continue
+                if command_name not in command_names:
+                    invalid_command_references.append(
+                        {
+                            "field": field,
+                            "command": command,
+                            "command_name": command_name,
+                        }
+                    )
+        if invalid_command_references:
+            problems.append("unknown_command_references")
+
+        if problems:
+            item: dict[str, Any] = {"task": task, "problems": problems}
+            if invalid_command_references:
+                item["invalid_command_references"] = invalid_command_references
+            invalid.append(item)
+
+    return invalid
+
+
+def _browser_cli_command_reference_name(command: str) -> str | None:
+    text = command.strip()
+    if not text.startswith("browser-cli "):
+        return None
+    try:
+        tokens = shlex.split(text)
+    except ValueError:
+        tokens = text.split()
+    if len(tokens) < 2 or tokens[0] != "browser-cli":
+        return None
+    group = tokens[1]
+    if group in {"commands", "doctor", "version"}:
+        return group
+    if group in {
+        "action",
+        "auth",
+        "case",
+        "context",
+        "example",
+        "reference",
+        "session",
+        "skill",
+    }:
+        if len(tokens) < 3:
+            return None
+        return f"{group}.{tokens[2]}"
+    return group
+
+
+def _doctor_action_guide_command_names() -> set[str]:
+    try:
+        catalog = _command_catalog()
+    except Exception:
+        return set(DOCTOR_REQUIRED_COMMANDS)
+    command_names = {
+        str(command.get("name"))
+        for command in catalog.get("commands", [])
+        if isinstance(command, dict) and command.get("name")
+    }
+    command_names.update(COMMAND_ALIASES)
+    return command_names
+
+
+def _doctor_action_guides_check() -> dict[str, Any]:
+    try:
+        guides = _action_guide_tasks()
+    except Exception as exc:
+        return _doctor_check(
+            "action_guides",
+            "warn",
+            "Action guide catalog could not be built.",
+            error=exc.__class__.__name__,
+            required_action_guides=list(DOCTOR_REQUIRED_ACTION_GUIDE_TASKS),
+            required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
+            fix=_doctor_fix(
+                "verify_action_guide_catalog",
+                commands=[
+                    "browser-cli action guide --names-only",
+                    "browser-cli action guide --task interactive_targeting",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "The Codex Skill relies on action guides before choosing browser actions.",
+                    "Upgrade or reinstall browser-cli if action guide discovery fails.",
+                ],
+            ),
+        )
+
+    guide_names = set(guides) if isinstance(guides, dict) else set()
+    missing_action_guides = [
+        task for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS if task not in guide_names
+    ]
+    command_names = _doctor_action_guide_command_names()
+    invalid_action_guides = (
+        _doctor_invalid_action_guides(guides, command_names)
+        if isinstance(guides, dict)
+        else [
+            {
+                "task": task,
+                "problems": ["action_guides_not_object"],
+            }
+            for task in DOCTOR_REQUIRED_ACTION_GUIDE_TASKS
+        ]
+    )
+    invalid_guide_command_references = [
+        {
+            "task": guide["task"],
+            **reference,
+        }
+        for guide in invalid_action_guides
+        for reference in guide.get("invalid_command_references", [])
+        if isinstance(reference, dict)
+    ]
+
+    if missing_action_guides or invalid_action_guides:
+        return _doctor_check(
+            "action_guides",
+            "warn",
+            "Action guide catalog is missing tasks or fields expected by the Codex Skill.",
+            schema_version=1,
+            guide_count=len(guide_names),
+            required_action_guides=list(DOCTOR_REQUIRED_ACTION_GUIDE_TASKS),
+            missing_required_action_guides=missing_action_guides,
+            required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
+            invalid_action_guides=invalid_action_guides,
+            invalid_guide_command_references=invalid_guide_command_references,
+            fix=_doctor_fix(
+                "upgrade_browser_cli_action_guides",
+                commands=[
+                    "browser-cli action guide --names-only",
+                    "browser-cli action guide --task interactive_targeting",
+                    "browser-cli action guide --task form_interaction",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Upgrade browser-cli before relying on action guides for the full Codex Skill workflow.",
+                    "Use `browser-cli action guide --names-only` to inspect supported guide tasks.",
+                    "Use `browser-cli action guide --task <task>` before choosing browser actions or custom JavaScript.",
+                ],
+            ),
+        )
+
+    return _doctor_check(
+        "action_guides",
+        "pass",
+        "Action guide catalog includes the task guides expected by the Codex Skill.",
+        schema_version=1,
+        guide_count=len(guide_names),
+        required_action_guides=list(DOCTOR_REQUIRED_ACTION_GUIDE_TASKS),
+        missing_required_action_guides=[],
+        required_guide_fields=list(DOCTOR_REQUIRED_ACTION_GUIDE_FIELDS),
+        invalid_action_guides=[],
+        invalid_guide_command_references=[],
     )
 
 
@@ -4086,6 +5937,77 @@ def _doctor_invalid_case_action_schemas(
     return invalid
 
 
+def _doctor_case_scaffold_args(template: str) -> argparse.Namespace:
+    return argparse.Namespace(
+        template=template,
+        name=None,
+        url=None,
+        selector=None,
+        title=None,
+        text="lexmount browser",
+        browser_mode="light",
+        max_chars=2000,
+        output_format="json",
+        output=None,
+        overwrite=False,
+    )
+
+
+def _doctor_case_scaffold_checks(
+    available_templates: set[str],
+) -> list[dict[str, Any]]:
+    checked: list[dict[str, Any]] = []
+    for template in DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES:
+        if template not in available_templates:
+            continue
+        try:
+            spec = _case_scaffold_spec(_doctor_case_scaffold_args(template))
+            if not isinstance(spec, dict):
+                raise TypeError("case scaffold spec must be an object")
+            errors = _validate_browser_cli_case_spec(spec)
+            content = _serialize_case_spec(
+                command="doctor.case_schema",
+                spec=spec,
+                output_format="json",
+            )
+            decoded = json.loads(content)
+            if isinstance(decoded, dict):
+                round_trip_errors = _validate_browser_cli_case_spec(decoded)
+            else:
+                round_trip_errors = ["serialized case must be an object"]
+            errors.extend(f"serialized.{error}" for error in round_trip_errors)
+            steps = spec.get("steps", [])
+            actions = [
+                str(step.get("action"))
+                for step in steps
+                if isinstance(step, dict) and step.get("action") is not None
+            ]
+            checked.append(
+                {
+                    "template": template,
+                    "valid": not errors,
+                    "errors": errors,
+                    "step_count": len(steps) if isinstance(steps, list) else 0,
+                    "actions": actions,
+                    "output_format": "json",
+                    "content_length": len(content),
+                }
+            )
+        except Exception as exc:
+            checked.append(
+                {
+                    "template": template,
+                    "valid": False,
+                    "errors": [f"{exc.__class__.__name__}: {exc}"],
+                    "step_count": 0,
+                    "actions": [],
+                    "output_format": "json",
+                    "content_length": 0,
+                }
+            )
+    return checked
+
+
 def _doctor_case_schema_check() -> dict[str, Any]:
     try:
         actions = _case_action_schema()
@@ -4097,11 +6019,18 @@ def _doctor_case_schema_check() -> dict[str, Any]:
             "Case schema could not be built.",
             error=exc.__class__.__name__,
             required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+            required_case_scaffold_templates=list(
+                DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
+            ),
+            checked_case_scaffold_templates=[],
+            invalid_case_scaffold_templates=[],
             fix=_doctor_fix(
                 "verify_case_schema",
                 commands=[
                     "browser-cli case schema --names-only",
-                    "browser-cli case schema --action fill-label",
+                    "browser-cli case schema --action act",
+                    "browser-cli case schema --action observe",
+                    "browser-cli case schema --action extract",
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
@@ -4125,6 +6054,16 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         for action in DOCTOR_REQUIRED_CASE_ACTIONS
         if action in set(missing_supported_actions) | set(missing_action_schemas)
     ]
+    scaffold_templates = set(CASE_SCAFFOLD_TEMPLATES)
+    missing_case_scaffold_templates = [
+        template
+        for template in DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
+        if template not in scaffold_templates
+    ]
+    checked_case_scaffold_templates = _doctor_case_scaffold_checks(scaffold_templates)
+    invalid_case_scaffold_templates = [
+        result for result in checked_case_scaffold_templates if not result["valid"]
+    ]
     invalid_action_schemas = (
         _doctor_invalid_case_action_schemas(actions)
         if isinstance(actions, dict)
@@ -4137,31 +6076,55 @@ def _doctor_case_schema_check() -> dict[str, Any]:
         ]
     )
 
-    if missing_supported_actions or missing_action_schemas or invalid_action_schemas:
+    if (
+        missing_supported_actions
+        or missing_action_schemas
+        or missing_case_scaffold_templates
+        or invalid_case_scaffold_templates
+        or invalid_action_schemas
+    ):
         return _doctor_check(
             "case_schema",
             "warn",
-            "Case schema is missing actions or schema fields expected by the Codex Skill.",
+            "Case schema is missing actions, scaffold templates, valid starter cases, or schema fields expected by the Codex Skill.",
             schema_version=1,
             action_count=len(action_names),
             supported_action_count=len(supported_actions),
             required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+            required_case_scaffold_templates=list(
+                DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES
+            ),
             missing_required_case_actions=missing_required_case_actions,
             missing_supported_actions=missing_supported_actions,
             missing_action_schemas=missing_action_schemas,
+            missing_case_scaffold_templates=missing_case_scaffold_templates,
+            checked_case_scaffold_templates=checked_case_scaffold_templates,
+            invalid_case_scaffold_templates=invalid_case_scaffold_templates,
             invalid_action_schemas=invalid_action_schemas,
             fix=_doctor_fix(
                 "upgrade_browser_cli_case_schema",
                 commands=[
                     "browser-cli case schema --names-only",
+                    "browser-cli case schema --action act",
+                    "browser-cli case schema --action observe",
+                    "browser-cli case schema --action extract",
                     "browser-cli case schema --action fill-label",
+                    "browser-cli case scaffold --template agent-primitives --format json",
+                    "browser-cli case scaffold --template content-extraction --format json",
+                    "browser-cli case scaffold --template browser-state --format json",
+                    "browser-cli case scaffold --template navigation-flow --format json",
+                    "browser-cli case scaffold --template file-upload --format json",
+                    "browser-cli case scaffold --template checkout-flow --format json",
                     "browser-cli case schema --action network-snapshot",
+                    "browser-cli case scaffold --template interactive-targeting --format json",
+                    "browser-cli case scaffold --template page-diagnostics --format json",
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
                     "Upgrade browser-cli before relying on case files for the full Codex Skill workflow.",
                     "Use `browser-cli case schema --names-only` to inspect repeatable case actions.",
                     "Use `browser-cli case schema --action <action>` to inspect required fields, result fields, and example steps.",
+                    "Use `browser-cli case scaffold --template <template> --format json` to verify packaged starter cases are valid.",
                 ],
             ),
         )
@@ -4169,14 +6132,18 @@ def _doctor_case_schema_check() -> dict[str, Any]:
     return _doctor_check(
         "case_schema",
         "pass",
-        "Case schema includes the repeatable actions expected by the Codex Skill.",
+        "Case schema includes the repeatable actions and valid scaffold templates expected by the Codex Skill.",
         schema_version=1,
         action_count=len(action_names),
         supported_action_count=len(supported_actions),
         required_case_actions=list(DOCTOR_REQUIRED_CASE_ACTIONS),
+        required_case_scaffold_templates=list(DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES),
         missing_required_case_actions=[],
         missing_supported_actions=[],
         missing_action_schemas=[],
+        missing_case_scaffold_templates=[],
+        checked_case_scaffold_templates=checked_case_scaffold_templates,
+        invalid_case_scaffold_templates=[],
         invalid_action_schemas=[],
     )
 
@@ -4303,6 +6270,528 @@ def _doctor_auth_export_env_contract_check() -> dict[str, Any]:
         "auth_export_env_contract",
         "pass",
         "auth export-env exposes safe local-shell metadata for agents.",
+        **common_details,
+    )
+
+
+def _doctor_auth_login_contract_check() -> dict[str, Any]:
+    try:
+        project_id = None
+        project_id_source = "unset"
+        scopes = list(DEFAULT_CODEX_CONNECT_SCOPES)
+        expires_in = DEFAULT_CODEX_CONNECT_EXPIRES_IN
+        connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        handoff = _auth_login_handoff(
+            connect_url=connect_url,
+            project_id=project_id,
+            project_id_source=project_id_source,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        site_capability_status = _connect_from_codex_site_capability_status(
+            _connect_from_codex_site_capabilities()
+        )
+        runtime_auth = _connect_from_codex_required_runtime_auth()
+    except Exception as exc:
+        return _doctor_check(
+            "auth_login_contract",
+            "warn",
+            "auth login handoff contract could not be built.",
+            error=exc.__class__.__name__,
+            required_handoff_fields=list(DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS),
+            fix=_doctor_fix(
+                "repair_auth_login_contract",
+                commands=[
+                    "browser-cli auth login",
+                    "browser-cli auth connect-requirements",
+                    "browser-cli commands --workflow connect_from_codex_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents rely on auth login handoff fields before guiding users through local credential setup.",
+                    "Upgrade or reinstall browser-cli if auth login cannot produce JSON.",
+                ],
+            ),
+        )
+
+    missing_handoff_fields = [
+        field
+        for field in DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS
+        if field not in handoff
+    ]
+    invalid_fields: list[str] = []
+    if handoff.get("recommended_flow") != "manual_env":
+        invalid_fields.append("recommended_flow")
+    if handoff.get("login_url") != LEXMOUNT_CONSOLE_URL:
+        invalid_fields.append("login_url")
+    if handoff.get("connect_from_codex_available") is not False:
+        invalid_fields.append("connect_from_codex_available")
+    if handoff.get("open_command") != "browser-cli auth login --open":
+        invalid_fields.append("open_command")
+    if handoff.get("open_url") != handoff.get("connect_from_codex_url"):
+        invalid_fields.append("open_url")
+    if handoff.get("connect_from_codex_url") != connect_url:
+        invalid_fields.append("connect_from_codex_url")
+
+    split_url = urlsplit(str(handoff.get("connect_from_codex_url", "")))
+    query_pairs = parse_qsl(split_url.query)
+    query_values = {key: value for key, value in query_pairs if key != "scope"}
+    scope_values = [value for key, value in query_pairs if key == "scope"]
+    if f"{split_url.scheme}://{split_url.netloc}{split_url.path}" != (
+        LEXMOUNT_CODEX_CONNECT_URL
+    ):
+        invalid_fields.append("connect_from_codex_url.base")
+    expected_query = {
+        "source": "browser-cli",
+        "intent": "agent-browser-control",
+        "response": "env",
+        "expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+    }
+    for key, expected in expected_query.items():
+        if query_values.get(key) != expected:
+            invalid_fields.append(f"connect_from_codex_url.{key}")
+    if scope_values != list(DEFAULT_CODEX_CONNECT_SCOPES):
+        invalid_fields.append("connect_from_codex_url.scope")
+
+    setup_blocks = handoff.get("setup_blocks")
+    setup_block_ids: list[str] = []
+    missing_setup_blocks = list(DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS)
+    setup_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(setup_blocks, list):
+        setup_by_id = {
+            str(block.get("id")): block
+            for block in setup_blocks
+            if isinstance(block, dict) and block.get("id") is not None
+        }
+        setup_block_ids = list(setup_by_id)
+        missing_setup_blocks = [
+            block_id
+            for block_id in DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS
+            if block_id not in setup_by_id
+        ]
+    else:
+        invalid_fields.append("setup_blocks")
+
+    install_block = setup_by_id.get("install", {})
+    if "uv tool install git+https://github.com/lexmount/browser-cli.git" not in (
+        install_block.get("commands") or []
+    ):
+        invalid_fields.append("setup_blocks.install.commands")
+    local_env_block = setup_by_id.get("local_env", {})
+    if local_env_block.get("safe_to_paste_in_chat") is not False:
+        invalid_fields.append("setup_blocks.local_env.safe_to_paste_in_chat")
+    if local_env_block.get("local_shell_only") is not True:
+        invalid_fields.append("setup_blocks.local_env.local_shell_only")
+    if local_env_block.get("contains_secret_values") is not False:
+        invalid_fields.append("setup_blocks.local_env.contains_secret_values")
+    if "LEXMOUNT_API_KEY" not in local_env_block.get("secret_env", []):
+        invalid_fields.append("setup_blocks.local_env.secret_env")
+    verify_block = setup_by_id.get("verify", {})
+    if AGENT_DOCTOR_COMMAND not in (verify_block.get("commands") or []):
+        invalid_fields.append("setup_blocks.verify.commands")
+
+    copyable_commands = handoff.get("copyable_commands")
+    if not isinstance(copyable_commands, list):
+        invalid_fields.append("copyable_commands")
+    else:
+        for command in (
+            AGENT_USABLE_STATUS_METADATA_COMMAND,
+            AGENT_USABLE_STATUS_COMMAND,
+            "browser-cli auth status",
+            "browser-cli auth login",
+            "browser-cli auth export-env",
+            AGENT_DOCTOR_COMMAND,
+        ):
+            if command not in copyable_commands:
+                invalid_fields.append(f"copyable_commands.{command}")
+
+    local_env = handoff.get("local_env")
+    if not isinstance(local_env, list):
+        invalid_fields.append("local_env")
+        local_env_names: list[str] = []
+    else:
+        env_by_name = {
+            str(item.get("name")): item
+            for item in local_env
+            if isinstance(item, dict) and item.get("name") is not None
+        }
+        local_env_names = list(env_by_name)
+        if env_by_name.get("LEXMOUNT_API_KEY", {}).get("secret") is not True:
+            invalid_fields.append("local_env.LEXMOUNT_API_KEY.secret")
+        if env_by_name.get("LEXMOUNT_PROJECT_ID", {}).get("required") is not True:
+            invalid_fields.append("local_env.LEXMOUNT_PROJECT_ID.required")
+
+    verification = handoff.get("verification")
+    if not isinstance(verification, dict):
+        invalid_fields.append("verification")
+        verification = {}
+    if verification.get("doctor_command") != AGENT_DOCTOR_COMMAND:
+        invalid_fields.append("verification.doctor_command")
+    if verification.get("status_command") != "browser-cli auth status":
+        invalid_fields.append("verification.status_command")
+
+    secret_policy = handoff.get("secret_policy")
+    if not isinstance(secret_policy, dict):
+        invalid_fields.append("secret_policy")
+        secret_policy = {}
+    if "LEXMOUNT_API_KEY" not in secret_policy.get("do_not_paste_in_chat", []):
+        invalid_fields.append("secret_policy.do_not_paste_in_chat")
+    if "browser-cli doctor output with default masking" not in secret_policy.get(
+        "safe_to_share", []
+    ):
+        invalid_fields.append("secret_policy.safe_to_share")
+
+    runtime_auth_ids = [
+        str(item.get("id")) for item in runtime_auth if isinstance(item, dict)
+    ]
+    missing_runtime_auth = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH
+        if item not in runtime_auth_ids
+    ]
+    if missing_runtime_auth:
+        invalid_fields.append("required_runtime_auth")
+
+    invalid_fields = _dedupe_preserving_order(invalid_fields)
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "required_handoff_fields": list(DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS),
+        "missing_handoff_fields": missing_handoff_fields,
+        "required_setup_blocks": list(DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS),
+        "setup_block_ids": setup_block_ids,
+        "missing_setup_blocks": missing_setup_blocks,
+        "invalid_fields": invalid_fields,
+        "copyable_commands": copyable_commands,
+        "local_env_names": local_env_names,
+        "recommended_flow": handoff.get("recommended_flow"),
+        "manual_env_available": True,
+        "connect_from_codex_available": handoff.get("connect_from_codex_available"),
+        "connect_from_codex_url": handoff.get("connect_from_codex_url"),
+        "connect_from_codex_url_masked": False,
+        "requested_scopes": handoff.get("requested_scopes"),
+        "requested_expires_in": handoff.get("requested_expires_in"),
+        "site_capability_status": site_capability_status,
+        "runtime_auth_ids": runtime_auth_ids,
+        "missing_runtime_auth": missing_runtime_auth,
+        "secret_policy": secret_policy,
+        "verification": verification,
+    }
+
+    if missing_handoff_fields or missing_setup_blocks or invalid_fields:
+        return _doctor_check(
+            "auth_login_contract",
+            "warn",
+            "auth login handoff metadata is missing or invalid.",
+            fix=_doctor_fix(
+                "repair_auth_login_contract",
+                commands=[
+                    "browser-cli auth login",
+                    "browser-cli auth login --device-code",
+                    "browser-cli commands --workflow connect_from_codex_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Keep auth login, auth connect-requirements, README, and docs/json-contract.md in sync.",
+                    "Agents should not guide users through browser credentials unless auth login exposes setup_blocks, local_env safety, verification, and secret_policy.",
+                ],
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "auth_login_contract",
+        "pass",
+        "auth login exposes the handoff metadata agents need for safe setup.",
+        **common_details,
+    )
+
+
+def _doctor_device_code_contract_check() -> dict[str, Any]:
+    try:
+        project_id = None
+        project_id_source = "unset"
+        scopes = list(DEFAULT_CODEX_CONNECT_SCOPES)
+        scope_details = _scope_details(scopes)
+        expires_in = DEFAULT_CODEX_CONNECT_EXPIRES_IN
+        connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=scopes,
+            expires_in=expires_in,
+            response="device_code",
+        )
+        fallback_connect_url = _connect_from_codex_url(
+            project_id=project_id,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        fallback_handoff = _auth_login_handoff(
+            connect_url=fallback_connect_url,
+            project_id=project_id,
+            project_id_source=project_id_source,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        required_endpoints = _device_code_required_endpoints()
+        required_browser_site_support = _device_code_required_browser_site_support()
+        device_code = {
+            "available": False,
+            "reason": "browser_site_endpoint_missing",
+            "verification_uri": LEXMOUNT_CODEX_CONNECT_URL,
+            "connect_from_codex_url": connect_url,
+            "project_id": project_id,
+            "project_id_source": project_id_source,
+            "requested_scopes": scopes,
+            "requested_scope_details": scope_details,
+            "requested_expires_in": expires_in,
+            "required_endpoints": required_endpoints,
+            "required_browser_site_support": required_browser_site_support,
+        }
+        site_capabilities = _connect_from_codex_site_capabilities()
+        site_capability_status = _connect_from_codex_site_capability_status(
+            site_capabilities
+        )
+        runtime_auth = _connect_from_codex_required_runtime_auth()
+    except Exception as exc:
+        return _doctor_check(
+            "device_code_contract",
+            "warn",
+            "auth login --device-code contract could not be built.",
+            error=exc.__class__.__name__,
+            required_device_code_fields=list(DOCTOR_REQUIRED_DEVICE_CODE_FIELDS),
+            fix=_doctor_fix(
+                "repair_device_code_contract",
+                commands=[
+                    "browser-cli auth login --device-code",
+                    "browser-cli auth connect-requirements",
+                    "browser-cli commands --workflow device_code_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Agents rely on auth login --device-code metadata to decide between approval and manual-env fallback.",
+                    "Upgrade or reinstall browser-cli if device-code login cannot produce JSON.",
+                ],
+                connect_from_codex=_doctor_connect_from_codex_fix(),
+            ),
+        )
+
+    missing_device_code_fields = [
+        field for field in DOCTOR_REQUIRED_DEVICE_CODE_FIELDS if field not in device_code
+    ]
+    invalid_fields: list[str] = []
+    if device_code.get("available") is not False:
+        invalid_fields.append("available")
+    if device_code.get("reason") != "browser_site_endpoint_missing":
+        invalid_fields.append("reason")
+    if device_code.get("verification_uri") != LEXMOUNT_CODEX_CONNECT_URL:
+        invalid_fields.append("verification_uri")
+    if device_code.get("project_id") is not None:
+        invalid_fields.append("project_id")
+    if device_code.get("project_id_source") != "unset":
+        invalid_fields.append("project_id_source")
+    if device_code.get("requested_scopes") != list(DEFAULT_CODEX_CONNECT_SCOPES):
+        invalid_fields.append("requested_scopes")
+    if device_code.get("requested_expires_in") != DEFAULT_CODEX_CONNECT_EXPIRES_IN:
+        invalid_fields.append("requested_expires_in")
+
+    split_url = urlsplit(str(device_code.get("connect_from_codex_url", "")))
+    query_pairs = parse_qsl(split_url.query)
+    query_values = {key: value for key, value in query_pairs if key != "scope"}
+    scope_values = [value for key, value in query_pairs if key == "scope"]
+    if f"{split_url.scheme}://{split_url.netloc}{split_url.path}" != (
+        LEXMOUNT_CODEX_CONNECT_URL
+    ):
+        invalid_fields.append("connect_from_codex_url.base")
+    expected_query = {
+        "source": "browser-cli",
+        "intent": "agent-browser-control",
+        "response": "device_code",
+        "expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+    }
+    for key, expected in expected_query.items():
+        if query_values.get(key) != expected:
+            invalid_fields.append(f"connect_from_codex_url.{key}")
+    if scope_values != list(DEFAULT_CODEX_CONNECT_SCOPES):
+        invalid_fields.append("connect_from_codex_url.scope")
+
+    device_code_endpoints = device_code.get("required_endpoints")
+    if not isinstance(device_code_endpoints, list):
+        invalid_fields.append("required_endpoints")
+        device_code_endpoints = []
+    missing_required_device_code_endpoints = [
+        endpoint
+        for endpoint in DOCTOR_REQUIRED_DEVICE_CODE_ENDPOINTS
+        if endpoint not in device_code_endpoints
+    ]
+    if missing_required_device_code_endpoints:
+        invalid_fields.append("required_endpoints")
+
+    browser_site_support = device_code.get("required_browser_site_support")
+    if not isinstance(browser_site_support, list):
+        invalid_fields.append("required_browser_site_support")
+        browser_site_support = []
+    missing_required_browser_site_support = [
+        support
+        for support in DOCTOR_REQUIRED_DEVICE_CODE_BROWSER_SITE_SUPPORT
+        if support not in browser_site_support
+    ]
+    if missing_required_browser_site_support:
+        invalid_fields.append("required_browser_site_support")
+
+    fallback_setup_blocks = fallback_handoff.get("setup_blocks")
+    fallback_setup_block_ids: list[str] = []
+    missing_fallback_setup_blocks = list(DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS)
+    fallback_setup_by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(fallback_setup_blocks, list):
+        fallback_setup_by_id = {
+            str(block.get("id")): block
+            for block in fallback_setup_blocks
+            if isinstance(block, dict) and block.get("id") is not None
+        }
+        fallback_setup_block_ids = list(fallback_setup_by_id)
+        missing_fallback_setup_blocks = [
+            block_id
+            for block_id in DOCTOR_REQUIRED_AUTH_LOGIN_SETUP_BLOCKS
+            if block_id not in fallback_setup_by_id
+        ]
+    else:
+        invalid_fields.append("fallback_handoff.setup_blocks")
+
+    local_env_block = fallback_setup_by_id.get("local_env", {})
+    if local_env_block.get("safe_to_paste_in_chat") is not False:
+        invalid_fields.append(
+            "fallback_handoff.setup_blocks.local_env.safe_to_paste_in_chat"
+        )
+    if local_env_block.get("local_shell_only") is not True:
+        invalid_fields.append(
+            "fallback_handoff.setup_blocks.local_env.local_shell_only"
+        )
+    if local_env_block.get("contains_secret_values") is not False:
+        invalid_fields.append(
+            "fallback_handoff.setup_blocks.local_env.contains_secret_values"
+        )
+    verify_block = fallback_setup_by_id.get("verify", {})
+    if AGENT_DOCTOR_COMMAND not in (verify_block.get("commands") or []):
+        invalid_fields.append("fallback_handoff.setup_blocks.verify.commands")
+
+    capability_ids = [
+        str(item.get("id")) for item in site_capabilities if isinstance(item, dict)
+    ]
+    missing_required_site_capabilities = [
+        capability
+        for capability in DOCTOR_REQUIRED_DEVICE_CODE_SITE_CAPABILITIES
+        if capability not in capability_ids
+    ]
+    if missing_required_site_capabilities:
+        invalid_fields.append("site_capabilities")
+
+    runtime_auth_ids = [
+        str(item.get("id")) for item in runtime_auth if isinstance(item, dict)
+    ]
+    missing_runtime_auth = [
+        item
+        for item in DOCTOR_REQUIRED_CONNECT_RUNTIME_AUTH
+        if item not in runtime_auth_ids
+    ]
+    if missing_runtime_auth:
+        invalid_fields.append("required_runtime_auth")
+
+    secret_policy = {
+        "contains_secret_values": False,
+        "do_not_paste_in_chat": [
+            "access_token",
+            "refresh_token",
+            "raw device_code",
+        ],
+        "safe_to_share": [
+            "browser-cli auth login --device-code output with unavailable pending contract",
+            "browser-cli doctor output with default masking",
+        ],
+    }
+    verification = {
+        "login_command": "browser-cli auth login --device-code",
+        "workflow_command": "browser-cli commands --workflow device_code_auth",
+        "doctor_command": AGENT_DOCTOR_COMMAND,
+        "success_condition": (
+            "available=false falls back to manual_env until device-code endpoints "
+            "and bearer-token runtime auth are implemented"
+        ),
+    }
+
+    invalid_fields = _dedupe_preserving_order(invalid_fields)
+    common_details: dict[str, Any] = {
+        "schema_version": 1,
+        "required_device_code_fields": list(DOCTOR_REQUIRED_DEVICE_CODE_FIELDS),
+        "missing_device_code_fields": missing_device_code_fields,
+        "available": device_code.get("available"),
+        "selected_flow": "device_code",
+        "device_code_available": device_code.get("available"),
+        "reason": device_code.get("reason"),
+        "verification_uri": device_code.get("verification_uri"),
+        "connect_from_codex_url": device_code.get("connect_from_codex_url"),
+        "connect_from_codex_url_masked": False,
+        "requested_scopes": device_code.get("requested_scopes"),
+        "requested_expires_in": device_code.get("requested_expires_in"),
+        "required_device_code_endpoints": device_code_endpoints,
+        "missing_required_device_code_endpoints": (
+            missing_required_device_code_endpoints
+        ),
+        "required_browser_site_support": browser_site_support,
+        "missing_required_browser_site_support": (
+            missing_required_browser_site_support
+        ),
+        "required_site_capabilities": list(
+            DOCTOR_REQUIRED_DEVICE_CODE_SITE_CAPABILITIES
+        ),
+        "site_capability_ids": capability_ids,
+        "missing_required_site_capabilities": missing_required_site_capabilities,
+        "site_capability_status": site_capability_status,
+        "fallback_handoff_setup_block_ids": fallback_setup_block_ids,
+        "missing_fallback_setup_blocks": missing_fallback_setup_blocks,
+        "runtime_auth_ids": runtime_auth_ids,
+        "missing_runtime_auth": missing_runtime_auth,
+        "invalid_fields": invalid_fields,
+        "secret_policy": secret_policy,
+        "verification": verification,
+    }
+
+    if (
+        missing_device_code_fields
+        or missing_required_device_code_endpoints
+        or missing_required_browser_site_support
+        or missing_required_site_capabilities
+        or missing_fallback_setup_blocks
+        or missing_runtime_auth
+        or invalid_fields
+    ):
+        return _doctor_check(
+            "device_code_contract",
+            "warn",
+            "auth login --device-code metadata is missing or invalid.",
+            fix=_doctor_fix(
+                "repair_device_code_contract",
+                commands=[
+                    "browser-cli auth login --device-code",
+                    "browser-cli auth connect-requirements",
+                    "browser-cli commands --workflow device_code_auth",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Keep auth login --device-code, auth connect-requirements, README, and docs/json-contract.md in sync.",
+                    "browser.lexmount.cn needs device-code endpoints plus bearer-token runtime support before agents can prefer approval over manual_env fallback.",
+                ],
+                connect_from_codex=_doctor_connect_from_codex_fix(),
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "device_code_contract",
+        "pass",
+        "auth login --device-code exposes a safe pending/fallback contract for agents.",
         **common_details,
     )
 
@@ -4742,6 +7231,72 @@ def _doctor_agent_prompt_check() -> dict[str, Any]:
     )
 
 
+def _doctor_agent_skill_resources_check() -> dict[str, Any]:
+    resource_items, package_errors = _packaged_skill_resource_items()
+    checked_resources: list[dict[str, Any]] = []
+    missing_patterns: list[str] = []
+    skill_content = ""
+    for item in resource_items:
+        resource_payload = {
+            "path": item["path"],
+            "package_resource": item["package_resource"],
+            "content_length": len(str(item["content"])),
+            "sha256": item["sha256"],
+        }
+        if item["path"] == "SKILL.md":
+            skill_content = str(item["content"])
+        checked_resources.append(resource_payload)
+
+    if skill_content:
+        missing_patterns = [
+            pattern
+            for pattern in DOCTOR_REQUIRED_SKILL_PATTERNS
+            if pattern not in skill_content
+        ]
+    elif not package_errors:
+        missing_patterns = list(DOCTOR_REQUIRED_SKILL_PATTERNS)
+
+    common_details = {
+        "resource_count": len(resource_items),
+        "expected_resource_count": len(_packaged_skill_resources()),
+        "checked_resources": checked_resources,
+        "package_errors": package_errors,
+        "required_patterns": list(DOCTOR_REQUIRED_SKILL_PATTERNS),
+        "missing_patterns": missing_patterns,
+        "status_command": "browser-cli skill status",
+        "install_command": "browser-cli skill install",
+        "force_install_command": "browser-cli skill install --force",
+    }
+
+    if package_errors or missing_patterns:
+        return _doctor_check(
+            "agent_skill_resources",
+            "warn",
+            "Packaged Codex Skill resources are missing or stale.",
+            fix=_doctor_fix(
+                "repair_packaged_agent_skill_resources",
+                commands=[
+                    "browser-cli skill status",
+                    "browser-cli skill install --force",
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                ],
+                guidance=[
+                    "Packaged Skill resources should include SKILL.md, agents/openai.yaml, and references.",
+                    "Keep root SKILL.md and browser_cli.agent_skill:SKILL.md in sync.",
+                    "Run skill install to refresh a local Codex Skill directory.",
+                ],
+            ),
+            **common_details,
+        )
+
+    return _doctor_check(
+        "agent_skill_resources",
+        "pass",
+        "Packaged Codex Skill resources are installable.",
+        **common_details,
+    )
+
+
 def _doctor_agent_references_check() -> dict[str, Any]:
     try:
         references = _agent_references()
@@ -4972,8 +7527,11 @@ def _doctor_agent_examples_check() -> dict[str, Any]:
                 commands=[
                     "browser-cli example list",
                     "browser-cli example get --id agent_playbook --metadata-only",
-                    "browser-cli example get --id page_inspection_case",
-                    "browser-cli example get --id form_fill_case",
+                    *[
+                        f"browser-cli example get --id {example_id}"
+                        for example_id in DOCTOR_REQUIRED_EXAMPLES
+                        if example_id != "agent_playbook"
+                    ],
                     "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
                 ],
                 guidance=[
@@ -6714,20 +9272,11 @@ def _connect_from_codex_site_capability_status(
 
 
 def _device_code_required_endpoints() -> list[str]:
-    return [
-        "POST /api/auth/device/code",
-        "POST /api/auth/device/token",
-    ]
+    return list(DOCTOR_REQUIRED_DEVICE_CODE_ENDPOINTS)
 
 
 def _device_code_required_browser_site_support() -> list[str]:
-    return [
-        "Show user_code approval UI on /connect/codex.",
-        "Issue scoped, project-bound, short-lived access tokens.",
-        "Issue refresh tokens with revoke and expiration metadata.",
-        "Expose token refresh and revoke endpoints for browser-cli.",
-        "Enable browser runtime bearer-token authentication.",
-    ]
+    return list(DOCTOR_REQUIRED_DEVICE_CODE_BROWSER_SITE_SUPPORT)
 
 
 def _connect_from_codex_browser_site_requirements() -> list[str]:
@@ -8428,6 +10977,111 @@ def _read_file_input_payloads(
     return payloads
 
 
+def _inline_file_input_payloads(
+    *,
+    command: str,
+    inline_files: list[Any],
+    max_bytes: int,
+) -> list[dict[str, Any]]:
+    if max_bytes < 0:
+        _failure(
+            command,
+            "argument_error",
+            "max_bytes must be zero or greater.",
+            exit_code=2,
+            max_bytes=max_bytes,
+        )
+
+    payloads: list[dict[str, Any]] = []
+    total_bytes = 0
+    for index, inline_file in enumerate(inline_files):
+        if not isinstance(inline_file, dict):
+            _failure(
+                command,
+                "argument_error",
+                "inline_files entries must be objects.",
+                exit_code=2,
+                index=index,
+            )
+        name = inline_file.get("name")
+        if not isinstance(name, str) or not name:
+            _failure(
+                command,
+                "argument_error",
+                "inline_files entries require a non-empty name.",
+                exit_code=2,
+                index=index,
+            )
+        if "data_base64" in inline_file:
+            data_base64 = inline_file["data_base64"]
+            if not isinstance(data_base64, str):
+                _failure(
+                    command,
+                    "argument_error",
+                    "inline_files data_base64 must be a string.",
+                    exit_code=2,
+                    index=index,
+                )
+            try:
+                data = base64.b64decode(data_base64, validate=True)
+            except Exception as exc:
+                _failure(
+                    command,
+                    "argument_error",
+                    "inline_files data_base64 must be valid base64.",
+                    exit_code=2,
+                    index=index,
+                    error_class=exc.__class__.__name__,
+                )
+        else:
+            content = inline_file.get("content")
+            if not isinstance(content, str):
+                _failure(
+                    command,
+                    "argument_error",
+                    "inline_files entries require string content or data_base64.",
+                    exit_code=2,
+                    index=index,
+                )
+            data = content.encode("utf-8")
+            data_base64 = base64.b64encode(data).decode("ascii")
+
+        total_bytes += len(data)
+        if total_bytes > max_bytes:
+            _failure(
+                command,
+                "file_payload_too_large",
+                "Total inline file input payload exceeds max_bytes.",
+                exit_code=2,
+                max_bytes=max_bytes,
+                total_bytes=total_bytes,
+            )
+        mime_type = inline_file.get("type")
+        if not isinstance(mime_type, str) or not mime_type:
+            mime_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        raw_last_modified = inline_file.get("last_modified", 0) or 0
+        try:
+            last_modified = int(raw_last_modified)
+        except (TypeError, ValueError):
+            _failure(
+                command,
+                "argument_error",
+                "inline_files last_modified must be an integer.",
+                exit_code=2,
+                index=index,
+            )
+        payloads.append(
+            {
+                "name": name,
+                "type": mime_type,
+                "size": len(data),
+                "last_modified": last_modified,
+                "data_base64": data_base64,
+            }
+        )
+    return payloads
+
+
 def _eval_backed_result_payload(result: Any) -> dict[str, Any]:
     if not isinstance(result, dict):
         return {"value": result}
@@ -8463,6 +11117,717 @@ def _run_eval_backed_action_command(
             reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
         ),
         result=_eval_backed_result_payload(result.result),
+    )
+
+
+def _run_eval_expression_result(*, connect_url: str, expression: str) -> dict[str, Any]:
+    result = run_browser_action(
+        connect_url=connect_url,
+        action="eval",
+        request=EvalRequest(expression=expression),
+    )
+    return _eval_backed_result_payload(result.result)
+
+
+def _normalize_observe_surfaces(values: list[str]) -> list[str]:
+    requested = values or ["interactive", "text"]
+    if "all" in requested:
+        requested = list(OBSERVE_SURFACE_CHOICES)
+    return _dedupe_preserving_order(requested)
+
+
+def _observe_surface_expression(
+    surface: str,
+    args: argparse.Namespace,
+) -> str:
+    if surface == "interactive":
+        return _interactive_snapshot_expression(
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    if surface == "accessibility":
+        return _accessibility_snapshot_expression(
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    if surface == "text":
+        return _text_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_chars=args.max_chars,
+        )
+    if surface == "links":
+        return _link_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            include_empty=False,
+            same_origin_only=False,
+        )
+    if surface == "forms":
+        return _form_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            reveal_sensitive_values=False,
+        )
+    if surface == "outline":
+        return _outline_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    raise BrowserRuntimeError(f"Unsupported observe surface: {surface}")
+
+
+def _normalize_extract_surfaces(values: list[str]) -> list[str]:
+    requested = values or ["text", "links"]
+    if "all" in requested:
+        requested = list(EXTRACT_SURFACE_CHOICES)
+    return _dedupe_preserving_order(requested)
+
+
+def _extract_surface_expression(
+    surface: str,
+    args: argparse.Namespace,
+) -> str:
+    if surface == "outline":
+        return _outline_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    if surface == "text":
+        return _text_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_chars=args.max_chars,
+        )
+    if surface == "links":
+        return _link_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            include_empty=args.include_empty_links,
+            same_origin_only=args.same_origin_only,
+        )
+    if surface == "tables":
+        return _table_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_rows=args.max_rows,
+            max_cells=args.max_cells,
+        )
+    if surface == "lists":
+        return _list_snapshot_expression(
+            selector=args.selector,
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+            max_items=args.max_items,
+        )
+    if surface == "accessibility":
+        return _accessibility_snapshot_expression(
+            include_hidden=args.include_hidden,
+            max_nodes=args.max_nodes,
+        )
+    raise BrowserRuntimeError(f"Unsupported extract surface: {surface}")
+
+
+def _extract_truncated_surfaces(extractions: dict[str, dict[str, Any]]) -> list[str]:
+    return [
+        surface
+        for surface, payload in extractions.items()
+        if bool(payload.get("truncated"))
+    ]
+
+
+def cmd_action_observe(args: argparse.Namespace) -> None:
+    command = "action.observe"
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        page_info = _run_eval_expression_result(
+            connect_url=connect_url,
+            expression=_page_info_expression(),
+        )
+        surfaces = _normalize_observe_surfaces(args.surface)
+        snapshots = {
+            surface: _run_eval_expression_result(
+                connect_url=connect_url,
+                expression=_observe_surface_expression(surface, args),
+            )
+            for surface in surfaces
+        }
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    result = {
+        "kind": "observe",
+        "url": page_info.get("url"),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "page_info": page_info,
+        "snapshots": snapshots,
+    }
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def cmd_action_extract(args: argparse.Namespace) -> None:
+    command = "action.extract"
+    try:
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        page_info = _run_eval_expression_result(
+            connect_url=connect_url,
+            expression=_page_info_expression(),
+        )
+        surfaces = _normalize_extract_surfaces(args.surface)
+        extractions = {
+            surface: _run_eval_expression_result(
+                connect_url=connect_url,
+                expression=_extract_surface_expression(surface, args),
+            )
+            for surface in surfaces
+        }
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    truncated_surfaces = _extract_truncated_surfaces(extractions)
+    result = {
+        "kind": "extract",
+        "url": page_info.get("url"),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "selector": args.selector,
+        "truncated": bool(truncated_surfaces),
+        "truncated_surfaces": truncated_surfaces,
+        "page_info": page_info,
+        "extractions": extractions,
+    }
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
+    )
+
+
+def _act_argument_error(
+    command: str,
+    message: str,
+    **payload: Any,
+) -> NoReturn:
+    if command == "case.run":
+        detail = {
+            key: _sanitize_failure_value(value)
+            for key, value in payload.items()
+            if value is not None
+        }
+        suffix = (
+            " " + json.dumps(detail, ensure_ascii=False, sort_keys=True, default=str)
+            if detail
+            else ""
+        )
+        raise BrowserConfigError(f"{message}{suffix}")
+    _failure(command, "argument_error", message, exit_code=2, **payload)
+
+
+def _act_present(value: Any) -> bool:
+    return value is not None and value != ""
+
+
+def _act_target_modes(args: argparse.Namespace, allowed: Iterable[str]) -> list[str]:
+    allowed_set = set(allowed)
+    modes: list[str] = []
+    for mode in ("role", "label", "text", "selector"):
+        if mode not in allowed_set:
+            continue
+        if _act_present(getattr(args, mode, None)):
+            modes.append(mode)
+    return modes
+
+
+def _act_validate_unused_targets(
+    command: str,
+    args: argparse.Namespace,
+    allowed: Iterable[str],
+) -> None:
+    allowed_set = set(allowed)
+    provided = [
+        mode
+        for mode in ("role", "label", "text", "selector")
+        if mode not in allowed_set
+        and not (args.kind == "fill" and mode == "text")
+        and _act_present(getattr(args, mode, None))
+    ]
+    if provided:
+        _act_argument_error(
+            command,
+            f"--kind {args.kind} does not support target option(s): "
+            + ", ".join(f"--{mode}" for mode in provided),
+            kind=args.kind,
+            unsupported_targets=provided,
+        )
+    if _act_present(getattr(args, "name", None)) and not _act_present(args.role):
+        _act_argument_error(
+            command,
+            "--name requires --role.",
+            kind=args.kind,
+            name=args.name,
+        )
+
+
+def _act_select_target(
+    command: str,
+    args: argparse.Namespace,
+    *,
+    allowed: Iterable[str],
+    required: bool = True,
+) -> str | None:
+    _act_validate_unused_targets(command, args, allowed)
+    modes = _act_target_modes(args, allowed)
+    if len(modes) > 1:
+        _act_argument_error(
+            command,
+            "Pass only one target mode for action act.",
+            kind=args.kind,
+            target_modes=modes,
+        )
+    if not modes:
+        if required:
+            _act_argument_error(
+                command,
+                f"--kind {args.kind} requires one of: "
+                + ", ".join(f"--{mode}" for mode in allowed),
+                kind=args.kind,
+                allowed_targets=list(allowed),
+            )
+        return None
+    return modes[0]
+
+
+def _act_click_selection(command: str, args: argparse.Namespace) -> str:
+    _act_validate_unused_targets(
+        command,
+        args,
+        allowed=("role", "label", "text", "selector"),
+    )
+    primary_modes = [
+        mode
+        for mode in ("role", "label", "text")
+        if _act_present(getattr(args, mode, None))
+    ]
+    selector_present = _act_present(args.selector)
+    if len(primary_modes) > 1:
+        _act_argument_error(
+            command,
+            "Pass only one semantic target mode for action act click.",
+            kind=args.kind,
+            target_modes=primary_modes,
+        )
+    if primary_modes:
+        selection = primary_modes[0]
+        if selector_present and selection != "text":
+            _act_argument_error(
+                command,
+                "--selector can only be combined with --text for --kind click.",
+                kind=args.kind,
+                target_modes=[selection, "selector"],
+            )
+        return selection
+    if selector_present:
+        return "selector"
+    _act_argument_error(
+        command,
+        "--kind click requires --role, --label, --text, or --selector.",
+        kind=args.kind,
+        allowed_targets=["role", "label", "text", "selector"],
+    )
+
+
+def _act_fill_text(command: str, args: argparse.Namespace) -> str:
+    has_value = _act_present(args.value)
+    has_text = _act_present(args.text)
+    if has_value and has_text:
+        _act_argument_error(
+            command,
+            "--kind fill accepts either --value or --text, not both.",
+            kind=args.kind,
+        )
+    if has_value:
+        return str(args.value)
+    if has_text:
+        return str(args.text)
+    _act_argument_error(
+        command,
+        "--kind fill requires --value.",
+        kind=args.kind,
+        accepted_alias="--text",
+    )
+
+
+def _act_select_value(command: str, args: argparse.Namespace) -> tuple[str | None, str | None]:
+    has_value = _act_present(args.value)
+    has_option_label = _act_present(args.option_label)
+    if has_value and has_option_label:
+        _act_argument_error(
+            command,
+            "--kind select accepts either --value or --option-label, not both.",
+            kind=args.kind,
+        )
+    if not has_value and not has_option_label:
+        _act_argument_error(
+            command,
+            "--kind select requires --value or --option-label.",
+            kind=args.kind,
+        )
+    return (
+        str(args.value) if has_value else None,
+        str(args.option_label) if has_option_label else None,
+    )
+
+
+def _act_target_payload(args: argparse.Namespace, selection: str | None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"selection": selection or "page"}
+    if selection == "role":
+        payload.update(
+            role=args.role,
+            name=args.name,
+            exact=bool(args.exact),
+            case_sensitive=bool(args.case_sensitive),
+        )
+    elif selection == "label":
+        payload.update(
+            label=args.label,
+            exact=bool(args.exact),
+            case_sensitive=bool(args.case_sensitive),
+        )
+    elif selection == "text":
+        payload.update(
+            text=args.text,
+            selector=args.selector,
+            exact=bool(args.exact),
+            case_sensitive=bool(args.case_sensitive),
+        )
+    elif selection == "selector":
+        payload.update(selector=args.selector)
+    return payload
+
+
+def _act_plan(
+    command: str,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    kind = args.kind
+    if kind == "click":
+        selection = _act_click_selection(command, args)
+        if selection == "role":
+            underlying_command = "action.click-role"
+            expression = _click_role_expression(
+                role=args.role,
+                name=args.name,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "label":
+            underlying_command = "action.click-label"
+            expression = _click_label_expression(
+                label=args.label,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "text":
+            underlying_command = "action.click-text"
+            expression = _click_text_expression(
+                text=args.text,
+                selector=args.selector,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.click-index"
+            expression = _click_index_expression(
+                selector=args.selector,
+                index=args.index,
+                include_hidden=args.include_hidden,
+            )
+    elif kind == "fill":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("label", "role", "selector"),
+        )
+        text = _act_fill_text(command, args)
+        if selection == "label":
+            underlying_command = "action.fill-label"
+            expression = _fill_label_expression(
+                label=args.label,
+                text=text,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "role":
+            underlying_command = "action.fill-role"
+            expression = _fill_role_expression(
+                role=args.role,
+                name=args.name,
+                text=text,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.fill"
+            expression = _fill_expression(selector=args.selector, text=text)
+    elif kind == "select":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("label", "role", "selector"),
+        )
+        value, option_label = _act_select_value(command, args)
+        if selection == "label":
+            underlying_command = "action.select-label"
+            expression = _select_label_expression(
+                label=args.label,
+                value=value,
+                option_label=option_label,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "role":
+            underlying_command = "action.select-role"
+            expression = _select_role_expression(
+                role=args.role,
+                name=args.name,
+                value=value,
+                option_label=option_label,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            if option_label is not None:
+                _act_argument_error(
+                    command,
+                    "--kind select with --selector requires --value; "
+                    "--option-label is supported with --label or --role.",
+                    kind=args.kind,
+                    target="selector",
+                )
+            underlying_command = "action.select-option"
+            expression = _select_option_expression(selector=args.selector, value=value or "")
+    elif kind in {"check", "uncheck"}:
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("label", "role", "selector"),
+        )
+        checked = kind == "check"
+        if selection == "label":
+            underlying_command = "action.check-label" if checked else "action.uncheck-label"
+            expression = _check_label_expression(
+                label=args.label,
+                checked=checked,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "role":
+            underlying_command = "action.check-role" if checked else "action.uncheck-role"
+            expression = _check_role_expression(
+                role=args.role,
+                name=args.name,
+                checked=checked,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.check" if checked else "action.uncheck"
+            expression = _checkbox_action_expression(
+                selector=args.selector,
+                checked=checked,
+            )
+    elif kind == "hover":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("role", "selector"),
+        )
+        if selection == "role":
+            underlying_command = "action.hover-role"
+            expression = _hover_role_expression(
+                role=args.role,
+                name=args.name,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.hover"
+            expression = _hover_expression(args.selector)
+    elif kind == "press":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("role", "selector"),
+            required=False,
+        )
+        if not _act_present(args.key):
+            _act_argument_error(command, "--kind press requires --key.", kind=args.kind)
+        if selection == "role":
+            underlying_command = "action.press-role"
+            expression = _press_role_expression(
+                role=args.role,
+                name=args.name,
+                key=args.key,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        elif selection == "selector":
+            underlying_command = "action.press"
+            expression = _press_expression(selector=args.selector, key=args.key)
+        else:
+            underlying_command = "action.press-key"
+            expression = _press_key_expression(
+                key=args.key,
+                code=args.code,
+                alt_key=args.alt_key,
+                ctrl_key=args.ctrl_key,
+                meta_key=args.meta_key,
+                shift_key=args.shift_key,
+            )
+    elif kind == "scroll-into-view":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("role", "selector"),
+        )
+        if selection == "role":
+            underlying_command = "action.scroll-into-view-role"
+            expression = _scroll_into_view_role_expression(
+                role=args.role,
+                name=args.name,
+                block=args.block,
+                inline=args.inline,
+                behavior=args.behavior,
+                exact=args.exact,
+                case_sensitive=args.case_sensitive,
+            )
+        else:
+            underlying_command = "action.scroll-into-view"
+            expression = _scroll_into_view_expression(
+                selector=args.selector,
+                block=args.block,
+                inline=args.inline,
+                behavior=args.behavior,
+            )
+    elif kind == "scroll":
+        selection = _act_select_target(
+            command,
+            args,
+            allowed=("selector",),
+            required=False,
+        )
+        underlying_command = "action.scroll"
+        expression = _scroll_expression(
+            selector=args.selector if selection == "selector" else None,
+            x=args.x,
+            y=args.y,
+            behavior=args.behavior,
+        )
+    else:
+        _act_argument_error(
+            command,
+            f"Unsupported action act kind: {kind}",
+            kind=kind,
+            available_kinds=list(ACT_KIND_CHOICES),
+        )
+
+    target = _act_target_payload(args, selection)
+    if selection == "selector" and kind == "click":
+        target["index"] = args.index
+        target["include_hidden"] = bool(args.include_hidden)
+    if kind in {"fill", "press", "select", "scroll", "scroll-into-view"}:
+        target.update(
+            {
+                key: value
+                for key, value in {
+                    "value_present": kind == "fill" and (
+                        _act_present(args.value) or _act_present(args.text)
+                    ),
+                    "key": args.key if kind == "press" else None,
+                    "option_label": args.option_label if kind == "select" else None,
+                    "x": args.x if kind == "scroll" else None,
+                    "y": args.y if kind == "scroll" else None,
+                    "block": args.block if kind == "scroll-into-view" else None,
+                    "inline": args.inline if kind == "scroll-into-view" else None,
+                    "behavior": args.behavior
+                    if kind in {"scroll", "scroll-into-view"}
+                    else None,
+                }.items()
+                if value is not None
+            }
+        )
+
+    return {
+        "underlying_command": underlying_command,
+        "selection": selection or "page",
+        "target": target,
+        "expression_backed": True,
+        "deterministic": True,
+        "custom_javascript": False,
+        "verify_after": [
+            "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
+            "browser-cli action page-info --session-id <session_id>",
+        ],
+        "expression": expression,
+    }
+
+
+def cmd_action_act(args: argparse.Namespace) -> None:
+    command = "action.act"
+    try:
+        plan = _act_plan(command, args)
+        expression = str(plan.pop("expression"))
+        target = _target_from_args(args)
+        connect_url = resolve_browser_action_connect_url(target)
+        action_result = _run_eval_expression_result(
+            connect_url=connect_url,
+            expression=expression,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+
+    result = {
+        "kind": "act",
+        "intent": args.kind,
+        "target": plan["target"],
+        "plan": plan,
+        "action_result": action_result,
+    }
+    _success(
+        command,
+        session_id=getattr(args, "session_id", None),
+        **_masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=bool(getattr(args, "reveal_connect_url", False)),
+        ),
+        result=result,
     )
 
 
@@ -16552,6 +19917,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "related_workflows": [
                 "navigation_flow",
                 "state_waits",
+                "first_browser_task",
                 "one_off_page_task",
             ],
             "when_to_use": [
@@ -16919,6 +20285,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "selection_order": [
                 "page-info",
+                "extract",
                 "outline-snapshot",
                 "text-snapshot",
                 "link-snapshot",
@@ -16931,10 +20298,13 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "inspect_commands": [
                 "browser-cli action page-info --session-id <session_id>",
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                 "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
             ],
             "preferred_commands": [
+                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
+                "browser-cli action extract --session-id <session_id> --surface all --selector main",
                 "browser-cli action outline-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
                 "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
@@ -16958,6 +20328,11 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "title",
                 "ready_state",
                 "result.kind",
+                "result.surfaces",
+                "result.extractions",
+                "result.extractions.text.texts",
+                "result.extractions.links.links",
+                "result.truncated_surfaces",
                 "result.texts",
                 "result.text_count",
                 "result.links",
@@ -16979,9 +20354,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "result.truncated",
             ],
             "custom_js_boundary": (
-                "Use action eval only after page-info plus outline/text/link/"
-                "table/list/accessibility snapshots and get-text commands cannot "
-                "express the requested extraction."
+                "Use action eval only after action extract plus page-info, "
+                "outline/text/link/table/list/accessibility snapshots, and "
+                "get-text commands cannot express the requested extraction."
             ),
         },
         "browser_state_management": {
@@ -18758,10 +22133,14 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     )
 
     checks.append(_doctor_command_catalog_check())
+    checks.append(_doctor_action_guides_check())
     checks.append(_doctor_case_schema_check())
     checks.append(_doctor_auth_export_env_contract_check())
+    checks.append(_doctor_auth_login_contract_check())
+    checks.append(_doctor_device_code_contract_check())
     checks.append(_doctor_connect_from_codex_contract_check())
     checks.append(_doctor_agent_prompt_check())
+    checks.append(_doctor_agent_skill_resources_check())
     checks.append(_doctor_agent_references_check())
     checks.append(_doctor_agent_examples_check())
     checks.append(_doctor_context_registry_check())
@@ -20286,6 +23665,134 @@ def cmd_example_get(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_skill_status(args: argparse.Namespace) -> None:
+    command = "skill.status"
+    skill_dir = _skill_dir_from_args(args)
+    _success(command, **_skill_status_payload(skill_dir))
+
+
+def cmd_skill_install(args: argparse.Namespace) -> None:
+    command = "skill.install"
+    skill_dir = _skill_dir_from_args(args)
+    before = _skill_status_payload(skill_dir)
+    if before["package_errors"]:
+        _failure(
+            command,
+            "packaged_skill_unavailable",
+            "Packaged Codex Skill resources could not be read.",
+            skill_dir=str(skill_dir),
+            package_errors=before["package_errors"],
+            fix=_doctor_fix(
+                "reinstall_browser_cli_skill_resources",
+                commands=[
+                    "uv tool install --force git+https://github.com/lexmount/browser-cli.git",
+                    "browser-cli skill status",
+                ],
+                guidance=[
+                    "The installed package should include browser-cli Codex Skill resources.",
+                    "Reinstall browser-cli if packaged Skill resources are unavailable.",
+                ],
+            ),
+        )
+
+    conflicts = [
+        *[str(path) for path in before["stale_files"]],
+        *[str(path) for path in before["unreadable_files"]],
+    ]
+    if conflicts and not bool(args.force):
+        _failure(
+            command,
+            "would_overwrite_skill_files",
+            "Codex Skill files already exist with different or unreadable content.",
+            skill_dir=str(skill_dir),
+            conflicting_files=conflicts,
+            force_required=True,
+            fix=_doctor_fix(
+                "rerun_skill_install_with_force",
+                commands=[_skill_install_command(skill_dir, force=True)],
+                guidance=[
+                    "Review the conflicting files if they may contain local edits.",
+                    "Use --force to replace them with the packaged browser-cli Skill resources.",
+                ],
+            ),
+        )
+
+    resource_items, _package_errors = _packaged_skill_resource_items()
+    status_by_path = {
+        str(item["path"]): str(item["status"])
+        for item in before["checked_files"]
+        if isinstance(item, dict)
+    }
+    written_files: list[str] = []
+    updated_files: list[str] = []
+    skipped_current_files: list[str] = []
+    created_directories: list[str] = []
+
+    for item in resource_items:
+        relative_path = str(item["path"])
+        target = skill_dir / relative_path
+        parent = target.parent
+        if parent.exists() and not parent.is_dir():
+            _failure(
+                command,
+                "skill_parent_path_not_directory",
+                "A parent path for a Codex Skill resource is not a directory.",
+                skill_dir=str(skill_dir),
+                path=relative_path,
+                parent=str(parent),
+            )
+        if not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
+            created_directories.append(str(parent))
+        if target.exists() and not target.is_file():
+            _failure(
+                command,
+                "skill_resource_path_not_file",
+                "A Codex Skill resource path exists but is not a file.",
+                skill_dir=str(skill_dir),
+                path=relative_path,
+                target=str(target),
+            )
+        previous_status = status_by_path.get(relative_path)
+        if previous_status == "current":
+            skipped_current_files.append(relative_path)
+            continue
+        target.write_text(str(item["content"]), encoding="utf-8")
+        if previous_status == "missing":
+            written_files.append(relative_path)
+        else:
+            updated_files.append(relative_path)
+
+    after = _skill_status_payload(skill_dir)
+    _success(
+        command,
+        skill_dir=str(skill_dir),
+        force=bool(args.force),
+        written_files=written_files,
+        updated_files=updated_files,
+        skipped_current_files=skipped_current_files,
+        created_directories=_dedupe_preserving_order(created_directories),
+        before={
+            "status": before["status"],
+            "current": before["current"],
+            "missing_files": before["missing_files"],
+            "stale_files": before["stale_files"],
+            "unreadable_files": before["unreadable_files"],
+        },
+        after={
+            "status": after["status"],
+            "current": after["current"],
+            "missing_files": after["missing_files"],
+            "stale_files": after["stale_files"],
+            "unreadable_files": after["unreadable_files"],
+        },
+        next_steps=[
+            "Restart or reload Codex so the updated Skill instructions are read.",
+            "Run `browser-cli skill status` to verify the installed Skill remains current.",
+        ],
+    )
+
+
 def cmd_commands(args: argparse.Namespace) -> None:
     command = "commands"
     catalog = _command_catalog()
@@ -20390,9 +23897,21 @@ def cmd_version(args: argparse.Namespace) -> None:
     )
 
 
-CASE_SCAFFOLD_TEMPLATES = ("page-inspection", "form-fill")
+CASE_SCAFFOLD_TEMPLATES = (
+    "page-inspection",
+    "agent-primitives",
+    "form-fill",
+    "content-extraction",
+    "browser-state",
+    "navigation-flow",
+    "file-upload",
+    "checkout-flow",
+    "interactive-targeting",
+    "page-diagnostics",
+)
 
 EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "act": ("kind",),
     "accessibility-snapshot": tuple(),
     "blur": ("selector",),
     "blur-role": ("role",),
@@ -20421,6 +23940,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "drag-role-to-role": ("source_role", "target_role"),
     "exists": ("selector",),
     "exists-role": ("role",),
+    "extract": tuple(),
     "fill": ("selector", "text"),
     "fill-label": ("label", "text"),
     "fill-role": ("role", "text"),
@@ -20428,6 +23948,8 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "focus-role": ("role",),
     "frame-snapshot": tuple(),
     "form-snapshot": tuple(),
+    "go-back": tuple(),
+    "go-forward": tuple(),
     "get-attribute": ("selector", "name"),
     "get-attribute-role": ("role", "attribute"),
     "get-text": ("selector",),
@@ -20442,6 +23964,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "link-snapshot": tuple(),
     "list-snapshot": tuple(),
     "network-snapshot": tuple(),
+    "observe": tuple(),
     "outline-snapshot": tuple(),
     "page-info": tuple(),
     "performance-snapshot": tuple(),
@@ -20449,6 +23972,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "press-key": ("key",),
     "press-role": ("role", "key"),
     "query": ("selector",),
+    "reload": tuple(),
     "right-click": ("selector",),
     "right-click-role": ("role",),
     "scroll": tuple(),
@@ -20457,7 +23981,7 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "select-label": ("label",),
     "select-option": ("selector", "value"),
     "select-role": ("role",),
-    "set-file-input": ("selector", "file"),
+    "set-file-input": ("selector",),
     "set-value": ("selector", "value"),
     "storage-clear": tuple(),
     "storage-get": tuple(),
@@ -20497,6 +24021,18 @@ BROWSER_CLI_REQUIRED_CASE_FIELDS: dict[str, tuple[str, ...]] = {
     **EXTENDED_CASE_REQUIRED_FIELDS,
 }
 BROWSER_CLI_CASE_FIELD_CHOICES: dict[str, dict[str, frozenset[str]]] = {
+    "act": {
+        "kind": frozenset(ACT_KIND_CHOICES),
+        "block": frozenset({"start", "center", "end", "nearest"}),
+        "inline": frozenset({"start", "center", "end", "nearest"}),
+        "behavior": frozenset({"auto", "smooth"}),
+    },
+    "extract": {
+        "surface": frozenset([*EXTRACT_SURFACE_CHOICES, "all"]),
+    },
+    "observe": {
+        "surface": frozenset([*OBSERVE_SURFACE_CHOICES, "all"]),
+    },
     "cookie-set": {"same_site": frozenset({"lax", "strict", "none"})},
     "storage-clear": {"area": frozenset({"local", "session"})},
     "storage-get": {"area": frozenset({"local", "session"})},
@@ -20557,7 +24093,10 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
         ).items():
             if field not in step:
                 continue
-            allow_list = str(action) == "dispatch-event" and field == "event"
+            allow_list = (
+                (str(action) == "dispatch-event" and field == "event")
+                or (str(action) in {"extract", "observe"} and field == "surface")
+            )
             raw_values = (
                 step[field]
                 if allow_list and isinstance(step[field], list)
@@ -20593,6 +24132,44 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"steps[{index}] must not set both 'value' and 'option_label'"
                 )
+        if action == "set-file-input":
+            has_file = "file" in step
+            has_inline_files = "inline_files" in step
+            if not has_file and not has_inline_files:
+                errors.append(f"steps[{index}] missing one of 'file' or 'inline_files'")
+            if has_inline_files:
+                inline_files = step["inline_files"]
+                if not isinstance(inline_files, list) or not inline_files:
+                    errors.append(f"steps[{index}].inline_files must be a non-empty array")
+                else:
+                    for file_index, inline_file in enumerate(inline_files):
+                        path = f"steps[{index}].inline_files[{file_index}]"
+                        if not isinstance(inline_file, dict):
+                            errors.append(f"{path} must be an object")
+                            continue
+                        name = inline_file.get("name")
+                        if not isinstance(name, str) or not name:
+                            errors.append(f"{path}.name must be a non-empty string")
+                        has_content = "content" in inline_file
+                        has_data_base64 = "data_base64" in inline_file
+                        if not has_content and not has_data_base64:
+                            errors.append(
+                                f"{path} missing one of 'content' or 'data_base64'"
+                            )
+                        if has_content and not isinstance(inline_file["content"], str):
+                            errors.append(f"{path}.content must be a string")
+                        if has_data_base64:
+                            data_base64 = inline_file["data_base64"]
+                            if not isinstance(data_base64, str):
+                                errors.append(f"{path}.data_base64 must be a string")
+                            else:
+                                try:
+                                    base64.b64decode(data_base64, validate=True)
+                                except Exception:
+                                    errors.append(f"{path}.data_base64 must be valid base64")
+                        mime_type = inline_file.get("type")
+                        if mime_type is not None and not isinstance(mime_type, str):
+                            errors.append(f"{path}.type must be a string")
 
     if "target" in spec and not isinstance(spec["target"], dict):
         errors.append("target must be an object when present")
@@ -20659,6 +24236,87 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                     "action": "screenshot",
                     "output": f"{stem}-page.png",
                     "full_page": True,
+                },
+            ],
+        }
+
+    if template == "agent-primitives":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny page and exercise the agent observe, act, extract, "
+                "and verify loop without custom browser automation code."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Agent primitives fixture</h1>
+      <p id="summary">Revenue: $42</p>
+      <p id="status" role="status" aria-live="polite">Waiting</p>
+      <button type="button" aria-label="Generate insight">Generate insight</button>
+      <a href="#details">Details</a>
+    </main>
+  `;
+  const status = document.querySelector("#status");
+  document.querySelector("[aria-label='Generate insight']").addEventListener("click", () => {
+    status.textContent = "Insight generated";
+    document.querySelector("#summary").textContent = "Revenue: $84";
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "observe",
+                    "surface": ["interactive", "text"],
+                    "selector": "main",
+                    "max_nodes": 40,
+                    "max_chars": 1000,
+                },
+                {
+                    "action": "act",
+                    "kind": "click",
+                    "role": "button",
+                    "name": "Generate insight",
+                },
+                {
+                    "action": "extract",
+                    "surface": ["text", "links"],
+                    "selector": "main",
+                    "max_nodes": 40,
+                    "max_chars": 1000,
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#status",
+                    "text": "Insight generated",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#summary",
+                    "expect": {
+                        "text": "Revenue: $84",
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
                 },
             ],
         }
@@ -20736,6 +24394,743 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
             ],
         }
 
+    if template == "content-extraction":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny content fixture, extract bounded text/link/table/list "
+                "data, and save artifacts without custom scraping code."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Quarterly report</h1>
+      <p class="summary">Revenue grew to $84 with 3 active regions.</p>
+      <a href="/reports/q2">Read Q2 report</a>
+      <ul aria-label="Region highlights">
+        <li>North: $42</li>
+        <li>South: $28</li>
+        <li>West: $14</li>
+      </ul>
+      <table aria-label="Revenue by region">
+        <thead><tr><th>Region</th><th>Revenue</th></tr></thead>
+        <tbody>
+          <tr><td>North</td><td>$42</td></tr>
+          <tr><td>South</td><td>$28</td></tr>
+        </tbody>
+      </table>
+    </main>
+  `;
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "main",
+                    "text": "Quarterly report",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "extract",
+                    "surface": ["text", "links", "tables", "lists"],
+                    "selector": "main",
+                    "max_nodes": 80,
+                    "max_chars": 2000,
+                    "output": f"{stem}.json",
+                },
+                {
+                    "action": "text-snapshot",
+                    "selector": "main",
+                    "max_chars": 1000,
+                    "output": f"{stem}-text.json",
+                },
+                {
+                    "action": "link-snapshot",
+                    "selector": "main",
+                    "max_nodes": 20,
+                    "output": f"{stem}-links.json",
+                },
+                {
+                    "action": "table-snapshot",
+                    "selector": "table",
+                    "max_nodes": 20,
+                    "output": f"{stem}-table.json",
+                },
+                {
+                    "action": "list-snapshot",
+                    "selector": "ul",
+                    "max_nodes": 20,
+                    "output": f"{stem}-list.json",
+                },
+                {
+                    "action": "get-text",
+                    "selector": ".summary",
+                    "expect": {
+                        "text": "Revenue grew to $84 with 3 active regions.",
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "browser-state":
+        url = args.url or "https://example.com"
+        selector = args.selector or "body"
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Open a stable origin, set browser storage and cookie state, "
+                "verify reads, then clean up without custom state scripts."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-selector",
+                    "selector": selector,
+                    "state": "visible",
+                },
+                {
+                    "action": "page-info",
+                },
+                {
+                    "action": "storage-set",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "value": "enabled",
+                },
+                {
+                    "action": "wait-storage",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "value": "enabled",
+                    "match": "exact",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "storage-get",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "expect": {
+                        "value": "enabled",
+                    },
+                },
+                {
+                    "action": "storage-set",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                    "value": "ready",
+                },
+                {
+                    "action": "wait-storage",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                    "value": "ready",
+                    "match": "exact",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "storage-get",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                    "expect": {
+                        "value": "ready",
+                    },
+                },
+                {
+                    "action": "cookie-set",
+                    "name": "lexmount_state",
+                    "value": "enabled",
+                    "path": "/",
+                    "same_site": "lax",
+                },
+                {
+                    "action": "wait-cookie",
+                    "name": "lexmount_state",
+                    "value": "enabled",
+                    "match": "exact",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "cookie-get",
+                    "name": "lexmount_state",
+                    "expect": {
+                        "value": "enabled",
+                    },
+                },
+                {
+                    "action": "storage-remove",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                },
+                {
+                    "action": "wait-storage",
+                    "area": "local",
+                    "key": "lexmount.localState",
+                    "state": "absent",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "storage-remove",
+                    "area": "session",
+                    "key": "lexmount.sessionState",
+                },
+                {
+                    "action": "cookie-delete",
+                    "name": "lexmount_state",
+                    "path": "/",
+                },
+                {
+                    "action": "wait-cookie",
+                    "name": "lexmount_state",
+                    "state": "absent",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "navigation-flow":
+        base_url = (args.url or "https://example.com").split("#", 1)[0]
+        home_url = f"{base_url}#home"
+        details_url = f"{base_url}#details"
+        title = getattr(args, "title", None) or "Example Domain"
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Open a stable page, assert URL/title/load readiness, move "
+                "back and forward through history, reload, and save evidence."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": home_url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-load-state",
+                    "state": "complete",
+                    "timeout_ms": 10000,
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#home",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "wait-title",
+                    "title": title,
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "open-url",
+                    "url": details_url,
+                    "wait_until": "load",
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#details",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "go-back",
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#home",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "go-forward",
+                },
+                {
+                    "action": "wait-url",
+                    "url": "#details",
+                    "match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "reload",
+                },
+                {
+                    "action": "wait-load-state",
+                    "state": "complete",
+                    "timeout_ms": 10000,
+                },
+                {
+                    "action": "page-info",
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "file-upload":
+        stem = _case_artifact_stem(name)
+        upload_name = "lexmount-upload.txt"
+        upload_content = args.text or "lexmount browser upload fixture"
+        uploaded_text = f"Uploaded: {upload_name}"
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny upload fixture, attach an inline file with "
+                "set-file-input, submit the form, and save evidence."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>File upload fixture</h1>
+      <form id="upload-form">
+        <label for="upload-file">Receipt file</label>
+        <input id="upload-file" name="receipt" type="file" />
+        <button type="submit">Upload</button>
+        <output id="upload-status" role="status" aria-live="polite">Waiting</output>
+      </form>
+    </main>
+  `;
+  const form = document.querySelector("#upload-form");
+  const input = document.querySelector("#upload-file");
+  const status = document.querySelector("#upload-status");
+  const fileNames = () => [...(input.files || [])].map((file) => file.name).join(", ");
+  input.addEventListener("change", () => {
+    status.textContent = "Selected: " + fileNames();
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const names = fileNames();
+    status.textContent = names ? "Uploaded: " + names : "No file uploaded";
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "form-snapshot",
+                    "selector": "form",
+                    "max_nodes": 30,
+                },
+                {
+                    "action": "set-file-input",
+                    "selector": "#upload-file",
+                    "inline_files": [
+                        {
+                            "name": upload_name,
+                            "type": "text/plain",
+                            "content": upload_content,
+                        }
+                    ],
+                    "expect": {
+                        "set": True,
+                        "file_count": 1,
+                    },
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#upload-status",
+                    "text": f"Selected: {upload_name}",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "submit",
+                    "selector": "#upload-form",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#upload-status",
+                    "text": uploaded_text,
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#upload-status",
+                    "expect": {
+                        "text": uploaded_text,
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "checkout-flow":
+        stem = _case_artifact_stem(name)
+        confirmed_text = "Order confirmed for Ada Lovelace via Express"
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny multi-step checkout fixture, fill shipping and "
+                "payment details with semantic actions, submit, and save evidence."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Checkout fixture</h1>
+      <p id="checkout-status" role="status" aria-live="polite">Step 1: Shipping</p>
+      <form id="checkout-form">
+        <fieldset id="shipping-step">
+          <legend>Shipping</legend>
+          <label for="full-name">Full name</label>
+          <input id="full-name" name="fullName" autocomplete="name" />
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" />
+          <label for="delivery-speed">Delivery speed</label>
+          <select id="delivery-speed" name="deliverySpeed">
+            <option>Standard</option>
+            <option>Express</option>
+          </select>
+          <label for="gift-wrap">
+            <input id="gift-wrap" name="giftWrap" type="checkbox" />
+            Gift wrap
+          </label>
+          <button type="button" aria-label="Next: payment" disabled>Next: payment</button>
+        </fieldset>
+        <fieldset id="payment-step" hidden>
+          <legend>Payment</legend>
+          <label for="card-number">Card number</label>
+          <input id="card-number" name="cardNumber" inputmode="numeric" />
+          <label for="security-code">Security code</label>
+          <input id="security-code" name="securityCode" inputmode="numeric" />
+          <button type="submit">Place order</button>
+        </fieldset>
+      </form>
+    </main>
+  `;
+  const form = document.querySelector("#checkout-form");
+  const status = document.querySelector("#checkout-status");
+  const shipping = document.querySelector("#shipping-step");
+  const payment = document.querySelector("#payment-step");
+  const fullName = document.querySelector("#full-name");
+  const email = document.querySelector("#email");
+  const delivery = document.querySelector("#delivery-speed");
+  const next = document.querySelector("[aria-label='Next: payment']");
+  const updateNext = () => {
+    next.disabled = !(fullName.value.trim() && email.value.trim());
+  };
+  [fullName, email].forEach((input) => input.addEventListener("input", updateNext));
+  updateNext();
+  next.addEventListener("click", () => {
+    shipping.hidden = true;
+    payment.hidden = false;
+    status.textContent = "Step 2: Payment";
+    document.querySelector("#card-number").focus();
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    status.textContent = `Order confirmed for ${fullName.value} via ${delivery.value}`;
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "form-snapshot",
+                    "selector": "#checkout-form",
+                    "max_nodes": 80,
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Full name",
+                    "text": "Ada Lovelace",
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Email",
+                    "text": "ada@example.test",
+                },
+                {
+                    "action": "select-label",
+                    "label": "Delivery speed",
+                    "option_label": "Express",
+                },
+                {
+                    "action": "check-label",
+                    "label": "Gift wrap",
+                },
+                {
+                    "action": "wait-state-role",
+                    "role": "button",
+                    "name": "Next: payment",
+                    "state": "enabled",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "click-role",
+                    "role": "button",
+                    "name": "Next: payment",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#checkout-status",
+                    "text": "Step 2: Payment",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Card number",
+                    "text": "4242424242424242",
+                },
+                {
+                    "action": "fill-label",
+                    "label": "Security code",
+                    "text": "123",
+                },
+                {
+                    "action": "click-role",
+                    "role": "button",
+                    "name": "Place order",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#checkout-status",
+                    "text": confirmed_text,
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#checkout-status",
+                    "expect": {
+                        "text": confirmed_text,
+                    },
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "interactive-targeting":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a tiny interactive fixture, inspect actionable targets, "
+                "act by role, and verify the result with first-class browser-cli actions."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+() => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Interactive targeting fixture</h1>
+      <p id="status" role="status" aria-live="polite">Waiting</p>
+      <button type="button" aria-label="Launch report">Launch report</button>
+      <button type="button" aria-label="Archive report">Archive report</button>
+    </main>
+  `;
+  const status = document.querySelector("#status");
+  document.querySelector("[aria-label='Launch report']").addEventListener("click", () => {
+    status.textContent = "Launch report clicked";
+  });
+  document.querySelector("[aria-label='Archive report']").addEventListener("click", () => {
+    status.textContent = "Archive report clicked";
+  });
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "interactive-snapshot",
+                    "max_nodes": 20,
+                },
+                {
+                    "action": "accessibility-snapshot",
+                    "max_nodes": 40,
+                },
+                {
+                    "action": "act",
+                    "kind": "click",
+                    "role": "button",
+                    "name": "Launch report",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#status",
+                    "text": "Launch report clicked",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "get-text",
+                    "selector": "#status",
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}.png",
+                },
+            ],
+        }
+
+    if template == "page-diagnostics":
+        stem = _case_artifact_stem(name)
+        return {
+            "name": name,
+            "description": (
+                "Build a local diagnostic fixture, capture console/runtime and "
+                "fetch evidence, and save artifacts."
+            ),
+            "close_created_session": True,
+            "session": {
+                "create": True,
+                "browser_mode": browser_mode,
+            },
+            "steps": [
+                {
+                    "action": "open-url",
+                    "url": "about:blank",
+                    "wait_until": "load",
+                },
+                {
+                    "action": "console-snapshot",
+                    "install_only": True,
+                },
+                {
+                    "action": "network-snapshot",
+                    "install_only": True,
+                },
+                {
+                    "action": "eval",
+                    "expression": """
+async () => {
+  document.body.innerHTML = `
+    <main>
+      <h1>Diagnostics fixture</h1>
+      <p id="status" role="status" aria-live="polite">Starting</p>
+    </main>
+  `;
+  console.info("diagnostic fixture ready");
+  console.error("diagnostic runtime error");
+  await fetch("data:text/plain,diagnostic-network-ok", {
+    method: "GET",
+  });
+  document.querySelector("#status").textContent = "Diagnostics captured";
+  return true;
+}
+""".strip(),
+                },
+                {
+                    "action": "wait-console",
+                    "source": "console",
+                    "level": "error",
+                    "text": "diagnostic runtime error",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "wait-network",
+                    "source": "fetch",
+                    "method": "GET",
+                    "status": 200,
+                    "url": "diagnostic-network-ok",
+                    "url_match": "contains",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "console-snapshot",
+                    "max_entries": 20,
+                    "output": f"{stem}-console.json",
+                },
+                {
+                    "action": "network-snapshot",
+                    "max_entries": 20,
+                    "output": f"{stem}-network.json",
+                },
+                {
+                    "action": "wait-text",
+                    "selector": "#status",
+                    "text": "Diagnostics captured",
+                    "timeout_ms": 5000,
+                },
+                {
+                    "action": "screenshot",
+                    "output": f"{stem}-page.png",
+                },
+            ],
+        }
+
     raise AssertionError(f"unhandled case scaffold template: {template}")
 
 
@@ -20797,6 +25192,30 @@ def _case_scaffold_next_commands(output: str | None) -> list[str]:
 
 def _case_action_schema() -> dict[str, Any]:
     optional_fields: dict[str, list[str]] = {
+        "act": [
+            "role",
+            "name",
+            "label",
+            "text",
+            "selector",
+            "index",
+            "value",
+            "option_label",
+            "key",
+            "code",
+            "alt_key",
+            "ctrl_key",
+            "meta_key",
+            "shift_key",
+            "x",
+            "y",
+            "block",
+            "inline",
+            "behavior",
+            "include_hidden",
+            "exact",
+            "case_sensitive",
+        ],
         "open-url": ["wait_until", "timeout_ms"],
         "wait-selector": ["state", "timeout_ms"],
         "click": ["timeout_ms", "wait_after_ms"],
@@ -20843,6 +25262,18 @@ def _case_action_schema() -> dict[str, Any]:
         ],
         "exists": [],
         "exists-role": ["name", "exact", "case_sensitive", "include_hidden"],
+        "extract": [
+            "surface",
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_chars",
+            "include_empty_links",
+            "same_origin_only",
+            "max_rows",
+            "max_cells",
+            "max_items",
+        ],
         "fill-label": ["exact", "case_sensitive"],
         "fill-role": ["name", "exact", "case_sensitive"],
         "focus": ["prevent_scroll"],
@@ -20854,6 +25285,8 @@ def _case_action_schema() -> dict[str, Any]:
             "max_nodes",
             "reveal_sensitive_values",
         ],
+        "go-back": [],
+        "go-forward": [],
         "get-attribute": [],
         "get-attribute-role": ["name", "exact", "case_sensitive", "include_hidden"],
         "get-text": [],
@@ -20881,6 +25314,13 @@ def _case_action_schema() -> dict[str, Any]:
             "method",
             "failed_only",
         ],
+        "observe": [
+            "surface",
+            "selector",
+            "include_hidden",
+            "max_nodes",
+            "max_chars",
+        ],
         "outline-snapshot": ["selector", "include_hidden", "max_nodes"],
         "page-info": [],
         "performance-snapshot": [
@@ -20892,6 +25332,7 @@ def _case_action_schema() -> dict[str, Any]:
         "press-key": ["code", "alt_key", "ctrl_key", "meta_key", "shift_key"],
         "press-role": ["name", "exact", "case_sensitive"],
         "query": ["include_hidden", "max_nodes"],
+        "reload": [],
         "right-click": [],
         "right-click-role": ["name", "exact", "case_sensitive"],
         "scroll": ["selector", "x", "y", "behavior"],
@@ -20913,7 +25354,7 @@ def _case_action_schema() -> dict[str, Any]:
             "exact",
             "case_sensitive",
         ],
-        "set-file-input": ["max_bytes", "no_events"],
+        "set-file-input": ["file", "inline_files", "max_bytes", "no_events"],
         "set-value": ["no_events"],
         "storage-clear": ["area", "prefix"],
         "storage-get": ["area", "key", "prefix", "max_items"],
@@ -21066,14 +25507,32 @@ def _case_action_schema() -> dict[str, Any]:
     required_one_of: dict[str, list[list[str]]] = {
         "select-label": [["value", "option_label"]],
         "select-role": [["value", "option_label"]],
+        "set-file-input": [["file"], ["inline_files"]],
     }
     result_fields: dict[str, list[str]] = {
+        "act": ["kind", "intent", "target", "plan", "action_result", "url"],
         "open-url": ["url", "title", "status"],
         "wait-selector": ["selector", "state", "text", "url"],
         "click": ["selector", "clicked", "url"],
         "type": ["selector", "typed", "press_enter", "url"],
         "screenshot": ["path", "full_page", "url"],
         "eval": ["expression", "value", "url"],
+        "go-back": [
+            "action",
+            "navigation_requested",
+            "before_url",
+            "url",
+            "title",
+            "history_length",
+        ],
+        "go-forward": [
+            "action",
+            "navigation_requested",
+            "before_url",
+            "url",
+            "title",
+            "history_length",
+        ],
         "snapshot": ["url", "title", "html", "text"],
         "accessibility-snapshot": ["nodes", "node_count", "url", "title"],
         "blur": ["selector", "found", "blurred", "focused", "url"],
@@ -21304,6 +25763,19 @@ def _case_action_schema() -> dict[str, Any]:
             "name",
             "url",
         ],
+        "extract": [
+            "kind",
+            "url",
+            "title",
+            "ready_state",
+            "surface_count",
+            "surfaces",
+            "selector",
+            "truncated",
+            "truncated_surfaces",
+            "page_info",
+            "extractions",
+        ],
         "fill": [
             "selector",
             "found",
@@ -21462,6 +25934,16 @@ def _case_action_schema() -> dict[str, Any]:
             "url",
             "title",
         ],
+        "observe": [
+            "kind",
+            "url",
+            "title",
+            "ready_state",
+            "surface_count",
+            "surfaces",
+            "page_info",
+            "snapshots",
+        ],
         "outline-snapshot": [
             "headings",
             "landmarks",
@@ -21529,6 +26011,14 @@ def _case_action_schema() -> dict[str, Any]:
             "truncated",
             "nodes",
             "url",
+        ],
+        "reload": [
+            "action",
+            "navigation_requested",
+            "reloaded",
+            "before_url",
+            "url",
+            "title",
         ],
         "right-click": [
             "found",
@@ -21944,6 +26434,12 @@ def _case_action_schema() -> dict[str, Any]:
         "wait-text": ["found", "text", "selector", "waited_ms", "url"],
     }
     examples: dict[str, dict[str, Any]] = {
+        "act": {
+            "action": "act",
+            "kind": "click",
+            "role": "button",
+            "name": "Submit",
+        },
         "open-url": {
             "action": "open-url",
             "url": "https://example.com",
@@ -22024,6 +26520,11 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "exists": {"action": "exists", "selector": ".toast"},
         "exists-role": {"action": "exists-role", "role": "alert", "name": "Saved"},
+        "extract": {
+            "action": "extract",
+            "surface": ["text", "links"],
+            "selector": "main",
+        },
         "fill": {
             "action": "fill",
             "selector": "input[name=email]",
@@ -22063,6 +26564,8 @@ def _case_action_schema() -> dict[str, Any]:
         },
         "get-text": {"action": "get-text", "selector": ".status"},
         "get-text-role": {"action": "get-text-role", "role": "alert", "name": "Saved"},
+        "go-back": {"action": "go-back"},
+        "go-forward": {"action": "go-forward"},
         "hover": {"action": "hover", "selector": ".menu-button"},
         "hover-role": {"action": "hover-role", "role": "button", "name": "Menu"},
         "inspect": {"action": "inspect", "selector": "button[type=submit]"},
@@ -22078,6 +26581,11 @@ def _case_action_schema() -> dict[str, Any]:
             "max_entries": 50,
             "source": "fetch",
         },
+        "observe": {
+            "action": "observe",
+            "surface": ["interactive", "text"],
+            "selector": "main",
+        },
         "outline-snapshot": {"action": "outline-snapshot", "selector": "main"},
         "page-info": {"action": "page-info"},
         "performance-snapshot": {"action": "performance-snapshot"},
@@ -22090,6 +26598,7 @@ def _case_action_schema() -> dict[str, Any]:
             "key": "Enter",
         },
         "query": {"action": "query", "selector": ".result", "max_nodes": 10},
+        "reload": {"action": "reload"},
         "right-click": {"action": "right-click", "selector": ".item"},
         "right-click-role": {
             "action": "right-click-role",
@@ -22297,6 +26806,7 @@ def cmd_case_schema(args: argparse.Namespace) -> None:
         "schema_version": 1,
         "supported_actions": sorted(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
         "action_count": len(BROWSER_CLI_SUPPORTED_CASE_ACTIONS),
+        "scaffold_templates": list(CASE_SCAFFOLD_TEMPLATES),
         "required_fields": {
             action: list(fields)
             for action, fields in sorted(BROWSER_CLI_REQUIRED_CASE_FIELDS.items())
@@ -22434,6 +26944,12 @@ def _case_step_string_list(step: dict[str, Any], name: str) -> list[str]:
     return [str(item) for item in values]
 
 
+def _case_step_optional_string_list(step: dict[str, Any], name: str) -> list[str]:
+    if name not in step:
+        return []
+    return _case_step_string_list(step, name)
+
+
 def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
     if isinstance(result, dict):
         payload = dict(result)
@@ -22445,6 +26961,129 @@ def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
 
 def _case_eval_expression(page: Any, expression: str) -> dict[str, Any]:
     return _case_step_result(page, page.evaluate(expression))
+
+
+def _case_step_optional_str(step: dict[str, Any], name: str) -> str | None:
+    value = step.get(name)
+    return str(value) if value is not None else None
+
+
+def _case_act_args(step: dict[str, Any]) -> argparse.Namespace:
+    return argparse.Namespace(
+        kind=str(step["kind"]),
+        role=_case_step_optional_str(step, "role"),
+        name=_case_step_optional_str(step, "name"),
+        label=_case_step_optional_str(step, "label"),
+        text=_case_step_optional_str(step, "text"),
+        selector=_case_step_optional_str(step, "selector"),
+        index=_case_step_int(step, "index", default=0),
+        value=_case_step_optional_str(step, "value"),
+        option_label=_case_step_optional_str(step, "option_label"),
+        key=_case_step_optional_str(step, "key"),
+        code=_case_step_optional_str(step, "code"),
+        alt_key=_case_step_bool(step, "alt_key"),
+        ctrl_key=_case_step_bool(step, "ctrl_key"),
+        meta_key=_case_step_bool(step, "meta_key"),
+        shift_key=_case_step_bool(step, "shift_key"),
+        x=_case_step_float(step, "x", default=0),
+        y=_case_step_float(step, "y", default=600),
+        block=str(step.get("block", "center")),
+        inline=str(step.get("inline", "nearest")),
+        behavior=str(step.get("behavior", "auto")),
+        include_hidden=_case_step_bool(step, "include_hidden"),
+        exact=_case_step_bool(step, "exact"),
+        case_sensitive=_case_step_bool(step, "case_sensitive"),
+    )
+
+
+def _case_act_result(page: Any, step: dict[str, Any]) -> dict[str, Any]:
+    args = _case_act_args(step)
+    plan = _act_plan("case.run", args)
+    expression = str(plan.pop("expression"))
+    action_result = _case_eval_expression(page, expression)
+    return {
+        "kind": "act",
+        "intent": args.kind,
+        "target": plan["target"],
+        "plan": plan,
+        "action_result": action_result,
+        "url": action_result.get("url", page.url),
+    }
+
+
+def _case_observe_args(step: dict[str, Any]) -> argparse.Namespace:
+    return argparse.Namespace(
+        surface=_case_step_optional_string_list(step, "surface"),
+        selector=_case_step_optional_str(step, "selector"),
+        include_hidden=_case_step_bool(step, "include_hidden"),
+        max_nodes=_case_step_int(step, "max_nodes", default=80),
+        max_chars=_case_step_int(step, "max_chars", default=1000),
+    )
+
+
+def _case_observe_result(page: Any, step: dict[str, Any]) -> dict[str, Any]:
+    args = _case_observe_args(step)
+    page_info = _case_eval_expression(page, _page_info_expression())
+    surfaces = _normalize_observe_surfaces(args.surface)
+    snapshots = {
+        surface: _case_eval_expression(
+            page,
+            _observe_surface_expression(surface, args),
+        )
+        for surface in surfaces
+    }
+    return {
+        "kind": "observe",
+        "url": page_info.get("url", page.url),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "page_info": page_info,
+        "snapshots": snapshots,
+    }
+
+
+def _case_extract_args(step: dict[str, Any]) -> argparse.Namespace:
+    return argparse.Namespace(
+        surface=_case_step_optional_string_list(step, "surface"),
+        selector=_case_step_optional_str(step, "selector"),
+        include_hidden=_case_step_bool(step, "include_hidden"),
+        max_nodes=_case_step_int(step, "max_nodes", default=80),
+        max_chars=_case_step_int(step, "max_chars", default=1000),
+        include_empty_links=_case_step_bool(step, "include_empty_links"),
+        same_origin_only=_case_step_bool(step, "same_origin_only"),
+        max_rows=_case_step_int(step, "max_rows", default=20),
+        max_cells=_case_step_int(step, "max_cells", default=200),
+        max_items=_case_step_int(step, "max_items", default=50),
+    )
+
+
+def _case_extract_result(page: Any, step: dict[str, Any]) -> dict[str, Any]:
+    args = _case_extract_args(step)
+    page_info = _case_eval_expression(page, _page_info_expression())
+    surfaces = _normalize_extract_surfaces(args.surface)
+    extractions = {
+        surface: _case_eval_expression(
+            page,
+            _extract_surface_expression(surface, args),
+        )
+        for surface in surfaces
+    }
+    truncated_surfaces = _extract_truncated_surfaces(extractions)
+    return {
+        "kind": "extract",
+        "url": page_info.get("url", page.url),
+        "title": page_info.get("title"),
+        "ready_state": page_info.get("ready_state"),
+        "surface_count": len(surfaces),
+        "surfaces": surfaces,
+        "selector": args.selector,
+        "truncated": bool(truncated_surfaces),
+        "truncated_surfaces": truncated_surfaces,
+        "page_info": page_info,
+        "extractions": extractions,
+    }
 
 
 def _case_result_path(result: Any, path: str) -> tuple[bool, Any]:
@@ -22585,12 +27224,24 @@ def _run_browser_cli_case_step(
     index: int,
 ) -> dict[str, Any]:
     action = step["action"]
+    if action == "act":
+        return _case_act_result(page, step)
+    if action == "observe":
+        return _case_observe_result(page, step)
+    if action == "extract":
+        return _case_extract_result(page, step)
     if action in SUPPORTED_CASE_ACTIONS:
         return _runtime_run_case_step(page, step, artifacts_dir, index)
 
     exact = _case_step_bool(step, "exact")
     case_sensitive = _case_step_bool(step, "case_sensitive")
 
+    if action == "go-back":
+        return _case_eval_expression(page, _history_expression("back"))
+    if action == "go-forward":
+        return _case_eval_expression(page, _history_expression("forward"))
+    if action == "reload":
+        return _case_eval_expression(page, _reload_expression())
     if action == "blur":
         return _case_eval_expression(page, _blur_expression(str(step["selector"])))
     if action == "blur-role":
@@ -23243,15 +27894,46 @@ def _run_browser_cli_case_step(
             ),
         )
     if action == "set-file-input":
-        files = _read_file_input_payloads(
-            command="case.run",
-            files=_case_step_string_list(step, "file"),
-            max_bytes=_case_step_int(
-                step,
-                "max_bytes",
-                default=DEFAULT_FILE_INPUT_MAX_BYTES,
-            ),
+        max_bytes = _case_step_int(
+            step,
+            "max_bytes",
+            default=DEFAULT_FILE_INPUT_MAX_BYTES,
         )
+        files: list[dict[str, Any]] = []
+        if "file" in step:
+            files.extend(
+                _read_file_input_payloads(
+                    command="case.run",
+                    files=_case_step_string_list(step, "file"),
+                    max_bytes=max_bytes,
+                )
+            )
+        if "inline_files" in step:
+            inline_files = step["inline_files"]
+            files.extend(
+                _inline_file_input_payloads(
+                    command="case.run",
+                    inline_files=inline_files if isinstance(inline_files, list) else [],
+                    max_bytes=max_bytes,
+                )
+            )
+        if not files:
+            _failure(
+                "case.run",
+                "argument_error",
+                "set-file-input requires file or inline_files.",
+                exit_code=2,
+            )
+        total_bytes = sum(int(file.get("size", 0)) for file in files)
+        if total_bytes > max_bytes:
+            _failure(
+                "case.run",
+                "file_payload_too_large",
+                "Total file input payload exceeds max_bytes.",
+                exit_code=2,
+                max_bytes=max_bytes,
+                total_bytes=total_bytes,
+            )
         return _case_eval_expression(
             page,
             _set_file_input_expression(
@@ -24085,6 +28767,183 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Only list available action guide task ids.",
     )
     action_guide.set_defaults(func=cmd_action_guide)
+
+    action_observe = action_subparsers.add_parser(
+        "observe",
+        help="Read page info plus bounded agent observation surfaces",
+    )
+    _add_session_target_args(action_observe)
+    action_observe.add_argument(
+        "--surface",
+        action="append",
+        choices=[*OBSERVE_SURFACE_CHOICES, "all"],
+        default=[],
+        help=(
+            "Observation surface to include. Repeat for multiple surfaces; "
+            "default is interactive and text."
+        ),
+    )
+    action_observe.add_argument(
+        "--selector",
+        help=(
+            "Optional container selector used to scope text, links, forms, "
+            "and outline surfaces."
+        ),
+    )
+    action_observe.add_argument(
+        "--max-nodes",
+        type=_non_negative_int,
+        default=80,
+        help="Maximum DOM nodes returned per bounded surface.",
+    )
+    action_observe.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters returned per text block.",
+    )
+    action_observe.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in supported surfaces.",
+    )
+    action_observe.set_defaults(func=cmd_action_observe)
+
+    action_extract = action_subparsers.add_parser(
+        "extract",
+        help="Extract bounded page content surfaces for agents",
+    )
+    _add_session_target_args(action_extract)
+    action_extract.add_argument(
+        "--surface",
+        action="append",
+        choices=[*EXTRACT_SURFACE_CHOICES, "all"],
+        default=[],
+        help=(
+            "Extraction surface to include. Repeat for multiple surfaces; "
+            "default is text and links."
+        ),
+    )
+    action_extract.add_argument(
+        "--selector",
+        help="Optional container selector used to scope extractable content.",
+    )
+    action_extract.add_argument(
+        "--max-nodes",
+        type=_non_negative_int,
+        default=80,
+        help="Maximum nodes returned per bounded surface.",
+    )
+    action_extract.add_argument(
+        "--max-chars",
+        type=_non_negative_int,
+        default=1000,
+        help="Maximum characters returned per text block.",
+    )
+    action_extract.add_argument(
+        "--max-rows",
+        type=_non_negative_int,
+        default=20,
+        help="Maximum rows returned per table.",
+    )
+    action_extract.add_argument(
+        "--max-cells",
+        type=_non_negative_int,
+        default=20,
+        help="Maximum cells returned per table row.",
+    )
+    action_extract.add_argument(
+        "--max-items",
+        type=_non_negative_int,
+        default=50,
+        help="Maximum items returned per list.",
+    )
+    action_extract.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Include hidden DOM nodes in supported surfaces.",
+    )
+    action_extract.add_argument(
+        "--include-empty-links",
+        action="store_true",
+        help="Include links without visible text or accessible name.",
+    )
+    action_extract.add_argument(
+        "--same-origin-only",
+        action="store_true",
+        help="Only return links whose resolved URL has the same origin as the current page.",
+    )
+    action_extract.set_defaults(func=cmd_action_extract)
+
+    action_act = action_subparsers.add_parser(
+        "act",
+        help="Run one deterministic semantic browser action and return its plan",
+    )
+    _add_session_target_args(action_act)
+    action_act.add_argument(
+        "--kind",
+        required=True,
+        choices=ACT_KIND_CHOICES,
+        help="Deterministic action intent to run.",
+    )
+    action_act.add_argument("--role", help="Accessible role target.")
+    action_act.add_argument("--name", help="Optional accessible name for --role.")
+    action_act.add_argument("--label", help="Visible label or accessible label target.")
+    action_act.add_argument(
+        "--text",
+        help="Visible text target for click, or fill text alias when --kind fill.",
+    )
+    action_act.add_argument("--selector", help="CSS selector target or text scope.")
+    action_act.add_argument(
+        "--index",
+        type=_non_negative_int,
+        default=0,
+        help="Zero-based selector index for --kind click with --selector.",
+    )
+    action_act.add_argument(
+        "--value",
+        help="Fill value or native select option value.",
+    )
+    action_act.add_argument(
+        "--option-label",
+        help="Visible option label for --kind select with --label or --role.",
+    )
+    action_act.add_argument("--key", help="Keyboard key for --kind press.")
+    action_act.add_argument(
+        "--code",
+        help="KeyboardEvent.code for --kind press without role/selector. Defaults to --key.",
+    )
+    action_act.add_argument("--alt-key", action="store_true")
+    action_act.add_argument("--ctrl-key", action="store_true")
+    action_act.add_argument("--meta-key", action="store_true")
+    action_act.add_argument("--shift-key", action="store_true")
+    action_act.add_argument("--x", type=float, default=0)
+    action_act.add_argument("--y", type=float, default=600)
+    action_act.add_argument(
+        "--block",
+        choices=["start", "center", "end", "nearest"],
+        default="center",
+        help="Vertical alignment for --kind scroll-into-view.",
+    )
+    action_act.add_argument(
+        "--inline",
+        choices=["start", "center", "end", "nearest"],
+        default="nearest",
+        help="Horizontal alignment for --kind scroll-into-view.",
+    )
+    action_act.add_argument(
+        "--behavior",
+        choices=["auto", "smooth"],
+        default="auto",
+        help="Scroll behavior for --kind scroll or scroll-into-view.",
+    )
+    action_act.add_argument(
+        "--include-hidden",
+        action="store_true",
+        help="Allow hidden DOM nodes for selector-index clicks.",
+    )
+    _add_text_match_args(action_act)
+    action_act.set_defaults(func=cmd_action_act)
 
     action_open_url = action_subparsers.add_parser("open-url", help="Open a URL")
     _add_session_target_args(action_open_url)
@@ -25843,6 +30702,10 @@ def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Text used by the form-fill template.",
     )
     case_scaffold.add_argument(
+        "--title",
+        help="Expected title fragment for the navigation-flow template. Defaults to Example Domain.",
+    )
+    case_scaffold.add_argument(
         "--browser-mode",
         type=_normalize_browser_mode,
         default="light",
@@ -26305,6 +31168,48 @@ def _add_example_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     example_get.set_defaults(func=cmd_example_get)
 
 
+def _add_skill_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
+    skill = subparsers.add_parser(
+        "skill",
+        help="Inspect or install the packaged Codex Skill resources",
+    )
+    skill_subparsers = skill.add_subparsers(
+        dest="skill_command",
+        required=True,
+    )
+
+    skill_status = skill_subparsers.add_parser(
+        "status",
+        help="Compare the installed Codex Skill directory with packaged resources",
+    )
+    skill_status.add_argument(
+        "--skill-dir",
+        help=(
+            "Codex Skill directory to inspect. Defaults to "
+            "$CODEX_HOME/skills/lexmount-browser or ~/.codex/skills/lexmount-browser."
+        ),
+    )
+    skill_status.set_defaults(func=cmd_skill_status)
+
+    skill_install = skill_subparsers.add_parser(
+        "install",
+        help="Install or update packaged Codex Skill resources",
+    )
+    skill_install.add_argument(
+        "--skill-dir",
+        help=(
+            "Codex Skill directory to write. Defaults to "
+            "$CODEX_HOME/skills/lexmount-browser or ~/.codex/skills/lexmount-browser."
+        ),
+    )
+    skill_install.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing stale Skill resource files.",
+    )
+    skill_install.set_defaults(func=cmd_skill_install)
+
+
 def _add_version_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     version_parser = subparsers.add_parser(
         "version",
@@ -26378,6 +31283,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_commands_command(subparsers)
     _add_reference_commands(subparsers)
     _add_example_commands(subparsers)
+    _add_skill_commands(subparsers)
     _add_alias_commands(subparsers)
     _add_json_compatibility_flag(parser)
 

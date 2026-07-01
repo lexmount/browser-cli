@@ -30,11 +30,16 @@ def test_quickstart_covers_minimum_usable_flow() -> None:
     assert "codex/add-export-env-safety-metadata" not in text
     assert "LEXMOUNT_API_KEY" in text
     assert "LEXMOUNT_PROJECT_ID" in text
+    assert "browser-cli reference get --id quickstart --metadata-only" in text
+    assert "browser-cli reference get --id quickstart" in text
+    assert "browser-cli skill status" in text
+    assert "browser-cli skill install --force" in text
     assert "browser-cli auth status" in text
     assert "browser-cli doctor --json" in text
     assert "browser-cli doctor --smoke-session" in text
     assert "browser-cli session create" in text
     assert "browser-cli action open-url" in text
+    assert "browser-cli action act --session-id <session_id>" in text
     assert "browser-cli context pick" in text
     assert "browser-cli action guide --task interactive_targeting" in text
     assert "browser-cli case schema" in text

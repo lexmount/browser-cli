@@ -1,7 +1,8 @@
 # browser-cli
 
-`browser-cli` is a command-line interface for operating Lexmount remote browser
-sessions from local shells, Codex, and other agents.
+`browser-cli` is the agent-facing command-line interface and Codex Skill starter
+for operating Lexmount remote browser sessions from local shells, Codex, and
+other agents.
 
 It owns command parsing, JSON output, installation docs, and agent-facing
 ergonomics. Browser lifecycle and page action behavior stay in
@@ -19,23 +20,36 @@ trial status, readiness checks, and browser.lexmount.cn integration boundaries.
 
 ## When To Use This Skill
 
-Use `browser-cli` when Codex or another agent needs to control a Lexmount
-remote browser with machine-readable JSON, deterministic commands, and safe
-secret handling. It is the right first choice for:
+Use `browser-cli` when Codex or another agent needs a Lexmount remote browser
+instead of a local tab, with machine-readable JSON, deterministic commands,
+structured repair hints, explicit cleanup, and safe secret handling.
 
-- Creating, listing, inspecting, keeping alive, and closing remote sessions.
-- Reusing persistent login state through contexts and metadata filters.
-- Opening pages, waiting for readiness, navigating history, and capturing
+| Use `browser-cli` when | Use something else when |
+| --- | --- |
+| The task needs an isolated Lexmount remote browser session. | The task is about a local desktop app or an already-open local browser tab. |
+| The agent must log in, reuse cookies/storage, fill forms, inspect page state, capture evidence, or diagnose page failures. | The task only needs static documentation lookup or HTTP fetch/search without browser state. |
+| The work should be repeatable through JSON/YAML case files or auditable JSON output. | The user only needs advice and no live browser operation. |
+| Credentials, API connectivity, session cleanup, or secret handling need structured checks. | Lexmount credentials are unavailable and the user does not want to configure them. |
+
+Start here when the user asks an agent to:
+
+- Create, list, inspect, keep alive, and close remote sessions.
+- Reuse persistent login state through contexts and metadata filters.
+- Open pages, wait for readiness, navigate history, and capture
   screenshots or page snapshots.
-- Inspecting page structure before acting: text, links, forms, tables, lists,
+- Inspect page structure before acting: text, links, forms, tables, lists,
   dialogs, frames, accessibility trees, interactive elements, console logs, and
   network activity.
-- Clicking, typing, filling, selecting, checking, hovering, pressing keys,
+- Click, type, fill, select, check, hover, press keys,
   scrolling, and targeting by selector, role, label, text, or index.
-- Reading and mutating browser state through storage and cookies.
-- Running repeatable JSON/YAML browser case files instead of ad hoc scripts.
-- Diagnosing setup, credential, API, selector, page, console, and network
+- Read and mutate browser state through storage and cookies.
+- Run repeatable JSON/YAML browser case files instead of ad hoc scripts.
+- Diagnose setup, credential, API, selector, page, console, and network
   failures with structured repair hints.
+
+Do not use this Skill for a local desktop app, an already-open local browser
+tab, or a task that only needs static documentation. If Lexmount credentials are
+missing or unclear, stay in setup/auth/doctor commands before creating sessions.
 
 Use the setup and auth commands first when credentials are missing or unclear:
 `browser-cli reference get --id usable_status`, `browser-cli auth status`,
@@ -49,11 +63,15 @@ catalog cannot express the browser task.
 | Task | Start With | Use When |
 | --- | --- | --- |
 | Install and readiness | `browser-cli doctor --json` | Confirm the CLI, Python runtime, environment variables, packaged references, examples, and API connectivity are usable. |
-| First browser task | `browser-cli commands --workflow one_off_page_task` | Open a page, inspect it, act once, collect evidence, then close the temporary session. |
+| First browser task | `browser-cli commands --workflow first_browser_task` | Verify readiness, open a page, inspect targets, act once, collect evidence, then close the temporary session. |
+| Agent primitives | `browser-cli commands --workflow agent_browser_primitives` | Cover the observe, act, extract, and verify loop: use `action observe` before targets, `action act` for deterministic click/fill/select/check/press/hover/scroll plans, and `action extract` for bounded page content. |
 | Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
+| Navigation and readiness | `browser-cli commands --workflow navigation_flow` | Open URLs, reload, move through history, and wait for URL, title, load state, or network idle before acting. |
 | Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
 | Interactive targets | `browser-cli action guide --task interactive_targeting` | Choose between role, label, text, selector, and index targeting for buttons, links, menus, and repeated controls. |
-| Content extraction | `browser-cli action guide --task content_extraction` | Prefer outline/text/link/table/list/accessibility snapshots and bounded text reads before custom JS. |
+| Content extraction | `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` | Extract bounded text, links, tables, lists, outline, and accessibility surfaces before custom JS. |
+| Visual evidence | `browser-cli action guide --task visual_capture` | Set a viewport, capture a full page, selector, or role screenshot, and gather bounded text as supporting evidence. |
+| Dialogs, frames, uploads | `browser-cli action guide --task dialog_frame_handling` | Detect modals, prompts, embedded frames, cookie banners, and file upload controls before custom workarounds. |
 | State and credentials | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies for setup, cleanup, or assertions. |
 | Diagnostics | `browser-cli commands --workflow page_diagnostics` | Capture console and network evidence around page failures, fetch/XHR issues, and runtime errors. |
 | Repeatable cases | `browser-cli commands --workflow case_file_task` | Validate, scaffold, and run browser tasks as JSON/YAML artifacts with cleanup and generated evidence. |
@@ -87,14 +105,22 @@ CLI for you:
    browser-cli --version
    browser-cli version
 5. 先读取当前安装版本提供给 agent 的 workflow 契约，后续按 JSON 中的 workflow.steps 执行，不要解析 --help 文本：
+   browser-cli skill status
+   如果 status 不是 current，先检查 stale_files/missing_files；确认要刷新本机 Codex Skill 后运行：
+   browser-cli skill install --force
    browser-cli commands --workflows-only
    browser-cli commands --workflow setup_and_verify
    browser-cli commands --workflow connect_from_codex_site_requirements
    browser-cli commands --workflow connect_from_codex_auth
    browser-cli commands --workflow device_code_auth
    browser-cli commands --workflow scoped_token_lifecycle
+   browser-cli commands --workflow agent_browser_primitives
 6. 读取 action guide 和 packaged agent reference 目录；后续选择浏览器 action 前，优先读取机器可读 guide 和 action_playbook，不要先写自定义 Playwright/JS：
    browser-cli action guide --names-only
+   browser-cli action observe --session-id <session_id> --surface interactive --surface text
+   browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
+   browser-cli action act --session-id <session_id> --kind fill --label "<label>" --value "<value>"
+   browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
    browser-cli action guide --task interactive_targeting
    browser-cli action guide --task content_extraction
    browser-cli action guide --task browser_state_management
@@ -108,6 +134,10 @@ CLI for you:
    browser-cli action guide --task mouse_interaction
    browser-cli action guide --task state_waits
    browser-cli reference list
+   browser-cli reference get --id quickstart --metadata-only
+   browser-cli reference get --id quickstart
+   browser-cli reference get --id connect_from_codex --metadata-only
+   browser-cli reference get --id connect_from_codex
    browser-cli reference get --id skill_positioning --metadata-only
    browser-cli reference get --id skill_positioning
    browser-cli reference get --id usable_status --metadata-only
@@ -117,14 +147,37 @@ CLI for you:
 7. 读取 packaged examples；如果要做可重复任务或 case file，优先参考这些示例：
    browser-cli example list
    browser-cli example get --id agent_playbook --metadata-only
+   browser-cli example get --id setup_verification_playbook --metadata-only
+   browser-cli example get --id auth_lifecycle_playbook --metadata-only
+   browser-cli example get --id persistent_context_playbook --metadata-only
    browser-cli example get --id page_inspection_case
+   browser-cli example get --id agent_primitives_case
    browser-cli example get --id form_fill_case
+   browser-cli example get --id content_extraction_case
+   browser-cli example get --id browser_state_case
+   browser-cli example get --id navigation_flow_case
+   browser-cli example get --id file_upload_case
+   browser-cli example get --id checkout_flow_case
+   browser-cli example get --id interactive_targeting_case
+   browser-cli example get --id page_diagnostics_case
    browser-cli case schema
+   browser-cli case schema --action observe
+   browser-cli case schema --action act
+   browser-cli case schema --action extract
    browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+   browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
    browser-cli case scaffold --template form-fill --output form-case.yaml
+   browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+   browser-cli case scaffold --template browser-state --output browser-state-case.yaml
+   browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+   browser-cli case scaffold --template file-upload --output upload-case.yaml
+   browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
+   browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
+   browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 8. 运行下面命令查看本机是否已经配置凭证：
    browser-cli auth status
 9. 如果需要确认 browser.lexmount.cn Connect from Codex 页面/API 还缺什么，先读取权限目录和站点契约：
+   browser-cli reference get --id connect_from_codex
    browser-cli auth scopes --include-site-contract
    browser-cli auth connect-requirements
    browser-cli auth connect-requirements --checklist
@@ -157,6 +210,8 @@ CLI for you:
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
 19. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约；选择具体 action 时先查 action guide、action_playbook、packaged examples 和 commands catalog，只有 CLI 无法表达时才写自定义 Playwright/JS：
    browser-cli commands --workflow session_recovery
+   browser-cli commands --workflow first_browser_task
+   browser-cli commands --workflow agent_browser_primitives
    browser-cli commands --workflow one_off_page_task
    browser-cli commands --workflow case_file_task
    browser-cli commands --workflow persistent_login_state
@@ -174,6 +229,9 @@ CLI for you:
    browser-cli commands --workflow mouse_interaction
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
+   browser-cli action observe --session-id <session_id> --surface interactive --surface text
+   browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
+   browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
    browser-cli action guide --task form_interaction
    browser-cli action guide --task interactive_targeting
    browser-cli action guide --task content_extraction
@@ -362,6 +420,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
@@ -388,9 +447,27 @@ browser-cli commands --workflow page_diagnostics
 browser-cli reference list
 browser-cli reference get --id action_playbook --metadata-only
 browser-cli example list
+browser-cli example get --id auth_lifecycle_playbook --metadata-only
+browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id page_inspection_case --metadata-only
+browser-cli example get --id agent_primitives_case --metadata-only
+browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
+browser-cli example get --id navigation_flow_case --metadata-only
+browser-cli example get --id file_upload_case --metadata-only
+browser-cli example get --id checkout_flow_case --metadata-only
+browser-cli example get --id interactive_targeting_case --metadata-only
+browser-cli example get --id page_diagnostics_case --metadata-only
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
+browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
+browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
+browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
+browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 ```
 
 `commands` returns the current parser-backed command catalog, option metadata,
@@ -520,6 +597,7 @@ browser-cli commands --workflow connect_from_codex_auth
 browser-cli commands --workflow device_code_auth
 browser-cli commands --workflow scoped_token_lifecycle
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow one_off_page_task
 browser-cli commands --workflow case_file_task
 browser-cli commands --workflow persistent_login_state
@@ -787,6 +865,11 @@ browser-cli commands
 browser-cli commands --workflow case_file_task
 browser-cli case schema
 browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
+browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
+browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
+browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
 browser-cli doctor
@@ -839,27 +922,44 @@ Use `--names-only` for compact command discovery and `--group action` when
 choosing a browser action. Use `browser-cli action guide --task <task>` for
 compact task-specific action selection before reading larger references. Use
 `agent_references` to load detailed Skill references such as
-`references/skill-positioning.md` when deciding when to use this Skill or
+`references/connect-from-codex.md` when coordinating browser.lexmount.cn site
+work, `references/skill-positioning.md` when deciding when to use this Skill or
 comparing cloud-browser agent gaps, `references/usable-status.md` when checking
 the current usable baseline, and `references/action-playbook.md` when action
-selection, structured result parsing, masking, or browser-target details are
-needed.
+selection, structured result parsing, masking, or browser-target details are needed.
+`agent_references.connect_from_codex.content_command` points to
+`browser-cli reference get --id connect_from_codex`, which returns the packaged
+browser.lexmount.cn implementation guide.
 `agent_references.skill_positioning.content_command` points to
 `browser-cli reference get --id skill_positioning`, which returns the packaged
-Skill positioning, supported operations, Browserbase MCP comparison, and product
+Skill positioning, supported operations, Browserbase Skills comparison, and product
 gap notes.
 `agent_references.usable_status.content_command` points to
 `browser-cli reference get --id usable_status`, which returns the installed
 setup/readiness boundary reference.
+`browser-cli skill status` compares the local Codex Skill directory with the
+packaged Skill resources; use `browser-cli skill install --force` only after
+reviewing `stale_files` or `missing_files`.
 `agent_references.action_playbook.content_command` points to
 `browser-cli reference get --id action_playbook`, which returns the packaged
 markdown content from an installed CLI. `agent_examples` points to packaged
 playbook and case-file examples, readable with `browser-cli example list` and
-`browser-cli example get --id page_inspection_case`. Use `--workflows-only` when
+`browser-cli example get --id setup_verification_playbook`,
+`browser-cli example get --id auth_lifecycle_playbook`,
+`browser-cli example get --id persistent_context_playbook`,
+`browser-cli example get --id page_inspection_case`,
+`browser-cli example get --id form_fill_case`,
+`browser-cli example get --id content_extraction_case`,
+`browser-cli example get --id browser_state_case`,
+`browser-cli example get --id navigation_flow_case`,
+`browser-cli example get --id file_upload_case`,
+`browser-cli example get --id checkout_flow_case`,
+`browser-cli example get --id interactive_targeting_case`, or
+`browser-cli example get --id page_diagnostics_case`. Use `--workflows-only` when
 you only need the structured setup,
 Connect from Codex auth, device-code auth, scoped token lifecycle, one-off page
 task, persistent login state, session recovery, case file task, form interaction,
-interactive targeting, content extraction, state waits, and page diagnostics workflows, or
+interactive targeting, content extraction, browser state management, state waits, and page diagnostics workflows, or
 `--workflow <id>` to fetch a single workflow. `agent_workflows` gives ordered
 steps with fields to read, success conditions, failure hints, and cleanup
 commands. The `read` arrays include auth flow availability, export usability,
@@ -907,13 +1007,35 @@ the Codex Skill and reports
 workflow surface is too old or missing critical steps such as cleanup. That
 required surface includes selector actions, role-based text/existence/geometry
 checks, press/hover/scroll, select/check/uncheck, role/text/label actions,
-accessibility snapshot, interactive-only snapshot, and diagnostic commands. The
-`case_schema` check verifies that repeatable case files can use the Skill's
+accessibility snapshot, interactive-only snapshot, and diagnostic commands. It
+also reports `invalid_workflow_command_references` when a workflow step points
+at a command missing from the parser-backed catalog, and
+`invalid_agent_entrypoint_command_references` when a quick-start entrypoint does
+the same. The
+`action_guides` check verifies task-specific action guides such as
+`interactive_targeting`, `form_interaction`, `content_extraction`,
+`browser_state_management`, and `page_diagnostics`; it reports
+`missing_required_action_guides`, `required_guide_fields`, and
+`invalid_action_guides`, plus `invalid_guide_command_references` when a guide
+points at a command not present in the parser-backed catalog. This tells agents
+when an installed CLI is too old to guide them away from custom
+Playwright/JavaScript.
+The `case_schema` check verifies that repeatable case files can use the Skill's
 expected semantic, state, content, storage/cookie, and diagnostic actions; it
 reports `required_case_actions`,
-`missing_required_case_actions`, `missing_supported_actions`,
-`missing_action_schemas`, and `invalid_action_schemas` with upgrade guidance
-when the installed CLI is too old for case-based smoke tests.
+`required_case_scaffold_templates`, `missing_required_case_actions`,
+`missing_supported_actions`, `missing_action_schemas`,
+`missing_case_scaffold_templates`, `checked_case_scaffold_templates`,
+`invalid_case_scaffold_templates`, and `invalid_action_schemas` with upgrade
+guidance when the installed CLI is too old or its packaged starter cases no
+longer validate for case-based smoke tests.
+The `auth_login_contract` check verifies that `auth login` still exposes the
+handoff fields agents need for safe setup, including `setup_blocks`,
+`copyable_commands`, `local_env`, `verification`, `secret_policy`,
+`connect_from_codex_url`, and runtime-auth blockers.
+The `device_code_contract` check verifies that `auth login --device-code`
+still exposes the pending approval contract, required device-code endpoints,
+required browser-site support, fallback setup blocks, and runtime-auth blockers.
 The `connect_from_codex_contract` check verifies that browser.lexmount.cn
 handoff fields such as capabilities, `browser_site_acceptance_tests`, token
 lifecycle, runtime auth, and device-code API contracts are still present.
@@ -944,11 +1066,33 @@ For a new browser task, agents should prefer this sequence:
 
 ```bash
 browser-cli commands --workflow session_recovery
+browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow case_file_task
 browser-cli case schema
+browser-cli case schema --action observe
+browser-cli case schema --action act
+browser-cli case schema --action extract
 browser-cli case schema --action fill-label
+browser-cli example get --id auth_lifecycle_playbook --metadata-only
+browser-cli example get --id persistent_context_playbook --metadata-only
+browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id form_fill_case --metadata-only
+browser-cli example get --id content_extraction_case --metadata-only
+browser-cli example get --id browser_state_case --metadata-only
+browser-cli example get --id navigation_flow_case --metadata-only
+browser-cli example get --id file_upload_case --metadata-only
+browser-cli example get --id checkout_flow_case --metadata-only
+browser-cli example get --id interactive_targeting_case --metadata-only
+browser-cli example get --id page_diagnostics_case --metadata-only
+browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
 browser-cli case scaffold --template form-fill --output form-case.yaml
+browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml
+browser-cli case scaffold --template browser-state --output browser-state-case.yaml
+browser-cli case scaffold --template navigation-flow --output navigation-case.yaml
+browser-cli case scaffold --template file-upload --output upload-case.yaml
+browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
+browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
+browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
@@ -974,8 +1118,8 @@ browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
 browser-cli session close --session-id <session_id>
 ```
 
-`case schema` supports repeatable semantic form and targeting steps such as
-`fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
+`case schema` supports repeatable agent primitives and semantic form/targeting steps such as
+`observe`, `act`, `extract`, `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
 `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
 `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
 `press-key`, `scroll-into-view-role`, `click-index`, `form-snapshot`,
@@ -1043,9 +1187,12 @@ Common agent recipes:
   `query` -> choose a zero-based candidate -> `click-index` when the list is not
   semantic.
 - Page content/data: run `browser-cli commands --workflow content_extraction`,
-  then choose `outline-snapshot`, `text-snapshot`, `link-snapshot`,
-  `table-snapshot`, `list-snapshot`, or `accessibility-snapshot` before
-  falling back to `snapshot` or custom JavaScript.
+  then start with `action extract --surface text --surface links --selector main`;
+  use `--surface all` when one bounded result should include outline, tables,
+  lists, and accessibility nodes. Choose narrower `outline-snapshot`,
+  `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, or
+  `accessibility-snapshot` when the bundled extract result is too broad or
+  truncated before falling back to `snapshot` or custom JavaScript.
 - Manage browser state: run `browser-cli commands --workflow browser_state_management`,
   then choose `storage-get`, `storage-set`, `cookie-get`, `cookie-set`,
   `wait-storage`, or `wait-cookie` before using custom JavaScript. Use these

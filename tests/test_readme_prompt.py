@@ -51,19 +51,56 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli auth login --device-code" in prompt
     assert "browser-cli auth login --device-code --wait" in prompt
     assert "available=false 时使用 manual env fallback" in prompt
+    assert "browser-cli skill status" in prompt
+    assert "browser-cli skill install --force" in prompt
     assert "browser-cli commands --workflows-only" in prompt
     assert "browser-cli reference list" in prompt
+    assert "browser-cli reference get --id quickstart --metadata-only" in prompt
+    assert "browser-cli reference get --id quickstart" in prompt
+    assert "browser-cli reference get --id connect_from_codex --metadata-only" in prompt
+    assert "browser-cli reference get --id connect_from_codex" in prompt
     assert "browser-cli reference get --id usable_status --metadata-only" in prompt
     assert "browser-cli reference get --id usable_status" in prompt
     assert "browser-cli reference get --id action_playbook --metadata-only" in prompt
     assert "browser-cli reference get --id action_playbook" in prompt
     assert "browser-cli example list" in prompt
     assert "browser-cli example get --id agent_playbook --metadata-only" in prompt
+    assert (
+        "browser-cli example get --id setup_verification_playbook --metadata-only"
+        in prompt
+    )
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
+        in prompt
+    )
+    assert (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
+        in prompt
+    )
     assert "browser-cli example get --id page_inspection_case" in prompt
+    assert "browser-cli example get --id agent_primitives_case" in prompt
     assert "browser-cli example get --id form_fill_case" in prompt
+    assert "browser-cli example get --id content_extraction_case" in prompt
+    assert "browser-cli example get --id browser_state_case" in prompt
+    assert "browser-cli example get --id navigation_flow_case" in prompt
+    assert "browser-cli example get --id file_upload_case" in prompt
+    assert "browser-cli example get --id checkout_flow_case" in prompt
+    assert "browser-cli example get --id interactive_targeting_case" in prompt
+    assert "browser-cli example get --id page_diagnostics_case" in prompt
     assert "browser-cli case schema" in prompt
+    assert "browser-cli case schema --action observe" in prompt
+    assert "browser-cli case schema --action act" in prompt
+    assert "browser-cli case schema --action extract" in prompt
     assert "browser-cli case scaffold --template page-inspection" in prompt
+    assert "browser-cli case scaffold --template agent-primitives" in prompt
     assert "browser-cli case scaffold --template form-fill" in prompt
+    assert "browser-cli case scaffold --template content-extraction" in prompt
+    assert "browser-cli case scaffold --template browser-state" in prompt
+    assert "browser-cli case scaffold --template navigation-flow" in prompt
+    assert "browser-cli case scaffold --template file-upload" in prompt
+    assert "browser-cli case scaffold --template checkout-flow" in prompt
+    assert "browser-cli case scaffold --template interactive-targeting" in prompt
+    assert "browser-cli case scaffold --template page-diagnostics" in prompt
     assert "不要先写自定义 Playwright/JS" in prompt
     assert "browser-cli commands --workflow setup_and_verify" in prompt
     assert (
@@ -73,6 +110,8 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli commands --workflow device_code_auth" in prompt
     assert "browser-cli commands --workflow scoped_token_lifecycle" in prompt
     assert "browser-cli commands --workflow session_recovery" in prompt
+    assert "browser-cli commands --workflow first_browser_task" in prompt
+    assert "browser-cli commands --workflow agent_browser_primitives" in prompt
     assert "browser-cli commands --workflow one_off_page_task" in prompt
     assert "browser-cli commands --workflow case_file_task" in prompt
     assert "browser-cli commands --workflow persistent_login_state" in prompt
@@ -91,6 +130,18 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli commands --workflow state_waits" in prompt
     assert "browser-cli commands --workflow page_diagnostics" in prompt
     assert "browser-cli action guide --names-only" in prompt
+    assert (
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
+        in prompt
+    )
+    assert (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"'
+        in prompt
+    )
+    assert (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+        in prompt
+    )
     assert "browser-cli action guide --task form_interaction" in prompt
     assert "browser-cli action guide --task interactive_targeting" in prompt
     assert "browser-cli action guide --task content_extraction" in prompt
@@ -141,8 +192,11 @@ def test_readme_documents_doctor_connect_from_codex_blockers() -> None:
     text = README.read_text()
 
     assert "`repair_plan.connect_from_codex.required_runtime_auth`" in text
+    assert "`auth_login_contract`" in text
+    assert "`device_code_contract`" in text
     assert "`required_token_lifecycle`" in text
     assert "`site_capability_status`" in text
+    assert "required device-code endpoints" in text
     assert "browser.lexmount.cn, SDK, API, and gateway blockers" in text
 
 
@@ -152,24 +206,60 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "## When To Use This Skill" in text
     assert "## Supported Operation Map" in text
     assert "Use `browser-cli` when Codex or another agent needs" in text
+    assert "| Use `browser-cli` when | Use something else when |" in text
+    assert "isolated Lexmount remote browser session" in text
+    assert "Do not use this Skill for a local desktop app" in text
     assert "persistent_login_state" in text
+    assert "navigation_flow" in text
+    assert "agent_browser_primitives" in text
+    assert "observe, act, extract, and verify" in text
+    assert "action act` for deterministic click/fill/select/check/press/hover/scroll plans" in text
+    assert "browser-cli action act --session-id <session_id>" in text
+    assert "browser-cli action extract --session-id <session_id>" in text
     assert "interactive_targeting" in text
     assert "content_extraction" in text
+    assert "visual_capture" in text
+    assert "dialog_frame_handling" in text
     assert "page_diagnostics" in text
     assert "docs/skill-positioning.md" in text
     assert "Chrome" not in text
     assert "chrome" not in text
+    assert "Chromium" not in text
+    assert "chromium" not in text
 
 
-def test_skill_positioning_doc_compares_browserbase_mcp() -> None:
+def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     text = (DOCS / "skill-positioning.md").read_text()
+    normalized = " ".join(text.split())
     docs_index = (DOCS / "README.md").read_text()
 
-    assert "Browserbase MCP Server" in text
-    assert "https://github.com/browserbase/mcp-server-browserbase" in text
+    assert "Browserbase Skills" in text
+    assert "https://github.com/browserbase/skills" in text
+    assert "https://raw.githubusercontent.com/browserbase/skills/main/skills/browser/SKILL.md" in text
+    assert "https://docs.browserbase.com/integrations/mcp/introduction" in text
+    assert "https://docs.browserbase.com/integrations/mcp/setup" in text
     assert "browser-cli reference get --id skill_positioning" in text
-    assert "`start`, `end`, `navigate`, `act`, `observe`, and `extract`" in text
+    assert "short default loop" in text
+    assert "element refs" in text
+    assert "What Browserbase currently does better" in text
+    assert "What `browser-cli` should copy from that shape" in text
+    assert "Keep one memorable first loop" in text
+    assert "Expose platform capabilities as data" in text
+    assert "first-run path is shorter" in text
+    assert "browse snapshot" in text
+    assert "agent_browser_primitives" in text
+    assert "browser-cli action observe --session-id <session_id>" in text
+    assert 'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"' in text
+    assert "browser-cli action extract --session-id <session_id>" in text
+    assert "deterministic `action act` plans" in normalized
+    assert "natural-language act still needs a wrapper above the CLI" in normalized
+    assert "MCP-style or natural-language wrappers" in normalized
     assert "Current Gap" in text
-    assert "hosted MCP" in text
+    assert "plugin package" in text
+    assert "capability panel" in text
     assert "Connect from Codex" in text
+    assert "single Connect from Codex flow" in text
+    assert "scoped agent key" in text
+    assert "browser.lexmount.cn project page" in text
+    assert "machine-readable data that `doctor` can verify" in text
     assert "Skill positioning and cloud-browser comparison" in docs_index

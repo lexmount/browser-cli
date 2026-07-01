@@ -1,0 +1,55 @@
+name: page-diagnostics
+description: Build a local diagnostic fixture, capture console/runtime and fetch evidence, and save artifacts.
+close_created_session: true
+session:
+  create: true
+  browser_mode: light
+steps:
+  - action: open-url
+    url: about:blank
+    wait_until: load
+  - action: console-snapshot
+    install_only: true
+  - action: network-snapshot
+    install_only: true
+  - action: eval
+    expression: |
+      async () => {
+        document.body.innerHTML = `
+          <main>
+            <h1>Diagnostics fixture</h1>
+            <p id="status" role="status" aria-live="polite">Starting</p>
+          </main>
+        `;
+        console.info("diagnostic fixture ready");
+        console.error("diagnostic runtime error");
+        await fetch("data:text/plain,diagnostic-network-ok", {
+          method: "GET",
+        });
+        document.querySelector("#status").textContent = "Diagnostics captured";
+        return true;
+      }
+  - action: wait-console
+    source: console
+    level: error
+    text: diagnostic runtime error
+    timeout_ms: 5000
+  - action: wait-network
+    source: fetch
+    method: GET
+    status: 200
+    url: diagnostic-network-ok
+    url_match: contains
+    timeout_ms: 5000
+  - action: console-snapshot
+    max_entries: 20
+    output: diagnostics-console.json
+  - action: network-snapshot
+    max_entries: 20
+    output: diagnostics-network.json
+  - action: wait-text
+    selector: "#status"
+    text: Diagnostics captured
+    timeout_ms: 5000
+  - action: screenshot
+    output: diagnostics-page.png

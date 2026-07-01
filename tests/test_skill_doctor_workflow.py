@@ -33,12 +33,28 @@ def test_skill_explains_doctor_status_decisions() -> None:
     assert '`browser_smoke_session` with `status: "pass"`' in text
     assert '`browser_smoke_session` with `status: "fail"`' in text
     assert '`command_catalog` with `status: "warn"`' in text
+    assert "`action_guides` warns" in text
     assert '`agent_references` with `status: "warn"`' in text
     assert '`agent_examples` with `status: "warn"`' in text
     assert "browser-cli reference get --id action_playbook" in text
     assert "browser-cli example list" in text
     assert "`invalid_examples` and `checked_examples`" in text
     assert "`missing_required_commands`" in text
+    assert "`missing_required_agent_entrypoints`" in text
+    assert "`invalid_workflow_command_references`" in text
+    assert "`invalid_agent_entrypoint_command_references`" in text
+    assert "`missing_required_action_guides`" in text
+    assert "`invalid_action_guides`" in text
+    assert "`invalid_guide_command_references`" in text
+    assert "`missing_case_scaffold_templates`" in text
+    assert "`checked_case_scaffold_templates`" in text
+    assert "`invalid_case_scaffold_templates`" in text
+    assert "`auth_login_contract`" in text
+    assert "`device_code_contract`" in text
+    assert "`missing_handoff_fields`" in text
+    assert "`missing_setup_blocks`" in text
+    assert "`missing_required_device_code_endpoints`" in text
+    assert "`missing_required_browser_site_support`" in text
     assert "`repair_plan`" in text
     assert "`warnings > 0`" in text
     assert "`ok: false`" in text
@@ -86,6 +102,8 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow device_code_auth" in normalized
     assert "browser-cli commands --workflow scoped_token_lifecycle" in normalized
     assert "browser-cli commands --workflow session_recovery" in normalized
+    assert "browser-cli commands --workflow first_browser_task" in normalized
+    assert "browser-cli commands --workflow agent_browser_primitives" in normalized
     assert "browser-cli commands --workflow one_off_page_task" in normalized
     assert "browser-cli commands --workflow case_file_task" in normalized
     assert "browser-cli commands --workflow persistent_login_state" in normalized
@@ -102,6 +120,8 @@ def test_skill_documents_agent_workflow_discovery() -> None:
     assert "browser-cli commands --workflow state_waits" in normalized
     assert "browser-cli commands --workflow page_diagnostics" in normalized
     assert "browser-cli reference list" in normalized
+    assert "browser-cli reference get --id connect_from_codex" in normalized
+    assert "browser-cli reference get --id quickstart" in normalized
     assert "browser-cli reference get --id usable_status" in normalized
     assert "browser-cli example list" in normalized
     assert (

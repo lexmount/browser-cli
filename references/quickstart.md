@@ -1,4 +1,4 @@
-# browser-cli Quickstart
+# Browser CLI Quickstart
 
 This guide is the shortest path to a usable `browser-cli` install for Codex or
 another agent. The current MVP uses `LEXMOUNT_API_KEY` and

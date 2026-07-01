@@ -273,6 +273,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "doctor" in payload["groups"]
     assert "example" in payload["groups"]
     assert "reference" in payload["groups"]
+    assert "skill" in payload["groups"]
     assert "version" in payload["groups"]
     assert payload["json_output"]["always_json"] is True
     assert "LEXMOUNT_API_KEY" in payload["secret_policy"]["never_paste"]
@@ -294,8 +295,31 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert references["usable_status"]["package_resource"] == (
         "browser_cli.agent_references:usable-status.md"
     )
+    assert references["quickstart"]["path"] == "references/quickstart.md"
+    assert references["quickstart"]["content_command"] == (
+        "browser-cli reference get --id quickstart"
+    )
+    assert references["quickstart"]["package_resource"] == (
+        "browser_cli.agent_references:quickstart.md"
+    )
+    assert "first browser task" in references["quickstart"]["covers"]
+    assert references["connect_from_codex"]["path"] == (
+        "references/connect-from-codex.md"
+    )
+    assert references["connect_from_codex"]["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert references["connect_from_codex"]["package_resource"] == (
+        "browser_cli.agent_references:connect-from-codex.md"
+    )
+    assert "doctor integration" in references["connect_from_codex"]["covers"]
     assert "setup_and_verify" in references["usable_status"]["related_workflows"]
     assert "doctor readiness checks" in references["usable_status"]["covers"]
+    assert "first_browser_task" in references["quickstart"]["related_workflows"]
+    assert "first_browser_task" in references["usable_status"]["related_workflows"]
+    assert "first_browser_task" in references["action_playbook"]["related_workflows"]
+    assert "agent_browser_primitives" in references["quickstart"]["related_workflows"]
+    assert "agent_browser_primitives" in references["action_playbook"]["related_workflows"]
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "mouse_interaction" in references["action_playbook"]["related_workflows"]
@@ -317,15 +341,71 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert examples["agent_playbook"]["content_command"] == (
         "browser-cli example get --id agent_playbook"
     )
+    assert "first_browser_task" in examples["agent_playbook"]["related_workflows"]
+    assert "agent_browser_primitives" in examples["agent_playbook"]["related_workflows"]
+    assert (
+        "first_browser_task"
+        in examples["setup_verification_playbook"]["related_workflows"]
+    )
+    assert examples["auth_lifecycle_playbook"]["format"] == "markdown"
+    assert (
+        "scoped_token_lifecycle"
+        in examples["auth_lifecycle_playbook"]["related_workflows"]
+    )
+    assert examples["persistent_context_playbook"]["format"] == "markdown"
+    assert (
+        "persistent_login_state"
+        in examples["persistent_context_playbook"]["related_workflows"]
+    )
     assert examples["page_inspection_case"]["format"] == "yaml"
     assert "case_file_task" in examples["page_inspection_case"]["related_workflows"]
+    assert "first_browser_task" in examples["page_inspection_case"]["related_workflows"]
+    assert examples["agent_primitives_case"]["format"] == "yaml"
+    assert (
+        "agent_browser_primitives"
+        in examples["agent_primitives_case"]["related_workflows"]
+    )
+    assert examples["browser_state_case"]["format"] == "yaml"
+    assert (
+        "browser_state_management"
+        in examples["browser_state_case"]["related_workflows"]
+    )
+    assert examples["navigation_flow_case"]["format"] == "yaml"
+    assert "navigation_flow" in examples["navigation_flow_case"]["related_workflows"]
+    assert examples["file_upload_case"]["format"] == "yaml"
+    assert "file_upload" in examples["file_upload_case"]["related_workflows"]
+    assert examples["checkout_flow_case"]["format"] == "yaml"
+    assert "form_interaction" in examples["checkout_flow_case"]["related_workflows"]
+    assert examples["page_diagnostics_case"]["format"] == "yaml"
+    assert "page_diagnostics" in examples["page_diagnostics_case"]["related_workflows"]
     assert examples["form_fill_case"]["package_resource"] == (
         "browser_cli.agent_examples.cases:form-fill.yaml"
+    )
+    assert examples["interactive_targeting_case"]["format"] == "yaml"
+    assert (
+        "interactive_targeting"
+        in examples["interactive_targeting_case"]["related_workflows"]
     )
     assert (
         "browser-cli auth connect-requirements" in payload["agent_entrypoints"]["setup"]
     )
     assert "browser-cli reference list" in payload["agent_entrypoints"]["setup"]
+    assert (
+        "browser-cli reference get --id quickstart --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli reference get --id quickstart"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex"
+        in payload["agent_entrypoints"]["setup"]
+    )
     assert (
         "browser-cli reference get --id skill_positioning --metadata-only"
         in payload["agent_entrypoints"]["setup"]
@@ -342,10 +422,56 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli reference get --id usable_status"
         in payload["agent_entrypoints"]["setup"]
     )
+    assert (
+        "browser-cli example get --id setup_verification_playbook --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli example get --id setup_verification_playbook"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert "browser-cli skill status" in payload["agent_entrypoints"]["setup"]
+    assert "browser-cli skill install --force" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth scopes" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
+    assert (
+        "browser-cli commands --workflow first_browser_task"
+        in payload["agent_entrypoints"]["first_browser_task"]
+    )
+    assert (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+        in payload["agent_entrypoints"]["first_browser_task"]
+    )
+    assert (
+        "browser-cli commands --workflow agent_browser_primitives"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"'
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
+    assert (
+        "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    )
     assert (
         "browser-cli action page-info --session-id <session_id>"
         in payload["agent_entrypoints"]["one_off_page_task"]
@@ -356,7 +482,27 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
     assert (
+        "browser-cli case schema --action observe"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action act"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action extract"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id agent_primitives_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
@@ -364,11 +510,71 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template browser-state --output browser-state-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template file-upload --output upload-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli example get --id form_fill_case --metadata-only"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli example get --id content_extraction_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id browser_state_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id navigation_flow_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id file_upload_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id checkout_flow_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id page_diagnostics_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli auth login --device-code"
+        in payload["agent_entrypoints"]["device_code_auth"]
+    )
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
         in payload["agent_entrypoints"]["device_code_auth"]
     )
     assert (
@@ -384,22 +590,34 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
     )
     assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
+        in payload["agent_entrypoints"]["scoped_token_lifecycle"]
+    )
+    assert (
         "browser-cli session keepalive --session-id <session_id> --duration 60 --stop-on-inactive"
         in payload["agent_entrypoints"]["session_recovery"]
     )
     assert (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
+        in payload["agent_entrypoints"]["persistent_login_state"]
+    )
+    assert (
+        "browser-cli example get --id persistent_context_playbook"
+        in payload["agent_entrypoints"]["persistent_login_state"]
+    )
+    assert (
         "browser-cli context list"
-        in payload["agent_entrypoints"]["persistent_login_state"][0]
+        in payload["agent_entrypoints"]["persistent_login_state"][2]
     )
     assert (
         "--include-reuse-state"
-        in payload["agent_entrypoints"]["persistent_login_state"][0]
+        in payload["agent_entrypoints"]["persistent_login_state"][2]
     )
     assert (
         "browser-cli context pick"
-        in payload["agent_entrypoints"]["persistent_login_state"][1]
+        in payload["agent_entrypoints"]["persistent_login_state"][3]
     )
-    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][1]
+    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][3]
     assert (
         "browser-cli context status --context-id <context_id>"
         in payload["agent_entrypoints"]["persistent_login_state"]
@@ -545,6 +763,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["content_extraction"]
     )
     assert (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+        in payload["agent_entrypoints"]["content_extraction"]
+    )
+    assert (
         "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000"
         in payload["agent_entrypoints"]["content_extraction"]
     )
@@ -598,6 +820,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "reference.content_command"
         in setup_steps["inspect_skill_positioning"]["read"]
     )
+    assert setup_steps["inspect_quickstart"]["command"] == (
+        "browser-cli reference get --id quickstart --metadata-only"
+    )
+    assert (
+        setup_steps["inspect_quickstart"]["follow_up_command"]
+        == "browser-cli reference get --id quickstart"
+    )
+    assert "reference.content_command" in setup_steps["inspect_quickstart"]["read"]
     assert setup_steps["inspect_usable_status"]["command"] == (
         "browser-cli reference get --id usable_status --metadata-only"
     )
@@ -606,6 +836,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         == "browser-cli reference get --id usable_status"
     )
     assert "reference.content_command" in setup_steps["inspect_usable_status"]["read"]
+    assert setup_steps["skill_status"]["command"] == "browser-cli skill status"
+    assert setup_steps["skill_status"]["optional"] is True
+    assert "force_install_command" in setup_steps["skill_status"]["read"]
     assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
     assert (
         "repair_plan.connect_from_codex.url"
@@ -626,6 +859,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     site_steps = workflows["connect_from_codex_site_requirements"]["steps"]
     assert [step["id"] for step in site_steps] == [
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -634,32 +868,38 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "doctor_after_credentials",
     ]
     assert site_steps[0]["command"] == (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+    )
+    assert site_steps[0]["follow_up_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert site_steps[1]["command"] == (
         "browser-cli auth scopes --include-site-contract"
     )
-    assert "browser_site_contract.scope_ui_fields" in site_steps[0]["read"]
+    assert "browser_site_contract.scope_ui_fields" in site_steps[1]["read"]
     assert (
-        "browser_site_contract.browser_site_acceptance_tests" in site_steps[0]["read"]
+        "browser_site_contract.browser_site_acceptance_tests" in site_steps[1]["read"]
     )
-    assert site_steps[1]["command"] == "browser-cli auth connect-requirements"
-    assert "connect_from_codex.device_code_url" in site_steps[1]["read"]
-    assert "required_device_code_endpoints" in site_steps[1]["read"]
-    assert "required_token_lifecycle" in site_steps[1]["read"]
-    assert "required_runtime_auth" in site_steps[1]["read"]
-    assert "browser_site_acceptance_tests" in site_steps[1]["read"]
+    assert site_steps[2]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.device_code_url" in site_steps[2]["read"]
+    assert "required_device_code_endpoints" in site_steps[2]["read"]
+    assert "required_token_lifecycle" in site_steps[2]["read"]
+    assert "required_runtime_auth" in site_steps[2]["read"]
+    assert "browser_site_acceptance_tests" in site_steps[2]["read"]
     assert (
-        site_steps[2]["command"] == "browser-cli auth connect-requirements --checklist"
+        site_steps[3]["command"] == "browser-cli auth connect-requirements --checklist"
     )
-    assert "implementation_checklist.phases" in site_steps[2]["read"]
+    assert "implementation_checklist.phases" in site_steps[3]["read"]
     assert (
-        "implementation_checklist.blocked_until.runtime_auth" in site_steps[2]["read"]
+        "implementation_checklist.blocked_until.runtime_auth" in site_steps[3]["read"]
     )
-    assert site_steps[3]["optional"] is True
-    assert "connect_from_codex.required_runtime_auth" in site_steps[3]["read"]
-    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[3]["read"]
-    assert site_steps[4]["command"] == "browser-cli auth login --device-code"
+    assert site_steps[4]["optional"] is True
     assert "connect_from_codex.required_runtime_auth" in site_steps[4]["read"]
     assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[4]["read"]
-    assert site_steps[5]["command"] == "browser-cli doctor --json"
+    assert site_steps[5]["command"] == "browser-cli auth login --device-code"
+    assert "connect_from_codex.required_runtime_auth" in site_steps[5]["read"]
+    assert "connect_from_codex.browser_site_acceptance_tests" in site_steps[5]["read"]
+    assert site_steps[6]["command"] == "browser-cli doctor --json"
     auth_steps = workflows["connect_from_codex_auth"]["steps"]
     assert auth_steps[0]["command"] == "browser-cli auth status"
     assert "runtime_auth.usable" in auth_steps[0]["read"]
@@ -769,6 +1009,87 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "closed" in session_steps[3]["read"]
     assert "context_reuse.availability" in session_steps[4]["read"]
     assert "browser-cli doctor --json" in session_steps[4]["fallback_commands"]
+    first_steps = workflows["first_browser_task"]["steps"]
+    assert [step["id"] for step in first_steps] == [
+        "check_readiness",
+        "create_session",
+        "open_url",
+        "inspect_page",
+        "inspect_targets",
+        "choose_first_action",
+        "verify_or_capture",
+        "close_session",
+    ]
+    assert first_steps[0]["command"] == "browser-cli doctor --json"
+    assert "ready_for_browser_actions" in first_steps[0]["read"]
+    assert "repair_plan.guidance" in first_steps[0]["read"]
+    assert first_steps[0]["success_condition"] == (
+        "ok=true and ready_for_browser_actions=true"
+    )
+    assert first_steps[4]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in first_steps[4]["read"]
+    assert "browser-cli action accessibility-snapshot" in first_steps[4]["fallback_commands"][0]
+    assert first_steps[5]["agent_action"] is True
+    assert first_steps[5]["selection_order"][:4] == [
+        "wait-text",
+        "click-role",
+        "click-text",
+        "fill-label",
+    ]
+    assert "browser-cli action guide --task interactive_targeting" in first_steps[5]["fallback_commands"]
+    assert first_steps[6]["agent_action"] is True
+    assert "result.matched" in first_steps[6]["read"]
+    assert first_steps[-1] == {
+        "id": "close_session",
+        "command": "browser-cli session close --session-id <session_id>",
+        "cleanup": True,
+    }
+    primitive_steps = workflows["agent_browser_primitives"]["steps"]
+    assert [step["id"] for step in primitive_steps] == [
+        "inspect_action_surface",
+        "observe_page",
+        "choose_primitive",
+        "act_semantically",
+        "extract_content",
+        "verify_result",
+    ]
+    assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
+    assert "custom_js_boundary" in primitive_steps[0]["read"]
+    assert primitive_steps[1]["command"] == (
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
+    )
+    assert "result.page_info" in primitive_steps[1]["read"]
+    assert "result.snapshots.interactive.nodes" in primitive_steps[1]["read"]
+    assert "result.snapshots.text.texts" in primitive_steps[1]["read"]
+    assert "browser-cli action page-info" in primitive_steps[1]["fallback_commands"][0]
+    assert primitive_steps[2]["agent_action"] is True
+    assert primitive_steps[2]["selection_order"] == [
+        "observe",
+        "act",
+        "extract",
+        "verify",
+    ]
+    assert primitive_steps[3]["optional"] is True
+    assert primitive_steps[3]["command"] == (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"'
+    )
+    assert primitive_steps[3]["selection_order"][0] == "act"
+    assert "click-role" in primitive_steps[3]["selection_order"]
+    assert "result.plan.underlying_command" in primitive_steps[3]["read"]
+    assert "result.action_result.clicked" in primitive_steps[3]["read"]
+    assert "browser-cli commands --workflow form_interaction" in primitive_steps[3]["fallback_commands"]
+    assert primitive_steps[4]["optional"] is True
+    assert primitive_steps[4]["command"] == (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+    )
+    assert "extract" in primitive_steps[4]["selection_order"]
+    assert "text-snapshot" in primitive_steps[4]["selection_order"]
+    assert "result.extractions.text.texts" in primitive_steps[4]["read"]
+    assert "browser-cli commands --workflow content_extraction" in primitive_steps[4]["fallback_commands"]
+    assert primitive_steps[5]["agent_action"] is True
+    assert "result.link_count" in primitive_steps[5]["read"]
     one_off_steps = workflows["one_off_page_task"]["steps"]
     assert one_off_steps[0]["id"] == "create_session"
     assert "result.nodes" in one_off_steps[3]["read"]
@@ -926,9 +1247,25 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "inspect_case_commands",
         "inspect_case_schema",
         "inspect_semantic_case_action",
+        "inspect_agent_primitives_case_example",
         "inspect_form_case_example",
+        "inspect_content_extraction_case_example",
+        "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
+        "inspect_file_upload_case_example",
+        "inspect_checkout_flow_case_example",
+        "inspect_interactive_targeting_case_example",
+        "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
+        "scaffold_agent_primitives_case_file",
         "scaffold_form_case_file",
+        "scaffold_content_extraction_case_file",
+        "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
+        "scaffold_file_upload_case_file",
+        "scaffold_checkout_flow_case_file",
+        "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -938,66 +1275,154 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "supported_actions" in case_steps[1]["read"]
     assert "required_fields" in case_steps[1]["read"]
     assert "top_level" in case_steps[1]["read"]
-    assert case_steps[2]["command"] == "browser-cli case schema --action fill-label"
+    assert case_steps[2]["command"] == "browser-cli case schema --action act"
+    assert "browser-cli case schema --action observe" in case_steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action extract" in case_steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action fill-label" in case_steps[2]["fallback_commands"]
     assert "action_schema.result_fields" in case_steps[2]["read"]
     assert case_steps[3]["command"] == (
-        "browser-cli example get --id form_fill_case --metadata-only"
+        "browser-cli example get --id agent_primitives_case --metadata-only"
     )
     assert "example.grep_patterns" in case_steps[3]["read"]
     assert case_steps[4]["command"] == (
+        "browser-cli example get --id form_fill_case --metadata-only"
+    )
+    assert "example.grep_patterns" in case_steps[4]["read"]
+    assert case_steps[5]["command"] == (
+        "browser-cli example get --id content_extraction_case --metadata-only"
+    )
+    assert "example.related_workflows" in case_steps[5]["read"]
+    assert case_steps[6]["command"] == (
+        "browser-cli example get --id browser_state_case --metadata-only"
+    )
+    assert "example.case_file" in case_steps[6]["read"]
+    assert case_steps[7]["command"] == (
+        "browser-cli example get --id navigation_flow_case --metadata-only"
+    )
+    assert "example.case_file" in case_steps[7]["read"]
+    assert case_steps[8]["command"] == (
+        "browser-cli example get --id file_upload_case --metadata-only"
+    )
+    assert "example.case_file" in case_steps[8]["read"]
+    assert case_steps[9]["command"] == (
+        "browser-cli example get --id checkout_flow_case --metadata-only"
+    )
+    assert "example.case_file" in case_steps[9]["read"]
+    assert case_steps[10]["command"] == (
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
+    )
+    assert "example.case_file" in case_steps[10]["read"]
+    assert case_steps[11]["command"] == (
+        "browser-cli example get --id page_diagnostics_case --metadata-only"
+    )
+    assert "example.case_file" in case_steps[11]["read"]
+    assert case_steps[12]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert case_steps[4]["optional"] is True
-    assert case_steps[4]["success_condition"] == "valid=true and wrote_file=true"
-    assert "next_commands" in case_steps[4]["read"]
-    assert case_steps[5]["command"] == (
+    assert case_steps[12]["optional"] is True
+    assert case_steps[12]["success_condition"] == "valid=true and wrote_file=true"
+    assert "next_commands" in case_steps[12]["read"]
+    assert case_steps[13]["command"] == (
+        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
+    )
+    assert case_steps[13]["optional"] is True
+    assert "case.steps" in case_steps[13]["read"]
+    assert "supported_actions" in case_steps[13]["read"]
+    assert case_steps[14]["command"] == (
         "browser-cli case scaffold --template form-fill --output form-case.yaml"
     )
-    assert case_steps[5]["optional"] is True
-    assert "case.steps" in case_steps[5]["read"]
-    assert "supported_actions" in case_steps[5]["read"]
-    assert case_steps[6]["command"] == "browser-cli case validate --file <case.yaml>"
-    assert case_steps[6]["success_condition"] == "valid=true"
-    assert "errors" in case_steps[6]["read"]
-    assert case_steps[7]["command"] == (
+    assert case_steps[14]["optional"] is True
+    assert "case.steps" in case_steps[14]["read"]
+    assert "supported_actions" in case_steps[14]["read"]
+    assert case_steps[15]["command"] == (
+        "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml"
+    )
+    assert case_steps[15]["optional"] is True
+    assert "case.steps" in case_steps[15]["read"]
+    assert "supported_actions" in case_steps[15]["read"]
+    assert case_steps[16]["command"] == (
+        "browser-cli case scaffold --template browser-state --output browser-state-case.yaml"
+    )
+    assert case_steps[16]["optional"] is True
+    assert "case.steps" in case_steps[16]["read"]
+    assert "supported_actions" in case_steps[16]["read"]
+    assert case_steps[17]["command"] == (
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
+    )
+    assert case_steps[17]["optional"] is True
+    assert "case.steps" in case_steps[17]["read"]
+    assert "supported_actions" in case_steps[17]["read"]
+    assert case_steps[18]["command"] == (
+        "browser-cli case scaffold --template file-upload --output upload-case.yaml"
+    )
+    assert case_steps[18]["optional"] is True
+    assert "case.steps" in case_steps[18]["read"]
+    assert "supported_actions" in case_steps[18]["read"]
+    assert case_steps[19]["command"] == (
+        "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml"
+    )
+    assert case_steps[19]["optional"] is True
+    assert "case.steps" in case_steps[19]["read"]
+    assert "supported_actions" in case_steps[19]["read"]
+    assert case_steps[20]["command"] == (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+    )
+    assert case_steps[20]["optional"] is True
+    assert "case.steps" in case_steps[20]["read"]
+    assert "supported_actions" in case_steps[20]["read"]
+    assert case_steps[21]["command"] == (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+    )
+    assert case_steps[21]["optional"] is True
+    assert "case.steps" in case_steps[21]["read"]
+    assert "supported_actions" in case_steps[21]["read"]
+    assert case_steps[22]["command"] == "browser-cli case validate --file <case.yaml>"
+    assert case_steps[22]["success_condition"] == "valid=true"
+    assert "errors" in case_steps[22]["read"]
+    assert case_steps[23]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "events_path" in case_steps[7]["read"]
-    assert "message" in case_steps[7]["on_failure_read"]
+    assert "events_path" in case_steps[23]["read"]
+    assert "message" in case_steps[23]["on_failure_read"]
     context_steps = workflows["persistent_login_state"]["steps"]
-    assert context_steps[0]["id"] == "list_reuse_candidates"
-    assert context_steps[0]["optional"] is True
-    assert "reuse_state_included" in context_steps[0]["read"]
-    assert "recommended_context_id" in context_steps[0]["read"]
-    assert "reuse_candidates" in context_steps[0]["read"]
-    assert "metadata_values_redacted" in context_steps[0]["read"]
-    assert "selection_summary.availability_counts" in context_steps[0]["read"]
-    assert "availability" in context_steps[1]["read"]
-    assert "reusable" in context_steps[1]["read"]
-    assert "locked" in context_steps[1]["read"]
-    assert "reuse_reason" in context_steps[1]["read"]
-    assert "selection_strategy" in context_steps[1]["read"]
-    assert "selection_summary.recommended_next_action" in context_steps[1]["read"]
-    assert "selection_summary.reusable_matches" in context_steps[1]["read"]
-    assert "selection_summary.metadata_mismatches" in context_steps[1]["read"]
-    assert "selection_summary.availability_counts" in context_steps[1]["read"]
-    assert context_steps[2]["id"] == "inspect_context_status"
-    assert context_steps[2]["optional"] is True
-    assert context_steps[2]["command"] == (
-        "browser-cli context status --context-id <context_id>"
+    assert context_steps[0]["id"] == "inspect_persistent_context_playbook"
+    assert context_steps[0]["command"] == (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
     )
+    assert "example.content_command" in context_steps[0]["read"]
+    assert context_steps[1]["id"] == "list_reuse_candidates"
+    assert context_steps[1]["optional"] is True
+    assert "reuse_state_included" in context_steps[1]["read"]
+    assert "recommended_context_id" in context_steps[1]["read"]
+    assert "reuse_candidates" in context_steps[1]["read"]
+    assert "metadata_values_redacted" in context_steps[1]["read"]
+    assert "selection_summary.availability_counts" in context_steps[1]["read"]
     assert "availability" in context_steps[2]["read"]
     assert "reusable" in context_steps[2]["read"]
     assert "locked" in context_steps[2]["read"]
-    assert "normalized_status" in context_steps[2]["read"]
-    assert "context_reuse.availability" in context_steps[3]["read"]
-    assert "context_reuse.reusable" in context_steps[3]["read"]
-    assert "context_reuse.locked" in context_steps[3]["read"]
-    assert "context_reuse.reuse_reason" in context_steps[3]["read"]
-    assert "context_reuse.selection_strategy" in context_steps[3]["read"]
+    assert "reuse_reason" in context_steps[2]["read"]
+    assert "selection_strategy" in context_steps[2]["read"]
+    assert "selection_summary.recommended_next_action" in context_steps[2]["read"]
+    assert "selection_summary.reusable_matches" in context_steps[2]["read"]
+    assert "selection_summary.metadata_mismatches" in context_steps[2]["read"]
+    assert "selection_summary.availability_counts" in context_steps[2]["read"]
+    assert context_steps[3]["id"] == "inspect_context_status"
+    assert context_steps[3]["optional"] is True
+    assert context_steps[3]["command"] == (
+        "browser-cli context status --context-id <context_id>"
+    )
+    assert "availability" in context_steps[3]["read"]
+    assert "reusable" in context_steps[3]["read"]
+    assert "locked" in context_steps[3]["read"]
+    assert "normalized_status" in context_steps[3]["read"]
+    assert "context_reuse.availability" in context_steps[4]["read"]
+    assert "context_reuse.reusable" in context_steps[4]["read"]
+    assert "context_reuse.locked" in context_steps[4]["read"]
+    assert "context_reuse.reuse_reason" in context_steps[4]["read"]
+    assert "context_reuse.selection_strategy" in context_steps[4]["read"]
     assert (
         "context_reuse.selection_summary.recommended_next_action"
-        in (context_steps[3]["read"])
+        in (context_steps[4]["read"])
     )
     state_management_steps = workflows["browser_state_management"]["steps"]
     assert [step["id"] for step in state_management_steps] == [
@@ -1279,6 +1704,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "visibility_state" in extraction_steps[1]["read"]
     assert extraction_steps[2]["agent_action"] is True
     assert extraction_steps[2]["selection_order"] == [
+        "extract",
         "outline-snapshot",
         "text-snapshot",
         "link-snapshot",
@@ -1291,14 +1717,19 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     ]
     assert (
         "browser-cli action table-snapshot"
-        in extraction_steps[2]["preferred_commands"][3]
+        in extraction_steps[2]["preferred_commands"][5]
     )
     assert extraction_steps[3]["agent_action"] is True
+    assert extraction_steps[3]["command"] == (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+    )
+    assert "result.extractions.text.texts" in extraction_steps[3]["read"]
     assert "result.tables" in extraction_steps[3]["read"]
     assert "result.headings" in extraction_steps[3]["read"]
-    assert "browser-cli action snapshot" in extraction_steps[3]["fallback_commands"][0]
+    assert "browser-cli action text-snapshot" in extraction_steps[3]["fallback_commands"][0]
     assert extraction_steps[4]["agent_action"] is True
     assert "result.truncated" in extraction_steps[4]["read"]
+    assert "result.truncated_surfaces" in extraction_steps[4]["read"]
     state_steps = workflows["state_waits"]["steps"]
     assert [step["id"] for step in state_steps] == [
         "inspect_action_guide",
@@ -1380,6 +1811,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "auth.login",
         "auth.refresh",
         "doctor",
+        "skill.status",
+        "skill.install",
         "case.schema",
         "case.scaffold",
         "case.validate",
@@ -1387,6 +1820,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "session.create",
         "context.pick",
         "action.guide",
+        "action.observe",
+        "action.act",
         "action.open-url",
         "action.page-info",
         "action.set-viewport",
@@ -1462,12 +1897,43 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.console-snapshot",
         "action.wait-console",
         "action.outline-snapshot",
+        "action.extract",
         "action.interactive-snapshot",
         "action.interactive-only-snapshot",
         "direct-url",
     ):
         assert name in commands
 
+    observe = commands["action.observe"]
+    assert observe["required_options"] == []
+    assert observe["browser_target"] == {
+        "required": True,
+        "exactly_one_of": ["--connect-url", "--direct-url", "--session-id"],
+    }
+    assert any("--surface" in option["flags"] for option in observe["options"])
+    assert any("--selector" in option["flags"] for option in observe["options"])
+    assert any("--max-nodes" in option["flags"] for option in observe["options"])
+    extract = commands["action.extract"]
+    assert extract["required_options"] == []
+    assert extract["browser_target"] == observe["browser_target"]
+    assert any("--surface" in option["flags"] for option in extract["options"])
+    assert any("--selector" in option["flags"] for option in extract["options"])
+    assert any("--max-rows" in option["flags"] for option in extract["options"])
+    assert any("--max-cells" in option["flags"] for option in extract["options"])
+    assert any("--max-items" in option["flags"] for option in extract["options"])
+    act = commands["action.act"]
+    assert act["required_options"] == ["--kind"]
+    assert act["browser_target"] == observe["browser_target"]
+    assert any("--role" in option["flags"] for option in act["options"])
+    assert any("--label" in option["flags"] for option in act["options"])
+    assert any("--value" in option["flags"] for option in act["options"])
+    assert any("--option-label" in option["flags"] for option in act["options"])
+    skill_status = commands["skill.status"]
+    assert skill_status["required_options"] == []
+    assert any("--skill-dir" in option["flags"] for option in skill_status["options"])
+    skill_install = commands["skill.install"]
+    assert skill_install["required_options"] == []
+    assert any("--force" in option["flags"] for option in skill_install["options"])
     open_url = commands["action.open-url"]
     assert open_url["browser_target"] == {
         "required": True,
@@ -1834,6 +2300,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["guide"]["related_workflows"] == [
         "navigation_flow",
         "state_waits",
+        "first_browser_task",
         "one_off_page_task",
     ]
     assert payload["guide"]["selection_order"][:5] == [
@@ -1861,6 +2328,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert payload["next_commands"] == [
         "browser-cli commands --workflow navigation_flow",
         "browser-cli commands --workflow state_waits",
+        "browser-cli commands --workflow first_browser_task",
         "browser-cli commands --workflow one_off_page_task",
     ]
 
@@ -2144,13 +2612,18 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["guide"]["related_workflows"] == ["content_extraction"]
-    assert payload["guide"]["selection_order"][:4] == [
+    assert payload["guide"]["selection_order"][:5] == [
         "page-info",
+        "extract",
         "outline-snapshot",
         "text-snapshot",
         "link-snapshot",
     ]
     assert "table-snapshot" in payload["guide"]["selection_order"]
+    assert any(
+        "browser-cli action extract" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
     assert any(
         "browser-cli action table-snapshot" in command
         for command in payload["guide"]["preferred_commands"]
@@ -2164,7 +2637,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "result.tables" in payload["guide"]["read_fields"]
     assert "result.headings" in payload["guide"]["read_fields"]
     assert "result.truncated" in payload["guide"]["read_fields"]
-    assert "snapshots and get-text commands" in payload["guide"]["custom_js_boundary"]
+    assert "action extract plus page-info" in payload["guide"]["custom_js_boundary"]
     assert payload["next_commands"] == [
         "browser-cli commands --workflow content_extraction"
     ]
@@ -2294,7 +2767,7 @@ def test_commands_catalog_returns_workflows_only(
     assert payload["command"] == "commands"
     assert payload["schema_version"] == 1
     assert payload["group"] is None
-    assert payload["workflow_count"] == 23
+    assert payload["workflow_count"] == 25
     assert "commands" not in payload
     assert payload["agent_references"]["action_playbook"]["path"] == (
         "references/action-playbook.md"
@@ -2306,6 +2779,7 @@ def test_commands_catalog_returns_workflows_only(
         "page_diagnostics"
         in payload["agent_references"]["action_playbook"]["related_workflows"]
     )
+    assert "first_browser_task" in payload["agent_workflows"]
     setup_steps = {
         step["id"]: step
         for step in payload["agent_workflows"]["setup_and_verify"]["steps"]
@@ -2313,18 +2787,49 @@ def test_commands_catalog_returns_workflows_only(
     assert setup_steps["inspect_skill_positioning"]["command"] == (
         "browser-cli reference get --id skill_positioning --metadata-only"
     )
+    assert setup_steps["inspect_quickstart"]["command"] == (
+        "browser-cli reference get --id quickstart --metadata-only"
+    )
     assert setup_steps["inspect_usable_status"]["command"] == (
         "browser-cli reference get --id usable_status --metadata-only"
     )
+    assert setup_steps["skill_status"]["command"] == "browser-cli skill status"
     assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
     assert (
         "browser_smoke_session.status"
         in setup_steps["smoke_session"]["read"]
     )
+    first_steps = payload["agent_workflows"]["first_browser_task"]["steps"]
+    assert first_steps[0]["command"] == "browser-cli doctor --json"
+    assert first_steps[0]["success_condition"] == (
+        "ok=true and ready_for_browser_actions=true"
+    )
+    assert first_steps[5]["agent_action"] is True
+    assert "click-role" in first_steps[5]["selection_order"]
+    assert "result.matched" in first_steps[6]["read"]
+    assert first_steps[-1]["cleanup"] is True
+    primitive_steps = payload["agent_workflows"]["agent_browser_primitives"]["steps"]
+    assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
+    assert primitive_steps[1]["command"] == (
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
+    )
+    assert primitive_steps[2]["selection_order"] == [
+        "observe",
+        "act",
+        "extract",
+        "verify",
+    ]
+    assert primitive_steps[3]["optional"] is True
+    assert "fill-label" in primitive_steps[3]["selection_order"]
+    assert primitive_steps[4]["optional"] is True
+    assert "extract" in primitive_steps[4]["selection_order"]
+    assert "table-snapshot" in primitive_steps[4]["selection_order"]
+    assert "result.extractions.links.links" in primitive_steps[4]["read"]
+    assert "result.link_count" in primitive_steps[5]["read"]
     assert (
         "required_token_lifecycle"
         in payload["agent_workflows"]["connect_from_codex_site_requirements"]["steps"][
-            1
+            2
         ]["read"]
     )
     assert (
@@ -2358,19 +2863,19 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "events_path"
-        in payload["agent_workflows"]["case_file_task"]["steps"][7]["read"]
+        in payload["agent_workflows"]["case_file_task"]["steps"][23]["read"]
     )
     assert (
         "selection_summary.recommended_next_action"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
     )
     assert (
         "reuse_candidates"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][0]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
     )
     assert (
         "context_reuse.availability"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][3]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][4]["read"]
     )
     assert (
         "result.document_cookie_scope"
@@ -2378,7 +2883,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "normalized_status"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][3]["read"]
     )
     assert (
         "unusable_exports"
@@ -2466,6 +2971,98 @@ def test_commands_catalog_returns_single_workflow(
     assert (
         "browser-cli session create"
         in payload["agent_entrypoints"]["one_off_page_task"]
+    )
+
+
+def test_commands_catalog_returns_first_browser_task_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "first_browser_task"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "commands"
+    assert payload["workflow_id"] == "first_browser_task"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "check_readiness",
+        "create_session",
+        "open_url",
+        "inspect_page",
+        "inspect_targets",
+        "choose_first_action",
+        "verify_or_capture",
+        "close_session",
+    ]
+    assert steps[0]["command"] == "browser-cli doctor --json"
+    assert "ready_for_browser_actions" in steps[0]["read"]
+    assert steps[4]["command"] == (
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    )
+    assert "result.nodes" in steps[4]["read"]
+    assert steps[5]["agent_action"] is True
+    assert "fill-label" in steps[5]["selection_order"]
+    assert "browser-cli action guide --task form_interaction" in steps[5]["fallback_commands"]
+    assert steps[6]["agent_action"] is True
+    assert "result.matched" in steps[6]["read"]
+    assert steps[-1] == {
+        "id": "close_session",
+        "command": "browser-cli session close --session-id <session_id>",
+        "cleanup": True,
+    }
+    assert (
+        "browser-cli commands --workflow first_browser_task"
+        in payload["agent_entrypoints"]["first_browser_task"]
+    )
+
+
+def test_commands_catalog_returns_agent_browser_primitives_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["commands", "--workflow", "agent_browser_primitives"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "commands"
+    assert payload["workflow_id"] == "agent_browser_primitives"
+    assert "agent_workflows" not in payload
+    steps = payload["workflow"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "inspect_action_surface",
+        "observe_page",
+        "choose_primitive",
+        "act_semantically",
+        "extract_content",
+        "verify_result",
+    ]
+    assert steps[0]["command"] == "browser-cli action guide --names-only"
+    assert steps[1]["command"] == (
+        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
+    )
+    assert "result.snapshots.interactive.nodes" in steps[1]["read"]
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"] == ["observe", "act", "extract", "verify"]
+    assert steps[3]["optional"] is True
+    assert steps[3]["command"] == (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"'
+    )
+    assert steps[3]["selection_order"][0] == "act"
+    assert "click-role" in steps[3]["selection_order"]
+    assert "result.plan.selection" in steps[3]["read"]
+    assert steps[4]["optional"] is True
+    assert "extract" in steps[4]["selection_order"]
+    assert "text-snapshot" in steps[4]["selection_order"]
+    assert "result.extractions.text.texts" in steps[4]["read"]
+    assert steps[5]["agent_action"] is True
+    assert "result.node_count" in steps[5]["read"]
+    assert (
+        "browser-cli commands --workflow agent_browser_primitives"
+        in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
 
 
@@ -2698,7 +3295,7 @@ def test_reference_list_returns_packaged_agent_references(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 3
+    assert payload["reference_count"] == 5
     reference = payload["references"]["action_playbook"]
     assert reference["id"] == "action_playbook"
     assert reference["path"] == "references/action-playbook.md"
@@ -2717,6 +3314,26 @@ def test_reference_list_returns_packaged_agent_references(
         "browser_cli.agent_references:usable-status.md"
     )
     assert "browser_smoke_session.status=pass" in usable["grep_patterns"]
+    quickstart = payload["references"]["quickstart"]
+    assert quickstart["id"] == "quickstart"
+    assert quickstart["path"] == "references/quickstart.md"
+    assert quickstart["content_command"] == "browser-cli reference get --id quickstart"
+    assert quickstart["package_resource"] == (
+        "browser_cli.agent_references:quickstart.md"
+    )
+    assert "Verify Readiness" in quickstart["grep_patterns"]
+    assert "first browser task" in quickstart["covers"]
+    connect = payload["references"]["connect_from_codex"]
+    assert connect["id"] == "connect_from_codex"
+    assert connect["path"] == "references/connect-from-codex.md"
+    assert connect["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert connect["package_resource"] == (
+        "browser_cli.agent_references:connect-from-codex.md"
+    )
+    assert "Doctor Integration" in connect["grep_patterns"]
+    assert "browser.lexmount.cn page requirements" in connect["covers"]
     positioning = payload["references"]["skill_positioning"]
     assert positioning["id"] == "skill_positioning"
     assert positioning["path"] == "references/skill-positioning.md"
@@ -2726,8 +3343,8 @@ def test_reference_list_returns_packaged_agent_references(
     assert positioning["package_resource"] == (
         "browser_cli.agent_references:skill-positioning.md"
     )
-    assert "Browserbase MCP comparison" in positioning["covers"]
-    assert "Comparison: Browserbase MCP Server" in positioning["grep_patterns"]
+    assert "Browserbase Skills comparison" in positioning["covers"]
+    assert "Comparison: Browserbase Skills" in positioning["grep_patterns"]
 
 
 def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
@@ -2738,9 +3355,11 @@ def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 3
+    assert payload["reference_count"] == 5
     assert payload["references"] == [
         "action_playbook",
+        "connect_from_codex",
+        "quickstart",
         "skill_positioning",
         "usable_status",
     ]
@@ -2786,6 +3405,48 @@ def test_reference_get_returns_packaged_usable_status(
     assert "browser.lexmount.cn Work Needed" in payload["content"]
 
 
+def test_reference_get_returns_packaged_quickstart(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "quickstart"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.get"
+    assert payload["reference_id"] == "quickstart"
+    assert payload["reference"]["id"] == "quickstart"
+    assert payload["content_format"] == "markdown"
+    assert payload["content_included"] is True
+    assert payload["content_length"] == len(payload["content"])
+    assert "# Browser CLI Quickstart" in payload["content"]
+    assert "Verify Readiness" in payload["content"]
+    assert "First Browser Task" in payload["content"]
+    assert "browser-cli doctor --json" in payload["content"]
+
+
+def test_reference_get_returns_packaged_connect_from_codex(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["reference", "get", "--id", "connect_from_codex"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "reference.get"
+    assert payload["reference_id"] == "connect_from_codex"
+    assert payload["reference"]["id"] == "connect_from_codex"
+    assert payload["content_format"] == "markdown"
+    assert payload["content_included"] is True
+    assert payload["content_length"] == len(payload["content"])
+    assert "# Connect from Codex for browser.lexmount.cn" in payload["content"]
+    assert "Implementation Checklist JSON" in payload["content"]
+    assert "Device-Code/OAuth Flow" in payload["content"]
+    assert "Doctor Integration" in payload["content"]
+
+
 def test_reference_get_returns_packaged_skill_positioning(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -2802,7 +3463,7 @@ def test_reference_get_returns_packaged_skill_positioning(
     assert payload["content_included"] is True
     assert payload["content_length"] == len(payload["content"])
     assert "# browser-cli Skill Positioning" in payload["content"]
-    assert "Comparison: Browserbase MCP Server" in payload["content"]
+    assert "Comparison: Browserbase Skills" in payload["content"]
     assert "Defects To Fix Next" in payload["content"]
 
 
@@ -2838,10 +3499,99 @@ def test_reference_get_fails_unknown_reference_as_json(
     assert payload["reference_id"] == "missing"
     assert payload["available_references"] == [
         "action_playbook",
+        "connect_from_codex",
+        "quickstart",
         "skill_positioning",
         "usable_status",
     ]
     assert payload["fix"]["code"] == "inspect_available_agent_references"
+
+
+def test_skill_status_reports_missing_local_skill(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "status", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "skill.status"
+    assert payload["status"] == "missing"
+    assert payload["current"] is False
+    assert payload["installed"] is False
+    assert payload["skill_dir"] == str(skill_dir)
+    assert payload["resource_count"] == 7
+    assert "SKILL.md" in payload["missing_files"]
+    assert payload["stale_files"] == []
+    assert payload["package_errors"] == []
+    assert payload["force_install_command"].endswith("--force")
+
+
+def test_skill_install_writes_packaged_skill_resources(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "skill.install"
+    assert payload["before"]["status"] == "missing"
+    assert payload["after"]["status"] == "current"
+    assert payload["after"]["current"] is True
+    assert "SKILL.md" in payload["written_files"]
+    assert (skill_dir / "SKILL.md").is_file()
+    assert (skill_dir / "agents" / "openai.yaml").is_file()
+    assert (skill_dir / "references" / "action-playbook.md").is_file()
+    assert "browser-cli action act --session-id <session_id>" in (
+        skill_dir / "SKILL.md"
+    ).read_text()
+
+    with pytest.raises(SystemExit) as status_exc:
+        cli_main(["skill", "status", "--skill-dir", str(skill_dir)])
+
+    assert status_exc.value.code == 0
+    status_payload = json.loads(capsys.readouterr().out)
+    assert status_payload["status"] == "current"
+    assert status_payload["missing_files"] == []
+    assert status_payload["stale_files"] == []
+
+
+def test_skill_install_requires_force_for_stale_files(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("old skill", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "skill.install"
+    assert payload["error"] == "would_overwrite_skill_files"
+    assert payload["conflicting_files"] == ["SKILL.md"]
+    assert payload["force_required"] is True
+    assert "--force" in payload["fix"]["commands"][0]
+
+    with pytest.raises(SystemExit) as force_exc:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir), "--force"])
+
+    assert force_exc.value.code == 0
+    force_payload = json.loads(capsys.readouterr().out)
+    assert force_payload["after"]["status"] == "current"
+    assert "SKILL.md" in force_payload["updated_files"]
 
 
 def test_example_list_returns_packaged_agent_examples(
@@ -2854,11 +3604,22 @@ def test_example_list_returns_packaged_agent_examples(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 3
+    assert payload["example_count"] == 14
     assert sorted(payload["examples"]) == [
         "agent_playbook",
+        "agent_primitives_case",
+        "auth_lifecycle_playbook",
+        "browser_state_case",
+        "checkout_flow_case",
+        "content_extraction_case",
+        "file_upload_case",
         "form_fill_case",
+        "interactive_targeting_case",
+        "navigation_flow_case",
+        "page_diagnostics_case",
         "page_inspection_case",
+        "persistent_context_playbook",
+        "setup_verification_playbook",
     ]
     playbook = payload["examples"]["agent_playbook"]
     assert playbook["id"] == "agent_playbook"
@@ -2870,8 +3631,81 @@ def test_example_list_returns_packaged_agent_examples(
         "browser_cli.agent_examples:agent-playbook.md"
     )
     assert "case_file_task" in playbook["related_workflows"]
+    setup = payload["examples"]["setup_verification_playbook"]
+    assert setup["id"] == "setup_verification_playbook"
+    assert setup["path"] == "examples/setup-verification-playbook.md"
+    assert setup["content_command"] == (
+        "browser-cli example get --id setup_verification_playbook"
+    )
+    assert setup["package_resource"] == (
+        "browser_cli.agent_examples:setup-verification-playbook.md"
+    )
+    assert "setup_and_verify" in setup["related_workflows"]
+    assert "browser-cli doctor --json" in setup["grep_patterns"]
+    assert "browser-cli auth login --device-code" in setup["grep_patterns"]
+    assert "repair_plan.commands" in setup["grep_patterns"]
+    auth = payload["examples"]["auth_lifecycle_playbook"]
+    assert auth["id"] == "auth_lifecycle_playbook"
+    assert auth["path"] == "examples/auth-lifecycle-playbook.md"
+    assert auth["content_command"] == (
+        "browser-cli example get --id auth_lifecycle_playbook"
+    )
+    assert auth["package_resource"] == (
+        "browser_cli.agent_examples:auth-lifecycle-playbook.md"
+    )
+    assert "connect_from_codex_auth" in auth["related_workflows"]
+    assert "scoped_token_lifecycle" in auth["related_workflows"]
+    assert "safe_to_paste_in_chat" in auth["grep_patterns"]
+    persistent = payload["examples"]["persistent_context_playbook"]
+    assert persistent["id"] == "persistent_context_playbook"
+    assert persistent["path"] == "examples/persistent-context-playbook.md"
+    assert persistent["content_command"] == (
+        "browser-cli example get --id persistent_context_playbook"
+    )
+    assert persistent["package_resource"] == (
+        "browser_cli.agent_examples:persistent-context-playbook.md"
+    )
+    assert "persistent_login_state" in persistent["related_workflows"]
+    assert "availability=locked" in persistent["grep_patterns"]
     assert payload["examples"]["page_inspection_case"]["format"] == "yaml"
+    assert payload["examples"]["agent_primitives_case"]["format"] == "yaml"
+    assert (
+        "agent_browser_primitives"
+        in payload["examples"]["agent_primitives_case"]["related_workflows"]
+    )
+    assert payload["examples"]["page_diagnostics_case"]["format"] == "yaml"
+    assert (
+        "page_diagnostics"
+        in payload["examples"]["page_diagnostics_case"]["related_workflows"]
+    )
+    assert payload["examples"]["content_extraction_case"]["format"] == "yaml"
+    assert (
+        "content_extraction"
+        in payload["examples"]["content_extraction_case"]["related_workflows"]
+    )
+    assert payload["examples"]["browser_state_case"]["format"] == "yaml"
+    assert (
+        "browser_state_management"
+        in payload["examples"]["browser_state_case"]["related_workflows"]
+    )
+    assert payload["examples"]["navigation_flow_case"]["format"] == "yaml"
+    assert (
+        "navigation_flow"
+        in payload["examples"]["navigation_flow_case"]["related_workflows"]
+    )
+    assert payload["examples"]["file_upload_case"]["format"] == "yaml"
+    assert "file_upload" in payload["examples"]["file_upload_case"]["related_workflows"]
+    assert payload["examples"]["checkout_flow_case"]["format"] == "yaml"
+    assert (
+        "form_interaction"
+        in payload["examples"]["checkout_flow_case"]["related_workflows"]
+    )
     assert payload["examples"]["form_fill_case"]["format"] == "yaml"
+    assert payload["examples"]["interactive_targeting_case"]["format"] == "yaml"
+    assert (
+        "interactive_targeting"
+        in payload["examples"]["interactive_targeting_case"]["related_workflows"]
+    )
 
 
 def test_example_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
@@ -2882,11 +3716,22 @@ def test_example_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 3
+    assert payload["example_count"] == 14
     assert payload["examples"] == [
         "agent_playbook",
+        "agent_primitives_case",
+        "auth_lifecycle_playbook",
+        "browser_state_case",
+        "checkout_flow_case",
+        "content_extraction_case",
+        "file_upload_case",
         "form_fill_case",
+        "interactive_targeting_case",
+        "navigation_flow_case",
+        "page_diagnostics_case",
         "page_inspection_case",
+        "persistent_context_playbook",
+        "setup_verification_playbook",
     ]
 
 
@@ -2908,6 +3753,229 @@ def test_example_get_returns_packaged_case_file(
     assert "name: page-inspection" in payload["content"]
     assert "action: open-url" in payload["content"]
     assert "action: screenshot" in payload["content"]
+
+
+def test_example_get_returns_interactive_targeting_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "interactive_targeting_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "interactive_targeting_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: interactive-targeting" in payload["content"]
+    assert "action: interactive-snapshot" in payload["content"]
+    assert "action: accessibility-snapshot" in payload["content"]
+    assert "action: act" in payload["content"]
+    assert "kind: click" in payload["content"]
+    assert "action: wait-text" in payload["content"]
+
+
+def test_example_get_returns_agent_primitives_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "agent_primitives_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "agent_primitives_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: agent-primitives" in payload["content"]
+    assert "action: observe" in payload["content"]
+    assert "action: act" in payload["content"]
+    assert "kind: click" in payload["content"]
+    assert "action: extract" in payload["content"]
+    assert "action: wait-text" in payload["content"]
+    assert "action: get-text" in payload["content"]
+
+
+def test_example_get_returns_content_extraction_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "content_extraction_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "content_extraction_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: content-extraction" in payload["content"]
+    assert "action: extract" in payload["content"]
+    assert "action: text-snapshot" in payload["content"]
+    assert "action: link-snapshot" in payload["content"]
+    assert "action: table-snapshot" in payload["content"]
+    assert "action: list-snapshot" in payload["content"]
+
+
+def test_example_get_returns_browser_state_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "browser_state_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "browser_state_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: browser-state" in payload["content"]
+    assert "action: storage-set" in payload["content"]
+    assert "action: wait-storage" in payload["content"]
+    assert "action: storage-get" in payload["content"]
+    assert "action: cookie-set" in payload["content"]
+    assert "action: wait-cookie" in payload["content"]
+    assert "action: cookie-get" in payload["content"]
+    assert "action: storage-remove" in payload["content"]
+    assert "action: cookie-delete" in payload["content"]
+
+
+def test_example_get_returns_navigation_flow_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "navigation_flow_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "navigation_flow_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: navigation-flow" in payload["content"]
+    assert "action: open-url" in payload["content"]
+    assert "action: wait-load-state" in payload["content"]
+    assert "action: wait-url" in payload["content"]
+    assert "action: wait-title" in payload["content"]
+    assert "action: go-back" in payload["content"]
+    assert "action: go-forward" in payload["content"]
+    assert "action: reload" in payload["content"]
+    assert "action: page-info" in payload["content"]
+
+
+def test_example_get_returns_file_upload_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "file_upload_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "file_upload_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: file-upload" in payload["content"]
+    assert "action: form-snapshot" in payload["content"]
+    assert "action: set-file-input" in payload["content"]
+    assert "inline_files:" in payload["content"]
+    assert "lexmount-upload.txt" in payload["content"]
+    assert "action: submit" in payload["content"]
+
+
+def test_example_get_returns_checkout_flow_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "checkout_flow_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "checkout_flow_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: checkout-flow" in payload["content"]
+    assert "action: form-snapshot" in payload["content"]
+    assert "action: fill-label" in payload["content"]
+    assert "action: select-label" in payload["content"]
+    assert "action: check-label" in payload["content"]
+    assert "action: wait-state-role" in payload["content"]
+    assert "action: click-role" in payload["content"]
+    assert "Order confirmed for Ada Lovelace via Express" in payload["content"]
+
+
+def test_example_get_returns_page_diagnostics_case_file(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "page_diagnostics_case"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "page_diagnostics_case"
+    assert payload["content_format"] == "yaml"
+    assert "name: page-diagnostics" in payload["content"]
+    assert "action: console-snapshot" in payload["content"]
+    assert "action: network-snapshot" in payload["content"]
+    assert "action: wait-console" in payload["content"]
+    assert "action: wait-network" in payload["content"]
+
+
+def test_example_get_returns_setup_verification_playbook(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "setup_verification_playbook"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "setup_verification_playbook"
+    assert payload["content_format"] == "markdown"
+    assert "# Setup Verification Playbook" in payload["content"]
+    assert "browser-cli doctor --json" in payload["content"]
+    assert "browser-cli auth login --device-code" in payload["content"]
+    assert "repair_plan.commands" in payload["content"]
+
+
+def test_example_get_returns_auth_lifecycle_playbook(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "auth_lifecycle_playbook"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "auth_lifecycle_playbook"
+    assert payload["content_format"] == "markdown"
+    assert "# Auth Lifecycle Playbook" in payload["content"]
+    assert "browser-cli auth login --device-code" in payload["content"]
+    assert "browser-cli auth refresh --credentials-file" in payload["content"]
+    assert "browser.lexmount.cn Requirements" in payload["content"]
+
+
+def test_example_get_returns_persistent_context_playbook(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "persistent_context_playbook"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "persistent_context_playbook"
+    assert payload["content_format"] == "markdown"
+    assert "# Persistent Context Playbook" in payload["content"]
+    assert "browser-cli commands --workflow persistent_login_state" in payload["content"]
+    assert "availability=locked" in payload["content"]
+    assert "metadata_values_redacted" in payload["content"]
+    assert "context_reuse.selected" in payload["content"]
 
 
 def test_example_get_metadata_only_omits_content(
@@ -2942,8 +4010,19 @@ def test_example_get_fails_unknown_example_as_json(
     assert payload["example_id"] == "missing"
     assert payload["available_examples"] == [
         "agent_playbook",
+        "agent_primitives_case",
+        "auth_lifecycle_playbook",
+        "browser_state_case",
+        "checkout_flow_case",
+        "content_extraction_case",
+        "file_upload_case",
         "form_fill_case",
+        "interactive_targeting_case",
+        "navigation_flow_case",
+        "page_diagnostics_case",
         "page_inspection_case",
+        "persistent_context_playbook",
+        "setup_verification_playbook",
     ]
     assert payload["fix"]["code"] == "inspect_available_agent_examples"
 
@@ -2959,8 +4038,21 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["ok"] is True
     assert payload["command"] == "case.schema"
     assert payload["schema_version"] == 1
+    assert payload["scaffold_templates"] == [
+        "page-inspection",
+        "agent-primitives",
+        "form-fill",
+        "content-extraction",
+        "browser-state",
+        "navigation-flow",
+        "file-upload",
+        "checkout-flow",
+        "interactive-targeting",
+        "page-diagnostics",
+    ]
     assert payload["supported_actions"] == [
         "accessibility-snapshot",
+        "act",
         "blur",
         "blur-role",
         "bounding-box",
@@ -2990,6 +4082,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "eval",
         "exists",
         "exists-role",
+        "extract",
         "fill",
         "fill-label",
         "fill-role",
@@ -3003,6 +4096,8 @@ def test_case_schema_returns_supported_actions_and_fields(
         "get-text-role",
         "get-value",
         "get-value-role",
+        "go-back",
+        "go-forward",
         "hover",
         "hover-role",
         "inspect",
@@ -3011,6 +4106,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "link-snapshot",
         "list-snapshot",
         "network-snapshot",
+        "observe",
         "open-url",
         "outline-snapshot",
         "page-info",
@@ -3019,6 +4115,7 @@ def test_case_schema_returns_supported_actions_and_fields(
         "press-key",
         "press-role",
         "query",
+        "reload",
         "right-click",
         "right-click-role",
         "screenshot",
@@ -3063,6 +4160,9 @@ def test_case_schema_returns_supported_actions_and_fields(
         "wait-value",
         "wait-value-role",
     ]
+    assert payload["required_fields"]["act"] == ["kind"]
+    assert payload["required_fields"]["observe"] == []
+    assert payload["required_fields"]["extract"] == []
     assert payload["required_fields"]["type"] == ["selector", "text"]
     assert payload["required_fields"]["fill"] == ["selector", "text"]
     assert payload["required_fields"]["fill-label"] == ["label", "text"]
@@ -3086,6 +4186,28 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["actions"]["select-role"]["required_one_of"] == [
         ["value", "option_label"]
     ]
+    assert "role" in payload["actions"]["act"]["optional_fields"]
+    assert "option_label" in payload["actions"]["act"]["optional_fields"]
+    assert payload["actions"]["act"]["example_step"] == {
+        "action": "act",
+        "kind": "click",
+        "role": "button",
+        "name": "Submit",
+    }
+    assert "surface" in payload["actions"]["observe"]["optional_fields"]
+    assert "snapshots" in payload["actions"]["observe"]["result_fields"]
+    assert payload["actions"]["observe"]["example_step"] == {
+        "action": "observe",
+        "surface": ["interactive", "text"],
+        "selector": "main",
+    }
+    assert "surface" in payload["actions"]["extract"]["optional_fields"]
+    assert "extractions" in payload["actions"]["extract"]["result_fields"]
+    assert payload["actions"]["extract"]["example_step"] == {
+        "action": "extract",
+        "surface": ["text", "links"],
+        "selector": "main",
+    }
     assert payload["required_fields"]["wait-load-state"] == []
     assert payload["required_fields"]["wait-state"] == ["selector", "state"]
     assert payload["required_fields"]["wait-state-role"] == ["role", "state"]
@@ -3105,7 +4227,12 @@ def test_case_schema_returns_supported_actions_and_fields(
         "attribute",
     ]
     assert payload["required_fields"]["set-value"] == ["selector", "value"]
-    assert payload["required_fields"]["set-file-input"] == ["selector", "file"]
+    assert payload["required_fields"]["set-file-input"] == ["selector"]
+    assert payload["actions"]["set-file-input"]["required_one_of"] == [
+        ["file"],
+        ["inline_files"],
+    ]
+    assert "inline_files" in payload["actions"]["set-file-input"]["optional_fields"]
     assert payload["required_fields"]["storage-get"] == []
     assert payload["required_fields"]["storage-set"] == ["key", "value"]
     assert payload["required_fields"]["storage-remove"] == ["key"]
@@ -3119,6 +4246,9 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert payload["required_fields"]["wait-text"] == ["text"]
     assert payload["required_fields"]["wait-title"] == ["title"]
     assert payload["required_fields"]["wait-url"] == ["url"]
+    assert payload["required_fields"]["reload"] == []
+    assert payload["required_fields"]["go-back"] == []
+    assert payload["required_fields"]["go-forward"] == []
     assert payload["required_fields"]["wait-role"] == ["role"]
     assert payload["required_fields"]["screenshot"] == []
     assert payload["actions"]["open-url"]["required_fields"] == ["url"]
@@ -3157,6 +4287,14 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "requested_url" in payload["actions"]["wait-url"]["result_fields"]
     assert "requested_title" in payload["actions"]["wait-title"]["result_fields"]
     assert "requested_state" in payload["actions"]["wait-load-state"]["result_fields"]
+    assert "reloaded" in payload["actions"]["reload"]["result_fields"]
+    assert "navigation_requested" in payload["actions"]["go-back"]["result_fields"]
+    assert "history_length" in payload["actions"]["go-forward"]["result_fields"]
+    assert payload["actions"]["reload"]["example_step"] == {"action": "reload"}
+    assert payload["actions"]["go-back"]["example_step"] == {"action": "go-back"}
+    assert payload["actions"]["go-forward"]["example_step"] == {
+        "action": "go-forward"
+    }
     assert "matched" in payload["actions"]["wait-state-role"]["result_fields"]
     assert "attribute_found" in payload["actions"]["wait-attribute"]["result_fields"]
     assert "requested_count" in payload["actions"]["wait-count"]["result_fields"]
@@ -3220,9 +4358,10 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 102,
+        "action_count": 108,
         "supported_actions": [
             "accessibility-snapshot",
+            "act",
             "blur",
             "blur-role",
             "bounding-box",
@@ -3252,6 +4391,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "eval",
             "exists",
             "exists-role",
+            "extract",
             "fill",
             "fill-label",
             "fill-role",
@@ -3265,6 +4405,8 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "get-text-role",
             "get-value",
             "get-value-role",
+            "go-back",
+            "go-forward",
             "hover",
             "hover-role",
             "inspect",
@@ -3273,6 +4415,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "link-snapshot",
             "list-snapshot",
             "network-snapshot",
+            "observe",
             "open-url",
             "outline-snapshot",
             "page-info",
@@ -3281,6 +4424,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "press-key",
             "press-role",
             "query",
+            "reload",
             "right-click",
             "right-click-role",
             "screenshot",
@@ -3450,6 +4594,415 @@ def test_case_scaffold_writes_valid_yaml_case_file(
     ]
 
 
+def test_case_scaffold_writes_interactive_targeting_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "interactive-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "interactive-targeting",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "interactive-targeting"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][2]["action"] == "interactive-snapshot"
+    assert payload["case"]["steps"][3]["action"] == "accessibility-snapshot"
+    assert payload["case"]["steps"][4]["action"] == "act"
+    assert payload["case"]["steps"][4]["kind"] == "click"
+    assert payload["case"]["steps"][7]["output"] == "interactive-targeting.png"
+    content = output.read_text()
+    assert "name: interactive-targeting" in content
+    assert "action: interactive-snapshot" in content
+    assert "action: accessibility-snapshot" in content
+    assert "action: act" in content
+    assert "kind: click" in content
+    assert "action: wait-text" in content
+    assert "action: get-text" in content
+    assert "action: click\n" not in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 8
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_agent_primitives_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "agent-primitives-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "agent-primitives",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "agent-primitives"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][2]["action"] == "observe"
+    assert payload["case"]["steps"][3]["action"] == "act"
+    assert payload["case"]["steps"][3]["kind"] == "click"
+    assert payload["case"]["steps"][4]["action"] == "extract"
+    assert payload["case"]["steps"][7]["output"] == "agent-primitives.png"
+    content = output.read_text()
+    assert "name: agent-primitives" in content
+    assert "action: observe" in content
+    assert "action: act" in content
+    assert "kind: click" in content
+    assert "action: extract" in content
+    assert "action: wait-text" in content
+    assert "action: get-text" in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 8
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_content_extraction_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "content-extraction-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "content-extraction",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "content-extraction"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][3]["action"] == "extract"
+    assert payload["case"]["steps"][3]["surface"] == [
+        "text",
+        "links",
+        "tables",
+        "lists",
+    ]
+    assert payload["case"]["steps"][4]["action"] == "text-snapshot"
+    assert payload["case"]["steps"][5]["action"] == "link-snapshot"
+    assert payload["case"]["steps"][6]["action"] == "table-snapshot"
+    assert payload["case"]["steps"][7]["action"] == "list-snapshot"
+    assert payload["case"]["steps"][9]["output"] == "content-extraction.png"
+    content = output.read_text()
+    assert "name: content-extraction" in content
+    assert "action: extract" in content
+    assert "action: text-snapshot" in content
+    assert "action: link-snapshot" in content
+    assert "action: table-snapshot" in content
+    assert "action: list-snapshot" in content
+    assert "action: get-text" in content
+    assert "action: click\n" not in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 10
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_browser_state_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "browser-state-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "browser-state",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "browser-state"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][0]["url"] == "https://example.com"
+    assert payload["case"]["steps"][3]["action"] == "storage-set"
+    assert payload["case"]["steps"][4]["action"] == "wait-storage"
+    assert payload["case"]["steps"][5]["action"] == "storage-get"
+    assert payload["case"]["steps"][9]["action"] == "cookie-set"
+    assert payload["case"]["steps"][10]["action"] == "wait-cookie"
+    assert payload["case"]["steps"][11]["action"] == "cookie-get"
+    assert payload["case"]["steps"][12]["action"] == "storage-remove"
+    assert payload["case"]["steps"][16]["state"] == "absent"
+    assert payload["case"]["steps"][17]["output"] == "browser-state.png"
+    content = output.read_text()
+    assert "name: browser-state" in content
+    assert "action: storage-set" in content
+    assert "action: wait-storage" in content
+    assert "action: storage-get" in content
+    assert "action: cookie-set" in content
+    assert "action: wait-cookie" in content
+    assert "action: cookie-get" in content
+    assert "action: storage-remove" in content
+    assert "action: cookie-delete" in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 18
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_navigation_flow_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "navigation-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "navigation-flow",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "navigation-flow"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][0]["url"] == "https://example.com#home"
+    assert payload["case"]["steps"][1]["action"] == "wait-load-state"
+    assert payload["case"]["steps"][2]["url"] == "#home"
+    assert payload["case"]["steps"][3]["action"] == "wait-title"
+    assert payload["case"]["steps"][4]["url"] == "https://example.com#details"
+    assert payload["case"]["steps"][6]["action"] == "go-back"
+    assert payload["case"]["steps"][8]["action"] == "go-forward"
+    assert payload["case"]["steps"][10]["action"] == "reload"
+    assert payload["case"]["steps"][12]["action"] == "page-info"
+    assert payload["case"]["steps"][13]["output"] == "navigation-flow.png"
+    content = output.read_text()
+    assert "name: navigation-flow" in content
+    assert "action: open-url" in content
+    assert "action: wait-load-state" in content
+    assert "action: wait-url" in content
+    assert "action: wait-title" in content
+    assert "action: go-back" in content
+    assert "action: go-forward" in content
+    assert "action: reload" in content
+    assert "action: page-info" in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 14
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_file_upload_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "upload-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "file-upload",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "file-upload"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][0]["url"] == "about:blank"
+    assert payload["case"]["steps"][2]["action"] == "form-snapshot"
+    assert payload["case"]["steps"][3]["action"] == "set-file-input"
+    assert payload["case"]["steps"][3]["inline_files"][0]["name"] == (
+        "lexmount-upload.txt"
+    )
+    assert payload["case"]["steps"][5]["action"] == "submit"
+    assert payload["case"]["steps"][8]["output"] == "file-upload.png"
+    content = output.read_text()
+    assert "name: file-upload" in content
+    assert "action: form-snapshot" in content
+    assert "action: set-file-input" in content
+    assert "inline_files:" in content
+    assert "lexmount-upload.txt" in content
+    assert "action: submit" in content
+    assert "./upload.txt" not in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 9
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_checkout_flow_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "checkout-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "checkout-flow",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "checkout-flow"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][0]["url"] == "about:blank"
+    assert payload["case"]["steps"][2]["action"] == "form-snapshot"
+    assert payload["case"]["steps"][3]["action"] == "fill-label"
+    assert payload["case"]["steps"][5]["action"] == "select-label"
+    assert payload["case"]["steps"][6]["action"] == "check-label"
+    assert payload["case"]["steps"][7]["action"] == "wait-state-role"
+    assert payload["case"]["steps"][8]["action"] == "click-role"
+    assert payload["case"]["steps"][15]["output"] == "checkout-flow.png"
+    content = output.read_text()
+    assert "name: checkout-flow" in content
+    assert "action: form-snapshot" in content
+    assert "action: fill-label" in content
+    assert "action: select-label" in content
+    assert "action: check-label" in content
+    assert "action: wait-state-role" in content
+    assert "action: click-role" in content
+    assert "Order confirmed for Ada Lovelace via Express" in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 16
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
+def test_case_scaffold_writes_page_diagnostics_case_file(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "diagnostics-case.yaml"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "case",
+                "scaffold",
+                "--template",
+                "page-diagnostics",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "case.scaffold"
+    assert payload["template"] == "page-diagnostics"
+    assert payload["output"] == str(output)
+    assert payload["wrote_file"] is True
+    assert payload["case"]["steps"][1]["action"] == "console-snapshot"
+    assert payload["case"]["steps"][1]["install_only"] is True
+    assert payload["case"]["steps"][2]["action"] == "network-snapshot"
+    assert payload["case"]["steps"][2]["install_only"] is True
+    assert payload["case"]["steps"][4]["action"] == "wait-console"
+    assert payload["case"]["steps"][5]["action"] == "wait-network"
+    assert payload["case"]["steps"][6]["output"] == "page-diagnostics-console.json"
+    assert payload["case"]["steps"][7]["output"] == "page-diagnostics-network.json"
+    assert payload["case"]["steps"][9]["output"] == "page-diagnostics-page.png"
+    content = output.read_text()
+    assert "name: page-diagnostics" in content
+    assert "action: console-snapshot" in content
+    assert "action: network-snapshot" in content
+    assert "action: wait-console" in content
+    assert "action: wait-network" in content
+    assert "diagnostic-network-ok" in content
+    result = validate_case_file(output)
+    assert result.valid is True
+    assert result.step_count == 10
+    assert payload["next_commands"] == [
+        f"browser-cli case validate --file {str(output)}",
+        f"browser-cli case run --file {str(output)} --close-created-session",
+    ]
+
+
 def test_case_scaffold_refuses_to_overwrite_existing_file(
     tmp_path: Any,
     capsys: pytest.CaptureFixture[str],
@@ -3595,6 +5148,33 @@ def test_case_validate_diagnostic_wait_actions_reject_invalid_match_modes(
     assert (
         "steps[4].text_match must be one of 'contains', 'exact', 'regex'"
         in result.errors
+    )
+
+
+def test_case_validate_agent_primitives_reject_invalid_surfaces(tmp_path: Any) -> None:
+    invalid = tmp_path / "invalid-agent-primitives.json"
+    invalid.write_text(
+        json.dumps(
+            {
+                "steps": [
+                    {"action": "observe", "surface": "tables"},
+                    {"action": "extract", "surface": ["text", "forms"]},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_case_file(invalid)
+
+    assert result.valid is False
+    assert any(
+        error.startswith("steps[0].surface must be one of")
+        for error in result.errors
+    )
+    assert any(
+        error.startswith("steps[1].surface must be one of")
+        for error in result.errors
     )
 
 
@@ -3913,6 +5493,147 @@ def test_extended_case_step_uses_form_and_control_action_expressions(
     assert expression_snippet in page.expressions[0]
 
 
+def test_extended_case_step_act_returns_deterministic_plan(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/act"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True, "role_found": True, "clicked": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "act",
+            "kind": "click",
+            "role": "button",
+            "name": "Launch report",
+        },
+        tmp_path,
+        0,
+    )
+
+    assert "element.click()" in page.expressions[0]
+    assert result["kind"] == "act"
+    assert result["intent"] == "click"
+    assert result["target"]["selection"] == "role"
+    assert result["target"]["role"] == "button"
+    assert result["plan"]["underlying_command"] == "action.click-role"
+    assert result["plan"]["deterministic"] is True
+    assert result["plan"]["custom_javascript"] is False
+    assert result["action_result"]["clicked"] is True
+    assert result["url"] == "https://example.test/act"
+
+
+def test_extended_case_step_observe_collects_requested_surfaces(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/observe"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            if "body_text_length" in expression:
+                return {
+                    "url": self.url,
+                    "title": "Observe",
+                    "ready_state": "complete",
+                }
+            if 'kind: "interactive"' in expression:
+                return {"kind": "interactive", "node_count": 1, "nodes": []}
+            if 'kind: "text"' in expression:
+                return {"kind": "text", "text_count": 2, "texts": []}
+            raise AssertionError("unexpected observe expression")
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "observe",
+            "surface": ["interactive", "text"],
+            "selector": "main",
+            "max_nodes": 12,
+            "max_chars": 80,
+        },
+        tmp_path,
+        0,
+    )
+
+    assert len(page.expressions) == 3
+    assert result["kind"] == "observe"
+    assert result["url"] == "https://example.test/observe"
+    assert result["ready_state"] == "complete"
+    assert result["surface_count"] == 2
+    assert result["surfaces"] == ["interactive", "text"]
+    assert result["page_info"]["title"] == "Observe"
+    assert result["snapshots"]["interactive"]["node_count"] == 1
+    assert result["snapshots"]["text"]["text_count"] == 2
+
+
+def test_extended_case_step_extract_collects_requested_surfaces(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/extract"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            if "body_text_length" in expression:
+                return {
+                    "url": self.url,
+                    "title": "Extract",
+                    "ready_state": "complete",
+                }
+            if 'kind: "text"' in expression:
+                return {
+                    "kind": "text",
+                    "text_count": 2,
+                    "texts": [],
+                    "truncated": True,
+                }
+            if 'kind: "links"' in expression:
+                return {
+                    "kind": "links",
+                    "link_count": 3,
+                    "links": [],
+                    "truncated": False,
+                }
+            raise AssertionError("unexpected extract expression")
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "extract",
+            "surface": ["text", "links"],
+            "selector": "main",
+            "max_nodes": 12,
+            "max_chars": 80,
+            "same_origin_only": True,
+        },
+        tmp_path,
+        0,
+    )
+
+    assert len(page.expressions) == 3
+    assert result["kind"] == "extract"
+    assert result["url"] == "https://example.test/extract"
+    assert result["selector"] == "main"
+    assert result["surface_count"] == 2
+    assert result["surfaces"] == ["text", "links"]
+    assert result["truncated"] is True
+    assert result["truncated_surfaces"] == ["text"]
+    assert result["page_info"]["title"] == "Extract"
+    assert result["extractions"]["text"]["text_count"] == 2
+    assert result["extractions"]["links"]["link_count"] == 3
+
+
 @pytest.mark.parametrize(
     ("step", "expression_snippet"),
     [
@@ -4137,6 +5858,42 @@ def test_extended_case_step_uses_set_file_input_expression(tmp_path: Any) -> Non
     assert "upload.txt" in page.expressions[0]
 
 
+def test_extended_case_step_uses_inline_file_input_payload(tmp_path: Any) -> None:
+    class FakePage:
+        url = "https://example.test/upload"
+
+        def __init__(self) -> None:
+            self.expressions: list[str] = []
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            self.expressions.append(expression)
+            return {"found": True, "file_input": True, "set": True}
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "set-file-input",
+            "selector": "input[type=file]",
+            "inline_files": [
+                {
+                    "name": "inline-upload.txt",
+                    "type": "text/plain",
+                    "content": "hello from inline case file",
+                }
+            ],
+        },
+        tmp_path,
+        0,
+    )
+
+    assert result["set"] is True
+    assert result["url"] == "https://example.test/upload"
+    assert "requestedFiles" in page.expressions[0]
+    assert "inline-upload.txt" in page.expressions[0]
+    assert "aGVsbG8gZnJvbSBpbmxpbmUgY2FzZSBmaWxl" in page.expressions[0]
+
+
 @pytest.mark.parametrize(
     ("step", "expression_snippet"),
     [
@@ -4352,6 +6109,7 @@ def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
     assert "agent_workflows" not in payload
     steps = payload["workflow"]["steps"]
     assert [step["id"] for step in steps] == [
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -4359,18 +6117,32 @@ def test_commands_catalog_returns_connect_from_codex_site_requirements_workflow(
         "verify_device_code_handoff",
         "doctor_after_credentials",
     ]
-    assert steps[0]["command"] == "browser-cli auth scopes --include-site-contract"
-    assert "browser_site_contract.scope_ui_fields" in steps[0]["read"]
-    assert steps[1]["command"] == "browser-cli auth connect-requirements"
-    assert "connect_from_codex.site_capabilities" in steps[1]["read"]
-    assert "required_device_code_endpoints" in steps[1]["read"]
-    assert steps[2]["command"] == "browser-cli auth connect-requirements --checklist"
-    assert "implementation_checklist.phases" in steps[2]["read"]
-    assert steps[3]["optional"] is True
-    assert "handoff.setup_blocks" in steps[3]["read"]
-    assert steps[4]["command"] == "browser-cli auth login --device-code"
-    assert "device_code.required_endpoints" in steps[4]["read"]
-    assert steps[5]["command"] == "browser-cli doctor --json"
+    assert steps[0]["command"] == (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+    )
+    assert steps[0]["follow_up_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert steps[1]["command"] == "browser-cli auth scopes --include-site-contract"
+    assert "browser_site_contract.scope_ui_fields" in steps[1]["read"]
+    assert steps[2]["command"] == "browser-cli auth connect-requirements"
+    assert "connect_from_codex.site_capabilities" in steps[2]["read"]
+    assert "required_device_code_endpoints" in steps[2]["read"]
+    assert steps[3]["command"] == "browser-cli auth connect-requirements --checklist"
+    assert "implementation_checklist.phases" in steps[3]["read"]
+    assert steps[4]["optional"] is True
+    assert "handoff.setup_blocks" in steps[4]["read"]
+    assert steps[5]["command"] == "browser-cli auth login --device-code"
+    assert "device_code.required_endpoints" in steps[5]["read"]
+    assert steps[6]["command"] == "browser-cli doctor --json"
+    assert (
+        "browser-cli reference get --id connect_from_codex --metadata-only"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex"
+        in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
+    )
     assert (
         "browser-cli auth scopes --include-site-contract"
         in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
@@ -4619,9 +6391,25 @@ def test_commands_catalog_returns_case_file_task_workflow(
         "inspect_case_commands",
         "inspect_case_schema",
         "inspect_semantic_case_action",
+        "inspect_agent_primitives_case_example",
         "inspect_form_case_example",
+        "inspect_content_extraction_case_example",
+        "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
+        "inspect_file_upload_case_example",
+        "inspect_checkout_flow_case_example",
+        "inspect_interactive_targeting_case_example",
+        "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
+        "scaffold_agent_primitives_case_file",
         "scaffold_form_case_file",
+        "scaffold_content_extraction_case_file",
+        "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
+        "scaffold_file_upload_case_file",
+        "scaffold_checkout_flow_case_file",
+        "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ]
@@ -4630,30 +6418,117 @@ def test_commands_catalog_returns_case_file_task_workflow(
     assert steps[1]["command"] == "browser-cli case schema"
     assert "supported_actions" in steps[1]["read"]
     assert "actions" in steps[1]["read"]
-    assert steps[2]["command"] == "browser-cli case schema --action fill-label"
+    assert steps[2]["command"] == "browser-cli case schema --action act"
+    assert "browser-cli case schema --action observe" in steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action extract" in steps[2]["fallback_commands"]
+    assert "browser-cli case schema --action fill-label" in steps[2]["fallback_commands"]
     assert "action_schema.example_step" in steps[2]["read"]
     assert steps[3]["command"] == (
-        "browser-cli example get --id form_fill_case --metadata-only"
+        "browser-cli example get --id agent_primitives_case --metadata-only"
     )
     assert "example.content_command" in steps[3]["read"]
     assert steps[4]["command"] == (
+        "browser-cli example get --id form_fill_case --metadata-only"
+    )
+    assert "example.content_command" in steps[4]["read"]
+    assert steps[5]["command"] == (
+        "browser-cli example get --id content_extraction_case --metadata-only"
+    )
+    assert "example.related_workflows" in steps[5]["read"]
+    assert steps[6]["command"] == (
+        "browser-cli example get --id browser_state_case --metadata-only"
+    )
+    assert "example.case_file" in steps[6]["read"]
+    assert steps[7]["command"] == (
+        "browser-cli example get --id navigation_flow_case --metadata-only"
+    )
+    assert "example.case_file" in steps[7]["read"]
+    assert steps[8]["command"] == (
+        "browser-cli example get --id file_upload_case --metadata-only"
+    )
+    assert "example.case_file" in steps[8]["read"]
+    assert steps[9]["command"] == (
+        "browser-cli example get --id checkout_flow_case --metadata-only"
+    )
+    assert "example.case_file" in steps[9]["read"]
+    assert steps[10]["command"] == (
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
+    )
+    assert "example.case_file" in steps[10]["read"]
+    assert steps[11]["command"] == (
+        "browser-cli example get --id page_diagnostics_case --metadata-only"
+    )
+    assert "example.case_file" in steps[11]["read"]
+    assert steps[12]["command"] == (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
     )
-    assert steps[4]["optional"] is True
-    assert "next_commands" in steps[4]["read"]
-    assert steps[5]["command"] == (
+    assert steps[12]["optional"] is True
+    assert "next_commands" in steps[12]["read"]
+    assert steps[13]["command"] == (
+        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
+    )
+    assert steps[13]["optional"] is True
+    assert "case.steps" in steps[13]["read"]
+    assert steps[14]["command"] == (
         "browser-cli case scaffold --template form-fill --output form-case.yaml"
     )
-    assert steps[5]["optional"] is True
-    assert "case.steps" in steps[5]["read"]
-    assert steps[6]["success_condition"] == "valid=true"
-    assert "step_count" in steps[6]["read"]
-    assert steps[7]["command"] == (
+    assert steps[14]["optional"] is True
+    assert "case.steps" in steps[14]["read"]
+    assert steps[15]["command"] == (
+        "browser-cli case scaffold --template content-extraction --output content-extraction-case.yaml"
+    )
+    assert steps[15]["optional"] is True
+    assert "case.steps" in steps[15]["read"]
+    assert steps[16]["command"] == (
+        "browser-cli case scaffold --template browser-state --output browser-state-case.yaml"
+    )
+    assert steps[16]["optional"] is True
+    assert "case.steps" in steps[16]["read"]
+    assert steps[17]["command"] == (
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
+    )
+    assert steps[17]["optional"] is True
+    assert "case.steps" in steps[17]["read"]
+    assert steps[18]["command"] == (
+        "browser-cli case scaffold --template file-upload --output upload-case.yaml"
+    )
+    assert steps[18]["optional"] is True
+    assert "case.steps" in steps[18]["read"]
+    assert steps[19]["command"] == (
+        "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml"
+    )
+    assert steps[19]["optional"] is True
+    assert "case.steps" in steps[19]["read"]
+    assert steps[20]["command"] == (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+    )
+    assert steps[20]["optional"] is True
+    assert "case.steps" in steps[20]["read"]
+    assert steps[21]["command"] == (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
+    )
+    assert steps[21]["optional"] is True
+    assert "case.steps" in steps[21]["read"]
+    assert steps[22]["success_condition"] == "valid=true"
+    assert "step_count" in steps[22]["read"]
+    assert steps[23]["command"] == (
         "browser-cli case run --file <case.yaml> --close-created-session"
     )
-    assert "artifacts_dir" in steps[7]["read"]
-    assert "steps" in steps[7]["on_failure_read"]
+    assert "artifacts_dir" in steps[23]["read"]
+    assert "steps" in steps[23]["on_failure_read"]
     assert "browser-cli case schema" in payload["agent_entrypoints"]["case_file_task"]
+    assert (
+        "browser-cli case schema --action observe"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action act"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case schema --action extract"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
     assert (
         "browser-cli case schema --action fill-label"
         in payload["agent_entrypoints"]["case_file_task"]
@@ -4663,11 +6538,59 @@ def test_commands_catalog_returns_case_file_task_workflow(
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli example get --id agent_primitives_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id navigation_flow_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id file_upload_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id checkout_flow_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli example get --id page_diagnostics_case --metadata-only"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli case scaffold --template page-inspection --url <url> --output case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
+        "browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
         "browser-cli case scaffold --template form-fill --output form-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template navigation-flow --output navigation-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template file-upload --output upload-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template checkout-flow --output checkout-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml"
+        in payload["agent_entrypoints"]["case_file_task"]
+    )
+    assert (
+        "browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml"
         in payload["agent_entrypoints"]["case_file_task"]
     )
     assert (
@@ -4877,18 +6800,24 @@ def test_commands_catalog_returns_content_extraction_workflow(
     assert "ready_state" in steps[1]["read"]
     assert steps[2]["agent_action"] is True
     assert steps[2]["selection_order"][:4] == [
+        "extract",
         "outline-snapshot",
         "text-snapshot",
         "link-snapshot",
-        "table-snapshot",
     ]
-    assert "browser-cli action text-snapshot" in steps[2]["preferred_commands"][1]
+    assert "browser-cli action extract" in steps[2]["preferred_commands"][0]
+    assert "browser-cli action text-snapshot" in steps[2]["preferred_commands"][3]
     assert steps[3]["agent_action"] is True
+    assert steps[3]["command"] == (
+        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
+    )
+    assert "result.extractions.links.links" in steps[3]["read"]
     assert "result.links" in steps[3]["read"]
     assert "result.landmarks" in steps[3]["read"]
-    assert "browser-cli action snapshot" in steps[3]["fallback_commands"][0]
+    assert "browser-cli action text-snapshot" in steps[3]["fallback_commands"][0]
     assert steps[-1]["id"] == "verify_extraction_bounds"
     assert "result.truncated" in steps[-1]["read"]
+    assert "result.truncated_surfaces" in steps[-1]["read"]
     assert "browser-cli action table-snapshot" in steps[-1]["fallback_commands"][1]
 
 
@@ -4990,6 +6919,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
     assert payload["error"] == "unknown_workflow"
     assert payload["workflow"] == "missing"
     assert payload["available_workflows"] == [
+        "agent_browser_primitives",
         "browser_state_management",
         "case_file_task",
         "connect_from_codex_auth",
@@ -4998,6 +6928,7 @@ def test_commands_catalog_fails_unknown_workflow_as_json(
         "device_code_auth",
         "dialog_frame_handling",
         "file_upload",
+        "first_browser_task",
         "form_interaction",
         "interactive_targeting",
         "link_navigation",
@@ -5067,6 +6998,7 @@ def test_commands_catalog_filters_group_and_names_only(
         "commands": payload["commands"],
     }
     assert "action.open-url" in payload["commands"]
+    assert "action.observe" in payload["commands"]
     assert "action.page-info" in payload["commands"]
     assert "action.set-viewport" in payload["commands"]
     assert "action.screenshot-selector" in payload["commands"]
@@ -5169,7 +7101,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["lex_browser_runtime"]["version"] == "1.2.3"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
-    assert checks["command_catalog"]["workflow_count"] == 23
+    assert checks["command_catalog"]["workflow_count"] == 25
+    assert checks["command_catalog"]["agent_entrypoint_count"] == 25
     assert checks["command_catalog"]["required_workflows"] == [
         "setup_and_verify",
         "connect_from_codex_site_requirements",
@@ -5177,6 +7110,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
+        "first_browser_task",
+        "agent_browser_primitives",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -5196,9 +7131,39 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "page_diagnostics",
     ]
     assert checks["command_catalog"]["missing_required_workflows"] == []
+    assert checks["command_catalog"]["required_agent_entrypoints"] == [
+        "setup",
+        "connect_from_codex_site_requirements",
+        "connect_from_codex_auth",
+        "device_code_auth",
+        "scoped_token_lifecycle",
+        "session_recovery",
+        "first_browser_task",
+        "agent_browser_primitives",
+        "one_off_page_task",
+        "navigation_flow",
+        "link_navigation",
+        "case_file_task",
+        "persistent_login_state",
+        "browser_state_management",
+        "form_interaction",
+        "file_upload",
+        "dialog_frame_handling",
+        "interactive_targeting",
+        "mouse_interaction",
+        "visual_capture",
+        "semantic_waits",
+        "menu_keyboard_flow",
+        "content_extraction",
+        "state_waits",
+        "page_diagnostics",
+    ]
+    assert checks["command_catalog"]["missing_required_agent_entrypoints"] == []
     assert checks["command_catalog"]["required_workflow_steps"]["setup_and_verify"] == [
         "inspect_skill_positioning",
+        "inspect_quickstart",
         "inspect_usable_status",
+        "skill_status",
         "auth_status",
         "doctor",
         "smoke_session",
@@ -5215,6 +7180,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["required_workflow_steps"][
         "connect_from_codex_site_requirements"
     ] == [
+        "inspect_connect_from_codex_reference",
         "inspect_scope_catalog",
         "inspect_site_requirements",
         "inspect_implementation_checklist",
@@ -5246,6 +7212,28 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "create_replacement_session",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
+        "first_browser_task"
+    ] == [
+        "check_readiness",
+        "create_session",
+        "open_url",
+        "inspect_page",
+        "inspect_targets",
+        "choose_first_action",
+        "verify_or_capture",
+        "close_session",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
+        "agent_browser_primitives"
+    ] == [
+        "inspect_action_surface",
+        "observe_page",
+        "choose_primitive",
+        "act_semantically",
+        "extract_content",
+        "verify_result",
+    ]
+    assert checks["command_catalog"]["required_workflow_steps"][
         "one_off_page_task"
     ] == [
         "create_session",
@@ -5272,15 +7260,32 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "inspect_case_commands",
         "inspect_case_schema",
         "inspect_semantic_case_action",
+        "inspect_agent_primitives_case_example",
         "inspect_form_case_example",
+        "inspect_content_extraction_case_example",
+        "inspect_browser_state_case_example",
+        "inspect_navigation_flow_case_example",
+        "inspect_file_upload_case_example",
+        "inspect_checkout_flow_case_example",
+        "inspect_interactive_targeting_case_example",
+        "inspect_page_diagnostics_case_example",
         "scaffold_case_file",
+        "scaffold_agent_primitives_case_file",
         "scaffold_form_case_file",
+        "scaffold_content_extraction_case_file",
+        "scaffold_browser_state_case_file",
+        "scaffold_navigation_flow_case_file",
+        "scaffold_file_upload_case_file",
+        "scaffold_checkout_flow_case_file",
+        "scaffold_interactive_targeting_case_file",
+        "scaffold_page_diagnostics_case_file",
         "validate_case_file",
         "run_case_file",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
         "persistent_login_state"
     ] == [
+        "inspect_persistent_context_playbook",
         "dry_run_context_pick",
         "inspect_context_status",
         "create_session_with_context",
@@ -5398,7 +7403,48 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "capture_visible_state",
     ]
     assert checks["command_catalog"]["missing_required_workflow_steps"] == {}
+    assert checks["command_catalog"]["invalid_workflow_command_references"] == []
+    assert (
+        checks["command_catalog"]["invalid_agent_entrypoint_command_references"] == []
+    )
+    assert checks["action_guides"]["status"] == "pass"
+    assert checks["action_guides"]["schema_version"] == 1
+    assert checks["action_guides"]["guide_count"] == 14
+    assert checks["action_guides"]["required_action_guides"] == [
+        "browser_state_management",
+        "content_extraction",
+        "dialog_frame_handling",
+        "file_upload",
+        "form_interaction",
+        "interactive_targeting",
+        "link_navigation",
+        "menu_keyboard_flow",
+        "mouse_interaction",
+        "navigation_flow",
+        "page_diagnostics",
+        "semantic_waits",
+        "state_waits",
+        "visual_capture",
+    ]
+    assert checks["action_guides"]["missing_required_action_guides"] == []
+    assert checks["action_guides"]["required_guide_fields"] == [
+        "purpose",
+        "related_workflows",
+        "when_to_use",
+        "selection_order",
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+        "read_fields",
+        "custom_js_boundary",
+    ]
+    assert checks["action_guides"]["invalid_action_guides"] == []
+    assert checks["action_guides"]["invalid_guide_command_references"] == []
     for command_name in (
+        "action.observe",
+        "action.act",
+        "action.extract",
         "action.press",
         "action.press-role",
         "action.press-key",
@@ -5492,6 +7538,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "reference.get",
         "example.list",
         "example.get",
+        "skill.status",
+        "skill.install",
         "version",
         "case.schema",
         "case.scaffold",
@@ -5502,9 +7550,24 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 102
-    assert checks["case_schema"]["supported_action_count"] == 102
+    assert checks["case_schema"]["action_count"] == 108
+    assert checks["case_schema"]["supported_action_count"] == 108
+    assert checks["case_schema"]["required_case_scaffold_templates"] == [
+        "page-inspection",
+        "agent-primitives",
+        "form-fill",
+        "content-extraction",
+        "browser-state",
+        "navigation-flow",
+        "file-upload",
+        "checkout-flow",
+        "interactive-targeting",
+        "page-diagnostics",
+    ]
     for case_action in (
+        "observe",
+        "act",
+        "extract",
         "fill-label",
         "click-label",
         "click-role",
@@ -5519,6 +7582,135 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["case_schema"]["missing_required_case_actions"] == []
     assert checks["case_schema"]["missing_supported_actions"] == []
     assert checks["case_schema"]["missing_action_schemas"] == []
+    assert checks["case_schema"]["missing_case_scaffold_templates"] == []
+    checked_scaffolds = {
+        item["template"]: item
+        for item in checks["case_schema"]["checked_case_scaffold_templates"]
+    }
+    assert sorted(checked_scaffolds) == [
+        "agent-primitives",
+        "browser-state",
+        "checkout-flow",
+        "content-extraction",
+        "file-upload",
+        "form-fill",
+        "interactive-targeting",
+        "navigation-flow",
+        "page-diagnostics",
+        "page-inspection",
+    ]
+    assert all(item["valid"] for item in checked_scaffolds.values())
+    assert all(item["output_format"] == "json" for item in checked_scaffolds.values())
+    assert checked_scaffolds["agent-primitives"]["actions"] == [
+        "open-url",
+        "eval",
+        "observe",
+        "act",
+        "extract",
+        "wait-text",
+        "get-text",
+        "screenshot",
+    ]
+    assert checked_scaffolds["content-extraction"]["actions"] == [
+        "open-url",
+        "eval",
+        "wait-text",
+        "extract",
+        "text-snapshot",
+        "link-snapshot",
+        "table-snapshot",
+        "list-snapshot",
+        "get-text",
+        "screenshot",
+    ]
+    assert checked_scaffolds["browser-state"]["actions"] == [
+        "open-url",
+        "wait-selector",
+        "page-info",
+        "storage-set",
+        "wait-storage",
+        "storage-get",
+        "storage-set",
+        "wait-storage",
+        "storage-get",
+        "cookie-set",
+        "wait-cookie",
+        "cookie-get",
+        "storage-remove",
+        "wait-storage",
+        "storage-remove",
+        "cookie-delete",
+        "wait-cookie",
+        "screenshot",
+    ]
+    assert checked_scaffolds["interactive-targeting"]["actions"] == [
+        "open-url",
+        "eval",
+        "interactive-snapshot",
+        "accessibility-snapshot",
+        "act",
+        "wait-text",
+        "get-text",
+        "screenshot",
+    ]
+    assert checked_scaffolds["navigation-flow"]["actions"] == [
+        "open-url",
+        "wait-load-state",
+        "wait-url",
+        "wait-title",
+        "open-url",
+        "wait-url",
+        "go-back",
+        "wait-url",
+        "go-forward",
+        "wait-url",
+        "reload",
+        "wait-load-state",
+        "page-info",
+        "screenshot",
+    ]
+    assert checked_scaffolds["file-upload"]["actions"] == [
+        "open-url",
+        "eval",
+        "form-snapshot",
+        "set-file-input",
+        "wait-text",
+        "submit",
+        "wait-text",
+        "get-text",
+        "screenshot",
+    ]
+    assert checked_scaffolds["checkout-flow"]["actions"] == [
+        "open-url",
+        "eval",
+        "form-snapshot",
+        "fill-label",
+        "fill-label",
+        "select-label",
+        "check-label",
+        "wait-state-role",
+        "click-role",
+        "wait-text",
+        "fill-label",
+        "fill-label",
+        "click-role",
+        "wait-text",
+        "get-text",
+        "screenshot",
+    ]
+    assert checked_scaffolds["page-diagnostics"]["actions"] == [
+        "open-url",
+        "console-snapshot",
+        "network-snapshot",
+        "eval",
+        "wait-console",
+        "wait-network",
+        "console-snapshot",
+        "network-snapshot",
+        "wait-text",
+        "screenshot",
+    ]
+    assert checks["case_schema"]["invalid_case_scaffold_templates"] == []
     assert checks["case_schema"]["invalid_action_schemas"] == []
     assert checks["auth_export_env_contract"]["status"] == "pass"
     assert checks["auth_export_env_contract"]["required_fields"] == [
@@ -5547,6 +7739,116 @@ def test_doctor_checks_install_env_direct_url_and_api(
             "auth status reports configured=true and doctor reports ok=true"
         ),
     }
+    assert checks["auth_login_contract"]["status"] == "pass"
+    assert checks["auth_login_contract"]["required_handoff_fields"] == [
+        "recommended_flow",
+        "login_url",
+        "connect_from_codex_url",
+        "connect_from_codex_available",
+        "open_command",
+        "open_url",
+        "install_command",
+        "setup_blocks",
+        "copyable_commands",
+        "local_env",
+        "requested_scopes",
+        "requested_scope_details",
+        "requested_expires_in",
+        "verification",
+        "secret_policy",
+    ]
+    assert checks["auth_login_contract"]["missing_handoff_fields"] == []
+    assert checks["auth_login_contract"]["required_setup_blocks"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert checks["auth_login_contract"]["setup_block_ids"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert checks["auth_login_contract"]["missing_setup_blocks"] == []
+    assert checks["auth_login_contract"]["invalid_fields"] == []
+    assert checks["auth_login_contract"]["copyable_commands"][:2] == [
+        "browser-cli reference get --id usable_status --metadata-only",
+        "browser-cli reference get --id usable_status",
+    ]
+    assert checks["auth_login_contract"]["local_env_names"] == [
+        "LEXMOUNT_API_KEY",
+        "LEXMOUNT_PROJECT_ID",
+    ]
+    assert checks["auth_login_contract"]["recommended_flow"] == "manual_env"
+    assert checks["auth_login_contract"]["manual_env_available"] is True
+    assert checks["auth_login_contract"]["connect_from_codex_available"] is False
+    assert checks["auth_login_contract"]["connect_from_codex_url"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert checks["auth_login_contract"]["connect_from_codex_url_masked"] is False
+    assert checks["auth_login_contract"]["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert checks["auth_login_contract"]["requested_expires_in"] == "7d"
+    assert checks["auth_login_contract"]["missing_runtime_auth"] == []
+    assert "LEXMOUNT_API_KEY" in checks["auth_login_contract"]["secret_policy"][
+        "do_not_paste_in_chat"
+    ]
+    assert checks["auth_login_contract"]["verification"]["doctor_command"] == (
+        "browser-cli doctor --json"
+    )
+    assert checks["device_code_contract"]["status"] == "pass"
+    assert checks["device_code_contract"]["available"] is False
+    assert checks["device_code_contract"]["device_code_available"] is False
+    assert checks["device_code_contract"]["selected_flow"] == "device_code"
+    assert checks["device_code_contract"]["reason"] == "browser_site_endpoint_missing"
+    assert checks["device_code_contract"]["missing_device_code_fields"] == []
+    assert checks["device_code_contract"]["required_device_code_endpoints"] == [
+        "POST /api/auth/device/code",
+        "POST /api/auth/device/token",
+    ]
+    assert (
+        checks["device_code_contract"]["missing_required_device_code_endpoints"]
+        == []
+    )
+    assert (
+        checks["device_code_contract"]["missing_required_browser_site_support"]
+        == []
+    )
+    assert checks["device_code_contract"]["required_site_capabilities"] == [
+        "device_code_oauth"
+    ]
+    assert checks["device_code_contract"]["missing_required_site_capabilities"] == []
+    assert checks["device_code_contract"]["fallback_handoff_setup_block_ids"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert checks["device_code_contract"]["missing_fallback_setup_blocks"] == []
+    assert checks["device_code_contract"]["missing_runtime_auth"] == []
+    assert checks["device_code_contract"]["invalid_fields"] == []
+    assert checks["device_code_contract"]["connect_from_codex_url"].startswith(
+        "https://browser.lexmount.cn/connect/codex?"
+    )
+    assert (
+        checks["device_code_contract"]["connect_from_codex_url_masked"] is False
+    )
+    assert checks["device_code_contract"]["requested_scopes"] == [
+        "browser:sessions",
+        "browser:contexts",
+        "browser:actions",
+    ]
+    assert checks["device_code_contract"]["requested_expires_in"] == "7d"
+    assert "raw device_code" in checks["device_code_contract"]["secret_policy"][
+        "do_not_paste_in_chat"
+    ]
+    assert checks["device_code_contract"]["verification"]["workflow_command"] == (
+        "browser-cli commands --workflow device_code_auth"
+    )
     assert checks["connect_from_codex_contract"]["status"] == "pass"
     assert checks["connect_from_codex_contract"]["capability_ids"] == [
         "project_id_display",
@@ -5588,10 +7890,30 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["agent_prompt"]["missing_fields"] == []
     assert checks["agent_prompt"]["missing_patterns"] == []
     assert checks["agent_prompt"]["mismatched_fields"] == []
+    assert checks["agent_skill_resources"]["status"] == "pass"
+    assert checks["agent_skill_resources"]["resource_count"] == 7
+    assert checks["agent_skill_resources"]["expected_resource_count"] == 7
+    assert checks["agent_skill_resources"]["missing_patterns"] == []
+    assert checks["agent_skill_resources"]["package_errors"] == []
+    skill_resources = {
+        resource["path"]: resource
+        for resource in checks["agent_skill_resources"]["checked_resources"]
+    }
+    assert skill_resources["SKILL.md"]["package_resource"] == (
+        "browser_cli.agent_skill:SKILL.md"
+    )
+    assert checks["agent_skill_resources"]["status_command"] == (
+        "browser-cli skill status"
+    )
+    assert checks["agent_skill_resources"]["force_install_command"] == (
+        "browser-cli skill install --force"
+    )
     assert checks["agent_references"]["status"] == "pass"
-    assert checks["agent_references"]["reference_count"] == 3
+    assert checks["agent_references"]["reference_count"] == 5
     assert checks["agent_references"]["required_references"] == [
         "action_playbook",
+        "connect_from_codex",
+        "quickstart",
         "usable_status",
         "skill_positioning",
     ]
@@ -5622,6 +7944,26 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert usable_reference["content_length"] > 1000
     assert usable_reference["missing_patterns"] == []
+    quickstart_reference = checked_references["quickstart"]
+    assert quickstart_reference["status"] == "pass"
+    assert quickstart_reference["content_command"] == (
+        "browser-cli reference get --id quickstart"
+    )
+    assert quickstart_reference["package_resource"] == (
+        "browser_cli.agent_references:quickstart.md"
+    )
+    assert quickstart_reference["content_length"] > 1000
+    assert quickstart_reference["missing_patterns"] == []
+    connect_reference = checked_references["connect_from_codex"]
+    assert connect_reference["status"] == "pass"
+    assert connect_reference["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
+    assert connect_reference["package_resource"] == (
+        "browser_cli.agent_references:connect-from-codex.md"
+    )
+    assert connect_reference["content_length"] > 1000
+    assert connect_reference["missing_patterns"] == []
     skill_positioning_reference = checked_references["skill_positioning"]
     assert skill_positioning_reference["status"] == "pass"
     assert skill_positioning_reference["content_command"] == (
@@ -5633,11 +7975,22 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert skill_positioning_reference["content_length"] > 1000
     assert skill_positioning_reference["missing_patterns"] == []
     assert checks["agent_examples"]["status"] == "pass"
-    assert checks["agent_examples"]["example_count"] == 3
+    assert checks["agent_examples"]["example_count"] == 14
     assert checks["agent_examples"]["required_examples"] == [
         "agent_playbook",
+        "setup_verification_playbook",
+        "auth_lifecycle_playbook",
+        "persistent_context_playbook",
         "page_inspection_case",
+        "agent_primitives_case",
+        "content_extraction_case",
+        "browser_state_case",
+        "navigation_flow_case",
+        "file_upload_case",
+        "checkout_flow_case",
+        "page_diagnostics_case",
         "form_fill_case",
+        "interactive_targeting_case",
     ]
     assert checks["agent_examples"]["missing_required_examples"] == []
     assert checks["agent_examples"]["invalid_examples"] == []
@@ -5650,10 +8003,44 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert checked_examples["agent_playbook"]["content_length"] > 1000
     assert checked_examples["agent_playbook"]["missing_patterns"] == []
+    assert checked_examples["setup_verification_playbook"]["status"] == "pass"
+    assert checked_examples["setup_verification_playbook"]["content_command"] == (
+        "browser-cli example get --id setup_verification_playbook"
+    )
+    assert checked_examples["setup_verification_playbook"]["content_length"] > 1000
+    assert checked_examples["setup_verification_playbook"]["missing_patterns"] == []
+    assert checked_examples["auth_lifecycle_playbook"]["status"] == "pass"
+    assert checked_examples["auth_lifecycle_playbook"]["content_command"] == (
+        "browser-cli example get --id auth_lifecycle_playbook"
+    )
+    assert checked_examples["auth_lifecycle_playbook"]["content_length"] > 1000
+    assert checked_examples["auth_lifecycle_playbook"]["missing_patterns"] == []
+    assert checked_examples["persistent_context_playbook"]["status"] == "pass"
+    assert checked_examples["persistent_context_playbook"]["content_command"] == (
+        "browser-cli example get --id persistent_context_playbook"
+    )
+    assert checked_examples["persistent_context_playbook"]["content_length"] > 1000
+    assert checked_examples["persistent_context_playbook"]["missing_patterns"] == []
     assert checked_examples["page_inspection_case"]["case_valid"] is True
     assert checked_examples["page_inspection_case"]["case_errors"] == []
+    assert checked_examples["agent_primitives_case"]["case_valid"] is True
+    assert checked_examples["agent_primitives_case"]["case_errors"] == []
+    assert checked_examples["content_extraction_case"]["case_valid"] is True
+    assert checked_examples["content_extraction_case"]["case_errors"] == []
+    assert checked_examples["browser_state_case"]["case_valid"] is True
+    assert checked_examples["browser_state_case"]["case_errors"] == []
+    assert checked_examples["navigation_flow_case"]["case_valid"] is True
+    assert checked_examples["navigation_flow_case"]["case_errors"] == []
+    assert checked_examples["file_upload_case"]["case_valid"] is True
+    assert checked_examples["file_upload_case"]["case_errors"] == []
+    assert checked_examples["checkout_flow_case"]["case_valid"] is True
+    assert checked_examples["checkout_flow_case"]["case_errors"] == []
+    assert checked_examples["page_diagnostics_case"]["case_valid"] is True
+    assert checked_examples["page_diagnostics_case"]["case_errors"] == []
     assert checked_examples["form_fill_case"]["case_valid"] is True
     assert checked_examples["form_fill_case"]["case_errors"] == []
+    assert checked_examples["interactive_targeting_case"]["case_valid"] is True
+    assert checked_examples["interactive_targeting_case"]["case_errors"] == []
     assert checks["context_registry"]["status"] == "pass"
     assert checks["context_registry"]["path_source"] == "env"
     assert checks["context_registry"]["exists"] is False
@@ -5763,6 +8150,7 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert catalog["schema_version"] == 1
     assert catalog["command_count"] == 3
     assert catalog["workflow_count"] == 0
+    assert catalog["agent_entrypoint_count"] == 0
     assert "action.press" in catalog["missing_required_commands"]
     assert "action.press-role" in catalog["missing_required_commands"]
     assert "action.press-key" in catalog["missing_required_commands"]
@@ -5808,6 +8196,11 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
     assert "action.wait-url" in catalog["missing_required_commands"]
     assert "action.wait-load-state" in catalog["missing_required_commands"]
     assert "action.guide" in catalog["missing_required_commands"]
+    assert "action.observe" in catalog["missing_required_commands"]
+    assert "action.act" in catalog["missing_required_commands"]
+    assert "action.extract" in catalog["missing_required_commands"]
+    assert "skill.status" in catalog["missing_required_commands"]
+    assert "skill.install" in catalog["missing_required_commands"]
     assert "action.get-text-role" in catalog["missing_required_commands"]
     assert "action.exists-role" in catalog["missing_required_commands"]
     assert "action.wait-state-role" in catalog["missing_required_commands"]
@@ -5864,6 +8257,35 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "device_code_auth",
         "scoped_token_lifecycle",
         "session_recovery",
+        "first_browser_task",
+        "agent_browser_primitives",
+        "one_off_page_task",
+        "navigation_flow",
+        "link_navigation",
+        "case_file_task",
+        "persistent_login_state",
+        "browser_state_management",
+        "form_interaction",
+        "file_upload",
+        "dialog_frame_handling",
+        "interactive_targeting",
+        "mouse_interaction",
+        "visual_capture",
+        "semantic_waits",
+        "menu_keyboard_flow",
+        "content_extraction",
+        "state_waits",
+        "page_diagnostics",
+    ]
+    assert catalog["missing_required_agent_entrypoints"] == [
+        "setup",
+        "connect_from_codex_site_requirements",
+        "connect_from_codex_auth",
+        "device_code_auth",
+        "scoped_token_lifecycle",
+        "session_recovery",
+        "first_browser_task",
+        "agent_browser_primitives",
         "one_off_page_task",
         "navigation_flow",
         "link_navigation",
@@ -5883,9 +8305,159 @@ def test_doctor_warns_when_command_catalog_misses_skill_commands(
         "page_diagnostics",
     ]
     assert catalog["missing_required_workflow_steps"] == {}
+    assert catalog["invalid_agent_entrypoint_command_references"] == []
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands --names-only" in payload["repair_plan"]["commands"]
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_action_guides_are_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._action_guide_tasks",
+        lambda: {
+            "form_interaction": {
+                "purpose": "",
+                "related_workflows": ["unknown_workflow"],
+                "when_to_use": [],
+                "selection_order": [],
+                "inspect_commands": [],
+                "preferred_commands": [],
+                "fallback_commands": [],
+                "verify_commands": [],
+                "read_fields": [],
+                "custom_js_boundary": "",
+            }
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "action_guides" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    action_guides = checks["action_guides"]
+    assert action_guides["status"] == "warn"
+    assert action_guides["guide_count"] == 1
+    assert "interactive_targeting" in action_guides["missing_required_action_guides"]
+    assert "page_diagnostics" in action_guides["missing_required_action_guides"]
+    assert action_guides["required_guide_fields"] == [
+        "purpose",
+        "related_workflows",
+        "when_to_use",
+        "selection_order",
+        "inspect_commands",
+        "preferred_commands",
+        "fallback_commands",
+        "verify_commands",
+        "read_fields",
+        "custom_js_boundary",
+    ]
+    assert action_guides["invalid_action_guides"] == [
+        {
+            "task": "form_interaction",
+            "problems": [
+                "purpose_empty",
+                "when_to_use_empty",
+                "selection_order_empty",
+                "inspect_commands_empty",
+                "preferred_commands_empty",
+                "fallback_commands_empty",
+                "verify_commands_empty",
+                "read_fields_empty",
+                "custom_js_boundary_empty",
+                "related_workflows_unknown",
+            ],
+        }
+    ]
+    assert action_guides["invalid_guide_command_references"] == []
+    assert action_guides["fix"]["code"] == "upgrade_browser_cli_action_guides"
+    assert "browser-cli action guide --names-only" in payload["repair_plan"]["commands"]
+    assert (
+        "browser-cli action guide --task interactive_targeting"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_action_guides_reference_unknown_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    guides = {
+        task: dict(guide) for task, guide in cli_module._action_guide_tasks().items()
+    }
+    guides["interactive_targeting"] = {
+        **guides["interactive_targeting"],
+        "preferred_commands": [
+            *guides["interactive_targeting"]["preferred_commands"],
+            "browser-cli action missing-action --session-id <session_id>",
+        ],
+    }
+    monkeypatch.setattr("browser_cli.cli._action_guide_tasks", lambda: guides)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "action_guides" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    action_guides = checks["action_guides"]
+    assert action_guides["status"] == "warn"
+    assert action_guides["missing_required_action_guides"] == []
+    assert action_guides["invalid_action_guides"] == [
+        {
+            "task": "interactive_targeting",
+            "problems": ["unknown_command_references"],
+            "invalid_command_references": [
+                {
+                    "field": "preferred_commands",
+                    "command": (
+                        "browser-cli action missing-action --session-id <session_id>"
+                    ),
+                    "command_name": "action.missing-action",
+                }
+            ],
+        }
+    ]
+    assert action_guides["invalid_guide_command_references"] == [
+        {
+            "task": "interactive_targeting",
+            "field": "preferred_commands",
+            "command": "browser-cli action missing-action --session-id <session_id>",
+            "command_name": "action.missing-action",
+        }
+    ]
+    assert action_guides["fix"]["code"] == "upgrade_browser_cli_action_guides"
+    assert (
+        "browser-cli action guide --task interactive_targeting"
+        in payload["repair_plan"]["commands"]
+    )
     assert "api_connectivity" in payload["skipped_checks"]
 
 
@@ -5931,24 +8503,199 @@ def test_doctor_warns_when_case_schema_misses_skill_actions(
     assert case_schema["action_count"] == 1
     assert case_schema["supported_action_count"] == 1
     assert case_schema["missing_supported_actions"][:3] == [
+        "act",
         "accessibility-snapshot",
         "blur",
-        "blur-role",
     ]
     assert "fill" in case_schema["missing_required_case_actions"]
     assert "fill-label" in case_schema["missing_required_case_actions"]
     assert "network-snapshot" in case_schema["missing_required_case_actions"]
     assert "wait-console" in case_schema["missing_required_case_actions"]
     assert case_schema["missing_action_schemas"][:3] == [
+        "act",
         "accessibility-snapshot",
         "blur",
-        "blur-role",
     ]
     assert case_schema["invalid_action_schemas"] == []
     assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
     assert "browser-cli case schema --names-only" in payload["repair_plan"]["commands"]
     assert (
         "browser-cli case schema --action network-snapshot"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_case_schema_misses_scaffold_templates(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.CASE_SCAFFOLD_TEMPLATES",
+        ("page-inspection",),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "case_schema" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    case_schema = checks["case_schema"]
+    assert case_schema["status"] == "warn"
+    assert case_schema["missing_required_case_actions"] == []
+    assert case_schema["missing_supported_actions"] == []
+    assert case_schema["missing_action_schemas"] == []
+    assert case_schema["missing_case_scaffold_templates"] == [
+        "agent-primitives",
+        "form-fill",
+        "content-extraction",
+        "browser-state",
+        "navigation-flow",
+        "file-upload",
+        "checkout-flow",
+        "interactive-targeting",
+        "page-diagnostics",
+    ]
+    assert [
+        item["template"] for item in case_schema["checked_case_scaffold_templates"]
+    ] == ["page-inspection"]
+    assert case_schema["invalid_case_scaffold_templates"] == []
+    assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
+    assert (
+        "browser-cli case scaffold --template agent-primitives --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template content-extraction --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template browser-state --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template navigation-flow --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template file-upload --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template checkout-flow --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template interactive-targeting --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template page-diagnostics --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_case_scaffold_template_is_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    original_scaffold_spec = cli_module._case_scaffold_spec
+
+    def fake_scaffold_spec(args: Any) -> dict[str, Any]:
+        if args.template == "form-fill":
+            return {
+                "name": "form-fill",
+                "steps": [
+                    {
+                        "action": "fill-label",
+                    }
+                ],
+            }
+        return original_scaffold_spec(args)
+
+    monkeypatch.setattr("browser_cli.cli._case_scaffold_spec", fake_scaffold_spec)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "case_schema" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    case_schema = checks["case_schema"]
+    assert case_schema["status"] == "warn"
+    assert case_schema["missing_case_scaffold_templates"] == []
+    invalid_templates = case_schema["invalid_case_scaffold_templates"]
+    assert [item["template"] for item in invalid_templates] == ["form-fill"]
+    assert invalid_templates[0]["valid"] is False
+    assert "steps[0] missing required field 'label'" in invalid_templates[0]["errors"]
+    assert "steps[0] missing required field 'text'" in invalid_templates[0]["errors"]
+    checked_scaffolds = {
+        item["template"]: item
+        for item in case_schema["checked_case_scaffold_templates"]
+    }
+    assert checked_scaffolds["form-fill"]["valid"] is False
+    assert checked_scaffolds["page-inspection"]["valid"] is True
+    assert checked_scaffolds["agent-primitives"]["valid"] is True
+    assert checked_scaffolds["content-extraction"]["valid"] is True
+    assert checked_scaffolds["browser-state"]["valid"] is True
+    assert checked_scaffolds["navigation-flow"]["valid"] is True
+    assert checked_scaffolds["file-upload"]["valid"] is True
+    assert checked_scaffolds["checkout-flow"]["valid"] is True
+    assert checked_scaffolds["interactive-targeting"]["valid"] is True
+    assert checked_scaffolds["page-diagnostics"]["valid"] is True
+    assert case_schema["fix"]["code"] == "upgrade_browser_cli_case_schema"
+    assert (
+        "browser-cli case scaffold --template agent-primitives --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template content-extraction --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template browser-state --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template navigation-flow --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template file-upload --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template checkout-flow --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template interactive-targeting --format json"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli case scaffold --template page-diagnostics --format json"
         in payload["repair_plan"]["commands"]
     )
     assert "api_connectivity" in payload["skipped_checks"]
@@ -6009,6 +8756,120 @@ def test_doctor_warns_when_auth_export_env_contract_is_incomplete(
         "browser-cli auth export-env --from-current"
         in payload["repair_plan"]["commands"]
     )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_auth_login_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    original_handoff = cli_module._auth_login_handoff
+
+    def broken_handoff(**kwargs: Any) -> dict[str, Any]:
+        payload = original_handoff(**kwargs)
+        payload.pop("secret_policy")
+        payload["setup_blocks"] = [
+            block
+            for block in payload["setup_blocks"]
+            if block["id"] not in {"local_env", "verify"}
+        ]
+        return payload
+
+    monkeypatch.setattr("browser_cli.cli._auth_login_handoff", broken_handoff)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "auth_login_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["auth_login_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_handoff_fields"] == ["secret_policy"]
+    assert contract["missing_setup_blocks"] == ["local_env", "verify"]
+    assert "secret_policy" in contract["invalid_fields"]
+    assert "setup_blocks.local_env.safe_to_paste_in_chat" in contract[
+        "invalid_fields"
+    ]
+    assert "setup_blocks.verify.commands" in contract["invalid_fields"]
+    assert contract["fix"]["code"] == "repair_auth_login_contract"
+    assert "browser-cli auth login" in payload["repair_plan"]["commands"]
+    assert (
+        "browser-cli commands --workflow connect_from_codex_auth"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_device_code_contract_is_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._device_code_required_endpoints",
+        lambda: ["POST /api/auth/device/code"],
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._device_code_required_browser_site_support",
+        lambda: ["Show user_code approval UI on /connect/codex."],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "device_code_contract" in payload["warning_checks"]
+    assert '"secret"' not in json.dumps(payload)
+
+    checks = _checks_by_name(payload)
+    contract = checks["device_code_contract"]
+    assert contract["status"] == "warn"
+    assert contract["missing_required_device_code_endpoints"] == [
+        "POST /api/auth/device/token"
+    ]
+    assert "Issue scoped, project-bound, short-lived access tokens." in contract[
+        "missing_required_browser_site_support"
+    ]
+    assert "required_endpoints" in contract["invalid_fields"]
+    assert "required_browser_site_support" in contract["invalid_fields"]
+    assert contract["fallback_handoff_setup_block_ids"] == [
+        "install",
+        "open_connect",
+        "local_env",
+        "verify",
+    ]
+    assert contract["missing_fallback_setup_blocks"] == []
+    assert contract["fix"]["code"] == "repair_device_code_contract"
+    assert "browser-cli auth login --device-code" in payload["repair_plan"][
+        "commands"
+    ]
+    assert (
+        "browser-cli commands --workflow device_code_auth"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "connect_from_codex" in payload["repair_plan"]
     assert "api_connectivity" in payload["skipped_checks"]
 
 
@@ -6125,6 +8986,52 @@ def test_doctor_warns_when_agent_prompt_metadata_is_incomplete(
     assert "api_connectivity" in payload["skipped_checks"]
 
 
+def test_doctor_warns_when_packaged_skill_resources_are_stale(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli._packaged_skill_resource_items",
+        lambda: (
+            [
+                {
+                    "path": "SKILL.md",
+                    "package_resource": "browser_cli.agent_skill:SKILL.md",
+                    "content": "# browser-cli\n\nUse browser-cli.",
+                    "sha256": "old",
+                    "size": 30,
+                }
+            ],
+            [],
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "warning"
+    assert "agent_skill_resources" in payload["warning_checks"]
+    checks = _checks_by_name(payload)
+    skill_resources = checks["agent_skill_resources"]
+    assert skill_resources["status"] == "warn"
+    assert "browser-cli action act --session-id <session_id>" in skill_resources[
+        "missing_patterns"
+    ]
+    assert skill_resources["fix"]["code"] == "repair_packaged_agent_skill_resources"
+    assert "browser-cli skill install --force" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
 def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -6147,11 +9054,32 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
                 "browser_smoke_session.status=pass\n"
                 "browser.lexmount.cn Work Needed\n"
             )
+        if reference_id == "quickstart":
+            return (
+                "Install\n"
+                "Configure Credentials\n"
+                "Verify Readiness\n"
+                "First Browser Task\n"
+                "Persistent Login State\n"
+                "Agent Discovery\n"
+                "Current Limits\n"
+            )
+        if reference_id == "connect_from_codex":
+            return (
+                "Goals\n"
+                "Page\n"
+                "Scoped Agent API Keys\n"
+                "Local CLI Contract\n"
+                "Implementation Checklist JSON\n"
+                "Device-Code/OAuth Flow\n"
+                "Doctor Integration\n"
+                "Security Requirements\n"
+            )
         assert reference_id == "skill_positioning"
         return (
             "Primary Use Case\n"
             "Supported Today\n"
-            "Comparison: Browserbase MCP Server\n"
+            "Comparison: Browserbase Skills\n"
             "Defects To Fix Next\n"
         )
 
@@ -6170,6 +9098,8 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     assert references["status"] == "warn"
     assert references["required_references"] == [
         "action_playbook",
+        "connect_from_codex",
+        "quickstart",
         "usable_status",
         "skill_positioning",
     ]
@@ -6191,6 +9121,14 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     )
     assert (
         "browser-cli reference get --id usable_status"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli reference get --id quickstart"
+        in payload["repair_plan"]["commands"]
+    )
+    assert (
+        "browser-cli reference get --id connect_from_codex"
         in payload["repair_plan"]["commands"]
     )
     assert (
@@ -6242,8 +9180,19 @@ steps:
     assert examples["status"] == "warn"
     assert examples["required_examples"] == [
         "agent_playbook",
+        "setup_verification_playbook",
+        "auth_lifecycle_playbook",
+        "persistent_context_playbook",
         "page_inspection_case",
+        "agent_primitives_case",
+        "content_extraction_case",
+        "browser_state_case",
+        "navigation_flow_case",
+        "file_upload_case",
+        "checkout_flow_case",
+        "page_diagnostics_case",
         "form_fill_case",
+        "interactive_targeting_case",
     ]
     assert examples["missing_required_examples"] == []
     assert len(examples["invalid_examples"]) == 1
@@ -6345,6 +9294,24 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                         {"id": "create_replacement_session"},
                     ],
                 },
+                "first_browser_task": {
+                    "steps": [
+                        {"id": "check_readiness"},
+                        {"id": "create_session"},
+                        {"id": "open_url"},
+                        {"id": "inspect_page"},
+                        {"id": "inspect_targets"},
+                        {"id": "choose_first_action"},
+                    ],
+                },
+                "agent_browser_primitives": {
+                    "steps": [
+                        {"id": "inspect_action_surface"},
+                        {"id": "observe_page"},
+                        {"id": "choose_primitive"},
+                        {"id": "act_semantically"},
+                    ],
+                },
                 "one_off_page_task": {
                     "steps": [
                         {"id": "create_session"},
@@ -6380,6 +9347,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 },
                 "persistent_login_state": {
                     "steps": [
+                        {"id": "inspect_persistent_context_playbook"},
                         {"id": "dry_run_context_pick"},
                         {"id": "inspect_context_status"},
                         {"id": "create_session_with_context"},
@@ -6514,18 +9482,41 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
     assert catalog["missing_required_commands"] == []
     assert catalog["missing_required_workflows"] == []
     assert catalog["missing_required_workflow_steps"] == {
-        "case_file_task": [
-            "inspect_semantic_case_action",
-            "inspect_form_case_example",
-            "scaffold_form_case_file",
-        ],
+            "case_file_task": [
+                "inspect_semantic_case_action",
+                "inspect_agent_primitives_case_example",
+                "inspect_form_case_example",
+                "inspect_content_extraction_case_example",
+                "inspect_browser_state_case_example",
+                "inspect_navigation_flow_case_example",
+                "inspect_file_upload_case_example",
+                "inspect_checkout_flow_case_example",
+                "inspect_interactive_targeting_case_example",
+                "inspect_page_diagnostics_case_example",
+                "scaffold_agent_primitives_case_file",
+                "scaffold_form_case_file",
+                "scaffold_content_extraction_case_file",
+                "scaffold_browser_state_case_file",
+                "scaffold_navigation_flow_case_file",
+                "scaffold_file_upload_case_file",
+                "scaffold_checkout_flow_case_file",
+                "scaffold_interactive_targeting_case_file",
+                "scaffold_page_diagnostics_case_file",
+            ],
         "one_off_page_task": ["close_session"],
+        "first_browser_task": ["verify_or_capture", "close_session"],
+        "agent_browser_primitives": ["extract_content", "verify_result"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
-        "setup_and_verify": [
-            "inspect_skill_positioning",
-            "inspect_usable_status",
-            "smoke_session",
+            "setup_and_verify": [
+                "inspect_skill_positioning",
+                "inspect_quickstart",
+                "inspect_usable_status",
+                "skill_status",
+                "smoke_session",
+            ],
+        "connect_from_codex_site_requirements": [
+            "inspect_connect_from_codex_reference"
         ],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
@@ -6537,8 +9528,96 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "content_extraction": ["verify_extraction_bounds"],
         "state_waits": ["verify_after_wait"],
     }
+    assert catalog["invalid_workflow_command_references"] == []
     assert catalog["fix"]["code"] == "upgrade_browser_cli_command_surface"
     assert "browser-cli commands" in payload["repair_plan"]["commands"]
+
+
+def test_doctor_warns_when_agent_workflow_references_unknown_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    catalog = json.loads(json.dumps(cli_module._command_catalog()))
+    steps = catalog["agent_workflows"]["interactive_targeting"]["steps"]
+    steps[0]["fallback_commands"] = [
+        "browser-cli action missing-action --session-id <session_id>"
+    ]
+    monkeypatch.setattr("browser_cli.cli._command_catalog", lambda: catalog)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "warning"
+    assert "command_catalog" in payload["warning_checks"]
+    catalog_check = _checks_by_name(payload)["command_catalog"]
+    assert catalog_check["missing_required_commands"] == []
+    assert catalog_check["missing_required_workflows"] == []
+    assert catalog_check["missing_required_workflow_steps"] == {}
+    assert catalog_check["invalid_workflow_command_references"] == [
+        {
+            "workflow": "interactive_targeting",
+            "step": "inspect_action_guide",
+            "field": "fallback_commands",
+            "command": "browser-cli action missing-action --session-id <session_id>",
+            "command_name": "action.missing-action",
+        }
+    ]
+    assert catalog_check["fix"]["code"] == "upgrade_browser_cli_command_surface"
+    assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
+
+
+def test_doctor_warns_when_agent_entrypoint_references_unknown_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    monkeypatch.setattr(
+        "browser_cli.cli.shutil.which",
+        lambda name: "/usr/local/bin/browser-cli" if name == "browser-cli" else None,
+    )
+
+    catalog = json.loads(json.dumps(cli_module._command_catalog()))
+    catalog["agent_entrypoints"]["interactive_targeting"].append(
+        "browser-cli action missing-action --session-id <session_id>"
+    )
+    monkeypatch.setattr("browser_cli.cli._command_catalog", lambda: catalog)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "warning"
+    assert "command_catalog" in payload["warning_checks"]
+    catalog_check = _checks_by_name(payload)["command_catalog"]
+    assert catalog_check["missing_required_commands"] == []
+    assert catalog_check["missing_required_workflows"] == []
+    assert catalog_check["missing_required_agent_entrypoints"] == []
+    assert catalog_check["missing_required_workflow_steps"] == {}
+    assert catalog_check["invalid_workflow_command_references"] == []
+    assert catalog_check["invalid_agent_entrypoint_command_references"] == [
+        {
+            "entrypoint": "interactive_targeting",
+            "command": "browser-cli action missing-action --session-id <session_id>",
+            "command_name": "action.missing-action",
+        }
+    ]
+    assert catalog_check["fix"]["code"] == "upgrade_browser_cli_command_surface"
+    assert "browser-cli commands" in payload["repair_plan"]["commands"]
+    assert "api_connectivity" in payload["skipped_checks"]
 
 
 def test_doctor_smoke_session_creates_and_closes_temp_session(
@@ -12811,6 +15890,456 @@ def test_action_dom_snapshots_mask_sensitive_accessible_names(
     assert "element.value ||" not in expression
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "action.interactive-snapshot"
+
+
+def test_action_observe_collects_page_info_and_requested_surfaces(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expressions: list[str] = []
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert connect_url == "wss://example.test/devtools"
+        assert action == "eval"
+        expression = request.expression
+        expressions.append(expression)
+        if "body_text_length" in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "url": "https://example.test",
+                        "title": "Example",
+                        "ready_state": "complete",
+                    }
+                }
+            )
+        if 'kind: "interactive"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "interactive", "node_count": 1, "nodes": []}}
+            )
+        if 'kind: "dom-accessibility"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "dom-accessibility",
+                        "node_count": 2,
+                        "nodes": [],
+                    }
+                }
+            )
+        if 'kind: "text"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "text", "text_count": 3, "texts": []}}
+            )
+        if 'kind: "links"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "links", "link_count": 4, "links": []}}
+            )
+        if 'kind: "form"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "form", "field_count": 5, "fields": []}}
+            )
+        if 'kind: "outline"' in expression:
+            return SimpleNamespace(
+                result={"value": {"kind": "outline", "node_count": 6, "nodes": []}}
+            )
+        raise AssertionError("unexpected observe expression")
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "observe",
+                "--session-id",
+                "s1",
+                "--surface",
+                "all",
+                "--selector",
+                "main",
+                "--max-nodes",
+                "12",
+                "--max-chars",
+                "80",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert len(expressions) == 7
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.observe"
+    assert payload["result"]["kind"] == "observe"
+    assert payload["result"]["url"] == "https://example.test"
+    assert payload["result"]["ready_state"] == "complete"
+    assert payload["result"]["surface_count"] == 6
+    assert payload["result"]["surfaces"] == [
+        "interactive",
+        "accessibility",
+        "text",
+        "links",
+        "forms",
+        "outline",
+    ]
+    assert payload["result"]["page_info"]["title"] == "Example"
+    assert payload["result"]["snapshots"]["interactive"]["node_count"] == 1
+    assert payload["result"]["snapshots"]["accessibility"]["node_count"] == 2
+    assert payload["result"]["snapshots"]["text"]["text_count"] == 3
+    assert payload["result"]["snapshots"]["links"]["link_count"] == 4
+    assert payload["result"]["snapshots"]["forms"]["field_count"] == 5
+    assert payload["result"]["snapshots"]["outline"]["node_count"] == 6
+
+
+def test_action_extract_collects_bounded_content_surfaces(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    expressions: list[str] = []
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert connect_url == "wss://example.test/devtools"
+        assert action == "eval"
+        expression = request.expression
+        expressions.append(expression)
+        if "body_text_length" in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "url": "https://example.test",
+                        "title": "Example",
+                        "ready_state": "complete",
+                    }
+                }
+            )
+        if 'kind: "outline"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "outline",
+                        "heading_count": 1,
+                        "landmark_count": 1,
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "text"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "text",
+                        "text_count": 2,
+                        "texts": [],
+                        "truncated": True,
+                    }
+                }
+            )
+        if 'kind: "links"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "links",
+                        "link_count": 3,
+                        "links": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "tables"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "tables",
+                        "table_count": 4,
+                        "tables": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "lists"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "lists",
+                        "list_count": 5,
+                        "lists": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        if 'kind: "dom-accessibility"' in expression:
+            return SimpleNamespace(
+                result={
+                    "value": {
+                        "kind": "dom-accessibility",
+                        "node_count": 6,
+                        "nodes": [],
+                        "truncated": False,
+                    }
+                }
+            )
+        raise AssertionError("unexpected extract expression")
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "extract",
+                "--session-id",
+                "s1",
+                "--surface",
+                "all",
+                "--selector",
+                "main",
+                "--max-nodes",
+                "12",
+                "--max-chars",
+                "80",
+                "--max-rows",
+                "10",
+                "--max-cells",
+                "40",
+                "--max-items",
+                "20",
+                "--same-origin-only",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert len(expressions) == 7
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.extract"
+    assert payload["result"]["kind"] == "extract"
+    assert payload["result"]["url"] == "https://example.test"
+    assert payload["result"]["selector"] == "main"
+    assert payload["result"]["surface_count"] == 6
+    assert payload["result"]["surfaces"] == [
+        "outline",
+        "text",
+        "links",
+        "tables",
+        "lists",
+        "accessibility",
+    ]
+    assert payload["result"]["truncated"] is True
+    assert payload["result"]["truncated_surfaces"] == ["text"]
+    assert payload["result"]["page_info"]["title"] == "Example"
+    assert payload["result"]["extractions"]["outline"]["heading_count"] == 1
+    assert payload["result"]["extractions"]["text"]["text_count"] == 2
+    assert payload["result"]["extractions"]["links"]["link_count"] == 3
+    assert payload["result"]["extractions"]["tables"]["table_count"] == 4
+    assert payload["result"]["extractions"]["lists"]["list_count"] == 5
+    assert payload["result"]["extractions"]["accessibility"]["node_count"] == 6
+
+
+def test_action_act_routes_click_role_and_returns_plan(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert connect_url == "wss://example.test/devtools"
+        assert action == "eval"
+        observed["expression"] = request.expression
+        assert 'const requestedRole = "button";' in request.expression
+        assert 'const requestedName = "Submit";' in request.expression
+        return SimpleNamespace(
+            result={"value": {"found": True, "role_found": True, "clicked": True}}
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "click",
+                "--role",
+                "button",
+                "--name",
+                "Submit",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert "element.click()" in observed["expression"]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.act"
+    assert payload["result"]["kind"] == "act"
+    assert payload["result"]["intent"] == "click"
+    assert payload["result"]["target"]["selection"] == "role"
+    assert payload["result"]["target"]["role"] == "button"
+    assert payload["result"]["plan"]["selection"] == "role"
+    assert payload["result"]["plan"]["underlying_command"] == "action.click-role"
+    assert payload["result"]["plan"]["deterministic"] is True
+    assert payload["result"]["plan"]["custom_javascript"] is False
+    assert payload["result"]["action_result"]["clicked"] is True
+
+
+def test_action_act_routes_fill_label_value_without_exposing_value_in_plan(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert action == "eval"
+        assert 'const requestedLabel = "Email";' in request.expression
+        assert 'const text = "me@example.com";' in request.expression
+        return SimpleNamespace(
+            result={
+                "value": {
+                    "found": True,
+                    "filled": True,
+                    "text": "me@example.com",
+                    "text_masked": False,
+                }
+            }
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "fill",
+                "--label",
+                "Email",
+                "--value",
+                "me@example.com",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    result = payload["result"]
+    assert result["plan"]["underlying_command"] == "action.fill-label"
+    assert result["target"]["selection"] == "label"
+    assert result["target"]["value_present"] is True
+    assert "me@example.com" not in json.dumps(result["plan"])
+    assert result["action_result"]["filled"] is True
+
+
+def test_action_act_routes_press_without_target_to_press_key(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: "wss://example.test/devtools",
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert action == "eval"
+        assert 'const key = "Escape";' in request.expression
+        assert "meta_key" in request.expression
+        return SimpleNamespace(result={"value": {"pressed": True, "key": "Escape"}})
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "press",
+                "--key",
+                "Escape",
+                "--meta-key",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    result = payload["result"]
+    assert result["plan"]["underlying_command"] == "action.press-key"
+    assert result["plan"]["selection"] == "page"
+    assert result["target"]["selection"] == "page"
+    assert result["target"]["key"] == "Escape"
+    assert result["action_result"]["pressed"] is True
+
+
+def test_action_act_rejects_ambiguous_targets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "act",
+                "--session-id",
+                "s1",
+                "--kind",
+                "click",
+                "--role",
+                "button",
+                "--label",
+                "Submit",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.act"
+    assert payload["error"] == "argument_error"
+    assert payload["target_modes"] == ["role", "label"]
 
 
 @pytest.mark.parametrize(

@@ -66,20 +66,37 @@ surface. It returns `schema_version`, `selection_policy`, and `tasks`; with
 with `error=unknown_action_guide_task`, `available_tasks`, and a `fix` object
 with commands for inspecting valid guide tasks.
 `agent_references` describes optional Skill reference files such as
+`references/connect-from-codex.md`, `references/quickstart.md`,
 `references/skill-positioning.md`, `references/usable-status.md`, and
 `references/action-playbook.md`, with `content_command`, `package_resource`,
 `load_when`, `related_workflows`, `covers`, and `grep_patterns` so agents can
-load setup, positioning, or action guidance only when needed.
+load setup, positioning, site-implementation, or action guidance only when
+needed.
 `browser-cli reference list` returns packaged reference metadata;
 `browser-cli reference get --id skill_positioning` returns the installed Skill
 positioning and cloud-browser comparison reference,
+`browser-cli reference get --id connect_from_codex` returns the installed
+browser.lexmount.cn implementation guide,
+`browser-cli reference get --id quickstart` returns the installed minimum setup
+and first browser task path,
 `browser-cli reference get --id usable_status` returns the installed usable
 baseline/status reference, and `browser-cli reference get --id action_playbook`
 returns the installed action playbook as JSON.
 `agent_examples` describes packaged common-task examples and case files.
 `browser-cli example list` returns example metadata, and
-`browser-cli example get --id page_inspection_case` returns an installed example
-case file or playbook as JSON.
+`browser-cli example get --id setup_verification_playbook`,
+`browser-cli example get --id auth_lifecycle_playbook`,
+`browser-cli example get --id persistent_context_playbook`,
+`browser-cli example get --id page_inspection_case`,
+`browser-cli example get --id agent_primitives_case`,
+`browser-cli example get --id content_extraction_case`,
+`browser-cli example get --id browser_state_case`,
+`browser-cli example get --id navigation_flow_case`,
+`browser-cli example get --id file_upload_case`,
+`browser-cli example get --id checkout_flow_case`,
+`browser-cli example get --id interactive_targeting_case`, or
+`browser-cli example get --id page_diagnostics_case` returns an installed
+example case file or playbook as JSON.
 `agent_workflows` describes ordered setup, Connect from Codex site requirements,
 Connect from Codex auth, device-code auth, scoped token lifecycle, session
 recovery, one-off page, case file task, persistent login state, form
@@ -126,8 +143,11 @@ The session recovery workflow includes active session listing, single-session
 inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.
 The case file task workflow includes case command discovery, `case schema`
-inspection, action-specific schema lookup, `form_fill_case` example discovery,
-optional page/form `case scaffold` generation, case validation, and
+inspection, action-specific schema lookup, `form_fill_case`,
+`content_extraction_case`, `browser_state_case`, `navigation_flow_case`,
+`file_upload_case`, `checkout_flow_case`, `interactive_targeting_case`, and
+`page_diagnostics_case` example discovery, optional page/form/content/state/navigation/upload/checkout/interactive/diagnostic `case scaffold` generation, `scaffold_templates`,
+case validation, and
 `--close-created-session` case runs with `supported_actions`,
 `required_fields`, `next_commands`, `events_path`, `artifacts_dir`, `session`,
 and `steps` fields for repeatable smoke tests or regressions.
@@ -325,6 +345,19 @@ Default behavior:
 - `doctor` includes an `auth_export_env_contract` check so missing or invalid
   `auth export-env` safety metadata becomes an actionable warning instead of an
   agent-side guess.
+- `doctor` includes an `auth_login_contract` check so missing or invalid
+  `auth login` handoff metadata becomes actionable before agents guide setup.
+  It reports `required_handoff_fields`, `missing_handoff_fields`,
+  `required_setup_blocks`, `missing_setup_blocks`, `invalid_fields`,
+  `setup_block_ids`, `copyable_commands`, `local_env_names`, `verification`,
+  `secret_policy`, `connect_from_codex_url`, and `missing_runtime_auth`.
+- `doctor` includes a `device_code_contract` check so missing or invalid
+  `auth login --device-code` pending/fallback metadata becomes actionable. It
+  reports `missing_device_code_fields`,
+  `missing_required_device_code_endpoints`,
+  `missing_required_browser_site_support`, `fallback_handoff_setup_block_ids`,
+  `missing_fallback_setup_blocks`, `site_capability_status`, and
+  `missing_runtime_auth`.
 - `doctor` includes a `connect_from_codex_contract` check so missing
   browser-site capabilities, `browser_site_acceptance_tests`, token lifecycle,
   runtime auth, or device-code API contract fields become actionable warnings
@@ -352,8 +385,9 @@ Default behavior:
 - `case schema` returns `supported_actions`, `required_fields`, per-action
   `actions`, top-level target/session schema, optional `--names-only`, and
   action-specific output with `--action`. Supported case actions include the
-  original page actions plus semantic form and targeting actions such as
-  `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
+  original page actions plus agent primitives and semantic form/targeting
+  actions such as `observe`, `act`, `extract`, `fill`, `fill-label`,
+  `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
   `get-value-role`, `get-text-role`, `exists-role`, `select-label`,
   `select-role`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
   `scroll-into-view-role`, `form-snapshot`, `interactive-snapshot`, and
@@ -373,23 +407,31 @@ Default behavior:
   `missing_required_references`, `invalid_references`, and
   `checked_references`. Treat `status=warn` as a signal to run
   `browser-cli reference get --id skill_positioning`,
+  `browser-cli reference get --id connect_from_codex`,
+  `browser-cli reference get --id quickstart`,
   `browser-cli reference get --id usable_status`,
   `browser-cli reference get --id action_playbook`, or reinstall browser-cli
   before relying on the full Codex Skill setup or action guidance.
 - `doctor` reports an `agent_examples` check with `required_examples`,
   `missing_required_examples`, `invalid_examples`, and `checked_examples`.
   YAML case examples include `case_valid` and `case_errors`; treat
-  `status=warn` as a signal to run `browser-cli example list`, inspect the
+  `status=warn` as a signal to run `browser-cli example list`, inspect
+  `browser-cli example get --id setup_verification_playbook`,
+  `browser-cli example get --id auth_lifecycle_playbook`,
+  `browser-cli example get --id persistent_context_playbook`, or the
   invalid example, or reinstall browser-cli before relying on packaged
   playbooks or case examples.
 - `doctor` reports a `command_catalog` check with `required_commands`,
   `missing_required_commands`, `required_workflows`,
   `missing_required_workflows`, `required_workflow_steps`,
-  `missing_required_workflow_steps`, `schema_version`, `command_count`, and
-  `workflow_count` so agents can detect an installed CLI that is too old for
-  the Skill workflow or missing critical workflow steps such as cleanup. The
-  required command set covers setup commands, reference/example discovery, case
-  scaffold/validate/run, and core browser actions such as press, press-role,
+  `missing_required_workflow_steps`, `invalid_workflow_command_references`,
+  `required_agent_entrypoints`, `missing_required_agent_entrypoints`,
+  `invalid_agent_entrypoint_command_references`, `schema_version`,
+  `command_count`, `workflow_count`, and `agent_entrypoint_count` so agents can
+  detect an installed CLI that is too old for the Skill workflow, missing
+  critical workflow steps such as cleanup, or referencing commands absent from
+  the parser-backed catalog. The required command set covers setup commands, reference/example discovery, case
+  scaffold/validate/run, and core browser actions such as act, press, press-role,
   press-key,
   hover, hover-role, scroll, scroll-into-view, scroll-into-view-role, set-viewport,
   reload, go-back, go-forward,
@@ -399,7 +441,7 @@ Default behavior:
   wait-state, wait-state-role, query, inspect,
   get-attribute, get-attribute-role, wait-attribute, wait-attribute-role, bounding-box, bounding-box-role,
   select-option, select-label, select-role, check, uncheck, check-label,
-  check-role, uncheck-label, uncheck-role, click-label, click-text, click-role, click-index,
+  observe, act, extract, check-role, uncheck-label, uncheck-role, click-label, click-text, click-role, click-index,
   double-click, double-click-role, drag-role-to-role, drag-to, right-click, right-click-role,
   focus, focus-role, fill, fill-label, fill-role, get-value, get-value-role,
   wait-value, wait-value-role,
@@ -412,12 +454,22 @@ Default behavior:
   clear, clear-role, set-value, set-file-input, dispatch-event, submit,
   form-snapshot,
   accessibility snapshot, and interactive-only snapshot.
+- `doctor` reports an `action_guides` check with
+  `required_action_guides`, `missing_required_action_guides`,
+  `required_guide_fields`, `invalid_action_guides`,
+  `invalid_guide_command_references`, `schema_version`, and `guide_count` so
+  agents can detect an installed CLI whose task-specific guides are too old or
+  reference commands missing from the parser-backed catalog before custom
+  JavaScript.
 - `doctor` reports a `case_schema` check with `required_case_actions`,
-  `missing_required_case_actions`, `missing_supported_actions`,
-  `missing_action_schemas`, `invalid_action_schemas`, `schema_version`,
+  `required_case_scaffold_templates`, `missing_required_case_actions`,
+  `missing_supported_actions`, `missing_action_schemas`,
+  `missing_case_scaffold_templates`, `checked_case_scaffold_templates`,
+  `invalid_case_scaffold_templates`, `invalid_action_schemas`, `schema_version`,
   `action_count`, and `supported_action_count` so agents can detect an
-  installed CLI whose case runner is too old for repeatable semantic,
-  storage/cookie, content, and diagnostic smoke tests.
+  installed CLI whose case runner or packaged starter cases are too old for
+  repeatable semantic, storage/cookie, content, interactive-targeting, and
+  diagnostic smoke tests.
 - Credential-related `doctor` fixes and the aggregated `repair_plan` may report
   `connect_from_codex` with safe `/connect/codex` URLs, `open_command`,
   `device_code_url`, requested scopes, `site_capability_status`,

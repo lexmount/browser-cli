@@ -22,6 +22,15 @@ def test_packaged_examples_match_repo_examples() -> None:
     assert (PACKAGED_EXAMPLES / "agent-playbook.md").read_text() == (
         REPO_ROOT / "examples" / "agent-playbook.md"
     ).read_text()
+    assert (PACKAGED_EXAMPLES / "setup-verification-playbook.md").read_text() == (
+        REPO_ROOT / "examples" / "setup-verification-playbook.md"
+    ).read_text()
+    assert (PACKAGED_EXAMPLES / "auth-lifecycle-playbook.md").read_text() == (
+        REPO_ROOT / "examples" / "auth-lifecycle-playbook.md"
+    ).read_text()
+    assert (PACKAGED_EXAMPLES / "persistent-context-playbook.md").read_text() == (
+        REPO_ROOT / "examples" / "persistent-context-playbook.md"
+    ).read_text()
     for case_file in sorted((REPO_ROOT / "examples" / "cases").glob("*.yaml")):
         packaged_case = PACKAGED_EXAMPLES / "cases" / case_file.name
         assert packaged_case.read_text() == case_file.read_text()
@@ -35,6 +44,133 @@ def test_form_fill_case_uses_semantic_case_actions() -> None:
     assert "action: wait-text" in text
     assert "action: get-value-role" in text
     assert "action: type" not in text
+
+
+def test_interactive_targeting_case_uses_semantic_targets() -> None:
+    text = (
+        REPO_ROOT / "examples" / "cases" / "interactive-targeting.yaml"
+    ).read_text()
+
+    assert "action: interactive-snapshot" in text
+    assert "action: accessibility-snapshot" in text
+    assert "action: act" in text
+    assert "kind: click" in text
+    assert "action: wait-text" in text
+    assert "action: get-text" in text
+    assert "action: click\n" not in text
+
+
+def test_agent_primitives_case_uses_observe_act_extract() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "agent-primitives.yaml").read_text()
+
+    assert "name: agent-primitives" in text
+    assert "action: observe" in text
+    assert "action: act" in text
+    assert "kind: click" in text
+    assert "action: extract" in text
+    assert "action: wait-text" in text
+    assert "action: get-text" in text
+    assert "action: click\n" not in text
+
+
+def test_content_extraction_case_uses_bounded_extraction_actions() -> None:
+    text = (
+        REPO_ROOT / "examples" / "cases" / "content-extraction.yaml"
+    ).read_text()
+
+    assert "name: content-extraction" in text
+    assert "action: extract" in text
+    assert "- text" in text
+    assert "- links" in text
+    assert "- tables" in text
+    assert "- lists" in text
+    assert "action: text-snapshot" in text
+    assert "action: link-snapshot" in text
+    assert "action: table-snapshot" in text
+    assert "action: list-snapshot" in text
+    assert "action: get-text" in text
+    assert "action: screenshot" in text
+    assert "action: click\n" not in text
+
+
+def test_browser_state_case_uses_storage_and_cookie_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "browser-state.yaml").read_text()
+
+    assert "name: browser-state" in text
+    assert "action: storage-set" in text
+    assert "action: wait-storage" in text
+    assert "action: storage-get" in text
+    assert "action: cookie-set" in text
+    assert "action: wait-cookie" in text
+    assert "action: cookie-get" in text
+    assert "action: storage-remove" in text
+    assert "action: cookie-delete" in text
+    assert "action: eval" not in text
+
+
+def test_navigation_flow_case_uses_navigation_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "navigation-flow.yaml").read_text()
+
+    assert "name: navigation-flow" in text
+    assert "action: open-url" in text
+    assert "action: wait-load-state" in text
+    assert "action: wait-url" in text
+    assert "action: wait-title" in text
+    assert "action: go-back" in text
+    assert "action: go-forward" in text
+    assert "action: reload" in text
+    assert "action: page-info" in text
+    assert "action: screenshot" in text
+    assert "action: eval" not in text
+
+
+def test_file_upload_case_uses_inline_file_upload_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "file-upload.yaml").read_text()
+
+    assert "name: file-upload" in text
+    assert "action: form-snapshot" in text
+    assert "action: set-file-input" in text
+    assert "inline_files:" in text
+    assert "lexmount-upload.txt" in text
+    assert "action: submit" in text
+    assert "action: wait-text" in text
+    assert "action: get-text" in text
+    assert "action: screenshot" in text
+    assert "./upload.txt" not in text
+
+
+def test_checkout_flow_case_uses_multistep_form_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "checkout-flow.yaml").read_text()
+
+    assert "name: checkout-flow" in text
+    assert "Checkout fixture" in text
+    assert "action: form-snapshot" in text
+    assert "action: fill-label" in text
+    assert "action: select-label" in text
+    assert "action: check-label" in text
+    assert "action: wait-state-role" in text
+    assert "action: click-role" in text
+    assert "Order confirmed for Ada Lovelace via Express" in text
+    assert "action: screenshot" in text
+    assert "action: eval" in text
+
+
+def test_page_diagnostics_case_uses_console_and_network_actions() -> None:
+    text = (REPO_ROOT / "examples" / "cases" / "page-diagnostics.yaml").read_text()
+
+    assert "name: page-diagnostics" in text
+    assert "action: console-snapshot" in text
+    assert "action: network-snapshot" in text
+    assert "install_only: true" in text
+    assert "action: wait-console" in text
+    assert "source: console" in text
+    assert "level: error" in text
+    assert "action: wait-network" in text
+    assert "source: fetch" in text
+    assert "diagnostic-network-ok" in text
+    assert "action: eval" in text
+    assert "action: screenshot" in text
+    assert "action: click\n" not in text
 
 
 def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
@@ -51,12 +187,35 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow device_code_auth" in text
     assert "browser-cli commands --workflow scoped_token_lifecycle" in text
     assert "browser-cli commands --workflow session_recovery" in text
+    assert "browser-cli commands --workflow first_browser_task" in text
+    assert "browser-cli commands --workflow agent_browser_primitives" in text
     assert "browser-cli commands --workflow case_file_task" in text
     assert "browser-cli case schema" in text
     assert "browser-cli case schema --action fill-label" in text
+    assert "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
+    assert "browser-cli example get --id agent_primitives_case --metadata-only" in text
     assert "browser-cli example get --id form_fill_case --metadata-only" in text
+    assert "browser-cli example get --id content_extraction_case --metadata-only" in text
+    assert "browser-cli example get --id browser_state_case --metadata-only" in text
+    assert "browser-cli example get --id navigation_flow_case --metadata-only" in text
+    assert "browser-cli example get --id file_upload_case --metadata-only" in text
+    assert "browser-cli example get --id checkout_flow_case --metadata-only" in text
     assert "browser-cli case scaffold --template page-inspection" in text
+    assert "browser-cli case scaffold --template agent-primitives" in text
     assert "browser-cli case scaffold --template form-fill" in text
+    assert "browser-cli case scaffold --template content-extraction" in text
+    assert "browser-cli case scaffold --template browser-state" in text
+    assert "browser-cli case scaffold --template navigation-flow" in text
+    assert "browser-cli case scaffold --template file-upload" in text
+    assert "browser-cli case scaffold --template checkout-flow" in text
+    assert "browser-cli case scaffold --template interactive-targeting" in text
+    assert "browser-cli case scaffold --template page-diagnostics" in text
+    assert "browser-cli commands --workflow first_browser_task" in text
+    assert "browser-cli commands --workflow agent_browser_primitives" in text
+    assert "browser-cli action observe --session-id <session_id>" in text
+    assert "browser-cli action act --session-id <session_id>" in text
+    assert "browser-cli action extract --session-id <session_id>" in text
     assert "browser-cli commands --workflow one_off_page_task" in text
     assert "browser-cli commands --workflow persistent_login_state" in text
     assert "browser-cli commands --workflow form_interaction" in text
@@ -94,7 +253,16 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli reference get --id usable_status --metadata-only" in text
     assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli example list" in text
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
     assert "browser-cli example get --id page_inspection_case --metadata-only" in text
+    assert "browser-cli example get --id navigation_flow_case --metadata-only" in text
+    assert "browser-cli example get --id file_upload_case --metadata-only" in text
+    assert "browser-cli example get --id checkout_flow_case --metadata-only" in text
+    assert (
+        "browser-cli example get --id interactive_targeting_case --metadata-only"
+        in text
+    )
+    assert "browser-cli example get --id page_diagnostics_case --metadata-only" in text
     assert "browser-cli commands --group action" in text
     assert "browser-cli commands --group action --names-only" in text
     assert "action guide --task <task>" in text
@@ -140,6 +308,59 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
         '\'{"purpose":"login"}\' --selection newest --create-if-missing --dry-run'
     ) in text
     assert "browser-cli context status --context-id <context_id>" in text
+
+
+def test_auth_lifecycle_playbook_guides_secret_safe_auth() -> None:
+    text = (REPO_ROOT / "examples" / "auth-lifecycle-playbook.md").read_text()
+
+    assert "Auth Lifecycle Playbook" in text
+    assert "browser-cli commands --workflow connect_from_codex_auth" in text
+    assert "browser-cli commands --workflow device_code_auth" in text
+    assert "browser-cli commands --workflow scoped_token_lifecycle" in text
+    assert "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
+    assert "browser-cli auth status" in text
+    assert "browser-cli auth scopes" in text
+    assert "browser-cli auth token-info --required-scope browser.actions:run" in text
+    assert "runtime_auth.bearer_runtime.required_support" in text
+    assert "runtime_auth.usable=false" in text
+    assert "browser-cli auth login --device-code" in text
+    assert "browser-cli auth export-env --from-current" in text
+    assert "safe_to_paste_in_chat" in text
+    assert "local_shell_only" in text
+    assert "contains_secret_values" in text
+    assert "browser-cli auth refresh --credentials-file" in text
+    assert "browser-cli auth logout --credentials-file" in text
+    assert "remote_refresh.response_payload_source" in text
+    assert "remote_revoke.token_type_hint" in text
+    assert "LEXMOUNT_BROWSER_TOKEN_BASE_URL" in text
+    assert "browser-cli doctor --json" in text
+    assert "ready_for_browser_actions=true" in text
+    assert "browser.lexmount.cn Requirements" in text
+    assert "POST /api/auth/device/code" in text
+    assert "POST /api/auth/token/refresh" in text
+    assert "POST /api/auth/token/revoke" in text
+    assert "real secrets are local" in text
+
+
+def test_setup_verification_playbook_guides_safe_setup_before_actions() -> None:
+    text = (REPO_ROOT / "examples" / "setup-verification-playbook.md").read_text()
+
+    assert "Inspect The Installed CLI" in text
+    assert "Check Auth Without Revealing Secrets" in text
+    assert "Guide Manual Env Setup" in text
+    assert "Handle Device-Code Requests" in text
+    assert "Verify Readiness" in text
+    assert "browser-cli reference get --id quickstart" in text
+    assert "browser-cli reference get --id usable_status" in text
+    assert "browser-cli auth status" in text
+    assert "browser-cli auth login" in text
+    assert "browser-cli auth export-env" in text
+    assert "browser-cli auth login --device-code" in text
+    assert "browser-cli doctor --json" in text
+    assert "browser-cli doctor --smoke-session" in text
+    assert "repair_plan.commands" in text
+    assert "ready_for_browser_actions=true" in text
+    assert "browser-cli session close --session-id <session_id>" in text
     assert "browser-cli session create --context-metadata-json" in text
     assert "`availability` is `locked` or `unavailable`" in text
     assert "selection_summary.recommended_next_action" in text
@@ -192,3 +413,19 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "interactive-snapshot" in text
     assert "context resolve" not in text
     assert "browser-cli direct-url" not in text
+
+
+def test_persistent_context_playbook_guides_reuse_decisions() -> None:
+    text = (REPO_ROOT / "examples" / "persistent-context-playbook.md").read_text()
+
+    assert "browser-cli commands --workflow persistent_login_state" in text
+    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
+    assert "browser-cli context pick" in text
+    assert "--dry-run" in text
+    assert "availability=available" in text
+    assert "availability=locked" in text
+    assert "metadata_values_redacted" in text
+    assert "context_reuse.selected" in text
+    assert "context-mode read_write" in text
+    assert "context-mode read_only" in text
+    assert "browser-cli session close --session-id <session_id>" in text

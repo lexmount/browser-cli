@@ -126,10 +126,21 @@ def test_commands_catalog_output_contract(
     assert payload["agent_references"]["usable_status"]["content_command"] == (
         "browser-cli reference get --id usable_status"
     )
+    assert payload["agent_references"]["connect_from_codex"]["path"] == (
+        "references/connect-from-codex.md"
+    )
+    assert payload["agent_references"]["connect_from_codex"]["content_command"] == (
+        "browser-cli reference get --id connect_from_codex"
+    )
     assert payload["agent_examples"]["page_inspection_case"]["content_command"] == (
         "browser-cli example get --id page_inspection_case"
     )
+    assert payload["agent_examples"]["page_diagnostics_case"]["format"] == "yaml"
     assert payload["agent_examples"]["form_fill_case"]["format"] == "yaml"
+    assert payload["agent_examples"]["navigation_flow_case"]["format"] == "yaml"
+    assert payload["agent_examples"]["file_upload_case"]["format"] == "yaml"
+    assert payload["agent_examples"]["checkout_flow_case"]["format"] == "yaml"
+    assert payload["agent_examples"]["interactive_targeting_case"]["format"] == "yaml"
     assert all(command["group"] == "action" for command in payload["commands"])
     open_url = next(
         command
@@ -219,11 +230,25 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`content_command`" in text
     assert "`package_resource`" in text
     assert "`browser-cli reference list`" in text
+    assert "`browser-cli reference get --id connect_from_codex`" in text
+    assert "`browser-cli reference get --id quickstart`" in text
     assert "`browser-cli reference get --id usable_status`" in text
     assert "`browser-cli reference get --id action_playbook`" in text
     assert "`agent_examples`" in text
     assert "`browser-cli example list`" in text
+    assert "`browser-cli example get --id setup_verification_playbook`" in text
+    assert "`browser-cli example get --id auth_lifecycle_playbook`" in text
+    assert "`browser-cli example get --id persistent_context_playbook`" in text
     assert "`browser-cli example get --id page_inspection_case`" in text
+    assert "`browser-cli example get --id agent_primitives_case`" in text
+    assert "`browser-cli example get --id content_extraction_case`" in text
+    assert "`browser-cli example get --id browser_state_case`" in text
+    assert "`browser-cli example get --id navigation_flow_case`" in text
+    assert "`browser-cli example get --id file_upload_case`" in text
+    assert "`browser-cli example get --id checkout_flow_case`" in text
+    assert "`browser-cli example get --id interactive_targeting_case`" in text
+    assert "`browser-cli example get --id page_diagnostics_case`" in text
+    assert "`scaffold_templates`" in text
     assert "`load_when`" in text
     assert "`related_workflows`" in text
     assert "`grep_patterns`" in text
@@ -254,6 +279,10 @@ def test_json_contract_documents_agent_workflows() -> None:
     assert "`supported_actions`" in text
     assert "`required_fields`" in text
     assert "`case scaffold`" in text
+    assert (
+        "page/form/content/state/navigation/upload/checkout/interactive/diagnostic"
+        in text
+    )
     assert "`next_commands`" in text
     assert "`events_path`" in text
     assert "`artifacts_dir`" in text
@@ -311,7 +340,29 @@ def test_json_contract_documents_doctor_required_workflows() -> None:
     assert "`missing_required_workflows`" in text
     assert "`required_workflow_steps`" in text
     assert "`missing_required_workflow_steps`" in text
+    assert "`invalid_workflow_command_references`" in text
+    assert "`required_agent_entrypoints`" in text
+    assert "`missing_required_agent_entrypoints`" in text
+    assert "`invalid_agent_entrypoint_command_references`" in text
+    assert "`agent_entrypoint_count`" in text
     assert "`workflow_count`" in text
+    assert "`action_guides`" in text
+    assert "`required_action_guides`" in text
+    assert "`missing_required_action_guides`" in text
+    assert "`required_guide_fields`" in text
+    assert "`invalid_action_guides`" in text
+    assert "`invalid_guide_command_references`" in text
+    assert "`required_case_actions`" in text
+    assert "`required_case_scaffold_templates`" in text
+    assert "`missing_case_scaffold_templates`" in text
+    assert "`checked_case_scaffold_templates`" in text
+    assert "`invalid_case_scaffold_templates`" in text
+    assert "`auth_login_contract`" in text
+    assert "`device_code_contract`" in text
+    assert "`missing_handoff_fields`" in text
+    assert "`missing_setup_blocks`" in text
+    assert "`missing_required_device_code_endpoints`" in text
+    assert "`missing_required_browser_site_support`" in text
 
 
 def test_json_contract_documents_doctor_connect_from_codex_repair() -> None:

@@ -17,6 +17,8 @@ def test_skill_prefers_cli_workflow_over_custom_playwright() -> None:
     assert "Prefer CLI commands and JSON output" in text
     assert "browser-cli commands --group action" in text
     assert "browser-cli action guide --task <task>" in text
+    assert "browser-cli skill status" in text
+    assert "browser-cli skill install --force" in text
     assert "before writing custom JavaScript" in text
     assert "ad hoc Playwright scripts" in text
     assert "Write custom Playwright only when the CLI cannot express the task" in text
@@ -29,16 +31,32 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "## Use When" in text
     assert "## Supported Operations" in text
     assert "Lexmount remote browser" in text
+    assert "Start every new browser task with" in text
+    assert "browser-cli reference get --id connect_from_codex" in text
+    assert "browser-cli reference get --id quickstart" in text
     assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli action guide --task <task>" in text
+    assert "Setup and auth" in text
     assert "Sessions: create, list, get, keepalive, close" in text
     assert "Contexts: create, list, get, status, pick, delete" in text
+    assert "Navigation and readiness" in text
     assert "Inspection and extraction" in text
     assert "click-label, click-text, click-role" in text
     assert "interactive-only" in text
+    assert "Repeatable automation" in text
+    assert "observe/act/extract planning" in text
+    assert "browser-cli action observe --session-id <session_id>" in text
+    assert "browser-cli action act --session-id <session_id>" in text
+    assert "browser-cli action extract --session-id <session_id>" in text
+    assert "browser-cli commands --workflow agent_browser_primitives" in text
+    assert "dialogs/frames" in text
+    assert "file uploads" in text
     assert "Do not use this Skill for local desktop app control" in normalized
+    assert "already-open local browser tabs" in normalized
     assert "Chrome" not in text
     assert "chrome" not in text
+    assert "Chromium" not in text
+    assert "chromium" not in text
 
 
 def test_skill_guides_safe_one_off_sessions() -> None:
