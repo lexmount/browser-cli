@@ -25,6 +25,9 @@ def test_packaged_examples_match_repo_examples() -> None:
     assert (PACKAGED_EXAMPLES / "setup-verification-playbook.md").read_text() == (
         REPO_ROOT / "examples" / "setup-verification-playbook.md"
     ).read_text()
+    assert (PACKAGED_EXAMPLES / "auth-lifecycle-playbook.md").read_text() == (
+        REPO_ROOT / "examples" / "auth-lifecycle-playbook.md"
+    ).read_text()
     assert (PACKAGED_EXAMPLES / "persistent-context-playbook.md").read_text() == (
         REPO_ROOT / "examples" / "persistent-context-playbook.md"
     ).read_text()
@@ -107,6 +110,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow case_file_task" in text
     assert "browser-cli case schema" in text
     assert "browser-cli case schema --action fill-label" in text
+    assert "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
     assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
     assert "browser-cli example get --id agent_primitives_case --metadata-only" in text
     assert "browser-cli example get --id form_fill_case --metadata-only" in text
@@ -209,6 +213,38 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
         '\'{"purpose":"login"}\' --selection newest --create-if-missing --dry-run'
     ) in text
     assert "browser-cli context status --context-id <context_id>" in text
+
+
+def test_auth_lifecycle_playbook_guides_secret_safe_auth() -> None:
+    text = (REPO_ROOT / "examples" / "auth-lifecycle-playbook.md").read_text()
+
+    assert "Auth Lifecycle Playbook" in text
+    assert "browser-cli commands --workflow connect_from_codex_auth" in text
+    assert "browser-cli commands --workflow device_code_auth" in text
+    assert "browser-cli commands --workflow scoped_token_lifecycle" in text
+    assert "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
+    assert "browser-cli auth status" in text
+    assert "browser-cli auth scopes" in text
+    assert "browser-cli auth token-info --required-scope browser.actions:run" in text
+    assert "runtime_auth.bearer_runtime.required_support" in text
+    assert "runtime_auth.usable=false" in text
+    assert "browser-cli auth login --device-code" in text
+    assert "browser-cli auth export-env --from-current" in text
+    assert "safe_to_paste_in_chat" in text
+    assert "local_shell_only" in text
+    assert "contains_secret_values" in text
+    assert "browser-cli auth refresh --credentials-file" in text
+    assert "browser-cli auth logout --credentials-file" in text
+    assert "remote_refresh.response_payload_source" in text
+    assert "remote_revoke.token_type_hint" in text
+    assert "LEXMOUNT_BROWSER_TOKEN_BASE_URL" in text
+    assert "browser-cli doctor --json" in text
+    assert "ready_for_browser_actions=true" in text
+    assert "browser.lexmount.cn Requirements" in text
+    assert "POST /api/auth/device/code" in text
+    assert "POST /api/auth/token/refresh" in text
+    assert "POST /api/auth/token/revoke" in text
+    assert "real secrets are local" in text
 
 
 def test_setup_verification_playbook_guides_safe_setup_before_actions() -> None:

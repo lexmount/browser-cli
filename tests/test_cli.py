@@ -347,6 +347,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "first_browser_task"
         in examples["setup_verification_playbook"]["related_workflows"]
     )
+    assert examples["auth_lifecycle_playbook"]["format"] == "markdown"
+    assert (
+        "scoped_token_lifecycle"
+        in examples["auth_lifecycle_playbook"]["related_workflows"]
+    )
     assert examples["persistent_context_playbook"]["format"] == "markdown"
     assert (
         "persistent_login_state"
@@ -412,6 +417,14 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert (
         "browser-cli example get --id setup_verification_playbook"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
+        in payload["agent_entrypoints"]["setup"]
+    )
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook"
         in payload["agent_entrypoints"]["setup"]
     )
     assert "browser-cli skill status" in payload["agent_entrypoints"]["setup"]
@@ -510,6 +523,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["device_code_auth"]
     )
     assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
+        in payload["agent_entrypoints"]["device_code_auth"]
+    )
+    assert (
         "browser-cli auth scopes --include-site-contract"
         in payload["agent_entrypoints"]["connect_from_codex_site_requirements"]
     )
@@ -519,6 +536,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert (
         "browser-cli auth token-info --required-scope browser.actions:run"
+        in payload["agent_entrypoints"]["scoped_token_lifecycle"]
+    )
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
     )
     assert (
@@ -3472,10 +3493,11 @@ def test_example_list_returns_packaged_agent_examples(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 8
+    assert payload["example_count"] == 9
     assert sorted(payload["examples"]) == [
         "agent_playbook",
         "agent_primitives_case",
+        "auth_lifecycle_playbook",
         "form_fill_case",
         "interactive_targeting_case",
         "page_diagnostics_case",
@@ -3506,6 +3528,18 @@ def test_example_list_returns_packaged_agent_examples(
     assert "browser-cli doctor --json" in setup["grep_patterns"]
     assert "browser-cli auth login --device-code" in setup["grep_patterns"]
     assert "repair_plan.commands" in setup["grep_patterns"]
+    auth = payload["examples"]["auth_lifecycle_playbook"]
+    assert auth["id"] == "auth_lifecycle_playbook"
+    assert auth["path"] == "examples/auth-lifecycle-playbook.md"
+    assert auth["content_command"] == (
+        "browser-cli example get --id auth_lifecycle_playbook"
+    )
+    assert auth["package_resource"] == (
+        "browser_cli.agent_examples:auth-lifecycle-playbook.md"
+    )
+    assert "connect_from_codex_auth" in auth["related_workflows"]
+    assert "scoped_token_lifecycle" in auth["related_workflows"]
+    assert "safe_to_paste_in_chat" in auth["grep_patterns"]
     persistent = payload["examples"]["persistent_context_playbook"]
     assert persistent["id"] == "persistent_context_playbook"
     assert persistent["path"] == "examples/persistent-context-playbook.md"
@@ -3544,10 +3578,11 @@ def test_example_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "example.list"
-    assert payload["example_count"] == 8
+    assert payload["example_count"] == 9
     assert payload["examples"] == [
         "agent_playbook",
         "agent_primitives_case",
+        "auth_lifecycle_playbook",
         "form_fill_case",
         "interactive_targeting_case",
         "page_diagnostics_case",
@@ -3655,6 +3690,24 @@ def test_example_get_returns_setup_verification_playbook(
     assert "repair_plan.commands" in payload["content"]
 
 
+def test_example_get_returns_auth_lifecycle_playbook(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["example", "get", "--id", "auth_lifecycle_playbook"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "example.get"
+    assert payload["example_id"] == "auth_lifecycle_playbook"
+    assert payload["content_format"] == "markdown"
+    assert "# Auth Lifecycle Playbook" in payload["content"]
+    assert "browser-cli auth login --device-code" in payload["content"]
+    assert "browser-cli auth refresh --credentials-file" in payload["content"]
+    assert "browser.lexmount.cn Requirements" in payload["content"]
+
+
 def test_example_get_returns_persistent_context_playbook(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -3707,6 +3760,7 @@ def test_example_get_fails_unknown_example_as_json(
     assert payload["available_examples"] == [
         "agent_playbook",
         "agent_primitives_case",
+        "auth_lifecycle_playbook",
         "form_fill_case",
         "interactive_targeting_case",
         "page_diagnostics_case",
@@ -7162,10 +7216,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert skill_positioning_reference["content_length"] > 1000
     assert skill_positioning_reference["missing_patterns"] == []
     assert checks["agent_examples"]["status"] == "pass"
-    assert checks["agent_examples"]["example_count"] == 8
+    assert checks["agent_examples"]["example_count"] == 9
     assert checks["agent_examples"]["required_examples"] == [
         "agent_playbook",
         "setup_verification_playbook",
+        "auth_lifecycle_playbook",
         "persistent_context_playbook",
         "page_inspection_case",
         "agent_primitives_case",
@@ -7190,6 +7245,12 @@ def test_doctor_checks_install_env_direct_url_and_api(
     )
     assert checked_examples["setup_verification_playbook"]["content_length"] > 1000
     assert checked_examples["setup_verification_playbook"]["missing_patterns"] == []
+    assert checked_examples["auth_lifecycle_playbook"]["status"] == "pass"
+    assert checked_examples["auth_lifecycle_playbook"]["content_command"] == (
+        "browser-cli example get --id auth_lifecycle_playbook"
+    )
+    assert checked_examples["auth_lifecycle_playbook"]["content_length"] > 1000
+    assert checked_examples["auth_lifecycle_playbook"]["missing_patterns"] == []
     assert checked_examples["persistent_context_playbook"]["status"] == "pass"
     assert checked_examples["persistent_context_playbook"]["content_command"] == (
         "browser-cli example get --id persistent_context_playbook"
@@ -8296,6 +8357,7 @@ steps:
     assert examples["required_examples"] == [
         "agent_playbook",
         "setup_verification_playbook",
+        "auth_lifecycle_playbook",
         "persistent_context_playbook",
         "page_inspection_case",
         "agent_primitives_case",

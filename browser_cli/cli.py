@@ -471,6 +471,7 @@ DOCTOR_REQUIRED_REFERENCES = (
 DOCTOR_REQUIRED_EXAMPLES = (
     "agent_playbook",
     "setup_verification_playbook",
+    "auth_lifecycle_playbook",
     "persistent_context_playbook",
     "page_inspection_case",
     "agent_primitives_case",
@@ -500,6 +501,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "quickstart",
     "reference get",
     "setup_verification_playbook",
+    "auth_lifecycle_playbook",
     "example get",
     "action guide",
     "action observe",
@@ -1560,6 +1562,45 @@ def _agent_examples() -> dict[str, Any]:
                 "repair_plan.commands",
             ],
         },
+        "auth_lifecycle_playbook": {
+            "path": "examples/auth-lifecycle-playbook.md",
+            "content_command": (
+                "browser-cli example get --id auth_lifecycle_playbook"
+            ),
+            "metadata_command": "browser-cli example list",
+            "package_resource": (
+                "browser_cli.agent_examples:auth-lifecycle-playbook.md"
+            ),
+            "format": "markdown",
+            "purpose": (
+                "Show how an agent should guide Connect from Codex auth, "
+                "device-code fallback, safe export-env handling, scoped token "
+                "refresh/logout, doctor verification, and browser.lexmount.cn "
+                "site requirements without exposing secrets."
+            ),
+            "related_workflows": [
+                "connect_from_codex_auth",
+                "connect_from_codex_site_requirements",
+                "device_code_auth",
+                "scoped_token_lifecycle",
+                "setup_and_verify",
+            ],
+            "load_when": [
+                "Guiding a user from browser.lexmount.cn authorization to local browser-cli readiness.",
+                "Explaining scoped token refresh, revoke, or runtime-auth limitations.",
+                "Reviewing what browser.lexmount.cn must expose for Connect from Codex.",
+            ],
+            "grep_patterns": [
+                "Auth Lifecycle Playbook",
+                "Choose A Secret-Safe Login Path",
+                "Handle Device-Code Login",
+                "Export Local Env Commands Safely",
+                "Refresh Or Remove Saved Tokens",
+                "browser.lexmount.cn Requirements",
+                "runtime_auth.usable=false",
+                "safe_to_paste_in_chat",
+            ],
+        },
         "persistent_context_playbook": {
             "path": "examples/persistent-context-playbook.md",
             "content_command": (
@@ -1997,6 +2038,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli reference get --id usable_status",
                 "browser-cli example get --id setup_verification_playbook --metadata-only",
                 "browser-cli example get --id setup_verification_playbook",
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
                 "browser-cli skill status",
                 "browser-cli skill install --force",
                 "browser-cli auth status",
@@ -2020,6 +2063,8 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
             ],
             "connect_from_codex_auth": [
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
                 "browser-cli auth status",
                 "browser-cli auth scopes",
                 "browser-cli auth connect-requirements",
@@ -2029,6 +2074,8 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
             ],
             "device_code_auth": [
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth login --device-code",
                 "browser-cli auth login",
@@ -2037,6 +2084,8 @@ def _command_catalog() -> dict[str, Any]:
                 AGENT_DOCTOR_COMMAND,
             ],
             "scoped_token_lifecycle": [
+                "browser-cli example get --id auth_lifecycle_playbook --metadata-only",
+                "browser-cli example get --id auth_lifecycle_playbook",
                 "browser-cli auth status",
                 "browser-cli auth scopes --scope browser:actions",
                 "browser-cli auth token-info --required-scope browser.actions:run",

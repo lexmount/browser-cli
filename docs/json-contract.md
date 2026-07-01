@@ -85,6 +85,7 @@ returns the installed action playbook as JSON.
 `agent_examples` describes packaged common-task examples and case files.
 `browser-cli example list` returns example metadata, and
 `browser-cli example get --id setup_verification_playbook`,
+`browser-cli example get --id auth_lifecycle_playbook`,
 `browser-cli example get --id persistent_context_playbook`,
 `browser-cli example get --id page_inspection_case`,
 `browser-cli example get --id agent_primitives_case`,
@@ -410,6 +411,7 @@ Default behavior:
   YAML case examples include `case_valid` and `case_errors`; treat
   `status=warn` as a signal to run `browser-cli example list`, inspect
   `browser-cli example get --id setup_verification_playbook`,
+  `browser-cli example get --id auth_lifecycle_playbook`,
   `browser-cli example get --id persistent_context_playbook`, or the
   invalid example, or reinstall browser-cli before relying on packaged
   playbooks or case examples.

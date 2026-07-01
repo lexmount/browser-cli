@@ -70,6 +70,10 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
         in prompt
     )
     assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
+        in prompt
+    )
+    assert (
         "browser-cli example get --id persistent_context_playbook --metadata-only"
         in prompt
     )

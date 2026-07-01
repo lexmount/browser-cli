@@ -148,6 +148,7 @@ CLI for you:
    browser-cli example list
    browser-cli example get --id agent_playbook --metadata-only
    browser-cli example get --id setup_verification_playbook --metadata-only
+   browser-cli example get --id auth_lifecycle_playbook --metadata-only
    browser-cli example get --id persistent_context_playbook --metadata-only
    browser-cli example get --id page_inspection_case
    browser-cli example get --id agent_primitives_case
@@ -436,6 +437,7 @@ browser-cli commands --workflow page_diagnostics
 browser-cli reference list
 browser-cli reference get --id action_playbook --metadata-only
 browser-cli example list
+browser-cli example get --id auth_lifecycle_playbook --metadata-only
 browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id page_inspection_case --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
@@ -920,6 +922,7 @@ reviewing `stale_files` or `missing_files`.
 markdown content from an installed CLI. `agent_examples` points to packaged
 playbook and case-file examples, readable with `browser-cli example list` and
 `browser-cli example get --id setup_verification_playbook`,
+`browser-cli example get --id auth_lifecycle_playbook`,
 `browser-cli example get --id persistent_context_playbook`,
 `browser-cli example get --id page_inspection_case`,
 `browser-cli example get --id form_fill_case`,
@@ -1042,6 +1045,7 @@ browser-cli case schema --action observe
 browser-cli case schema --action act
 browser-cli case schema --action extract
 browser-cli case schema --action fill-label
+browser-cli example get --id auth_lifecycle_playbook --metadata-only
 browser-cli example get --id persistent_context_playbook --metadata-only
 browser-cli example get --id agent_primitives_case --metadata-only
 browser-cli example get --id form_fill_case --metadata-only
