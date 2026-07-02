@@ -1,8 +1,8 @@
-# browser-cli Quickstart
+# Browser CLI Quickstart
 
 This guide is the shortest path to a usable `browser-cli` install for Codex or
-another agent. The current MVP uses `LEXMOUNT_API_KEY` and
-`LEXMOUNT_PROJECT_ID` from your local shell. Do not paste real secrets into
+another agent. The preferred setup is `browser-cli auth login --open`, which
+uses a local loopback callback and PKCE exchange. Do not paste real secrets into
 chat, issues, commits, or PR descriptions.
 
 ## Install
@@ -40,19 +40,22 @@ browser-cli skill install --force
 
 ## Configure Credentials
 
-Open [browser.lexmount.cn](https://browser.lexmount.cn), choose the project you
-want Codex to control, and copy an API key plus Project ID. Put the real values
-only in your local terminal:
+Run the Connect from Codex flow. The CLI opens browser.lexmount.cn, listens on a
+local `127.0.0.1` callback, exchanges a one-time code with PKCE, and saves local
+credentials without printing the API key:
 
 ```bash
-export LEXMOUNT_API_KEY="<api-key-from-browser.lexmount.cn>"
-export LEXMOUNT_PROJECT_ID="<project-id-from-browser.lexmount.cn>"
+browser-cli auth login --open
+browser-cli auth status
+browser-cli doctor --json
 ```
 
 China users normally do not need `LEXMOUNT_BASE_URL`; the default API endpoint
 is `https://api.lexmount.cn`.
 
-To generate a safe local-shell template:
+If the browser flow is unavailable, use browser.lexmount.cn to choose the
+project and create an API key, then generate a safe local-shell template for
+`LEXMOUNT_API_KEY` and `LEXMOUNT_PROJECT_ID`:
 
 ```bash
 browser-cli auth export-env

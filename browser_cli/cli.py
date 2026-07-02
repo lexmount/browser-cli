@@ -12,10 +12,12 @@ import re
 import shutil
 import shlex
 import sys
+import threading
 import time
 import webbrowser
 from collections import Counter
 from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources as importlib_resources
 from importlib.metadata import PackageNotFoundError, version as distribution_version
 from pathlib import Path
@@ -63,12 +65,15 @@ from lex_browser_runtime.browser.models import (
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
 LEXMOUNT_CODEX_CONNECT_URL = f"{LEXMOUNT_CONSOLE_URL}/connect/codex"
+CODEX_CONNECT_BASE_URL_ENV = "LEXMOUNT_BROWSER_CONNECT_BASE_URL"
 DEFAULT_CODEX_CONNECT_SCOPES = (
     "browser:sessions",
     "browser:contexts",
     "browser:actions",
 )
 DEFAULT_CODEX_CONNECT_EXPIRES_IN = "7d"
+DEFAULT_CODEX_CONNECT_CALLBACK_TIMEOUT_SECONDS = 300
+DEFAULT_CODEX_CONNECT_HTTP_TIMEOUT_SECONDS = 15
 AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
 AGENT_USABLE_STATUS_METADATA_COMMAND = (
     "browser-cli reference get --id usable_status --metadata-only"
@@ -6348,13 +6353,13 @@ def _doctor_auth_login_contract_check() -> dict[str, Any]:
     expected_query = {
         "source": "browser-cli",
         "intent": "agent-browser-control",
-        "response": "env",
+        "response": "code",
         "expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
     }
     for key, expected in expected_query.items():
         if query_values.get(key) != expected:
             invalid_fields.append(f"connect_from_codex_url.{key}")
-    if scope_values != list(DEFAULT_CODEX_CONNECT_SCOPES):
+    if scope_values != [" ".join(DEFAULT_CODEX_CONNECT_SCOPES)]:
         invalid_fields.append("connect_from_codex_url.scope")
 
     setup_blocks = handoff.get("setup_blocks")
@@ -6614,7 +6619,7 @@ def _doctor_device_code_contract_check() -> dict[str, Any]:
     for key, expected in expected_query.items():
         if query_values.get(key) != expected:
             invalid_fields.append(f"connect_from_codex_url.{key}")
-    if scope_values != list(DEFAULT_CODEX_CONNECT_SCOPES):
+    if scope_values != [" ".join(DEFAULT_CODEX_CONNECT_SCOPES)]:
         invalid_fields.append("connect_from_codex_url.scope")
 
     device_code_endpoints = device_code.get("required_endpoints")
@@ -8238,6 +8243,19 @@ def _device_code_endpoint(base_url: str, path: str) -> str:
     return urljoin(f"{base_url.rstrip('/')}/", path.lstrip("/"))
 
 
+def _codex_connect_base_url(raw_url: str | None = None) -> tuple[str, str]:
+    if raw_url:
+        return raw_url.rstrip("/"), "argument"
+    env_url = os.environ.get(CODEX_CONNECT_BASE_URL_ENV)
+    if env_url:
+        return env_url.rstrip("/"), "env"
+    return LEXMOUNT_CONSOLE_URL, "default"
+
+
+def _codex_connect_endpoint(base_url: str, path: str) -> str:
+    return urljoin(f"{base_url.rstrip('/')}/", path.lstrip("/"))
+
+
 def _token_lifecycle_base_url(raw_url: str | None = None) -> tuple[str | None, str]:
     if raw_url:
         return raw_url.rstrip("/"), "argument"
@@ -8603,7 +8621,15 @@ def _local_device_token_status(raw_path: str | None = None) -> dict[str, Any]:
         }
     )
     if kind != "device_token":
-        status["warnings"].append("Unsupported credential kind.")
+        status["warnings"].append(
+            "Credential file does not contain device-token credentials; see api_key_credentials when kind is api_key."
+        )
+        status["usable_for_runtime"] = False
+        status["runtime_note"] = (
+            "Device-token bearer auth is not enabled in browser-cli runtime yet; "
+            "api_key credentials are reported separately."
+        )
+        return status
     if not status["has_access_token"]:
         status["warnings"].append("Device token is missing access_token.")
     if not status.get("project_id"):
@@ -8618,6 +8644,263 @@ def _local_device_token_status(raw_path: str | None = None) -> dict[str, Any]:
         "use LEXMOUNT_API_KEY and LEXMOUNT_PROJECT_ID for browser actions."
     )
     return status
+
+
+def _extract_api_key_response_payload(
+    response_payload: dict[str, Any],
+) -> tuple[dict[str, Any], str, list[str]]:
+    inspected_sources = ["json"]
+    candidates: list[tuple[str, dict[str, Any]]] = [("json", response_payload)]
+    for key in ("credential", "credentials", "token"):
+        inspected_sources.append(f"json.{key}")
+        nested = response_payload.get(key)
+        if isinstance(nested, dict):
+            candidates.append((f"json.{key}", nested))
+    env = response_payload.get("env")
+    if isinstance(env, dict):
+        inspected_sources.append("json.env")
+        candidates.append(("json.env", env))
+
+    top_level_scope = response_payload.get("scope") or response_payload.get("scopes")
+    for source, candidate in candidates:
+        project_id = (
+            candidate.get("project_id")
+            or candidate.get("projectId")
+            or candidate.get("LEXMOUNT_PROJECT_ID")
+            or response_payload.get("project_id")
+            or response_payload.get("projectId")
+        )
+        api_key = (
+            candidate.get("api_key")
+            or candidate.get("apiKey")
+            or candidate.get("LEXMOUNT_API_KEY")
+            or response_payload.get("api_key")
+            or response_payload.get("apiKey")
+        )
+        if isinstance(project_id, str) and project_id and isinstance(api_key, str) and api_key:
+            scopes = _scope_list(candidate.get("scopes"))
+            if scopes is None:
+                scopes = _scope_list(candidate.get("scope"))
+            if scopes is None:
+                scopes = _scope_list(top_level_scope)
+            return (
+                {
+                    "project_id": project_id,
+                    "api_key": api_key,
+                    "api_base_url": candidate.get("api_base_url")
+                    or candidate.get("apiBaseUrl")
+                    or response_payload.get("api_base_url")
+                    or response_payload.get("apiBaseUrl")
+                    or DEFAULT_LEXMOUNT_BASE_URL,
+                    "scopes": scopes or [],
+                    "expires_at": candidate.get("expires_at")
+                    or candidate.get("expiresAt")
+                    or response_payload.get("expires_at")
+                    or response_payload.get("expiresAt"),
+                },
+                source,
+                inspected_sources,
+            )
+    return {}, "missing", inspected_sources
+
+
+def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, Any]:
+    path, path_source = _device_token_credentials_path(raw_path)
+    status: dict[str, Any] = {
+        "present": False,
+        "path": str(path),
+        "path_source": path_source,
+        "kind": None,
+        "valid": False,
+        "usable_for_runtime": False,
+        "warnings": [],
+    }
+    if not path.exists():
+        return status
+
+    status["present"] = True
+    file_mode, file_mode_ok = _posix_file_mode(path)
+    if file_mode is not None:
+        status["file_mode"] = file_mode
+        status["file_mode_ok"] = file_mode_ok
+        if file_mode_ok is False:
+            status["warnings"].append(
+                "Credential file permissions should be 0600 on POSIX systems."
+            )
+
+    try:
+        raw_data = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        status.update(
+            {"readable": False, "error": "read_error", "message": str(exc)}
+        )
+        return status
+
+    status["readable"] = True
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError as exc:
+        status.update(
+            {
+                "error": "invalid_json",
+                "message": f"Invalid credentials JSON: {exc}",
+            }
+        )
+        return status
+    if not isinstance(data, dict):
+        status.update(
+            {
+                "error": "invalid_credentials",
+                "message": "Credentials JSON must contain an object.",
+            }
+        )
+        return status
+
+    kind = data.get("kind")
+    api_key = data.get("api_key")
+    project_id = data.get("project_id")
+    scopes = data.get("scopes")
+    if not isinstance(scopes, list):
+        scopes = _scope_list(data.get("scope")) or []
+    scopes = [str(scope) for scope in scopes]
+    valid = (
+        kind == "api_key"
+        and isinstance(api_key, str)
+        and bool(api_key)
+        and isinstance(project_id, str)
+        and bool(project_id)
+    )
+    status.update(
+        {
+            "kind": kind,
+            "valid": valid,
+            "usable_for_runtime": valid,
+            "project_id": project_id,
+            "api_base_url": data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+            "scopes": scopes,
+            "scope_count": len(scopes),
+            "has_api_key": isinstance(api_key, str) and bool(api_key),
+            "api_key_length": len(api_key) if isinstance(api_key, str) else 0,
+            "api_key_redacted": bool(api_key),
+            "source": data.get("source"),
+            "created_at": data.get("created_at"),
+        }
+    )
+    if kind != "api_key":
+        status["warnings"].append("Credential file does not contain api_key credentials.")
+    if not status["has_api_key"]:
+        status["warnings"].append("API-key credentials are missing api_key.")
+    if not project_id:
+        status["warnings"].append("API-key credentials are missing project_id.")
+    return status
+
+
+def _write_api_key_credentials(
+    api_key_payload: dict[str, Any],
+    *,
+    credentials_file: str | None,
+    requested_scopes: list[str],
+    connect_base_url: str,
+) -> dict[str, Any]:
+    path, path_source = _device_token_credentials_path(credentials_file)
+    api_key = api_key_payload.get("api_key")
+    project_id = api_key_payload.get("project_id")
+    if not isinstance(api_key, str) or not api_key:
+        return {
+            "saved": False,
+            "credentials_file": str(path),
+            "path_source": path_source,
+            "error": "missing_api_key",
+        }
+    if not isinstance(project_id, str) or not project_id:
+        return {
+            "saved": False,
+            "credentials_file": str(path),
+            "path_source": path_source,
+            "error": "missing_project_id",
+        }
+    scopes = api_key_payload.get("scopes")
+    if not isinstance(scopes, list):
+        scopes = requested_scopes
+    data = {
+        "kind": "api_key",
+        "project_id": project_id,
+        "api_base_url": api_key_payload.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+        "api_key": api_key,
+        "scopes": [str(scope) for scope in scopes],
+        "expires_at": api_key_payload.get("expires_at"),
+        "source": "connect_from_codex",
+        "connect_base_url": connect_base_url,
+        "created_at": _now_utc().isoformat(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    if os.name == "posix":
+        path.chmod(0o600)
+    return {
+        "saved": True,
+        "credentials_file": str(path),
+        "path_source": path_source,
+        "project_id": project_id,
+        "scopes": data["scopes"],
+        "scope_count": len(data["scopes"]),
+        "has_api_key": True,
+        "api_key_length": len(api_key),
+        "api_key_redacted": True,
+        "api_key_credentials": _local_api_key_credentials_status(str(path)),
+    }
+
+
+def _apply_local_api_key_credentials(
+    raw_path: str | None = None,
+) -> dict[str, Any]:
+    status = _local_api_key_credentials_status(raw_path)
+    result: dict[str, Any] = {
+        "attempted": True,
+        "applied": False,
+        "path": status.get("path"),
+        "path_source": status.get("path_source"),
+        "reason": None,
+        "applied_env": [],
+    }
+    if not status.get("present"):
+        result["reason"] = "missing_credentials_file"
+        return result
+    if not status.get("valid"):
+        result["reason"] = status.get("error") or "invalid_api_key_credentials"
+        return result
+
+    data, read_meta = _read_device_token_credentials_data(raw_path)
+    if data is None:
+        result.update(
+            {
+                "reason": read_meta.get("error") or "read_error",
+                "message": read_meta.get("message"),
+            }
+        )
+        return result
+
+    applied_env: list[str] = []
+    if not os.environ.get("LEXMOUNT_API_KEY") and isinstance(data.get("api_key"), str):
+        os.environ["LEXMOUNT_API_KEY"] = data["api_key"]
+        applied_env.append("LEXMOUNT_API_KEY")
+    if not os.environ.get("LEXMOUNT_PROJECT_ID") and isinstance(
+        data.get("project_id"), str
+    ):
+        os.environ["LEXMOUNT_PROJECT_ID"] = data["project_id"]
+        applied_env.append("LEXMOUNT_PROJECT_ID")
+    api_base_url = data.get("api_base_url")
+    if not os.environ.get("LEXMOUNT_BASE_URL") and isinstance(api_base_url, str):
+        os.environ["LEXMOUNT_BASE_URL"] = api_base_url
+        applied_env.append("LEXMOUNT_BASE_URL")
+
+    result["applied"] = bool(applied_env)
+    result["reason"] = "applied" if applied_env else "env_already_set"
+    result["applied_env"] = applied_env
+    return result
 
 
 def _auth_source(
@@ -9177,13 +9460,36 @@ def _scope_catalog_entries(scopes: list[str]) -> list[dict[str, Any]]:
     return [_scope_catalog_entry(scope) for scope in scopes]
 
 
+def _base64url_no_padding(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _new_pkce_code_verifier() -> str:
+    return _base64url_no_padding(os.urandom(32))
+
+
+def _pkce_code_challenge(code_verifier: str) -> str:
+    return _base64url_no_padding(hashlib.sha256(code_verifier.encode("ascii")).digest())
+
+
+def _new_oauth_state() -> str:
+    return _base64url_no_padding(os.urandom(24))
+
+
 def _connect_from_codex_url(
     *,
     project_id: str | None,
     scopes: list[str],
     expires_in: str,
-    response: str = "env",
+    response: str = "code",
+    connect_base_url: str | None = None,
+    redirect_uri: str | None = None,
+    state: str | None = None,
+    code_challenge: str | None = None,
+    code_challenge_method: str = "S256",
+    client_name: str = "Codex",
 ) -> str:
+    base_url = connect_base_url or LEXMOUNT_CONSOLE_URL
     query: list[tuple[str, str]] = [
         ("source", "browser-cli"),
         ("intent", "agent-browser-control"),
@@ -9192,8 +9498,369 @@ def _connect_from_codex_url(
     ]
     if project_id:
         query.append(("project_id", project_id))
-    query.extend(("scope", scope) for scope in scopes)
-    return f"{LEXMOUNT_CODEX_CONNECT_URL}?{urlencode(query)}"
+    if scopes:
+        query.append(("scope", " ".join(scopes)))
+    if redirect_uri:
+        query.append(("redirect_uri", redirect_uri))
+    if state:
+        query.append(("state", state))
+    if code_challenge:
+        query.append(("code_challenge", code_challenge))
+        query.append(("code_challenge_method", code_challenge_method))
+    if client_name:
+        query.append(("client_name", client_name))
+    connect_url = _codex_connect_endpoint(base_url, "/connect/codex")
+    return f"{connect_url}?{urlencode(query)}"
+
+
+class _CodexConnectCallbackHandler(BaseHTTPRequestHandler):
+    server_version = "browser-cli-connect"
+
+    def do_GET(self) -> None:
+        parsed = urlsplit(self.path)
+        params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        result = {
+            "received": True,
+            "path": parsed.path,
+            "query": params,
+        }
+        self.server.callback_result = result  # type: ignore[attr-defined]
+        self.server.callback_event.set()  # type: ignore[attr-defined]
+
+        is_callback = parsed.path == "/callback"
+        status = 200 if is_callback else 404
+        title = "Lexmount connection received" if is_callback else "Not found"
+        body = (
+            "<!doctype html><meta charset='utf-8'>"
+            f"<title>{title}</title>"
+            "<body style='font-family: system-ui, sans-serif; padding: 32px;'>"
+            f"<h1>{title}</h1>"
+            "<p>You can return to the terminal.</p>"
+            "</body>"
+        ).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+
+def _safe_callback_result(result: dict[str, Any] | None, expected_state: str) -> dict[str, Any]:
+    if not result:
+        return {"received": False, "state_valid": False, "code_present": False}
+    query = result.get("query") if isinstance(result.get("query"), dict) else {}
+    state = query.get("state")
+    code = query.get("code")
+    error = query.get("error")
+    return {
+        "received": True,
+        "path": result.get("path"),
+        "state_present": bool(state),
+        "state_valid": state == expected_state,
+        "code_present": bool(code),
+        "error": _mask_sensitive_text(str(error)) if error else None,
+        "error_description": _mask_sensitive_text(str(query.get("error_description")))
+        if query.get("error_description")
+        else None,
+    }
+
+
+def _exchange_codex_connect_code(
+    *,
+    exchange_endpoint: str,
+    code: str,
+    code_verifier: str,
+    redirect_uri: str,
+    credentials_file: str | None,
+    requested_scopes: list[str],
+    connect_base_url: str,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    response = _json_http_post(
+        exchange_endpoint,
+        {
+            "code": code,
+            "code_verifier": code_verifier,
+            "redirect_uri": redirect_uri,
+        },
+        timeout_seconds=timeout_seconds,
+    )
+    response_payload = response.get("json", {})
+    api_key_payload: dict[str, Any] = {}
+    payload_source = "missing"
+    inspected_sources: list[str] = []
+    if isinstance(response_payload, dict):
+        api_key_payload, payload_source, inspected_sources = (
+            _extract_api_key_response_payload(response_payload)
+        )
+    credentials: dict[str, Any] = {
+        "saved": False,
+        "credentials_file": str(
+            _device_token_credentials_path(credentials_file)[0]
+        ),
+    }
+    if response.get("ok") and api_key_payload:
+        credentials = _write_api_key_credentials(
+            api_key_payload,
+            credentials_file=credentials_file,
+            requested_scopes=requested_scopes,
+            connect_base_url=connect_base_url,
+        )
+        if credentials.get("saved"):
+            _apply_local_api_key_credentials(credentials_file)
+
+    ok = bool(response.get("ok")) and bool(credentials.get("saved"))
+    error = response.get("error")
+    if response.get("ok") and not api_key_payload:
+        error = "exchange_response_missing_api_key"
+    elif response.get("ok") and not credentials.get("saved"):
+        error = credentials.get("error") or "credentials_not_saved"
+
+    return {
+        "attempted": True,
+        "ok": ok,
+        "endpoint": exchange_endpoint,
+        "status_code": response.get("status_code"),
+        "error": error,
+        "message": response.get("message"),
+        "response_payload_source": payload_source,
+        "inspected_payload_sources": inspected_sources,
+        "project_id": api_key_payload.get("project_id"),
+        "scopes": api_key_payload.get("scopes") or [],
+        "scope_count": len(api_key_payload.get("scopes") or []),
+        "has_api_key": isinstance(api_key_payload.get("api_key"), str)
+        and bool(api_key_payload.get("api_key")),
+        "api_key_length": len(api_key_payload.get("api_key"))
+        if isinstance(api_key_payload.get("api_key"), str)
+        else 0,
+        "api_key_redacted": bool(api_key_payload.get("api_key")),
+        "credentials": credentials,
+    }
+
+
+def _run_codex_connect_loopback_login(
+    *,
+    args: argparse.Namespace,
+    project_id: str | None,
+    project_id_source: str,
+    scopes: list[str],
+    expires_in: str,
+    connect_base_url: str,
+    connect_base_url_source: str,
+) -> dict[str, Any]:
+    code_verifier = _new_pkce_code_verifier()
+    code_challenge = _pkce_code_challenge(code_verifier)
+    state = _new_oauth_state()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _CodexConnectCallbackHandler)
+    server.callback_event = threading.Event()  # type: ignore[attr-defined]
+    server.callback_result = None  # type: ignore[attr-defined]
+    redirect_uri = f"http://127.0.0.1:{server.server_port}/callback"
+    connect_url = _connect_from_codex_url(
+        project_id=project_id,
+        scopes=scopes,
+        expires_in=expires_in,
+        response="code",
+        connect_base_url=connect_base_url,
+        redirect_uri=redirect_uri,
+        state=state,
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
+        client_name="Codex",
+    )
+    exchange_endpoint = _codex_connect_endpoint(
+        connect_base_url, "/api/connect/codex/exchange"
+    )
+    callback_timeout_seconds = float(args.callback_timeout_seconds)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    open_result: dict[str, Any] = {
+        "requested": True,
+        "url": connect_url,
+        "opened": False,
+    }
+    warnings: list[str] = []
+    try:
+        try:
+            open_result["opened"] = bool(webbrowser.open(connect_url))
+        except Exception as exc:
+            open_result["error"] = _mask_sensitive_text(str(exc))
+            warnings.append(
+                "Failed to open the Connect from Codex URL automatically; rerun auth login --open or copy the URL locally."
+            )
+            return {
+                "attempted": True,
+                "available": True,
+                "authenticated": False,
+                "credentials_saved": False,
+                "reason": "browser_open_failed",
+                "connect_url": connect_url,
+                "connect_base_url": connect_base_url,
+                "connect_base_url_source": connect_base_url_source,
+                "exchange_endpoint": exchange_endpoint,
+                "redirect_uri": redirect_uri,
+                "open_result": open_result,
+                "loopback_callback": {
+                    "redirect_uri": redirect_uri,
+                    "timeout_seconds": callback_timeout_seconds,
+                    "received": False,
+                },
+                "exchange": {"attempted": False, "endpoint": exchange_endpoint},
+                "warnings": warnings,
+            }
+        if not open_result["opened"]:
+            warnings.append(
+                "The system browser did not confirm opening the Connect from Codex URL; rerun auth login --open or copy the URL locally."
+            )
+            return {
+                "attempted": True,
+                "available": True,
+                "authenticated": False,
+                "credentials_saved": False,
+                "reason": "browser_open_unconfirmed",
+                "connect_url": connect_url,
+                "connect_base_url": connect_base_url,
+                "connect_base_url_source": connect_base_url_source,
+                "exchange_endpoint": exchange_endpoint,
+                "redirect_uri": redirect_uri,
+                "open_result": open_result,
+                "loopback_callback": {
+                    "redirect_uri": redirect_uri,
+                    "timeout_seconds": callback_timeout_seconds,
+                    "received": False,
+                },
+                "exchange": {"attempted": False, "endpoint": exchange_endpoint},
+                "warnings": warnings,
+            }
+
+        callback_event = server.callback_event  # type: ignore[attr-defined]
+        received = callback_event.wait(callback_timeout_seconds)
+        raw_callback = server.callback_result if received else None  # type: ignore[attr-defined]
+        callback = _safe_callback_result(raw_callback, state)
+        callback["redirect_uri"] = redirect_uri
+        callback["timeout_seconds"] = callback_timeout_seconds
+        if not received:
+            warnings.append(
+                "Timed out waiting for the local Connect from Codex callback."
+            )
+            return {
+                "attempted": True,
+                "available": True,
+                "authenticated": False,
+                "credentials_saved": False,
+                "reason": "callback_timeout",
+                "connect_url": connect_url,
+                "connect_base_url": connect_base_url,
+                "connect_base_url_source": connect_base_url_source,
+                "exchange_endpoint": exchange_endpoint,
+                "redirect_uri": redirect_uri,
+                "open_result": open_result,
+                "loopback_callback": callback,
+                "exchange": {"attempted": False, "endpoint": exchange_endpoint},
+                "warnings": warnings,
+            }
+        query = raw_callback.get("query", {}) if isinstance(raw_callback, dict) else {}
+        if callback.get("error"):
+            warnings.append("Connect from Codex returned an authorization error.")
+            return {
+                "attempted": True,
+                "available": True,
+                "authenticated": False,
+                "credentials_saved": False,
+                "reason": "authorization_error",
+                "connect_url": connect_url,
+                "connect_base_url": connect_base_url,
+                "connect_base_url_source": connect_base_url_source,
+                "exchange_endpoint": exchange_endpoint,
+                "redirect_uri": redirect_uri,
+                "open_result": open_result,
+                "loopback_callback": callback,
+                "exchange": {"attempted": False, "endpoint": exchange_endpoint},
+                "warnings": warnings,
+            }
+        if not callback.get("state_valid"):
+            warnings.append("Connect from Codex callback state did not match.")
+            return {
+                "attempted": True,
+                "available": True,
+                "authenticated": False,
+                "credentials_saved": False,
+                "reason": "state_mismatch",
+                "connect_url": connect_url,
+                "connect_base_url": connect_base_url,
+                "connect_base_url_source": connect_base_url_source,
+                "exchange_endpoint": exchange_endpoint,
+                "redirect_uri": redirect_uri,
+                "open_result": open_result,
+                "loopback_callback": callback,
+                "exchange": {"attempted": False, "endpoint": exchange_endpoint},
+                "warnings": warnings,
+            }
+        code = query.get("code")
+        if not isinstance(code, str) or not code:
+            warnings.append("Connect from Codex callback did not include a code.")
+            return {
+                "attempted": True,
+                "available": True,
+                "authenticated": False,
+                "credentials_saved": False,
+                "reason": "missing_code",
+                "connect_url": connect_url,
+                "connect_base_url": connect_base_url,
+                "connect_base_url_source": connect_base_url_source,
+                "exchange_endpoint": exchange_endpoint,
+                "redirect_uri": redirect_uri,
+                "open_result": open_result,
+                "loopback_callback": callback,
+                "exchange": {"attempted": False, "endpoint": exchange_endpoint},
+                "warnings": warnings,
+            }
+
+        exchange = _exchange_codex_connect_code(
+            exchange_endpoint=exchange_endpoint,
+            code=code,
+            code_verifier=code_verifier,
+            redirect_uri=redirect_uri,
+            credentials_file=args.credentials_file,
+            requested_scopes=scopes,
+            connect_base_url=connect_base_url,
+            timeout_seconds=float(args.connect_http_timeout_seconds),
+        )
+        authenticated = bool(exchange.get("ok"))
+        if not authenticated:
+            warnings.append(
+                "Connect from Codex exchange did not return usable credentials."
+            )
+        return {
+            "attempted": True,
+            "available": True,
+            "authenticated": authenticated,
+            "credentials_saved": bool(
+                exchange.get("credentials", {}).get("saved")
+            ),
+            "reason": "authenticated" if authenticated else "exchange_failed",
+            "connect_url": connect_url,
+            "connect_base_url": connect_base_url,
+            "connect_base_url_source": connect_base_url_source,
+            "exchange_endpoint": exchange_endpoint,
+            "redirect_uri": redirect_uri,
+            "project_id": exchange.get("project_id") or project_id,
+            "project_id_source": "exchange" if exchange.get("project_id") else project_id_source,
+            "requested_scopes": scopes,
+            "requested_expires_in": expires_in,
+            "open_result": open_result,
+            "loopback_callback": callback,
+            "exchange": exchange,
+            "credentials": exchange.get("credentials"),
+            "warnings": warnings,
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
 
 
 def _connect_from_codex_site_capabilities() -> list[dict[str, Any]]:
@@ -9282,7 +9949,10 @@ def _device_code_required_browser_site_support() -> list[str]:
 def _connect_from_codex_browser_site_requirements() -> list[str]:
     return [
         "Implement /connect/codex on browser.lexmount.cn.",
-        "Accept optional project_id, repeated scope, expires_in, source, intent, and response query parameters.",
+        "Accept source, intent, response=code, expires_in, optional project_id, one space-delimited scope query parameter, redirect_uri, state, code_challenge, and code_challenge_method=S256.",
+        "Allow loopback redirect_uri values such as http://127.0.0.1:{port}/callback and http://[::1]:{port}/callback.",
+        "Issue one-time authorization codes with short TTLs; never put API keys or access tokens in redirect URLs.",
+        "Expose POST /api/connect/codex/exchange so browser-cli can exchange code plus code_verifier over HTTPS for project_id and a scoped credential.",
         "Show the selected Project ID, project name, API host, and region before issuing credentials.",
         "Issue scoped credentials for browser sessions, contexts, and actions.",
         "Offer copyable install, local env, auth export-env, and doctor verification commands without exposing secrets in chat.",
@@ -9679,8 +10349,18 @@ def _connect_from_codex_required_api_contract() -> dict[str, Any]:
     }
 
 
-def _auth_login_setup_blocks(project_id: str | None) -> list[dict[str, Any]]:
+def _auth_login_setup_blocks(
+    project_id: str | None,
+    *,
+    connect_base_url: str | None = None,
+) -> list[dict[str, Any]]:
     project_id_value = project_id or "<project-id>"
+    open_command = "browser-cli auth login --open"
+    if connect_base_url and connect_base_url.rstrip("/") != LEXMOUNT_CONSOLE_URL:
+        open_command = (
+            "browser-cli auth login --open --connect-base-url "
+            f"{shlex.quote(connect_base_url.rstrip('/'))}"
+        )
     return [
         {
             "id": "install",
@@ -9701,7 +10381,7 @@ def _auth_login_setup_blocks(project_id: str | None) -> list[dict[str, Any]]:
             "id": "open_connect",
             "label": "Open Connect from Codex",
             "commands": [
-                "browser-cli auth login --open",
+                open_command,
             ],
             "contains_secret_values": False,
             "contains_secret_placeholders": False,
@@ -9745,16 +10425,25 @@ def _auth_login_handoff(
     project_id_source: str,
     scopes: list[str],
     expires_in: str,
+    login_url: str = LEXMOUNT_CONSOLE_URL,
 ) -> dict[str, Any]:
+    open_command = "browser-cli auth login --open"
+    if login_url.rstrip("/") != LEXMOUNT_CONSOLE_URL:
+        open_command = (
+            "browser-cli auth login --open --connect-base-url "
+            f"{shlex.quote(login_url.rstrip('/'))}"
+        )
     return {
         "recommended_flow": "manual_env",
-        "login_url": LEXMOUNT_CONSOLE_URL,
+        "login_url": login_url,
         "connect_from_codex_url": connect_url,
         "connect_from_codex_available": False,
-        "open_command": "browser-cli auth login --open",
+        "open_command": open_command,
         "open_url": connect_url,
         "install_command": "uv tool install git+https://github.com/lexmount/browser-cli.git",
-        "setup_blocks": _auth_login_setup_blocks(project_id),
+        "setup_blocks": _auth_login_setup_blocks(
+            project_id, connect_base_url=login_url
+        ),
         "copyable_commands": [
             AGENT_USABLE_STATUS_METADATA_COMMAND,
             AGENT_USABLE_STATUS_COMMAND,
@@ -22511,8 +23200,9 @@ def cmd_auth_scopes(args: argparse.Namespace) -> None:
         "default_expires_in": DEFAULT_CODEX_CONNECT_EXPIRES_IN,
         "scope_query_parameter": {
             "name": "scope",
-            "repeatable": True,
-            "default": list(DEFAULT_CODEX_CONNECT_SCOPES),
+            "repeatable": False,
+            "format": "space-delimited",
+            "default": " ".join(DEFAULT_CODEX_CONNECT_SCOPES),
         },
         "secret_policy": {
             "contains_secret_values": False,
@@ -22567,10 +23257,14 @@ def cmd_auth_scopes(args: argparse.Namespace) -> None:
             "required_query_parameters": [
                 "source=browser-cli",
                 "intent=agent-browser-control",
-                "response=env|device_code",
+                "response=code",
                 "expires_in=<duration>",
                 "project_id=<project-id>",
-                "scope=<scope> (repeatable)",
+                "scope=<space-delimited-scopes>",
+                "redirect_uri=http://127.0.0.1:{port}/callback",
+                "state=<opaque-csrf-state>",
+                "code_challenge=<S256-base64url>",
+                "code_challenge_method=S256",
             ],
             "site_capability_status": site_capability_status,
             "site_capabilities": site_capabilities,
@@ -22597,6 +23291,7 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
         if not value
     ]
     device_token_status = _local_device_token_status(args.credentials_file)
+    api_key_credentials_status = _local_api_key_credentials_status(args.credentials_file)
     auth_source = _auth_source(
         env_configured=configured,
         device_token_status=device_token_status,
@@ -22620,6 +23315,7 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
             default=DEFAULT_LEXMOUNT_BASE_URL,
         ),
         "region": _env_value_status("LEXMOUNT_REGION"),
+        "api_key_credentials": api_key_credentials_status,
         "device_token": device_token_status,
         "next_steps": _auth_next_steps(
             configured=configured,
@@ -23075,16 +23771,20 @@ def cmd_auth_connect_requirements(args: argparse.Namespace) -> None:
             "requested_scope_details": scope_details,
             "requested_expires_in": args.expires_in,
             "supported_response_modes": [
-                "env",
+                "code",
                 "device_code",
             ],
             "required_query_parameters": [
                 "source=browser-cli",
                 "intent=agent-browser-control",
-                "response=env|device_code",
+                "response=code",
                 "expires_in=<duration>",
                 "project_id=<project-id>",
-                "scope=<scope> (repeatable)",
+                "scope=<space-delimited-scopes>",
+                "redirect_uri=http://127.0.0.1:{port}/callback",
+                "state=<opaque-csrf-state>",
+                "code_challenge=<S256-base64url>",
+                "code_challenge_method=S256",
             ],
             "expected_outputs": [
                 "Project ID for the selected project",
@@ -23171,18 +23871,39 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             exit_code=2,
             device_code_http_timeout_seconds=args.device_code_http_timeout_seconds,
         )
+    if getattr(args, "callback_timeout_seconds", 0) <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--callback-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            callback_timeout_seconds=args.callback_timeout_seconds,
+        )
+    if getattr(args, "connect_http_timeout_seconds", 0) <= 0:
+        _failure(
+            command,
+            "argument_error",
+            "--connect-http-timeout-seconds must be greater than zero.",
+            exit_code=2,
+            connect_http_timeout_seconds=args.connect_http_timeout_seconds,
+        )
     project_id, project_id_source = _auth_login_project_id(args)
     scopes = _auth_login_scopes(args)
+    connect_base_url, connect_base_url_source = _codex_connect_base_url(
+        args.connect_base_url
+    )
     connect_url = _connect_from_codex_url(
         project_id=project_id,
         scopes=scopes,
         expires_in=args.expires_in,
+        connect_base_url=connect_base_url,
     )
     device_connect_url = _connect_from_codex_url(
         project_id=project_id,
         scopes=scopes,
         expires_in=args.expires_in,
         response="device_code",
+        connect_base_url=connect_base_url,
     )
     handoff = _auth_login_handoff(
         connect_url=connect_url,
@@ -23190,6 +23911,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         project_id_source=project_id_source,
         scopes=scopes,
         expires_in=args.expires_in,
+        login_url=connect_base_url,
     )
     site_capabilities = _connect_from_codex_site_capabilities()
     site_capability_status = _connect_from_codex_site_capability_status(
@@ -23208,7 +23930,102 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         "opened": False,
     }
     warnings: list[str] = []
-    if args.open and not (args.device_code and device_code_base_url):
+    if args.open and not args.device_code:
+        connect_attempt = _run_codex_connect_loopback_login(
+            args=args,
+            project_id=project_id,
+            project_id_source=project_id_source,
+            scopes=scopes,
+            expires_in=args.expires_in,
+            connect_base_url=connect_base_url,
+            connect_base_url_source=connect_base_url_source,
+        )
+        warnings.extend(connect_attempt.get("warnings", []))
+        authenticated = bool(connect_attempt.get("authenticated"))
+        credentials_saved = bool(connect_attempt.get("credentials_saved"))
+        if authenticated:
+            next_steps = [
+                "Run `browser-cli auth status` to inspect saved local API-key metadata.",
+                f"Run `{AGENT_DOCTOR_COMMAND}` to verify live API connectivity.",
+                "Create a session with `browser-cli session create`.",
+            ]
+        else:
+            next_steps = [
+                "Complete the browser approval and local callback, then rerun `browser-cli auth login --open` if needed.",
+                "Use the manual_env fallback only if the local callback or exchange endpoint is unavailable.",
+                f"Run `{AGENT_DOCTOR_COMMAND}` after credentials are usable.",
+            ]
+        _success(
+            command,
+            flow="connect_from_codex",
+            selected_flow="connect_from_codex",
+            available=True,
+            manual_env_available=True,
+            device_code_available=False,
+            authenticated=authenticated,
+            credentials_saved=credentials_saved,
+            reason=connect_attempt.get("reason"),
+            fallback_flow=None if authenticated else "manual_env",
+            fallback_handoff=None if authenticated else handoff,
+            handoff=handoff,
+            login_url=connect_base_url,
+            connect_base_url=connect_base_url,
+            connect_base_url_source=connect_base_url_source,
+            flows=[
+                {
+                    "name": "connect_from_codex",
+                    "available": True,
+                    "reason": connect_attempt.get("reason"),
+                    "description": "Loopback redirect plus PKCE code exchange for local browser-cli credentials.",
+                },
+                {
+                    "name": "manual_env",
+                    "available": True,
+                    "description": "User copies Project ID and API key from browser.lexmount.cn into the local shell.",
+                },
+            ],
+            connect_from_codex={
+                "available": True,
+                "response": "code",
+                "url": connect_attempt.get("connect_url"),
+                "connect_base_url": connect_base_url,
+                "connect_base_url_source": connect_base_url_source,
+                "exchange_endpoint": connect_attempt.get("exchange_endpoint"),
+                "project_id": connect_attempt.get("project_id") or project_id,
+                "project_id_source": connect_attempt.get("project_id_source")
+                or project_id_source,
+                "requested_scopes": scopes,
+                "requested_scope_details": scope_details,
+                "requested_expires_in": args.expires_in,
+                "setup_blocks": setup_blocks,
+                "site_capability_status": site_capability_status,
+                "site_capabilities": site_capabilities,
+                "browser_site_acceptance_tests": browser_site_acceptance_tests,
+                "required_runtime_auth": _connect_from_codex_required_runtime_auth(),
+                "loopback_callback": connect_attempt.get("loopback_callback"),
+                "exchange": connect_attempt.get("exchange"),
+            },
+            open_result=connect_attempt.get("open_result"),
+            loopback_callback=connect_attempt.get("loopback_callback"),
+            exchange=connect_attempt.get("exchange"),
+            credentials=connect_attempt.get("credentials"),
+            warnings=warnings,
+            secret_policy={
+                "contains_secret_values": False,
+                "credentials_file_contains_secrets": credentials_saved,
+                "do_not_paste_in_chat": [
+                    "api_key",
+                    "LEXMOUNT_API_KEY",
+                    "authorization code",
+                    "code_verifier",
+                    "full direct browser URLs containing api_key",
+                ],
+            },
+            next_steps=next_steps,
+        )
+        return
+
+    if args.open and args.device_code and not device_code_base_url:
         try:
             open_result["opened"] = bool(webbrowser.open(open_url))
         except Exception as exc:
@@ -23321,13 +24138,17 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             selected_flow="device_code",
             available=False,
             manual_env_available=True,
-            login_url=LEXMOUNT_CONSOLE_URL,
+            login_url=connect_base_url,
+            connect_base_url=connect_base_url,
+            connect_base_url_source=connect_base_url_source,
             device_code_available=False,
             reason="browser_site_endpoint_missing",
             device_code={
                 "available": False,
                 "reason": "browser_site_endpoint_missing",
-                "verification_uri": LEXMOUNT_CODEX_CONNECT_URL,
+                "verification_uri": _codex_connect_endpoint(
+                    connect_base_url, "/connect/codex"
+                ),
                 "connect_from_codex_url": device_connect_url,
                 "project_id": project_id,
                 "project_id_source": project_id_source,
@@ -23390,7 +24211,9 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         selected_flow="manual_env",
         available=True,
         manual_env_available=True,
-        login_url=LEXMOUNT_CONSOLE_URL,
+        login_url=connect_base_url,
+        connect_base_url=connect_base_url,
+        connect_base_url_source=connect_base_url_source,
         device_code_available=False,
         handoff=handoff,
         open_result=open_result,
@@ -30976,9 +31799,28 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         help="Requested Connect from Codex credential lifetime, such as 7d or 24h.",
     )
     auth_login.add_argument(
+        "--connect-base-url",
+        help=(
+            "Lexmount Browser console origin for Connect from Codex. Defaults to "
+            f"{CODEX_CONNECT_BASE_URL_ENV} or {LEXMOUNT_CONSOLE_URL}."
+        ),
+    )
+    auth_login.add_argument(
         "--open",
         action="store_true",
         help="Open the Connect from Codex URL in the default browser.",
+    )
+    auth_login.add_argument(
+        "--callback-timeout-seconds",
+        type=float,
+        default=DEFAULT_CODEX_CONNECT_CALLBACK_TIMEOUT_SECONDS,
+        help="Maximum time to wait for the local 127.0.0.1 Connect callback.",
+    )
+    auth_login.add_argument(
+        "--connect-http-timeout-seconds",
+        type=float,
+        default=DEFAULT_CODEX_CONNECT_HTTP_TIMEOUT_SECONDS,
+        help="HTTP timeout for Connect from Codex code exchange requests.",
     )
     auth_login.add_argument(
         "--device-code",
@@ -31299,6 +32141,7 @@ def main(argv: list[str] | None = None) -> None:
         cmd_version(args)
     if not hasattr(args, "func"):
         parser.error("the following arguments are required: command")
+    _apply_local_api_key_credentials(getattr(args, "credentials_file", None))
     args.func(args)
 
 

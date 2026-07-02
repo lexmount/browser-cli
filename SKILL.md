@@ -29,19 +29,18 @@ Check availability with `browser-cli --version`, `browser-cli commands --names-o
 If Skill status is stale or missing, review files and run `browser-cli skill install --force`; if the CLI is not installed, install it with:
 
 ```bash
-uv tool install git+https://github.com/lexmount/browser-cli.git
+uv tool install --force git+https://github.com/lexmount/browser-cli.git
 ```
 
-Require credentials in the local shell:
-
-```bash
-export LEXMOUNT_API_KEY="<api-key>"
-export LEXMOUNT_PROJECT_ID="<project-id>"
-```
+Authorize with the local loopback PKCE flow: run `browser-cli auth login --open`,
+then `browser-cli auth status` and `browser-cli doctor --json`.
 
 Do not ask the user to paste secrets into chat. Direct the user to
-`https://browser.lexmount.cn` for China region credentials. China defaults to
-`https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
+`https://browser.lexmount.cn` for China region authorization. `auth login --open`
+starts a `127.0.0.1` callback, opens Connect from Codex, validates `state`, and
+exchanges a one-time code plus PKCE verifier for local credentials. API keys do
+not appear in the local callback URL. China defaults to `https://api.lexmount.cn`;
+set `LEXMOUNT_BASE_URL` only for non-default APIs.
 
 Use local auth helpers instead of handling secrets in chat:
 ```bash
@@ -79,15 +78,15 @@ Read `browser_site_contract.scope_ui_fields`,
 `required_runtime_auth`, `setup_blocks`, `implementation_checklist.phases`,
 `implementation_checklist.blocked_until`, and `verification.doctor_command`.
 
-When `auth login` returns `handoff`, use it as the setup contract: open
-`connect_from_codex_url` or `login_url`, follow `copyable_commands`, require the
-listed `local_env` variables in the user's local shell, and run the
-`verification.doctor_command`. Check top-level `selected_flow`, `available`,
-`manual_env_available`, and `device_code_available` before choosing a setup
-path. Use `browser-cli auth login --open` or
-`handoff.open_command` only when the user wants the local browser opened; then
-inspect `open_result`. Follow `secret_policy`: never paste `LEXMOUNT_API_KEY`,
-revealed export output, or full direct URLs into chat.
+Prefer `browser-cli auth login --open` when credentials are missing. Inspect
+top-level `selected_flow`, `authenticated`, `credentials_saved`, `reason`,
+`open_result`, `loopback_callback`, `exchange`, and safe `credentials` metadata.
+If it succeeds, run `browser-cli auth status` and `browser-cli doctor --json`.
+If it cannot complete, use the returned `handoff` as the manual fallback
+contract: follow `copyable_commands`, local shell env guidance, and
+`verification.doctor_command`. Follow `secret_policy`: never paste
+`LEXMOUNT_API_KEY`, revealed export output, authorization codes, code verifiers,
+or full direct URLs into chat.
 If the user asks for device-code login, run `browser-cli auth login --device-code`
 and parse `available`, `reason`, `device_code`, `polling`, `credentials`, and
 `fallback_handoff`; while `available` is false, guide the user through the
@@ -99,8 +98,8 @@ or explain the device-code authorization path.
 
 `auth export-env` prints placeholders by default. With `--from-current`, it still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in a trusted local terminal. Check top-level `usable` and `unusable_exports`, plus `safe_to_paste_in_chat`, `local_shell_only`, `contains_secret_values`, `contains_secret_placeholders`, `safety`, `setup_block`, and `verification.doctor_command` before treating returned `commands` as runnable; only run local-shell setup blocks in the user's local terminal, never in chat.
 
-`auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`, and
-safe `device_token` metadata. Read `runtime_auth.usable`,
+`auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`, safe
+`api_key_credentials`, and safe `device_token` metadata. Read `runtime_auth.usable`,
 `runtime_auth.source`, and `runtime_auth.bearer_runtime.required_support`
 before choosing a credential source. When env credentials are incomplete, read
 `missing_env` and the `fix` object instead of inventing setup steps. Use

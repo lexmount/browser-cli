@@ -99,8 +99,8 @@ CLI for you:
    uv --version
 2. 如果没有 uv，提示我先安装 uv：
    curl -LsSf https://astral.sh/uv/install.sh | sh
-3. 安装 browser-cli：
-   uv tool install git+https://github.com/lexmount/browser-cli.git
+3. 安装或升级 browser-cli：
+   uv tool install --force git+https://github.com/lexmount/browser-cli.git
 4. 验证 CLI 版本输出是 JSON：
    browser-cli --version
    browser-cli version
@@ -542,18 +542,24 @@ browser.lexmount.cn implementation work; it returns an
 creation, safe local env copy, doctor verification, credential lifecycle,
 device-code/OAuth, and runtime bearer-token launch gates.
 
-`auth login` returns top-level `flow`, `selected_flow`, `available`,
-`manual_env_available`, and `device_code_available`, plus the currently
-available `manual_env` flow, a machine-readable `handoff`, and a
-`connect_from_codex` contract. `handoff` includes the Connect URL, copyable
-local commands, required env vars, safe secret-handling rules, and doctor
-verification command. `connect_from_codex` includes the planned
-`https://browser.lexmount.cn/connect/codex` URL, optional `project_id`,
-repeated `scope` query parameters, requested `expires_in`,
-expected outputs, structured `setup_blocks`, `requested_scope_details`,
-`site_capabilities`/`site_capability_status`, `browser_site_acceptance_tests`,
-and the browser site requirements needed before device-code or scoped-token
-login can be marked available.
+`auth login --open` is the preferred Connect from Codex flow. It starts a local
+`127.0.0.1:{random_port}` callback server, opens
+`https://browser.lexmount.cn/connect/codex` with `redirect_uri`, `state`,
+`code_challenge`, and `code_challenge_method=S256`, validates the callback
+state, and exchanges the one-time code over HTTPS at
+`POST /api/connect/codex/exchange`. The callback URL never contains an API key.
+On success, browser-cli saves local API-key credentials metadata to the
+credentials file and `auth status`/`doctor` can use it without asking the user to
+paste secrets into chat.
+
+`auth login` without `--open` returns top-level `flow`, `selected_flow`,
+`available`, `manual_env_available`, and `device_code_available`, plus a
+machine-readable `handoff` and `connect_from_codex` contract for agents that need
+non-blocking guidance. `connect_from_codex` uses a single space-delimited
+`scope` query parameter, requested `expires_in`, structured `setup_blocks`,
+`requested_scope_details`, `site_capabilities`/`site_capability_status`,
+`browser_site_acceptance_tests`, and the browser site requirements for the
+loopback + PKCE authorization flow.
 The Connect from Codex site workflow also reads
 `connect_from_codex.browser_site_acceptance_tests` from manual and device-code
 handoff responses so agents can use the same browser.lexmount.cn acceptance
@@ -566,9 +572,11 @@ permission names, risk levels, and destructive markers for known scopes, while
 unknown future scopes are marked with `known: false`. Capability ids currently include
 `project_id_display`, `scoped_api_key`, `copy_install_and_env`,
 `doctor_verification`, `scoped_key_lifecycle`, and `device_code_oauth`.
-Use `auth login --open` when you want the CLI to open the Connect URL in the
-default browser; JSON output still includes `open_result` so agents can continue
-or fall back to copying the URL when the browser cannot be opened.
+Use `--connect-base-url <origin>` or `LEXMOUNT_BROWSER_CONNECT_BASE_URL` when
+testing a non-production browser.lexmount.cn host. JSON output includes
+`open_result`, `loopback_callback`, `exchange`, safe `credentials` metadata, and
+`reason` so agents can continue or fall back when browser open, callback, or
+exchange fails.
 `auth login --device-code` returns the structured device-code contract. By
 default, when no endpoint is configured, it reports `available: false`,
 `reason: "browser_site_endpoint_missing"`, required browser/API endpoints, and a
