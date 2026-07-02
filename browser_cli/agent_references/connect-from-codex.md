@@ -8,13 +8,13 @@ to paste secrets into chat.
 
 - Give users one clear page for connecting Lexmount Browser to Codex and other
   local agents.
-- Show the active project, API key status, install commands, env commands, and
-  verification commands in one copyable flow.
+- Show the active project, requested scopes, install commands, authorization
+  status, and verification commands in one copyable flow.
 - Encourage scoped, revocable agent keys instead of long-lived general keys.
 - Render permission labels from `browser-cli auth scopes` instead of hard-coded
   frontend copies.
-- Let `browser-cli auth login` evolve from manual guidance into a real
-  device-code/OAuth authorization flow.
+- Let `browser-cli auth login --open` run a real loopback redirect plus PKCE
+  authorization flow without putting API keys in URLs.
 - Let `browser-cli doctor` prove that local setup, credentials, API reachability,
   project access, and browser session creation are healthy.
 
@@ -25,8 +25,8 @@ to paste secrets into chat.
 - Do not require browser.lexmount.cn to know the user's local shell type.
   The page can show a default `posix` block and let the CLI generate shell-specific
   output.
-- Do not make the first version depend on a complete OAuth server. A scoped key
-  wizard plus copyable env commands is a useful first milestone.
+- Do not put API keys, access tokens, authorization codes, or direct browser URLs
+  into Codex chat.
 
 ## Page
 
@@ -47,15 +47,17 @@ Recommended sections:
    - API host, normally `https://api.lexmount.cn`
    - Region indicator
 2. Install
-   - `uv tool install git+https://github.com/lexmount/browser-cli.git`
+   - `uv tool install --force git+https://github.com/lexmount/browser-cli.git`
    - `browser-cli --help`
    - `browser-cli --version`
 3. Authorize
-   - Current agent key status
-   - Create scoped API key button
+   - Current authorization request
+   - Scope and expiration review
    - Permission picker rendered from `browser-cli auth scopes --include-site-contract`
-   - Show created API key once with copy controls
-   - Revoke button for each agent key
+   - Login/register/project selection
+   - Create scoped API key button or approve action that issues a short-lived
+     one-time authorization code for browser-cli exchange
+   - Revoke button for each agent key or credential
    - Expiration display and optional rotation action
 4. Configure Local Shell
    - Copyable env block:
@@ -146,12 +148,22 @@ Expected behavior after the website page exists:
   device-code/OAuth, and runtime bearer-token support. Each phase includes
   `status.pending`, `browser_site_actions`, acceptance tests, and the relevant
   setup blocks or API requirements.
-- `browser-cli auth login` prints
-  `https://browser.lexmount.cn/connect/codex`; `browser-cli auth login --open`
-  opens it in the local default browser and reports `open_result`.
+- `browser-cli auth login --open` starts a `127.0.0.1:{random_port}` callback
+  server, builds a Connect URL with `redirect_uri`, `state`,
+  `code_challenge`, and `code_challenge_method=S256`, opens it in the local
+  default browser, validates the callback state, and calls
+  `POST /api/connect/codex/exchange` with `code`, `code_verifier`, and
+  `redirect_uri`. The callback URL carries only a one-time code, never an API
+  key. JSON output includes `open_result`, `loopback_callback`, `exchange`, and
+  safe credential metadata so agents can recover from browser-open, callback,
+  or exchange failures.
+- `browser-cli auth login` without `--open` remains a non-blocking handoff and
+  fallback contract for agents. It should point users to `auth login --open`
+  for the full PKCE flow.
 - `browser-cli auth login` reports top-level `flow`, `selected_flow`,
-  `available`, `manual_env_available`, and `device_code_available` before nested
-  details so agents can pick the current setup path directly.
+  `available`, `manual_env_available`, `device_code_available`,
+  `authenticated`, `credentials_saved`, and `reason` before nested details so
+  agents can pick the current setup path directly.
 - `browser-cli auth login` includes `connect_from_codex.site_capabilities` and
   `site_capability_status` so agents can report structured browser site gaps:
   `project_id_display`, `scoped_api_key`, `copy_install_and_env`,

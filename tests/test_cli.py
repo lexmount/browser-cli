@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
+from urllib.request import urlopen
 
 import pytest
 
@@ -79,7 +80,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.2.0"
+    assert payload["version"] == "0.3.0"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9861,7 +9862,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.2.0"
+    assert checks["browser_cli"]["version"] == "0.3.0"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -9934,11 +9935,9 @@ def test_doctor_fails_missing_required_env(
     assert connect["verification"]["doctor_command"] == "browser-cli doctor --json"
     query = parse_qs(urlsplit(connect["url"]).query)
     assert "project_id" not in query
-    assert query["response"] == ["env"]
+    assert query["response"] == ["code"]
     assert query["scope"] == [
-        "browser:sessions",
-        "browser:contexts",
-        "browser:actions",
+        "browser:sessions browser:contexts browser:actions",
     ]
 
     checks = _checks_by_name(payload)
@@ -11446,12 +11445,9 @@ def test_auth_scopes_lists_machine_readable_scope_catalog(
     assert payload["all_selected_scopes_known"] is True
     assert payload["scope_query_parameter"] == {
         "name": "scope",
-        "repeatable": True,
-        "default": [
-            "browser:sessions",
-            "browser:contexts",
-            "browser:actions",
-        ],
+        "repeatable": False,
+        "format": "space-delimited",
+        "default": "browser:sessions browser:contexts browser:actions",
     }
     assert payload["secret_policy"]["contains_secret_values"] is False
     assert payload["secret_policy"]["safe_to_share"] is True
@@ -11543,7 +11539,7 @@ def test_auth_scopes_filters_unknown_scopes_and_reports_site_contract(
         "default_requested",
         "permission_count",
     ]
-    assert "scope=<scope> (repeatable)" in contract["required_query_parameters"]
+    assert "scope=<space-delimited-scopes>" in contract["required_query_parameters"]
     assert [item["id"] for item in contract["required_token_lifecycle"]] == [
         "issue_scoped_key",
         "refresh_token",
@@ -11586,9 +11582,9 @@ def test_auth_scopes_filters_unknown_scopes_and_reports_site_contract(
     )
     env_query = parse_qs(urlsplit(contract["url"]).query)
     assert env_query["project_id"] == ["arg-project"]
-    assert env_query["scope"] == ["browser:actions", "browser:future"]
+    assert env_query["scope"] == ["browser:actions browser:future"]
     assert env_query["expires_in"] == ["24h"]
-    assert env_query["response"] == ["env"]
+    assert env_query["response"] == ["code"]
     device_query = parse_qs(urlsplit(contract["device_code_url"]).query)
     assert device_query["response"] == ["device_code"]
     assert "real-api-key-value" not in json.dumps(payload)
@@ -11729,8 +11725,8 @@ def test_auth_connect_requirements_reports_browser_site_contract(
         == payload["browser_site_acceptance_tests"]
     )
     assert connect["implementation_checklist"] == checklist
-    assert connect["supported_response_modes"] == ["env", "device_code"]
-    assert "response=env|device_code" in connect["required_query_parameters"]
+    assert connect["supported_response_modes"] == ["code", "device_code"]
+    assert "response=code" in connect["required_query_parameters"]
     capability_ids = [
         "project_id_display",
         "scoped_api_key",
@@ -11755,7 +11751,7 @@ def test_auth_connect_requirements_reports_browser_site_contract(
     assert env_query["project_id"] == ["arg-project"]
     assert env_query["scope"] == ["browser:actions"]
     assert env_query["expires_in"] == ["24h"]
-    assert env_query["response"] == ["env"]
+    assert env_query["response"] == ["code"]
     device_query = parse_qs(urlsplit(connect["device_code_url"]).query)
     assert device_query["response"] == ["device_code"]
     assert "arg-project" in json.dumps(payload)
@@ -12054,13 +12050,12 @@ def test_auth_login_guides_manual_browser_flow(
     query = parse_qs(urlsplit(connect["url"]).query)
     assert query["source"] == ["browser-cli"]
     assert query["intent"] == ["agent-browser-control"]
-    assert query["response"] == ["env"]
+    assert query["response"] == ["code"]
     assert query["expires_in"] == ["7d"]
     assert query["scope"] == [
-        "browser:sessions",
-        "browser:contexts",
-        "browser:actions",
+        "browser:sessions browser:contexts browser:actions",
     ]
+    assert query["client_name"] == ["Codex"]
     assert "project_id" not in query
     assert any(
         "scoped API keys" in item for item in payload["browser_site_recommendations"]
@@ -12131,7 +12126,7 @@ def test_auth_login_builds_connect_from_codex_contract_from_args(
 
     query = parse_qs(urlsplit(connect["url"]).query)
     assert query["project_id"] == ["arg-project"]
-    assert query["scope"] == ["browser:sessions", "browser:actions"]
+    assert query["scope"] == ["browser:sessions browser:actions"]
     assert query["expires_in"] == ["24h"]
 
 
@@ -12557,20 +12552,132 @@ def test_auth_login_open_attempts_browser_and_reports_result(
     )
 
     with pytest.raises(SystemExit) as exc_info:
-        cli_main(["auth", "login", "--open", "--project-id", "arg-project"])
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--open",
+                "--project-id",
+                "arg-project",
+                "--callback-timeout-seconds",
+                "0.01",
+            ]
+        )
 
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     connect_url = payload["connect_from_codex"]["url"]
     assert opened == [connect_url]
-    assert payload["open_result"] == {
-        "requested": True,
-        "url": connect_url,
-        "opened": True,
-    }
+    assert payload["flow"] == "connect_from_codex"
+    assert payload["reason"] == "callback_timeout"
+    assert payload["authenticated"] is False
+    assert payload["open_result"]["requested"] is True
+    assert payload["open_result"]["url"] == connect_url
+    assert payload["open_result"]["opened"] is True
+    assert payload["loopback_callback"]["received"] is False
+    assert payload["exchange"]["attempted"] is False
+    query = parse_qs(urlsplit(connect_url).query)
+    assert query["redirect_uri"][0].startswith("http://127.0.0.1:")
+    assert query["state"][0]
+    assert query["code_challenge_method"] == ["S256"]
+    assert len(query["code_challenge"][0]) == 43
     assert payload["handoff"]["open_command"] == "browser-cli auth login --open"
-    assert payload["handoff"]["open_url"] == connect_url
-    assert payload["warnings"] == []
+    assert payload["warnings"] == [
+        "Timed out waiting for the local Connect from Codex callback."
+    ]
+
+
+def test_auth_login_open_exchanges_code_and_saves_api_key_without_stdout_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Any,
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    credentials_file = tmp_path / "credentials.json"
+    exchange_requests: list[dict[str, Any]] = []
+
+    def fake_json_http_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        exchange_requests.append(
+            {"url": url, "body": payload, "timeout_seconds": timeout_seconds}
+        )
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {
+                "ok": True,
+                "token_type": "api_key",
+                "project_id": "project-from-exchange",
+                "api_key": "secret-api-key-from-exchange",
+                "scope": ["browser:sessions", "browser:actions"],
+            },
+        }
+
+    def fake_open(url: str) -> bool:
+        query = parse_qs(urlsplit(url).query)
+        redirect_uri = query["redirect_uri"][0]
+        state = query["state"][0]
+        with urlopen(
+            f"{redirect_uri}?code=authorization-code&state={state}",
+            timeout=2,
+        ) as response:
+            response.read()
+        return True
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_json_http_post)
+    monkeypatch.setattr(cli_module.webbrowser, "open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--open",
+                "--credentials-file",
+                str(credentials_file),
+                "--callback-timeout-seconds",
+                "2",
+                "--connect-http-timeout-seconds",
+                "1",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert payload["authenticated"] is True
+    assert payload["credentials_saved"] is True
+    assert payload["reason"] == "authenticated"
+    assert payload["loopback_callback"]["received"] is True
+    assert payload["loopback_callback"]["state_valid"] is True
+    assert payload["loopback_callback"]["code_present"] is True
+    assert payload["exchange"]["ok"] is True
+    assert payload["exchange"]["project_id"] == "project-from-exchange"
+    assert payload["credentials"]["saved"] is True
+    assert payload["credentials"]["credentials_file"] == str(credentials_file)
+    assert "secret-api-key-from-exchange" not in stdout
+    assert "authorization-code" not in stdout
+
+    assert len(exchange_requests) == 1
+    request = exchange_requests[0]
+    assert request["url"] == "https://browser.lexmount.cn/api/connect/codex/exchange"
+    assert request["body"]["code"] == "authorization-code"
+    assert len(request["body"]["code_verifier"]) == 43
+    assert request["body"]["code_verifier"] not in stdout
+    assert request["body"]["redirect_uri"].startswith("http://127.0.0.1:")
+
+    stored = json.loads(credentials_file.read_text())
+    assert stored["kind"] == "api_key"
+    assert stored["project_id"] == "project-from-exchange"
+    assert stored["api_key"] == "secret-api-key-from-exchange"
+    assert stored["scopes"] == ["browser:sessions", "browser:actions"]
 
 
 def test_auth_login_open_failure_is_non_fatal_and_masked(
@@ -12596,7 +12703,7 @@ def test_auth_login_open_failure_is_non_fatal_and_masked(
     assert "token=***" in payload["open_result"]["error"]
     assert "api_key=***" in payload["open_result"]["error"]
     assert payload["warnings"] == [
-        "Failed to open the Connect from Codex URL automatically; copy the URL manually."
+        "Failed to open the Connect from Codex URL automatically; rerun auth login --open or copy the URL locally."
     ]
 
 

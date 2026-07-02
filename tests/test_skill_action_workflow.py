@@ -246,16 +246,10 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`required_runtime_auth`" in normalized
     assert "`browser_site_contract.scope_ui_fields`" in normalized
     assert "`browser_site_contract.browser_site_acceptance_tests`" in normalized
-    assert (
-        "When `auth login` returns `handoff`, use it as the setup contract"
-        in normalized
-    )
-    assert "`connect_from_codex_url` or `login_url`" in normalized
-    assert "Check top-level `selected_flow`, `available`" in normalized
-    assert (
-        "`copyable_commands`, `open_command`, `local_env`, `verification`, and"
-        in normalized
-    )
+    assert "Prefer `browser-cli auth login --open` when credentials are missing" in normalized
+    assert "`selected_flow`, `authenticated`, `credentials_saved`, `reason`" in normalized
+    assert "`open_result`, `loopback_callback`, `exchange`, and safe `credentials` metadata" in normalized
+    assert "use the returned `handoff` as the manual fallback contract" in normalized
     assert "browser-cli auth login --open" in normalized
     assert "inspect `open_result`" in normalized
     assert (
