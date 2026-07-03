@@ -63,6 +63,7 @@ from lex_browser_runtime.browser.models import (
 )
 
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
+INTERNAL_API_BASE_URL_REDACTION = "<internal-api-base-url-redacted>"
 LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
 LEXMOUNT_CODEX_CONNECT_URL = f"{LEXMOUNT_CONSOLE_URL}/connect/codex"
 CODEX_CONNECT_BASE_URL_ENV = "LEXMOUNT_BROWSER_CONNECT_BASE_URL"
@@ -5358,6 +5359,26 @@ def _masked_connect_url_payload(
     }
 
 
+def _doctor_connect_url_payload(
+    connect_url: str,
+    *,
+    reveal_connect_url: bool,
+) -> dict[str, Any]:
+    if reveal_connect_url:
+        payload = _masked_connect_url_payload(
+            connect_url,
+            reveal_connect_url=True,
+        )
+        payload["connect_url_redacted"] = False
+        return payload
+    return {
+        "connect_url_available": True,
+        "connect_url_redacted": True,
+        "connect_url_masked": True,
+        "connect_url_reveal_command": "browser-cli doctor --reveal-connect-url",
+    }
+
+
 def _mask_sensitive_text(text: str) -> str:
     masked = re.sub(
         r"(?i)((?:api[_-]?key|access[_-]?token|token)=)[^&\s]+",
@@ -8616,6 +8637,10 @@ def _local_device_token_status(raw_path: str | None = None) -> dict[str, Any]:
     if not isinstance(scopes, list):
         scopes = []
     scopes = [str(scope) for scope in scopes]
+    api_base_url_raw = data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL
+    api_base_url, api_base_url_redacted = _safe_api_base_url_for_output(
+        str(api_base_url_raw)
+    )
 
     status.update(
         {
@@ -8628,13 +8653,16 @@ def _local_device_token_status(raw_path: str | None = None) -> dict[str, Any]:
                 and bool(data.get("project_id"))
                 and expires_at_dt is not None
                 and expired is False
+                and not api_base_url_redacted
             ),
             "expired": expired,
             "refresh_needed": refresh_needed,
             "expires_at": expires_at,
             "expires_in_seconds": expires_in_seconds,
             "project_id": data.get("project_id"),
-            "api_base_url": data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+            "api_base_url": api_base_url,
+            "api_base_url_redacted": api_base_url_redacted,
+            "api_base_url_internal": api_base_url_redacted,
             "scopes": scopes,
             "scope_count": len(scopes),
             "token_id": data.get("token_id"),
@@ -8642,6 +8670,12 @@ def _local_device_token_status(raw_path: str | None = None) -> dict[str, Any]:
             "has_refresh_token": isinstance(refresh_token, str) and bool(refresh_token),
         }
     )
+    if api_base_url_redacted:
+        status["warnings"].append(
+            "Credentials contain an internal Kubernetes API base URL; rerun "
+            "browser-cli auth login --open after the Connect exchange returns a "
+            "public api_base_url."
+        )
     if kind != "device_token":
         status["warnings"].append(
             "Credential file does not contain device-token credentials; see api_key_credentials when kind is api_key."
@@ -8729,6 +8763,29 @@ def _default_api_base_url_allowed_for_connect_base(connect_base_url: str) -> boo
     return connect_base_url.rstrip("/") == LEXMOUNT_CONSOLE_URL
 
 
+def _is_internal_api_base_url(api_base_url: Any) -> bool:
+    if not isinstance(api_base_url, str) or not api_base_url:
+        return False
+    try:
+        hostname = urlsplit(api_base_url).hostname or ""
+    except ValueError:
+        hostname = ""
+    if not hostname:
+        hostname = api_base_url.split("/")[0].split(":")[0]
+    hostname = hostname.rstrip(".").lower()
+    return (
+        ".svc." in hostname
+        or hostname.endswith(".svc")
+        or hostname.endswith(".cluster.local")
+    )
+
+
+def _safe_api_base_url_for_output(api_base_url: str) -> tuple[str, bool]:
+    if _is_internal_api_base_url(api_base_url):
+        return INTERNAL_API_BASE_URL_REDACTION, True
+    return api_base_url, False
+
+
 def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, Any]:
     path, path_source = _device_token_credentials_path(raw_path)
     status: dict[str, Any] = {
@@ -8784,7 +8841,10 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
     kind = data.get("kind")
     api_key = data.get("api_key")
     project_id = data.get("project_id")
-    api_base_url = data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL
+    api_base_url_raw = data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL
+    api_base_url, api_base_url_redacted = _safe_api_base_url_for_output(
+        str(api_base_url_raw)
+    )
     connect_base_url = data.get("connect_base_url")
     scopes = data.get("scopes")
     if not isinstance(scopes, list):
@@ -8796,6 +8856,7 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
         and bool(api_key)
         and isinstance(project_id, str)
         and bool(project_id)
+        and not api_base_url_redacted
     )
     status.update(
         {
@@ -8804,6 +8865,8 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
             "usable_for_runtime": valid,
             "project_id": project_id,
             "api_base_url": api_base_url,
+            "api_base_url_redacted": api_base_url_redacted,
+            "api_base_url_internal": api_base_url_redacted,
             "connect_base_url": connect_base_url,
             "scopes": scopes,
             "scope_count": len(scopes),
@@ -8820,11 +8883,17 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
         status["warnings"].append("API-key credentials are missing api_key.")
     if not project_id:
         status["warnings"].append("API-key credentials are missing project_id.")
+    if api_base_url_redacted:
+        status["warnings"].append(
+            "API-key credentials contain an internal Kubernetes API base URL; "
+            "rerun browser-cli auth login --open after the Connect exchange "
+            "returns a public api_base_url."
+        )
     if (
         kind == "api_key"
         and isinstance(connect_base_url, str)
         and not _default_api_base_url_allowed_for_connect_base(connect_base_url)
-        and api_base_url == DEFAULT_LEXMOUNT_BASE_URL
+        and api_base_url_raw == DEFAULT_LEXMOUNT_BASE_URL
     ):
         status["warnings"].append(
             "Credential file was created from a non-default Connect base URL "
@@ -8875,6 +8944,17 @@ def _write_api_key_credentials(
                     "using a non-default connect_base_url."
                 ),
             }
+    if _is_internal_api_base_url(api_base_url):
+        return {
+            "saved": False,
+            "credentials_file": str(path),
+            "path_source": path_source,
+            "error": "invalid_api_base_url",
+            "message": (
+                "Connect exchange returned an internal api_base_url; "
+                "browser.lexmount.cn must return a public API base URL."
+            ),
+        }
     scopes = api_key_payload.get("scopes")
     if not isinstance(scopes, list):
         scopes = requested_scopes
@@ -9697,6 +9777,13 @@ def _exchange_codex_connect_code(
         error = "exchange_response_missing_api_key"
     elif response.get("ok") and not credentials.get("saved"):
         error = credentials.get("error") or "credentials_not_saved"
+    api_base_url = api_key_payload.get("api_base_url")
+    safe_api_base_url = None
+    api_base_url_redacted = False
+    if isinstance(api_base_url, str) and api_base_url:
+        safe_api_base_url, api_base_url_redacted = _safe_api_base_url_for_output(
+            api_base_url
+        )
 
     return {
         "attempted": True,
@@ -9708,7 +9795,9 @@ def _exchange_codex_connect_code(
         "response_payload_source": payload_source,
         "inspected_payload_sources": inspected_sources,
         "project_id": api_key_payload.get("project_id"),
-        "api_base_url": api_key_payload.get("api_base_url"),
+        "api_base_url": safe_api_base_url,
+        "api_base_url_redacted": api_base_url_redacted,
+        "api_base_url_internal": api_base_url_redacted,
         "has_api_base_url": isinstance(api_key_payload.get("api_base_url"), str)
         and bool(api_key_payload.get("api_base_url")),
         "scopes": api_key_payload.get("scopes") or [],
@@ -23122,7 +23211,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 "direct_url",
                 "pass",
                 "direct browser websocket URL can be built",
-                **_masked_connect_url_payload(
+                **_doctor_connect_url_payload(
                     connect_url,
                     reveal_connect_url=args.reveal_connect_url,
                 ),

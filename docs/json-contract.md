@@ -220,6 +220,9 @@ The CLI must not print API keys by default.
 Default behavior:
 
 - `direct-url` masks the `api_key` query parameter.
+- `doctor` does not include the full direct `connect_url` by default; it reports
+  `connect_url_available`, `connect_url_redacted`, and
+  `connect_url_reveal_command` so internal hosts are not exposed accidentally.
 - `action ... --direct-url` masks the resolved `connect_url` when it contains
   `api_key`.
 - Diagnostic and auth commands should report whether credentials exist without
@@ -492,6 +495,7 @@ Default behavior:
 Explicit reveal behavior:
 
 - `direct-url --reveal-url` may print the full URL.
+- `doctor --reveal-connect-url` may print the full direct URL.
 - `action ... --reveal-connect-url` may print the full resolved connect URL.
 - Auth helpers may use `--reveal-secrets` only in a trusted local shell.
 
