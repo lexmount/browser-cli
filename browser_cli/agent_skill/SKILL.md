@@ -177,6 +177,7 @@ what to do:
   `status: "fail"`, and follow each check's `fix` object when present.
 - `api_connectivity` with `status: "skipped"`: do not treat live API access as
   verified.
+- `env.LEXMOUNT_BASE_URL` with `status: "fail"` and `value_internal: true`: unset it, rerun `browser-cli auth login --open`, and verify a public API base URL before browser work.
 
 Use `browser-cli doctor --skip-api` only for offline setup checks or when the
 user explicitly asks to avoid a live API call. Do not treat a skipped API check

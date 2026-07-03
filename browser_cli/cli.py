@@ -7060,6 +7060,8 @@ def _doctor_context_registry_check() -> dict[str, Any]:
         "writable": writable,
         "project_id_present": bool(scope["project_id"]),
         "base_url": scope["base_url"],
+        "base_url_redacted": scope["base_url_redacted"],
+        "base_url_internal": scope["base_url_internal"],
         "stores_metadata_values": True,
         "metadata_values_redacted": True,
     }
@@ -7789,10 +7791,14 @@ def _context_registry_path(raw_path: str | None = None) -> tuple[Path, str]:
     )
 
 
-def _context_registry_scope() -> dict[str, str | None]:
+def _context_registry_scope() -> dict[str, Any]:
+    base_url_raw = os.environ.get("LEXMOUNT_BASE_URL") or DEFAULT_LEXMOUNT_BASE_URL
+    base_url, base_url_redacted = _safe_api_base_url_for_output(base_url_raw)
     return {
         "project_id": os.environ.get("LEXMOUNT_PROJECT_ID"),
-        "base_url": os.environ.get("LEXMOUNT_BASE_URL") or DEFAULT_LEXMOUNT_BASE_URL,
+        "base_url": base_url,
+        "base_url_redacted": base_url_redacted,
+        "base_url_internal": base_url_redacted,
     }
 
 
@@ -8236,10 +8242,25 @@ def _env_value_status(
             }
         )
     else:
-        payload["value"] = value
+        if name == "LEXMOUNT_BASE_URL" and value:
+            safe_value, value_redacted = _safe_api_base_url_for_output(value)
+            payload["value"] = safe_value
+            payload["value_redacted"] = value_redacted
+            payload["value_internal"] = value_redacted
+        else:
+            payload["value"] = value
     if default is not None:
         payload["default"] = default
-        payload["effective_value"] = value or default
+        effective_value = value or default
+        if name == "LEXMOUNT_BASE_URL":
+            safe_effective_value, effective_value_redacted = (
+                _safe_api_base_url_for_output(effective_value)
+            )
+            payload["effective_value"] = safe_effective_value
+            payload["effective_value_redacted"] = effective_value_redacted
+            payload["effective_value_internal"] = effective_value_redacted
+        else:
+            payload["effective_value"] = effective_value
         payload["using_default"] = not present
     return payload
 
@@ -8497,13 +8518,25 @@ def _write_device_token_credentials(
             "path_source": path_source,
             "error": "missing_access_token",
         }
+    api_base_url = token_payload.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL
+    if _is_internal_api_base_url(api_base_url):
+        return {
+            "saved": False,
+            "credentials_file": str(path),
+            "path_source": path_source,
+            "error": "invalid_api_base_url",
+            "message": (
+                "Token response returned an internal api_base_url; "
+                "browser.lexmount.cn must return a public API base URL."
+            ),
+        }
     scopes = token_payload.get("scopes")
     if not isinstance(scopes, list):
         scopes = requested_scopes
     data = {
         "kind": "device_token",
         "project_id": token_payload.get("project_id"),
-        "api_base_url": token_payload.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+        "api_base_url": api_base_url,
         "access_token": access_token,
         "refresh_token": token_payload.get("refresh_token"),
         "expires_at": _device_token_expires_at(token_payload),
@@ -23016,7 +23049,12 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
     base_url = os.environ.get("LEXMOUNT_BASE_URL")
     region = os.environ.get("LEXMOUNT_REGION")
-    env_configured = bool(api_key and project_id)
+    base_url_status = _env_value_status(
+        "LEXMOUNT_BASE_URL",
+        default=DEFAULT_LEXMOUNT_BASE_URL,
+    )
+    base_url_internal = bool(base_url_status.get("value_internal"))
+    env_configured = bool(api_key and project_id and not base_url_internal)
     api_admin: Any | None = None
     device_token_status = _local_device_token_status(
         getattr(args, "credentials_file", None)
@@ -23069,13 +23107,38 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     checks.append(
         _doctor_check(
             "env.LEXMOUNT_BASE_URL",
-            "pass",
-            "LEXMOUNT_BASE_URL is set"
-            if base_url
-            else "LEXMOUNT_BASE_URL is not set; the default endpoint will be used",
-            present=base_url is not None,
-            value=base_url,
-            default=DEFAULT_LEXMOUNT_BASE_URL,
+            "fail" if base_url_internal else "pass",
+            (
+                "LEXMOUNT_BASE_URL points at an internal Kubernetes service URL"
+                if base_url_internal
+                else (
+                    "LEXMOUNT_BASE_URL is set"
+                    if base_url
+                    else "LEXMOUNT_BASE_URL is not set; the default endpoint will be used"
+                )
+            ),
+            **base_url_status,
+            **(
+                {
+                    "fix": _doctor_fix(
+                        "unset_internal_base_url",
+                        env=["LEXMOUNT_BASE_URL"],
+                        commands=[
+                            "unset LEXMOUNT_BASE_URL",
+                            "browser-cli auth clear-credentials",
+                            "browser-cli auth login --open",
+                            "browser-cli doctor --json",
+                        ],
+                        guidance=[
+                            "Do not use Kubernetes service URLs such as *.svc or *.cluster.local from the local CLI.",
+                            "Unset LEXMOUNT_BASE_URL unless a public custom API endpoint is required.",
+                            "Rerun Connect from Codex so browser-cli receives a public api_base_url.",
+                        ],
+                    )
+                }
+                if base_url_internal
+                else {}
+            ),
         )
     )
     checks.append(
@@ -23177,46 +23240,69 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             )
         )
 
-    try:
-        connect_url = build_direct_connect_url()
-    except Exception as exc:
+    if base_url_internal:
         checks.append(
             _doctor_check(
                 "direct_url",
                 "fail",
-                _mask_sensitive_text(str(exc)),
-                error=exc.__class__.__name__,
+                "direct browser websocket URL cannot be built from an internal API base URL",
+                connect_url_available=False,
+                connect_url_redacted=True,
                 fix=_doctor_fix(
-                    "fix_direct_url_configuration",
-                    env=[
-                        "LEXMOUNT_API_KEY",
-                        "LEXMOUNT_PROJECT_ID",
-                        "LEXMOUNT_BASE_URL",
-                    ],
+                    "unset_internal_base_url",
+                    env=["LEXMOUNT_BASE_URL"],
                     commands=[
-                        "browser-cli auth status",
-                        "browser-cli auth export-env",
-                        "browser-cli doctor",
+                        "unset LEXMOUNT_BASE_URL",
+                        "browser-cli auth login --open",
+                        "browser-cli doctor --json",
                     ],
                     guidance=[
-                        "Confirm required environment variables are set.",
-                        "Unset LEXMOUNT_BASE_URL unless a custom API endpoint is required.",
+                        "Use a public Lexmount API base URL before creating browser websocket URLs."
                     ],
                 ),
             )
         )
     else:
-        checks.append(
-            _doctor_check(
-                "direct_url",
-                "pass",
-                "direct browser websocket URL can be built",
-                **_doctor_connect_url_payload(
-                    connect_url,
-                    reveal_connect_url=args.reveal_connect_url,
-                ),
+        try:
+            connect_url = build_direct_connect_url()
+        except Exception as exc:
+            checks.append(
+                _doctor_check(
+                    "direct_url",
+                    "fail",
+                    _mask_sensitive_text(str(exc)),
+                    error=exc.__class__.__name__,
+                    fix=_doctor_fix(
+                        "fix_direct_url_configuration",
+                        env=[
+                            "LEXMOUNT_API_KEY",
+                            "LEXMOUNT_PROJECT_ID",
+                            "LEXMOUNT_BASE_URL",
+                        ],
+                        commands=[
+                            "browser-cli auth status",
+                            "browser-cli auth export-env",
+                            "browser-cli doctor",
+                        ],
+                        guidance=[
+                            "Confirm required environment variables are set.",
+                            "Unset LEXMOUNT_BASE_URL unless a custom API endpoint is required.",
+                        ],
+                    ),
+                )
             )
-        )
+        else:
+            checks.append(
+                _doctor_check(
+                    "direct_url",
+                    "pass",
+                    "direct browser websocket URL can be built",
+                    **_doctor_connect_url_payload(
+                        connect_url,
+                        reveal_connect_url=args.reveal_connect_url,
+                    ),
+                )
+            )
 
     if args.skip_api:
         checks.append(
@@ -23242,6 +23328,26 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 fix=_credential_doctor_fix(
                     "LEXMOUNT_API_KEY",
                     "LEXMOUNT_PROJECT_ID",
+                ),
+            )
+        )
+    elif base_url_internal:
+        checks.append(
+            _doctor_check(
+                "api_connectivity",
+                "skipped",
+                "API connectivity check skipped because LEXMOUNT_BASE_URL points at an internal Kubernetes service URL",
+                fix=_doctor_fix(
+                    "unset_internal_base_url",
+                    env=["LEXMOUNT_BASE_URL"],
+                    commands=[
+                        "unset LEXMOUNT_BASE_URL",
+                        "browser-cli auth login --open",
+                        "browser-cli doctor --json",
+                    ],
+                    guidance=[
+                        "Use a public API endpoint before running live API checks."
+                    ],
                 ),
             )
         )
@@ -23499,7 +23605,12 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
     command = "auth.status"
     api_key = os.environ.get("LEXMOUNT_API_KEY")
     project_id = os.environ.get("LEXMOUNT_PROJECT_ID")
-    configured = bool(api_key and project_id)
+    base_url_status = _env_value_status(
+        "LEXMOUNT_BASE_URL",
+        default=DEFAULT_LEXMOUNT_BASE_URL,
+    )
+    base_url_internal = bool(base_url_status.get("value_internal"))
+    configured = bool(api_key and project_id and not base_url_internal)
     missing_env = [
         name
         for name, value in (
@@ -23528,10 +23639,7 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
         "missing_env": missing_env,
         "api_key": _env_value_status("LEXMOUNT_API_KEY", secret=True),
         "project_id": _env_value_status("LEXMOUNT_PROJECT_ID"),
-        "base_url": _env_value_status(
-            "LEXMOUNT_BASE_URL",
-            default=DEFAULT_LEXMOUNT_BASE_URL,
-        ),
+        "base_url": base_url_status,
         "region": _env_value_status("LEXMOUNT_REGION"),
         "api_key_credentials": api_key_credentials_status,
         "device_token": device_token_status,
@@ -23542,6 +23650,22 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
     }
     if missing_env:
         payload["fix"] = _credential_doctor_fix(*missing_env)
+    elif base_url_internal:
+        payload["fix"] = _doctor_fix(
+            "unset_internal_base_url",
+            env=["LEXMOUNT_BASE_URL"],
+            commands=[
+                "unset LEXMOUNT_BASE_URL",
+                "browser-cli auth clear-credentials",
+                "browser-cli auth login --open",
+                "browser-cli doctor --json",
+            ],
+            guidance=[
+                "Do not use Kubernetes service URLs such as *.svc or *.cluster.local from the local CLI.",
+                "Unset LEXMOUNT_BASE_URL unless a public custom API endpoint is required.",
+                "Rerun Connect from Codex so browser-cli receives a public api_base_url.",
+            ],
+        )
     _success(command, **payload)
 
 
@@ -23870,15 +23994,22 @@ def _auth_export_env_payload(args: argparse.Namespace) -> dict[str, Any]:
             if args.from_current and current_base_url
             else DEFAULT_LEXMOUNT_BASE_URL
         )
+        safe_base_url, base_url_redacted = _safe_api_base_url_for_output(base_url)
+        if base_url_redacted:
+            warnings.append(
+                "LEXMOUNT_BASE_URL points at an internal Kubernetes service URL and was redacted; unset it or rerun browser-cli auth login --open."
+            )
         entries.append(
             {
                 "name": "LEXMOUNT_BASE_URL",
-                "value": base_url,
+                "value": safe_base_url,
                 "secret": False,
                 "source": "env"
                 if args.from_current and current_base_url
                 else "default",
-                "usable": True,
+                "usable": not base_url_redacted,
+                "value_redacted": base_url_redacted,
+                "value_internal": base_url_redacted,
             }
         )
 

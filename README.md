@@ -400,6 +400,9 @@ not be called.
 Use `browser-cli doctor --smoke-session` when you need stronger proof that the
 credentials can create and close a temporary browser session, not just reach the
 API.
+If `LEXMOUNT_BASE_URL` points at an internal Kubernetes host such as `*.svc` or
+`*.cluster.local`, `doctor` treats it as invalid, redacts the value, and asks you
+to unset it or rerun `browser-cli auth login --open`.
 
 For machine-readable command discovery, run:
 

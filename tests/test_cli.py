@@ -10217,10 +10217,7 @@ def test_doctor_reveals_direct_url_only_with_explicit_flag(
 ) -> None:
     monkeypatch.setenv("LEXMOUNT_API_KEY", "secret")
     monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
-    monkeypatch.setenv(
-        "LEXMOUNT_BASE_URL",
-        "http://session-gateway.system.svc.cluster.local:9231",
-    )
+    monkeypatch.setenv("LEXMOUNT_BASE_URL", "https://api.example.test")
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["doctor", "--skip-api", "--reveal-connect-url"])
@@ -10229,12 +10226,48 @@ def test_doctor_reveals_direct_url_only_with_explicit_flag(
     payload = json.loads(capsys.readouterr().out)
     direct_url = _checks_by_name(payload)["direct_url"]
     assert direct_url["status"] == "pass"
-    assert direct_url["connect_url"].startswith(
-        "ws://session-gateway.system.svc.cluster.local:9231/connection"
-    )
+    assert direct_url["connect_url"].startswith("wss://api.example.test/connection")
     assert direct_url["connect_url"].endswith("api_key=secret")
     assert direct_url["connect_url_masked"] is False
     assert direct_url["connect_url_redacted"] is False
+
+
+def test_doctor_rejects_and_redacts_internal_env_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "super-sensitive-token-value")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv(
+        "LEXMOUNT_BASE_URL",
+        "http://session-gateway.system.svc.cluster.local:9231",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["doctor", "--skip-api", "--reveal-connect-url"])
+
+    assert exc_info.value.code == 1
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    checks = _checks_by_name(payload)
+    assert "super-sensitive-token-value" not in stdout
+    assert "session-gateway.system.svc.cluster.local" not in stdout
+    assert payload["ok"] is False
+    assert payload["runtime_auth_usable"] is False
+    assert "env.LEXMOUNT_BASE_URL" in payload["failed_checks"]
+    assert "direct_url" in payload["failed_checks"]
+    base_url = checks["env.LEXMOUNT_BASE_URL"]
+    assert base_url["status"] == "fail"
+    assert base_url["value"] == "<internal-api-base-url-redacted>"
+    assert base_url["value_redacted"] is True
+    assert base_url["value_internal"] is True
+    assert base_url["effective_value"] == "<internal-api-base-url-redacted>"
+    assert base_url["effective_value_internal"] is True
+    assert base_url["fix"]["code"] == "unset_internal_base_url"
+    direct_url = checks["direct_url"]
+    assert direct_url["status"] == "fail"
+    assert direct_url["connect_url_available"] is False
+    assert "connect_url" not in direct_url
 
 
 @pytest.mark.parametrize(
@@ -10464,12 +10497,44 @@ def test_auth_status_reports_env_without_revealing_api_key(
     assert payload["base_url"] == {
         "present": True,
         "value": "https://api.example.test",
+        "value_redacted": False,
+        "value_internal": False,
         "default": "https://api.lexmount.cn",
         "effective_value": "https://api.example.test",
+        "effective_value_redacted": False,
+        "effective_value_internal": False,
         "using_default": False,
     }
     assert payload["region"]["value"] == "cn"
     assert "browser-cli doctor --json" in payload["next_steps"][0]
+
+
+def test_auth_status_redacts_internal_env_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv(
+        "LEXMOUNT_BASE_URL",
+        "http://session-gateway.system.svc.cluster.local:9231",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["auth", "status"])
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert "local-secret" not in stdout
+    assert "session-gateway.system.svc.cluster.local" not in stdout
+    assert payload["configured"] is False
+    assert payload["runtime_auth_usable"] is False
+    assert payload["base_url"]["value"] == "<internal-api-base-url-redacted>"
+    assert payload["base_url"]["value_redacted"] is True
+    assert payload["base_url"]["value_internal"] is True
+    assert payload["base_url"]["effective_value_internal"] is True
+    assert payload["fix"]["code"] == "unset_internal_base_url"
 
 
 def test_auth_status_reports_connect_from_codex_fix_when_env_is_missing(
@@ -11643,6 +11708,46 @@ def test_auth_export_env_from_current_masks_api_key_by_default(
     assert payload["exports"][0]["usable"] is False
     assert payload["exports"][1]["source"] == "env"
     assert payload["exports"][1]["usable"] is True
+    assert payload["exports"][2]["source"] == "env"
+    assert payload["exports"][2]["usable"] is True
+    assert payload["exports"][2]["value_redacted"] is False
+    assert payload["exports"][2]["value_internal"] is False
+
+
+def test_auth_export_env_redacts_internal_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "local-secret")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv(
+        "LEXMOUNT_BASE_URL",
+        "http://session-gateway.system.svc.cluster.local:9231",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "export-env",
+                "--from-current",
+                "--include-base-url",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert "local-secret" not in stdout
+    assert "session-gateway.system.svc.cluster.local" not in stdout
+    assert payload["usable"] is False
+    assert "LEXMOUNT_BASE_URL" in payload["unusable_exports"]
+    assert payload["exports"][2]["name"] == "LEXMOUNT_BASE_URL"
+    assert payload["exports"][2]["value"] == "<internal-api-base-url-redacted>"
+    assert payload["exports"][2]["usable"] is False
+    assert payload["exports"][2]["value_redacted"] is True
+    assert payload["exports"][2]["value_internal"] is True
+    assert payload["warnings"]
 
 
 def test_auth_export_env_can_reveal_current_secret_explicitly(

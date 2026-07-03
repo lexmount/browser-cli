@@ -227,6 +227,9 @@ Default behavior:
   `api_key`.
 - Diagnostic and auth commands should report whether credentials exist without
   printing secret values by default.
+- `LEXMOUNT_BASE_URL` values that point at internal Kubernetes hosts such as
+  `*.svc` or `*.cluster.local` are invalid for the local CLI and must be
+  redacted as `<internal-api-base-url-redacted>`.
 - Eval-backed DOM/form actions that inspect, snapshot, read, wait for, set, fill,
   or clear values mask sensitive fields by default when the element looks like a
   password, token, credential, secret, authorization, or API-key field. Parse
@@ -495,7 +498,8 @@ Default behavior:
 Explicit reveal behavior:
 
 - `direct-url --reveal-url` may print the full URL.
-- `doctor --reveal-connect-url` may print the full direct URL.
+- `doctor --reveal-connect-url` may print the full direct URL only after
+  configuration checks reject internal API base URLs.
 - `action ... --reveal-connect-url` may print the full resolved connect URL.
 - Auth helpers may use `--reveal-secrets` only in a trusted local shell.
 
