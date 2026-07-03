@@ -246,7 +246,8 @@ Default behavior:
   parameters and key/value text in captured console/page-error entries and the
   reported page URL. Parse `text_masked`, `filename_masked`, and `url_masked`
   before copying console output, script filenames, or page URLs.
-- `auth status`, `auth token-info`, `auth refresh`, `auth logout`, and `doctor`
+- `auth status`, `auth token-info`, `auth refresh`, `auth clear-credentials`,
+  `auth logout`, and `doctor`
   may report local `device_token` metadata such as project id, token id, scopes,
   expiration, and refresh-needed state, but must never print access or refresh
   token values.
@@ -478,13 +479,15 @@ Default behavior:
   should point agents at the packaged `usable_status` reference before auth
   setup so current usable boundaries are explicit. This handoff must not contain
   API key values or direct connect URLs.
-- `auth logout` may report local credential file deletion metadata,
-  `revoke_endpoint`, `remote_revoke`, and `revoked`, but must not print token
-  values or unset environment variables. With `--revoke` and a configured token
-  lifecycle endpoint, it may call `POST /api/auth/token/revoke`; without one,
-  it reports `revoke_available=false`. `remote_revoke` may report
-  `token_type_hint` and endpoint `revoked` confirmation; explicit
-  `revoked=false` must not be treated as a successful remote revoke.
+- `auth clear-credentials` may report local credential file deletion metadata,
+  safe API-key/device-token metadata, `env_vars_present`, and
+  `unset_env_commands`, but must not print token values or unset parent-shell
+  environment variables. `auth logout` keeps the token lifecycle revoke flow:
+  with `--revoke` and a configured token lifecycle endpoint, it may call
+  `POST /api/auth/token/revoke`; without one, it reports
+  `revoke_available=false`. `remote_revoke` may report `token_type_hint` and
+  endpoint `revoked` confirmation; explicit `revoked=false` must not be treated
+  as a successful remote revoke.
 
 Explicit reveal behavior:
 

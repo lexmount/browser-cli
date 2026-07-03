@@ -228,7 +228,8 @@ Suggested local credential shape:
 Current CLI support:
 
 - `browser-cli auth status`, `browser-cli auth token-info`,
-  `browser-cli auth refresh`, `browser-cli auth logout`, and
+  `browser-cli auth refresh`, `browser-cli auth clear-credentials`,
+  `browser-cli auth logout`, and
   `browser-cli doctor` read the fallback credentials file,
   `LEXMOUNT_BROWSER_CREDENTIALS_FILE`, or
   `--credentials-file`.
@@ -261,9 +262,9 @@ Current CLI support:
   `expiresIn`, and `projectId` are normalized before saving. CLI output reports
   only safe metadata such as `remote_refresh.response_payload_source` and
   `remote_refresh.response_summary`.
-- `browser-cli auth logout` removes the local fallback credentials file and
-  reports `deleted`, `present_before`, `present_after`, `revoke_requested`, and
-  `revoke_available`.
+- `browser-cli auth clear-credentials` removes the local fallback credentials
+  file and reports `deleted`, `present_before`, `present_after`,
+  `env_vars_present`, and `unset_env_commands`.
 - `browser-cli auth logout --revoke` calls `POST /api/auth/token/revoke` when a
   token lifecycle base URL is configured; without one it reports
   `revoke_available=false` and still removes local metadata. An endpoint
@@ -287,6 +288,7 @@ browser-cli auth login --device-code
 browser-cli auth connect-requirements
 browser-cli auth status
 browser-cli auth token-info
+browser-cli auth clear-credentials
 browser-cli auth logout
 browser-cli auth refresh
 ```
@@ -310,10 +312,11 @@ browser-cli auth refresh
 browser-cli auth refresh --token-base-url https://browser.lexmount.cn
 ```
 
-`auth logout` removes local credentials. Configure a token lifecycle base URL to
-attempt remote revoke:
+`auth clear-credentials` removes the local credentials file. Configure a token
+lifecycle base URL and use `auth logout --revoke` to attempt remote revoke:
 
 ```bash
+browser-cli auth clear-credentials
 browser-cli auth logout --revoke
 browser-cli auth logout --revoke --token-base-url https://browser.lexmount.cn
 ```

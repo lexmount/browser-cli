@@ -208,6 +208,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "auth.login",
     "auth.connect-requirements",
     "auth.export-env",
+    "auth.clear-credentials",
     "context.pick",
     "context.status",
     "session.create",
@@ -666,6 +667,7 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
+        "clear_local_credentials_when_requested",
         "logout_or_revoke_when_requested",
     ),
     "session_recovery": (
@@ -2223,6 +2225,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli auth status",
                 "browser-cli auth scopes",
                 "browser-cli auth refresh",
+                "browser-cli auth clear-credentials",
                 "browser-cli auth connect-requirements",
                 "browser-cli auth login",
                 "browser-cli auth export-env",
@@ -2268,6 +2271,7 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli auth scopes --scope browser:actions",
                 "browser-cli auth token-info --required-scope browser.actions:run",
                 "browser-cli auth refresh",
+                "browser-cli auth clear-credentials",
                 AGENT_DOCTOR_COMMAND,
                 "browser-cli auth logout --revoke",
             ],
@@ -2963,6 +2967,24 @@ def _command_catalog() -> dict[str, Any]:
                             "repair_plan.commands",
                             "repair_plan.connect_from_codex.url",
                         ],
+                    },
+                    {
+                        "id": "clear_local_credentials_when_requested",
+                        "command": "browser-cli auth clear-credentials",
+                        "optional": True,
+                        "user_requested_only": True,
+                        "read": [
+                            "deleted",
+                            "present_before",
+                            "present_after",
+                            "env_unchanged",
+                            "env_vars_present",
+                            "unset_env_commands",
+                            "api_key_credentials_before.kind",
+                            "device_token_before.kind",
+                            "warnings",
+                        ],
+                        "secret_handling": "Do not print API keys, access tokens, or refresh tokens.",
                     },
                     {
                         "id": "logout_or_revoke_when_requested",
@@ -8690,8 +8712,7 @@ def _extract_api_key_response_payload(
                     "api_base_url": candidate.get("api_base_url")
                     or candidate.get("apiBaseUrl")
                     or response_payload.get("api_base_url")
-                    or response_payload.get("apiBaseUrl")
-                    or DEFAULT_LEXMOUNT_BASE_URL,
+                    or response_payload.get("apiBaseUrl"),
                     "scopes": scopes or [],
                     "expires_at": candidate.get("expires_at")
                     or candidate.get("expiresAt")
@@ -8702,6 +8723,10 @@ def _extract_api_key_response_payload(
                 inspected_sources,
             )
     return {}, "missing", inspected_sources
+
+
+def _default_api_base_url_allowed_for_connect_base(connect_base_url: str) -> bool:
+    return connect_base_url.rstrip("/") == LEXMOUNT_CONSOLE_URL
 
 
 def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, Any]:
@@ -8759,6 +8784,8 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
     kind = data.get("kind")
     api_key = data.get("api_key")
     project_id = data.get("project_id")
+    api_base_url = data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL
+    connect_base_url = data.get("connect_base_url")
     scopes = data.get("scopes")
     if not isinstance(scopes, list):
         scopes = _scope_list(data.get("scope")) or []
@@ -8776,7 +8803,8 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
             "valid": valid,
             "usable_for_runtime": valid,
             "project_id": project_id,
-            "api_base_url": data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+            "api_base_url": api_base_url,
+            "connect_base_url": connect_base_url,
             "scopes": scopes,
             "scope_count": len(scopes),
             "has_api_key": isinstance(api_key, str) and bool(api_key),
@@ -8792,6 +8820,17 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
         status["warnings"].append("API-key credentials are missing api_key.")
     if not project_id:
         status["warnings"].append("API-key credentials are missing project_id.")
+    if (
+        kind == "api_key"
+        and isinstance(connect_base_url, str)
+        and not _default_api_base_url_allowed_for_connect_base(connect_base_url)
+        and api_base_url == DEFAULT_LEXMOUNT_BASE_URL
+    ):
+        status["warnings"].append(
+            "Credential file was created from a non-default Connect base URL "
+            "but points at the default production API base URL; rerun "
+            "browser-cli auth login --open after the Connect exchange returns api_base_url."
+        )
     return status
 
 
@@ -8819,13 +8858,30 @@ def _write_api_key_credentials(
             "path_source": path_source,
             "error": "missing_project_id",
         }
+    api_base_url = api_key_payload.get("api_base_url")
+    if isinstance(api_base_url, str):
+        api_base_url = api_base_url.rstrip("/")
+    if not api_base_url:
+        if _default_api_base_url_allowed_for_connect_base(connect_base_url):
+            api_base_url = DEFAULT_LEXMOUNT_BASE_URL
+        else:
+            return {
+                "saved": False,
+                "credentials_file": str(path),
+                "path_source": path_source,
+                "error": "missing_api_base_url",
+                "message": (
+                    "Connect exchange response must include api_base_url when "
+                    "using a non-default connect_base_url."
+                ),
+            }
     scopes = api_key_payload.get("scopes")
     if not isinstance(scopes, list):
         scopes = requested_scopes
     data = {
         "kind": "api_key",
         "project_id": project_id,
-        "api_base_url": api_key_payload.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+        "api_base_url": api_base_url,
         "api_key": api_key,
         "scopes": [str(scope) for scope in scopes],
         "expires_at": api_key_payload.get("expires_at"),
@@ -8850,6 +8906,7 @@ def _write_api_key_credentials(
         "has_api_key": True,
         "api_key_length": len(api_key),
         "api_key_redacted": True,
+        "api_base_url": api_base_url,
         "api_key_credentials": _local_api_key_credentials_status(str(path)),
     }
 
@@ -9184,6 +9241,27 @@ def _auth_logout_next_steps(
             steps.append(
                 "Token lifecycle revoke endpoint is not configured; revoke the token from browser.lexmount.cn if needed."
             )
+    return steps
+
+
+def _auth_clear_credentials_next_steps(
+    *,
+    deleted: bool,
+    env_vars_present: bool,
+) -> list[str]:
+    steps = [
+        "Run `browser-cli auth status` to verify local credential state.",
+    ]
+    if deleted:
+        steps.insert(0, "Local browser-cli credentials file was removed.")
+    else:
+        steps.insert(0, "No local browser-cli credentials file was removed.")
+    if env_vars_present:
+        steps.append(
+            "Run the returned unset_env_commands in the parent shell to clear environment credentials too."
+        )
+    else:
+        steps.append("No Lexmount credential environment variables were detected.")
     return steps
 
 
@@ -9630,6 +9708,9 @@ def _exchange_codex_connect_code(
         "response_payload_source": payload_source,
         "inspected_payload_sources": inspected_sources,
         "project_id": api_key_payload.get("project_id"),
+        "api_base_url": api_key_payload.get("api_base_url"),
+        "has_api_base_url": isinstance(api_key_payload.get("api_base_url"), str)
+        and bool(api_key_payload.get("api_base_url")),
         "scopes": api_key_payload.get("scopes") or [],
         "scope_count": len(api_key_payload.get("scopes") or []),
         "has_api_key": isinstance(api_key_payload.get("api_key"), str)
@@ -10829,6 +10910,14 @@ def _export_command(name: str, value: str, shell: str) -> str:
     if shell == "powershell":
         return f"$env:{name} = {quoted}"
     return f"export {name}={quoted}"
+
+
+def _unset_env_command(name: str, shell: str) -> str:
+    if shell == "fish":
+        return f"set -e {name}"
+    if shell == "powershell":
+        return f"Remove-Item Env:{name} -ErrorAction SilentlyContinue"
+    return f"unset {name}"
 
 
 def cmd_session_create(args: argparse.Namespace) -> None:
@@ -22843,6 +22932,9 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     device_token_status = _local_device_token_status(
         getattr(args, "credentials_file", None)
     )
+    api_key_credentials_status = _local_api_key_credentials_status(
+        getattr(args, "credentials_file", None)
+    )
     missing_env = [
         name
         for name, value in (
@@ -22908,7 +23000,41 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             value=region,
         )
     )
-    if device_token_status.get("present"):
+    if api_key_credentials_status.get("present"):
+        api_key_credentials_check_status = (
+            "pass"
+            if api_key_credentials_status.get("valid")
+            and not api_key_credentials_status.get("warnings")
+            else "warn"
+        )
+        checks.append(
+            _doctor_check(
+                "local_api_key_credentials",
+                api_key_credentials_check_status,
+                (
+                    "Local API-key credentials are usable for browser actions."
+                    if api_key_credentials_check_status == "pass"
+                    else "Local API-key credentials need attention."
+                ),
+                api_key_credentials=api_key_credentials_status,
+                fix=_doctor_fix(
+                    "refresh_local_api_key_credentials",
+                    commands=[
+                        "browser-cli auth status",
+                        "browser-cli auth login --open",
+                        "browser-cli doctor --json",
+                    ],
+                    guidance=[
+                        "Rerun Connect from Codex to refresh the local API-key credentials file."
+                    ],
+                ),
+            )
+        )
+
+    if (
+        device_token_status.get("present")
+        and device_token_status.get("kind") == "device_token"
+    ):
         device_token_check_status = (
             "pass"
             if device_token_status.get("valid")
@@ -22940,7 +23066,9 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 ),
             )
         )
-    elif getattr(args, "credentials_file", None):
+    elif getattr(args, "credentials_file", None) and not device_token_status.get(
+        "present"
+    ):
         checks.append(
             _doctor_check(
                 "local_device_token",
@@ -23146,6 +23274,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "auth_source": auth_source,
         "runtime_auth_usable": env_configured,
         "runtime_auth": runtime_auth,
+        "api_key_credentials": api_key_credentials_status,
         "device_token": device_token_status,
         "ready_for_browser_actions": (
             not failed
@@ -23531,6 +23660,77 @@ def cmd_auth_logout(args: argparse.Namespace) -> None:
             revoke_requested=bool(args.revoke),
             revoke_available=revoke_available,
             revoked=revoked,
+        ),
+    )
+
+
+def cmd_auth_clear_credentials(args: argparse.Namespace) -> None:
+    command = "auth.clear-credentials"
+    path, path_source = _device_token_credentials_path(args.credentials_file)
+    api_key_credentials_before = _local_api_key_credentials_status(args.credentials_file)
+    device_token_before = _local_device_token_status(args.credentials_file)
+    present_before = bool(path.exists())
+    warnings: list[str] = []
+    deleted = False
+
+    if path.exists():
+        if not path.is_file():
+            _failure(
+                command,
+                "invalid_credentials_path",
+                "Credentials path exists but is not a file.",
+                exit_code=1,
+                credentials_file=str(path),
+            )
+        try:
+            path.unlink()
+        except OSError as exc:
+            _failure(
+                command,
+                "credential_delete_error",
+                str(exc),
+                exit_code=1,
+                credentials_file=str(path),
+            )
+        deleted = True
+
+    present_after = path.exists()
+    env_status = {
+        "LEXMOUNT_API_KEY": _env_value_status("LEXMOUNT_API_KEY", secret=True),
+        "LEXMOUNT_PROJECT_ID": _env_value_status("LEXMOUNT_PROJECT_ID"),
+        "LEXMOUNT_BASE_URL": _env_value_status(
+            "LEXMOUNT_BASE_URL",
+            default=DEFAULT_LEXMOUNT_BASE_URL,
+        ),
+    }
+    env_vars_present = [
+        name for name, status in env_status.items() if bool(status.get("present"))
+    ]
+    unset_env_commands = [
+        _unset_env_command(name, args.shell) for name in env_vars_present
+    ]
+    if env_vars_present:
+        warnings.append(
+            "Environment variables are still set in the parent shell; run unset_env_commands there if you want a fully clean credential state."
+        )
+
+    _success(
+        command,
+        credentials_file=str(path),
+        path_source=path_source,
+        present_before=present_before,
+        present_after=present_after,
+        deleted=deleted,
+        env_unchanged=True,
+        env_credentials=env_status,
+        env_vars_present=env_vars_present,
+        unset_env_commands=unset_env_commands,
+        warnings=warnings,
+        api_key_credentials_before=api_key_credentials_before,
+        device_token_before=device_token_before,
+        next_steps=_auth_clear_credentials_next_steps(
+            deleted=deleted,
+            env_vars_present=bool(env_vars_present),
         ),
     )
 
@@ -31708,6 +31908,25 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     auth_logout.set_defaults(func=cmd_auth_logout)
 
+    auth_clear_credentials = auth_subparsers.add_parser(
+        "clear-credentials",
+        help="Remove browser-cli local credentials and print env unset guidance",
+    )
+    auth_clear_credentials.add_argument(
+        "--credentials-file",
+        help=(
+            "Remove local browser-cli credentials from this JSON file. Defaults to "
+            f"{DEVICE_TOKEN_CREDENTIALS_FILE_ENV} or ~/.config/lexmount/browser-cli/credentials.json."
+        ),
+    )
+    auth_clear_credentials.add_argument(
+        "--shell",
+        choices=["posix", "fish", "powershell"],
+        default="posix",
+        help="Shell syntax to use for unset_env_commands.",
+    )
+    auth_clear_credentials.set_defaults(func=cmd_auth_clear_credentials)
+
     auth_export_env = auth_subparsers.add_parser(
         "export-env",
         help="Print safe shell export commands for Lexmount credentials",
@@ -32141,7 +32360,8 @@ def main(argv: list[str] | None = None) -> None:
         cmd_version(args)
     if not hasattr(args, "func"):
         parser.error("the following arguments are required: command")
-    _apply_local_api_key_credentials(getattr(args, "credentials_file", None))
+    if getattr(args, "auth_command", None) not in {"logout", "clear-credentials"}:
+        _apply_local_api_key_credentials(getattr(args, "credentials_file", None))
     args.func(args)
 
 

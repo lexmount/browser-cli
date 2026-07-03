@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, act/click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
+description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/clear-credentials/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, act/click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
 ---
 
 # browser-cli
@@ -51,6 +51,7 @@ browser-cli auth scopes --scope browser:actions --include-site-contract
 browser-cli auth token-info --required-scope browser:actions
 browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth clear-credentials --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth connect-requirements
 browser-cli auth login
 browser-cli auth login --open
@@ -113,11 +114,7 @@ before choosing a credential source. When env credentials are incomplete, read
 `LEXMOUNT_BROWSER_TOKEN_BASE_URL` when browser.lexmount.cn exposes
 `POST /api/auth/token/refresh`. `remote_refresh` reports safe metadata such as
 `response_payload_source` and `response_summary`; token data may be top-level or
-under `token`, `device_token`, `credential`, or `credentials`. Use
-`auth logout --credentials-file <path>` to remove local device-token metadata
-without changing environment variables; `--revoke` calls
-`POST /api/auth/token/revoke` only when a token lifecycle base URL is
-configured. Treat explicit `remote_revoke.revoked=false` as not confirmed.
+under `token`, `device_token`, `credential`, or `credentials`. Use `auth clear-credentials --credentials-file <path>` to delete local browser-cli credentials, including API-key credentials or device-token metadata, without changing the parent shell; inspect `unset_env_commands` when env variables are still present. Use `auth logout --credentials-file <path>` for the device-token lifecycle flow; `--revoke` calls `POST /api/auth/token/revoke` only when a token lifecycle base URL is configured. Treat explicit `remote_revoke.revoked=false` as not confirmed.
 These commands never report access or refresh token values. Until bearer-token
 runtime support lands, require env API-key credentials for browser actions when
 `runtime_auth.usable` is false.
@@ -330,8 +327,9 @@ Always close temporary sessions created for automation unless the user asks to k
 
 Authentication commands include `browser-cli auth status`, `browser-cli auth scopes`,
 `browser-cli auth token-info`, `browser-cli auth refresh`,
-`browser-cli auth logout`, `browser-cli auth connect-requirements`,
-`browser-cli auth login`, and `browser-cli auth export-env`.
+`browser-cli auth logout`, `browser-cli auth clear-credentials`,
+`browser-cli auth connect-requirements`, `browser-cli auth login`, and
+`browser-cli auth export-env`.
 
 Diagnostics:
 
