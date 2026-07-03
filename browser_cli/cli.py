@@ -8690,8 +8690,7 @@ def _extract_api_key_response_payload(
                     "api_base_url": candidate.get("api_base_url")
                     or candidate.get("apiBaseUrl")
                     or response_payload.get("api_base_url")
-                    or response_payload.get("apiBaseUrl")
-                    or DEFAULT_LEXMOUNT_BASE_URL,
+                    or response_payload.get("apiBaseUrl"),
                     "scopes": scopes or [],
                     "expires_at": candidate.get("expires_at")
                     or candidate.get("expiresAt")
@@ -8702,6 +8701,10 @@ def _extract_api_key_response_payload(
                 inspected_sources,
             )
     return {}, "missing", inspected_sources
+
+
+def _default_api_base_url_allowed_for_connect_base(connect_base_url: str) -> bool:
+    return connect_base_url.rstrip("/") == LEXMOUNT_CONSOLE_URL
 
 
 def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, Any]:
@@ -8759,6 +8762,8 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
     kind = data.get("kind")
     api_key = data.get("api_key")
     project_id = data.get("project_id")
+    api_base_url = data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL
+    connect_base_url = data.get("connect_base_url")
     scopes = data.get("scopes")
     if not isinstance(scopes, list):
         scopes = _scope_list(data.get("scope")) or []
@@ -8776,7 +8781,8 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
             "valid": valid,
             "usable_for_runtime": valid,
             "project_id": project_id,
-            "api_base_url": data.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+            "api_base_url": api_base_url,
+            "connect_base_url": connect_base_url,
             "scopes": scopes,
             "scope_count": len(scopes),
             "has_api_key": isinstance(api_key, str) and bool(api_key),
@@ -8792,6 +8798,17 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
         status["warnings"].append("API-key credentials are missing api_key.")
     if not project_id:
         status["warnings"].append("API-key credentials are missing project_id.")
+    if (
+        kind == "api_key"
+        and isinstance(connect_base_url, str)
+        and not _default_api_base_url_allowed_for_connect_base(connect_base_url)
+        and api_base_url == DEFAULT_LEXMOUNT_BASE_URL
+    ):
+        status["warnings"].append(
+            "Credential file was created from a non-default Connect base URL "
+            "but points at the default production API base URL; rerun "
+            "browser-cli auth login --open after the Connect exchange returns api_base_url."
+        )
     return status
 
 
@@ -8819,13 +8836,30 @@ def _write_api_key_credentials(
             "path_source": path_source,
             "error": "missing_project_id",
         }
+    api_base_url = api_key_payload.get("api_base_url")
+    if isinstance(api_base_url, str):
+        api_base_url = api_base_url.rstrip("/")
+    if not api_base_url:
+        if _default_api_base_url_allowed_for_connect_base(connect_base_url):
+            api_base_url = DEFAULT_LEXMOUNT_BASE_URL
+        else:
+            return {
+                "saved": False,
+                "credentials_file": str(path),
+                "path_source": path_source,
+                "error": "missing_api_base_url",
+                "message": (
+                    "Connect exchange response must include api_base_url when "
+                    "using a non-default connect_base_url."
+                ),
+            }
     scopes = api_key_payload.get("scopes")
     if not isinstance(scopes, list):
         scopes = requested_scopes
     data = {
         "kind": "api_key",
         "project_id": project_id,
-        "api_base_url": api_key_payload.get("api_base_url") or DEFAULT_LEXMOUNT_BASE_URL,
+        "api_base_url": api_base_url,
         "api_key": api_key,
         "scopes": [str(scope) for scope in scopes],
         "expires_at": api_key_payload.get("expires_at"),
@@ -8850,6 +8884,7 @@ def _write_api_key_credentials(
         "has_api_key": True,
         "api_key_length": len(api_key),
         "api_key_redacted": True,
+        "api_base_url": api_base_url,
         "api_key_credentials": _local_api_key_credentials_status(str(path)),
     }
 
@@ -9630,6 +9665,9 @@ def _exchange_codex_connect_code(
         "response_payload_source": payload_source,
         "inspected_payload_sources": inspected_sources,
         "project_id": api_key_payload.get("project_id"),
+        "api_base_url": api_key_payload.get("api_base_url"),
+        "has_api_base_url": isinstance(api_key_payload.get("api_base_url"), str)
+        and bool(api_key_payload.get("api_base_url")),
         "scopes": api_key_payload.get("scopes") or [],
         "scope_count": len(api_key_payload.get("scopes") or []),
         "has_api_key": isinstance(api_key_payload.get("api_key"), str)
@@ -22843,6 +22881,9 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     device_token_status = _local_device_token_status(
         getattr(args, "credentials_file", None)
     )
+    api_key_credentials_status = _local_api_key_credentials_status(
+        getattr(args, "credentials_file", None)
+    )
     missing_env = [
         name
         for name, value in (
@@ -22908,7 +22949,41 @@ def cmd_doctor(args: argparse.Namespace) -> None:
             value=region,
         )
     )
-    if device_token_status.get("present"):
+    if api_key_credentials_status.get("present"):
+        api_key_credentials_check_status = (
+            "pass"
+            if api_key_credentials_status.get("valid")
+            and not api_key_credentials_status.get("warnings")
+            else "warn"
+        )
+        checks.append(
+            _doctor_check(
+                "local_api_key_credentials",
+                api_key_credentials_check_status,
+                (
+                    "Local API-key credentials are usable for browser actions."
+                    if api_key_credentials_check_status == "pass"
+                    else "Local API-key credentials need attention."
+                ),
+                api_key_credentials=api_key_credentials_status,
+                fix=_doctor_fix(
+                    "refresh_local_api_key_credentials",
+                    commands=[
+                        "browser-cli auth status",
+                        "browser-cli auth login --open",
+                        "browser-cli doctor --json",
+                    ],
+                    guidance=[
+                        "Rerun Connect from Codex to refresh the local API-key credentials file."
+                    ],
+                ),
+            )
+        )
+
+    if (
+        device_token_status.get("present")
+        and device_token_status.get("kind") == "device_token"
+    ):
         device_token_check_status = (
             "pass"
             if device_token_status.get("valid")
@@ -22940,7 +23015,9 @@ def cmd_doctor(args: argparse.Namespace) -> None:
                 ),
             )
         )
-    elif getattr(args, "credentials_file", None):
+    elif getattr(args, "credentials_file", None) and not device_token_status.get(
+        "present"
+    ):
         checks.append(
             _doctor_check(
                 "local_device_token",
@@ -23146,6 +23223,7 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         "auth_source": auth_source,
         "runtime_auth_usable": env_configured,
         "runtime_auth": runtime_auth,
+        "api_key_credentials": api_key_credentials_status,
         "device_token": device_token_status,
         "ready_for_browser_actions": (
             not failed

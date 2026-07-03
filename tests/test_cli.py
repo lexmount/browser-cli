@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
@@ -10053,6 +10054,55 @@ def test_doctor_reports_device_token_without_treating_it_as_runtime_auth(
     assert "direct_url" in payload["failed_checks"]
 
 
+def test_doctor_reports_api_key_credentials_without_device_token_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "api_key",
+                "project_id": "project",
+                "api_base_url": "https://apitest.local.lexmount.net",
+                "api_key": "secret-api-key",
+                "scopes": ["browser:sessions"],
+                "connect_base_url": "https://test.local.lexmount.net",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "doctor",
+                "--skip-api",
+                "--credentials-file",
+                str(credentials_file),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert "secret-api-key" not in stdout
+    assert payload["auth_source"] == "env"
+    assert payload["runtime_auth_usable"] is True
+    assert payload["api_key_credentials"]["valid"] is True
+    assert payload["api_key_credentials"]["api_base_url"] == (
+        "https://apitest.local.lexmount.net"
+    )
+    checks = _checks_by_name(payload)
+    assert checks["local_api_key_credentials"]["status"] == "pass"
+    assert "local_device_token" not in checks
+    assert os.environ["LEXMOUNT_BASE_URL"] == "https://apitest.local.lexmount.net"
+
+
 def test_doctor_skip_api_does_not_call_admin(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -12594,6 +12644,7 @@ def test_auth_login_open_exchanges_code_and_saves_api_key_without_stdout_secret(
 ) -> None:
     monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
     monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
     credentials_file = tmp_path / "credentials.json"
     exchange_requests: list[dict[str, Any]] = []
 
@@ -12660,6 +12711,7 @@ def test_auth_login_open_exchanges_code_and_saves_api_key_without_stdout_secret(
     assert payload["loopback_callback"]["code_present"] is True
     assert payload["exchange"]["ok"] is True
     assert payload["exchange"]["project_id"] == "project-from-exchange"
+    assert payload["exchange"]["has_api_base_url"] is False
     assert payload["credentials"]["saved"] is True
     assert payload["credentials"]["credentials_file"] == str(credentials_file)
     assert "secret-api-key-from-exchange" not in stdout
@@ -12676,8 +12728,175 @@ def test_auth_login_open_exchanges_code_and_saves_api_key_without_stdout_secret(
     stored = json.loads(credentials_file.read_text())
     assert stored["kind"] == "api_key"
     assert stored["project_id"] == "project-from-exchange"
+    assert stored["api_base_url"] == "https://api.lexmount.cn"
     assert stored["api_key"] == "secret-api-key-from-exchange"
     assert stored["scopes"] == ["browser:sessions", "browser:actions"]
+    assert os.environ["LEXMOUNT_BASE_URL"] == "https://api.lexmount.cn"
+
+
+def test_auth_login_open_saves_exchange_api_base_url_for_custom_connect_base(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Any,
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    credentials_file = tmp_path / "credentials.json"
+    exchange_requests: list[dict[str, Any]] = []
+
+    def fake_json_http_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        exchange_requests.append(
+            {"url": url, "body": payload, "timeout_seconds": timeout_seconds}
+        )
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {
+                "ok": True,
+                "token_type": "api_key",
+                "project_id": "project-from-exchange",
+                "api_base_url": "https://apitest.local.lexmount.net/",
+                "api_key": "secret-api-key-from-exchange",
+                "scope": ["browser:sessions", "browser:actions"],
+            },
+        }
+
+    def fake_open(url: str) -> bool:
+        query = parse_qs(urlsplit(url).query)
+        redirect_uri = query["redirect_uri"][0]
+        state = query["state"][0]
+        with urlopen(
+            f"{redirect_uri}?code=authorization-code&state={state}",
+            timeout=2,
+        ) as response:
+            response.read()
+        return True
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_json_http_post)
+    monkeypatch.setattr(cli_module.webbrowser, "open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--open",
+                "--credentials-file",
+                str(credentials_file),
+                "--connect-base-url",
+                "https://test.local.lexmount.net",
+                "--callback-timeout-seconds",
+                "2",
+                "--connect-http-timeout-seconds",
+                "1",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert payload["authenticated"] is True
+    assert payload["credentials_saved"] is True
+    assert payload["exchange"]["ok"] is True
+    assert payload["exchange"]["api_base_url"] == "https://apitest.local.lexmount.net/"
+    assert payload["exchange"]["has_api_base_url"] is True
+    assert payload["credentials"]["api_base_url"] == "https://apitest.local.lexmount.net"
+    assert "secret-api-key-from-exchange" not in stdout
+    assert exchange_requests[0]["url"] == (
+        "https://test.local.lexmount.net/api/connect/codex/exchange"
+    )
+
+    stored = json.loads(credentials_file.read_text())
+    assert stored["kind"] == "api_key"
+    assert stored["project_id"] == "project-from-exchange"
+    assert stored["api_base_url"] == "https://apitest.local.lexmount.net"
+    assert stored["api_key"] == "secret-api-key-from-exchange"
+    assert os.environ["LEXMOUNT_BASE_URL"] == "https://apitest.local.lexmount.net"
+
+
+def test_auth_login_open_requires_api_base_url_for_custom_connect_base(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Any,
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    credentials_file = tmp_path / "credentials.json"
+
+    def fake_json_http_post(
+        url: str,
+        payload: dict[str, Any],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, Any]:
+        assert url == "https://test.local.lexmount.net/api/connect/codex/exchange"
+        return {
+            "ok": True,
+            "status_code": 200,
+            "error": None,
+            "message": None,
+            "json": {
+                "ok": True,
+                "token_type": "api_key",
+                "project_id": "project-from-exchange",
+                "api_key": "secret-api-key-from-exchange",
+                "scope": ["browser:sessions", "browser:actions"],
+            },
+        }
+
+    def fake_open(url: str) -> bool:
+        query = parse_qs(urlsplit(url).query)
+        redirect_uri = query["redirect_uri"][0]
+        state = query["state"][0]
+        with urlopen(
+            f"{redirect_uri}?code=authorization-code&state={state}",
+            timeout=2,
+        ) as response:
+            response.read()
+        return True
+
+    monkeypatch.setattr(cli_module, "_json_http_post", fake_json_http_post)
+    monkeypatch.setattr(cli_module.webbrowser, "open", fake_open)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "login",
+                "--open",
+                "--credentials-file",
+                str(credentials_file),
+                "--connect-base-url",
+                "https://test.local.lexmount.net",
+                "--callback-timeout-seconds",
+                "2",
+                "--connect-http-timeout-seconds",
+                "1",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert payload["authenticated"] is False
+    assert payload["credentials_saved"] is False
+    assert payload["reason"] == "exchange_failed"
+    assert payload["exchange"]["ok"] is False
+    assert payload["exchange"]["error"] == "missing_api_base_url"
+    assert payload["credentials"]["saved"] is False
+    assert payload["credentials"]["error"] == "missing_api_base_url"
+    assert not credentials_file.exists()
+    assert "secret-api-key-from-exchange" not in stdout
+    assert os.environ.get("LEXMOUNT_BASE_URL") is None
 
 
 def test_auth_login_open_failure_is_non_fatal_and_masked(
