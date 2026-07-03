@@ -218,7 +218,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     normalized = _normalized_skill_text()
 
     assert (
-        "guide authentication with auth status/scopes/token-info/refresh/logout/connect-requirements/export-env/login"
+        "guide authentication with auth status/scopes/token-info/refresh/logout/clear-credentials/connect-requirements/export-env/login"
         in normalized
     )
     assert "browser-cli auth status" in normalized

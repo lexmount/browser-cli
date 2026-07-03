@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.0"
+    assert payload["version"] == "0.3.1"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -444,6 +444,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "browser-cli skill install --force" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth scopes" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli auth refresh" in payload["agent_entrypoints"]["setup"]
+    assert "browser-cli auth clear-credentials" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --json" in payload["agent_entrypoints"]["setup"]
     assert "browser-cli doctor --smoke-session" in payload["agent_entrypoints"]["setup"]
     assert (
@@ -589,6 +590,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert (
         "browser-cli auth token-info --required-scope browser.actions:run"
+        in payload["agent_entrypoints"]["scoped_token_lifecycle"]
+    )
+    assert (
+        "browser-cli auth clear-credentials"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
     )
     assert (
@@ -957,6 +962,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
+        "clear_local_credentials_when_requested",
         "logout_or_revoke_when_requested",
     ]
     assert token_steps[0]["command"] == "browser-cli auth status"
@@ -985,12 +991,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "repair_plan.connect_from_codex.url" in token_steps[4]["on_failure_read"]
     assert token_steps[5]["optional"] is True
     assert token_steps[5]["user_requested_only"] is True
-    assert "revoke_available" in token_steps[5]["read"]
-    assert "revoked" in token_steps[5]["read"]
-    assert "revoke_endpoint" in token_steps[5]["read"]
-    assert "remote_revoke.attempted" in token_steps[5]["read"]
-    assert "remote_revoke.token_type_hint" in token_steps[5]["read"]
-    assert "remote_revoke.revoked" in token_steps[5]["read"]
+    assert "unset_env_commands" in token_steps[5]["read"]
+    assert "api_key_credentials_before.kind" in token_steps[5]["read"]
+    assert token_steps[6]["optional"] is True
+    assert token_steps[6]["user_requested_only"] is True
+    assert "revoke_available" in token_steps[6]["read"]
+    assert "revoked" in token_steps[6]["read"]
+    assert "revoke_endpoint" in token_steps[6]["read"]
+    assert "remote_revoke.attempted" in token_steps[6]["read"]
+    assert "remote_revoke.token_type_hint" in token_steps[6]["read"]
+    assert "remote_revoke.revoked" in token_steps[6]["read"]
     session_steps = workflows["session_recovery"]["steps"]
     assert [step["id"] for step in session_steps] == [
         "list_active_sessions",
@@ -6343,6 +6353,7 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
+        "clear_local_credentials_when_requested",
         "logout_or_revoke_when_requested",
     ]
     assert steps[0]["command"] == "browser-cli auth status"
@@ -6364,9 +6375,12 @@ def test_commands_catalog_returns_scoped_token_lifecycle_workflow(
         "ok=true and ready_for_browser_actions=true"
     )
     assert steps[5]["user_requested_only"] is True
-    assert "revoke_available" in steps[5]["read"]
-    assert "remote_revoke.status_code" in steps[5]["read"]
-    assert "remote_revoke.revoked" in steps[5]["read"]
+    assert "unset_env_commands" in steps[5]["read"]
+    assert "api_key_credentials_before.kind" in steps[5]["read"]
+    assert steps[6]["user_requested_only"] is True
+    assert "revoke_available" in steps[6]["read"]
+    assert "remote_revoke.status_code" in steps[6]["read"]
+    assert "remote_revoke.revoked" in steps[6]["read"]
     assert (
         "browser-cli auth scopes --scope browser:actions"
         in payload["agent_entrypoints"]["scoped_token_lifecycle"]
@@ -7204,6 +7218,7 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "inspect_required_scopes",
         "refresh_if_needed",
         "verify_browser_readiness",
+        "clear_local_credentials_when_requested",
         "logout_or_revoke_when_requested",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["session_recovery"] == [
@@ -9520,6 +9535,7 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
         "connect_from_codex_site_requirements": [
             "inspect_connect_from_codex_reference"
         ],
+        "scoped_token_lifecycle": ["clear_local_credentials_when_requested"],
         "browser_state_management": ["cleanup_state"],
         "file_upload": ["submit_if_requested"],
         "dialog_frame_handling": ["verify_result"],
@@ -9863,7 +9879,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.0"
+    assert checks["browser_cli"]["version"] == "0.3.1"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -11128,6 +11144,112 @@ def test_auth_logout_missing_file_is_idempotent(
     assert (
         payload["next_steps"][0] == "No local device-token metadata file was removed."
     )
+
+
+def test_auth_clear_credentials_deletes_api_key_file_without_revealing_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("LEXMOUNT_API_KEY", raising=False)
+    monkeypatch.delenv("LEXMOUNT_PROJECT_ID", raising=False)
+    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
+    credentials_file = tmp_path / "credentials.json"
+    credentials_file.write_text(
+        json.dumps(
+            {
+                "kind": "api_key",
+                "project_id": "project",
+                "api_base_url": "https://apitest.local.lexmount.net",
+                "api_key": "secret-api-key",
+                "scopes": ["browser:sessions"],
+                "connect_base_url": "https://test.local.lexmount.net",
+            }
+        )
+    )
+    credentials_file.chmod(0o600)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "clear-credentials",
+                "--credentials-file",
+                str(credentials_file),
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert not credentials_file.exists()
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert "secret-api-key" not in stdout
+    assert payload["command"] == "auth.clear-credentials"
+    assert payload["credentials_file"] == str(credentials_file)
+    assert payload["path_source"] == "argument"
+    assert payload["present_before"] is True
+    assert payload["present_after"] is False
+    assert payload["deleted"] is True
+    assert payload["env_unchanged"] is True
+    assert payload["env_vars_present"] == []
+    assert payload["unset_env_commands"] == []
+    assert payload["warnings"] == []
+    assert payload["api_key_credentials_before"]["kind"] == "api_key"
+    assert payload["api_key_credentials_before"]["valid"] is True
+    assert payload["device_token_before"]["kind"] == "api_key"
+    assert (
+        payload["next_steps"][0] == "Local browser-cli credentials file was removed."
+    )
+    assert os.environ.get("LEXMOUNT_API_KEY") is None
+    assert os.environ.get("LEXMOUNT_PROJECT_ID") is None
+    assert os.environ.get("LEXMOUNT_BASE_URL") is None
+
+
+def test_auth_clear_credentials_reports_parent_shell_env_cleanup_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("LEXMOUNT_API_KEY", "secret-env-api-key")
+    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
+    monkeypatch.setenv("LEXMOUNT_BASE_URL", "https://apitest.local.lexmount.net")
+    credentials_file = tmp_path / "missing.json"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "auth",
+                "clear-credentials",
+                "--credentials-file",
+                str(credentials_file),
+                "--shell",
+                "fish",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    payload = json.loads(stdout)
+    assert "secret-env-api-key" not in stdout
+    assert payload["command"] == "auth.clear-credentials"
+    assert payload["present_before"] is False
+    assert payload["present_after"] is False
+    assert payload["deleted"] is False
+    assert payload["env_unchanged"] is True
+    assert payload["env_vars_present"] == [
+        "LEXMOUNT_API_KEY",
+        "LEXMOUNT_PROJECT_ID",
+        "LEXMOUNT_BASE_URL",
+    ]
+    assert payload["unset_env_commands"] == [
+        "set -e LEXMOUNT_API_KEY",
+        "set -e LEXMOUNT_PROJECT_ID",
+        "set -e LEXMOUNT_BASE_URL",
+    ]
+    assert payload["env_credentials"]["LEXMOUNT_API_KEY"]["masked_value"] == "***"
+    assert payload["warnings"] == [
+        "Environment variables are still set in the parent shell; run unset_env_commands there if you want a fully clean credential state."
+    ]
 
 
 def test_auth_logout_revoke_flag_reports_remote_revoke_pending(

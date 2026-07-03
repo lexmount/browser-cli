@@ -116,6 +116,7 @@ browser-cli auth scopes
 browser-cli auth scopes --include-site-contract
 browser-cli auth token-info
 browser-cli auth refresh
+browser-cli auth clear-credentials
 browser-cli auth logout
 browser-cli auth connect-requirements
 browser-cli auth connect-requirements --checklist
@@ -218,9 +219,10 @@ Expected behavior after the website page exists:
   reports response shape metadata, not token values.
   Without a configured endpoint, it reports `refresh_available=false` and
   `refreshed=false`.
-- `browser-cli auth logout` remains local, removes fallback device-token
-  metadata, and only attempts remote revoke when `--revoke` and a token
-  lifecycle base URL are configured. The remote path is
+- `browser-cli auth clear-credentials` remains local and removes fallback
+  credentials metadata without changing parent-shell environment variables.
+  `browser-cli auth logout --revoke` attempts remote revoke when a token
+  lifecycle base URL is configured. The remote path is
   `POST /api/auth/token/revoke`; output reports `revoke_endpoint`,
   `remote_revoke`, `revoke_available`, and `revoked`. The request includes
   `token_type_hint`, `credential_kind`, `project_id`, `token_id`, and scopes

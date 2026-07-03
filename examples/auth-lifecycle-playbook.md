@@ -146,6 +146,7 @@ For scoped token lifecycle work, use explicit credentials files when possible:
 
 ```bash
 browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth clear-credentials --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json --revoke
 ```

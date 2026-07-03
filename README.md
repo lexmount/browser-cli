@@ -315,6 +315,7 @@ browser-cli auth scopes --scope browser:actions --include-site-contract
 browser-cli auth token-info --required-scope browser:actions
 browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth clear-credentials --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth login
 browser-cli auth login --open
 browser-cli auth login --device-code
@@ -369,10 +370,15 @@ under `token`, `device_token`, `credential`, or `credentials`. camelCase fields
 such as `accessToken`, `refreshToken`, `expiresIn`, `projectId`, and `tokenId`
 are normalized before saving. `remote_refresh` reports only safe response
 metadata such as `response_payload_source` and `response_summary`.
-Use `auth logout --credentials-file <path>` to remove local device-token
-metadata without changing environment variables. `auth logout --revoke` calls
-`POST /api/auth/token/revoke` when a token lifecycle base URL is configured;
-the revoke response may omit `revoked`, but explicit `revoked:false` is treated
+Use `auth clear-credentials --credentials-file <path>` to remove the local
+browser-cli credentials file, whether it contains API-key credentials or
+device-token metadata. It cannot mutate the parent shell, so it reports
+`env_unchanged: true` plus `unset_env_commands` when `LEXMOUNT_API_KEY`,
+`LEXMOUNT_PROJECT_ID`, or `LEXMOUNT_BASE_URL` are still present. Use
+`auth logout --credentials-file <path>` when you specifically want the
+device-token lifecycle flow; `auth logout --revoke` calls
+`POST /api/auth/token/revoke` when a token lifecycle base URL is configured.
+The revoke response may omit `revoked`, but explicit `revoked:false` is treated
 as not confirmed. Without a token lifecycle base URL it reports
 `revoke_available: false` and reminds you to revoke from browser.lexmount.cn.
 
@@ -495,6 +501,7 @@ browser-cli auth scopes --scope browser:actions --include-site-contract
 browser-cli auth token-info --required-scope browser:sessions --required-scope browser:actions
 browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
+browser-cli auth clear-credentials --credentials-file ~/.config/lexmount/browser-cli/credentials.json
 browser-cli auth connect-requirements
 browser-cli auth login
 browser-cli auth login --open
