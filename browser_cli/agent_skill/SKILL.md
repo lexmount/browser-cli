@@ -177,6 +177,7 @@ what to do:
   `status: "fail"`, and follow each check's `fix` object when present.
 - `api_connectivity` with `status: "skipped"`: do not treat live API access as
   verified.
+- `env.LEXMOUNT_BASE_URL` with `status: "fail"` and `value_internal: true`: unset it, rerun `browser-cli auth login --open`, and verify a public API base URL before browser work.
 
 Use `browser-cli doctor --skip-api` only for offline setup checks or when the
 user explicitly asks to avoid a live API call. Do not treat a skipped API check
@@ -462,8 +463,9 @@ agent task flows, `--names-only` for quick availability checks, and
 `--group action` or `action guide --task <task>` before choosing browser
 actions.
 Do not paste API keys, Project IDs, or full direct connect URLs into chat, docs,
-commits, screenshots, or test fixtures. By default, browser direct URLs are
-masked. Use reveal flags only for local debugging in a trusted shell.
+commits, screenshots, or test fixtures. By default, doctor hides full direct
+URLs and action/direct-url outputs mask secrets. Use reveal flags only for local
+debugging in a trusted shell.
 Failure messages and payloads mask `api_key`, token-like query parameters, and
 the current `LEXMOUNT_API_KEY` value.
 If `error` is `argument_error`, read the JSON `usage` field and rerun a

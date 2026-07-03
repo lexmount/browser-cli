@@ -302,8 +302,9 @@ export LEXMOUNT_BASE_URL="https://api.lexmount.cn"
 export LEXMOUNT_REGION="<region>"
 ```
 
-Treat API keys as secrets. The CLI masks `api_key` in generated direct browser
-URLs unless you pass an explicit reveal flag.
+Treat API keys and direct browser URLs as secrets. The CLI masks `api_key` in
+generated direct browser URLs, and `doctor` hides full direct URLs by default
+so internal hosts are not exposed unless you pass an explicit reveal flag.
 
 Use these local auth helpers:
 
@@ -399,6 +400,9 @@ not be called.
 Use `browser-cli doctor --smoke-session` when you need stronger proof that the
 credentials can create and close a temporary browser session, not just reach the
 API.
+If `LEXMOUNT_BASE_URL` points at an internal Kubernetes host such as `*.svc` or
+`*.cluster.local`, `doctor` treats it as invalid, redacts the value, and asks you
+to unset it or rerun `browser-cli auth login --open`.
 
 For machine-readable command discovery, run:
 
@@ -1003,8 +1007,9 @@ parsing stderr.
 aggregates fix commands/env/guidance. Its `checks` array uses `pass`, `warn`,
 `fail`, or `skipped` statuses for Python/runtime, install path, version,
 command catalog, case schema, packaged references/examples, environment,
-direct URL, API connectivity, and optional browser smoke-session checks. The
-`browser_cli` check
+direct URL, API connectivity, and optional browser smoke-session checks.
+`doctor` reports whether the direct URL can be built, but hides the full URL by
+default; use `--reveal-connect-url` only in a trusted local shell. The `browser_cli` check
 reports `version_source` so agents can distinguish installed package metadata
 from the package fallback version.
 The `agent_references` check verifies packaged Skill reference docs such as
