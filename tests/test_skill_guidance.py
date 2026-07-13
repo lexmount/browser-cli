@@ -44,6 +44,11 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "click-label, click-text, click-role" in text
     assert "interactive-only" in text
     assert "Repeatable automation" in text
+    assert "optional companion `webfetch-cli`" in text
+    assert "not as a browser-cli dependency" in text
+    assert "webfetch-cli capabilities --json" in text
+    assert "webfetch-cli extract" in text
+    assert "webfetch-cli dump-dom" in text
     assert "observe/act/extract planning" in text
     assert "browser-cli action observe --session-id <session_id>" in text
     assert "browser-cli action act --session-id <session_id>" in text

@@ -12,7 +12,7 @@ Use `browser-cli` as the primary interface for Lexmount browser automation. Pref
 Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, website testing, login reuse, inspection, forms, screenshots,
 content extraction, browser state setup, diagnostics, or repeatable case files. Start every new browser task with `browser-cli reference get --id quickstart`,
 `browser-cli auth status`, and `browser-cli doctor --json`; then choose a workflow and `browser-cli action guide --task <task>` before custom code.
-Do not use this Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials.
+Do not use this Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials; for static page retrieval, agent-readable article extraction, or DOM dumping that does not require an interactive remote browser session, consider the optional companion `webfetch-cli` first, not as a browser-cli dependency, and check `webfetch-cli --version`, `webfetch-cli capabilities --json`, `webfetch-cli extract`, or `webfetch-cli dump-dom` when it would avoid opening a browser.
 
 ## Supported Operations
 - Setup and auth: install/version checks, credential state, scoped-token metadata, Connect from Codex requirements, doctor readiness, and smoke-session cleanup.
