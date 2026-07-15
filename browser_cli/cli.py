@@ -9856,6 +9856,7 @@ def _run_codex_connect_loopback_login(
     expires_in: str,
     connect_base_url: str,
     connect_base_url_source: str,
+    client_name: str,
 ) -> dict[str, Any]:
     code_verifier = _new_pkce_code_verifier()
     code_challenge = _pkce_code_challenge(code_verifier)
@@ -9874,7 +9875,7 @@ def _run_codex_connect_loopback_login(
         state=state,
         code_challenge=code_challenge,
         code_challenge_method="S256",
-        client_name="Agent",
+        client_name=client_name,
     )
     exchange_endpoint = _codex_connect_endpoint(
         connect_base_url, "/api/connect/codex/exchange"
@@ -24319,6 +24320,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         scopes=scopes,
         expires_in=args.expires_in,
         connect_base_url=connect_base_url,
+        client_name=args.client_name,
     )
     device_connect_url = _connect_from_codex_url(
         project_id=project_id,
@@ -24326,6 +24328,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         expires_in=args.expires_in,
         response="device_code",
         connect_base_url=connect_base_url,
+        client_name=args.client_name,
     )
     handoff = _auth_login_handoff(
         connect_url=connect_url,
@@ -24361,6 +24364,7 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
             expires_in=args.expires_in,
             connect_base_url=connect_base_url,
             connect_base_url_source=connect_base_url_source,
+            client_name=args.client_name,
         )
         warnings.extend(connect_attempt.get("warnings", []))
         authenticated = bool(connect_attempt.get("authenticated"))
@@ -32245,6 +32249,11 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
             "Lexmount Browser console origin for Connect from Codex. Defaults to "
             f"{CODEX_CONNECT_BASE_URL_ENV} or {LEXMOUNT_CONSOLE_URL}."
         ),
+    )
+    auth_login.add_argument(
+        "--client-name",
+        default="Agent",
+        help="Agent name shown in the browser approval UI.",
     )
     auth_login.add_argument(
         "--open",
