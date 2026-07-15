@@ -524,6 +524,7 @@ DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "action observe",
     "action act",
     "action extract",
+    "webfetch-cli capabilities --json",
     "click-label",
     "fill before custom JavaScript",
     "custom JavaScript",
@@ -546,6 +547,7 @@ DOCTOR_REQUIRED_SKILL_PATTERNS = (
     "browser-cli action act --session-id <session_id>",
     "browser-cli action extract --session-id <session_id>",
     "browser-cli doctor --json",
+    "webfetch-cli capabilities --json",
     "Write custom Playwright only when the CLI cannot express the task",
 )
 DOCTOR_REQUIRED_WORKFLOWS = (
