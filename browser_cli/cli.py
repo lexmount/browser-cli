@@ -9680,7 +9680,7 @@ def _connect_from_codex_url(
     state: str | None = None,
     code_challenge: str | None = None,
     code_challenge_method: str = "S256",
-    client_name: str = "Codex",
+    client_name: str = "Agent",
 ) -> str:
     base_url = connect_base_url or LEXMOUNT_CONSOLE_URL
     query: list[tuple[str, str]] = [
@@ -9874,7 +9874,7 @@ def _run_codex_connect_loopback_login(
         state=state,
         code_challenge=code_challenge,
         code_challenge_method="S256",
-        client_name="Codex",
+        client_name="Agent",
     )
     exchange_endpoint = _codex_connect_endpoint(
         connect_base_url, "/api/connect/codex/exchange"
@@ -9894,7 +9894,7 @@ def _run_codex_connect_loopback_login(
         except Exception as exc:
             open_result["error"] = _mask_sensitive_text(str(exc))
             warnings.append(
-                "Failed to open the Connect from Codex URL automatically; rerun auth login --open or copy the URL locally."
+                "Failed to open the Connect from Agent URL automatically; rerun auth login --open or copy the URL locally."
             )
             return {
                 "attempted": True,
@@ -9918,7 +9918,7 @@ def _run_codex_connect_loopback_login(
             }
         if not open_result["opened"]:
             warnings.append(
-                "The system browser did not confirm opening the Connect from Codex URL; rerun auth login --open or copy the URL locally."
+                "The system browser did not confirm opening the Connect from Agent URL; rerun auth login --open or copy the URL locally."
             )
             return {
                 "attempted": True,
@@ -9949,7 +9949,7 @@ def _run_codex_connect_loopback_login(
         callback["timeout_seconds"] = callback_timeout_seconds
         if not received:
             warnings.append(
-                "Timed out waiting for the local Connect from Codex callback."
+                "Timed out waiting for the local Connect from Agent callback."
             )
             return {
                 "attempted": True,
@@ -9969,7 +9969,7 @@ def _run_codex_connect_loopback_login(
             }
         query = raw_callback.get("query", {}) if isinstance(raw_callback, dict) else {}
         if callback.get("error"):
-            warnings.append("Connect from Codex returned an authorization error.")
+            warnings.append("Connect from Agent returned an authorization error.")
             return {
                 "attempted": True,
                 "available": True,
@@ -9987,7 +9987,7 @@ def _run_codex_connect_loopback_login(
                 "warnings": warnings,
             }
         if not callback.get("state_valid"):
-            warnings.append("Connect from Codex callback state did not match.")
+            warnings.append("Connect from Agent callback state did not match.")
             return {
                 "attempted": True,
                 "available": True,
@@ -10006,7 +10006,7 @@ def _run_codex_connect_loopback_login(
             }
         code = query.get("code")
         if not isinstance(code, str) or not code:
-            warnings.append("Connect from Codex callback did not include a code.")
+            warnings.append("Connect from Agent callback did not include a code.")
             return {
                 "attempted": True,
                 "available": True,
@@ -10037,7 +10037,7 @@ def _run_codex_connect_loopback_login(
         authenticated = bool(exchange.get("ok"))
         if not authenticated:
             warnings.append(
-                "Connect from Codex exchange did not return usable credentials."
+                "Connect from Agent exchange did not return usable credentials."
             )
         return {
             "attempted": True,
@@ -10584,7 +10584,7 @@ def _auth_login_setup_blocks(
         },
         {
             "id": "open_connect",
-            "label": "Open Connect from Codex",
+            "label": "Open Connect from Agent",
             "commands": [
                 open_command,
             ],
@@ -24453,12 +24453,12 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
         except Exception as exc:
             open_result["error"] = _mask_sensitive_text(str(exc))
             warnings.append(
-                "Failed to open the Connect from Codex URL automatically; copy the URL manually."
+                "Failed to open the Connect from Agent URL automatically; copy the URL manually."
             )
         else:
             if not open_result["opened"]:
                 warnings.append(
-                    "The system browser did not confirm opening the Connect from Codex URL; copy the URL manually."
+                    "The system browser did not confirm opening the Connect from Agent URL; copy the URL manually."
                 )
     if args.device_code:
         if device_code_base_url:
@@ -32298,7 +32298,7 @@ def _add_auth_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     auth_login.add_argument(
         "--device-name",
-        default="Codex workstation",
+        default="Agent workstation",
         help="Device name shown in the browser approval UI.",
     )
     auth_login.add_argument(

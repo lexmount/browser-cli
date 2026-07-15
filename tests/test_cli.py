@@ -12412,7 +12412,7 @@ def test_auth_login_guides_manual_browser_flow(
     assert query["scope"] == [
         "browser:sessions browser:contexts browser:actions",
     ]
-    assert query["client_name"] == ["Codex"]
+    assert query["client_name"] == ["Agent"]
     assert "project_id" not in query
     assert any(
         "scoped API keys" in item for item in payload["browser_site_recommendations"]
@@ -12940,7 +12940,7 @@ def test_auth_login_open_attempts_browser_and_reports_result(
     assert len(query["code_challenge"][0]) == 43
     assert payload["handoff"]["open_command"] == "browser-cli auth login --open"
     assert payload["warnings"] == [
-        "Timed out waiting for the local Connect from Codex callback."
+        "Timed out waiting for the local Connect from Agent callback."
     ]
 
 
@@ -13309,7 +13309,7 @@ def test_auth_login_open_failure_is_non_fatal_and_masked(
     assert "token=***" in payload["open_result"]["error"]
     assert "api_key=***" in payload["open_result"]["error"]
     assert payload["warnings"] == [
-        "Failed to open the Connect from Codex URL automatically; rerun auth login --open or copy the URL locally."
+        "Failed to open the Connect from Agent URL automatically; rerun auth login --open or copy the URL locally."
     ]
 
 
