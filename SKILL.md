@@ -10,8 +10,7 @@ Use `browser-cli` as the primary interface for Lexmount browser automation. Pref
 ## Use When
 
 Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, website testing, login reuse, inspection, forms, screenshots,
-content extraction, browser state setup, diagnostics, or repeatable case files. Start every new browser task with `browser-cli reference get --id quickstart`,
-`browser-cli auth status`, and `browser-cli doctor --json`; then choose a workflow and `browser-cli action guide --task <task>` before custom code.
+content extraction, browser state setup, diagnostics, or repeatable case files. Use the Fast Path below: do not run reference, doctor, or action-guide discovery before every CLI command. Run the target command directly when credentials, session, and action are already clear.
 Do not use this Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials; for static page retrieval, agent-readable article extraction, or DOM dumping that does not require an interactive remote browser session, consider the optional companion `webfetch-cli` first, not as a browser-cli dependency, and check `webfetch-cli --version`, `webfetch-cli capabilities --json`, `webfetch-cli extract`, or `webfetch-cli dump-dom` when it would avoid opening a browser.
 
 ## Supported Operations
@@ -21,12 +20,15 @@ Do not use this Skill for local desktop app control, already-open local browser 
 - Inspection and extraction: observe/extract/page-info plus snapshot, text, links, tables, lists, forms, dialogs, frames, accessibility, interactive-only, network, console, performance, and screenshots.
 - Interaction: act, click-label, click-text, click-role, click-index, fill, select, check/uncheck, hover, press, focus/blur, scroll, drag, file uploads, dialogs/frames, and storage/cookie state changes.
 - Repeatable automation: validate, scaffold, and run JSON/YAML cases with artifacts, events, expectations, and cleanup for reproducible tasks.
+## Fast Path
+
+Avoid repeated setup discovery. For ordinary browser work, run the next necessary command directly, for example `browser-cli auth status`, `browser-cli session create`, `browser-cli action open-url --session-id <session_id> --url <url>`, `browser-cli action snapshot --session-id <session_id>`, then `browser-cli session close --session-id <session_id>`.
+
+Run heavier checks only when they change the next action: first use in a new environment (`browser-cli --version`, `browser-cli auth status`); missing/unclear credentials (`browser-cli auth login --open`, then `browser-cli doctor --json`); no recent successful auth/status signal before creating a browser session (`browser-cli doctor --json`); unclear command/API failure (inspect JSON error, then doctor if still unclear); unsure command shape (`browser-cli commands --names-only`, `browser-cli commands --workflow <id>`, or `browser-cli reference list`); unsure action arguments (`browser-cli action guide --task <task>`); stale skill (`browser-cli skill status`, then `browser-cli skill install --force` only if needed).
+
 ## Setup
 
-Check availability with `browser-cli --version`, `browser-cli commands --names-only`,
-`browser-cli commands --workflows-only`, `browser-cli reference list`,
-`browser-cli reference get --id quickstart --metadata-only`, `browser-cli example list`, and `browser-cli skill status`.
-If Skill status is stale or missing, review files and run `browser-cli skill install --force`; if the CLI is not installed, install it with:
+If the CLI is not installed, install it with:
 
 ```bash
 uv tool install --force git+https://github.com/lexmount/browser-cli.git
@@ -137,9 +139,7 @@ browser-cli doctor --json
 browser-cli doctor --smoke-session
 ```
 
-Run `browser-cli doctor --json` before the first browser action in a thread,
-after credential changes, or when a session/context/action command fails for an
-unclear reason. Use `browser-cli doctor --smoke-session` only when you need
+Run `browser-cli doctor --json` before creating a browser session only when there is no recent successful auth/status signal, after credential changes, or when a session/context/action command fails for an unclear reason. Use `browser-cli doctor --smoke-session` only when you need
 proof that credentials can create and close a temporary browser session. `--json`
 is accepted as a no-op compatibility flag at the top level and after
 subcommands; browser-cli output is always JSON. Parse the JSON before deciding
@@ -203,9 +203,7 @@ drive the next decision.
 
 ## Workflow
 
-If setup is uncertain, run `browser-cli commands --workflow setup_and_verify`,
-then `browser-cli auth status` and `browser-cli doctor --json` before creating a
-session. Inspect doctor `context_registry` before persistent login reuse; warnings identify invalid JSON, non-file paths, or unwritable locations and include `repair_context_registry`. If credentials are missing, run
+If setup is uncertain, run `browser-cli auth status` first. Use `browser-cli commands --workflow setup_and_verify` and `browser-cli doctor --json` only when auth status is missing, stale, or not enough to decide whether creating a session is safe. Inspect doctor `context_registry` before persistent login reuse; warnings identify invalid JSON, non-file paths, or unwritable locations and include `repair_context_registry`. If credentials are missing, run
 `browser-cli commands --workflow connect_from_codex_auth`, then
 `browser-cli auth login` and guide the user to set local environment variables.
 If the task is to coordinate browser.lexmount.cn changes, run `browser-cli commands --workflow connect_from_codex_site_requirements` and `browser-cli auth connect-requirements --checklist`.

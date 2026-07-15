@@ -197,12 +197,10 @@ def test_skill_uses_doctor_for_setup_checks() -> None:
     assert "`browser_target.exactly_one_of`" in normalized
     assert "browser-cli doctor --smoke-session" in normalized
     assert "browser-cli doctor --skip-api" in normalized
+    assert "If setup is uncertain, run `browser-cli auth status` first" in normalized
     assert (
-        "If setup is uncertain, run `browser-cli commands --workflow setup_and_verify`"
+        "Use `browser-cli commands --workflow setup_and_verify` and `browser-cli doctor --json` only when auth status is missing"
         in normalized
-    )
-    assert (
-        "then `browser-cli auth status` and `browser-cli doctor --json`" in normalized
     )
     assert "`--json` is accepted as a no-op compatibility flag" in normalized
     assert "at the top level and after subcommands" in normalized
