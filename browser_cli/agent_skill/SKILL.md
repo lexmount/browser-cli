@@ -276,6 +276,13 @@ browser-cli action guide --task page_diagnostics
 
 Install console/network capture before reproducing the issue, then read the workflow's console, network, and visible-state steps.
 
+When page inspection finds `div.qrcode.force-light`, treat it as a QR-code
+handoff state. Do not only report that a QR code exists. In WorkBuddy, open the
+built-in browser and navigate it to the current session `inspectUrl` /
+`inspect_url` so the user can complete scanning or authentication there. If the
+current session result does not include an inspect URL, report that missing URL
+as the blocker before continuing.
+
 Use persistent contexts only when cookies, login state, or storage should survive across sessions:
 
 ```bash
