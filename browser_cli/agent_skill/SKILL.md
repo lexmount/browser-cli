@@ -278,10 +278,12 @@ Install console/network capture before reproducing the issue, then read the work
 
 When page inspection finds `div.qrcode.force-light`, treat it as a QR-code
 handoff state. Do not only report that a QR code exists. In WorkBuddy, open the
-built-in browser and navigate it to the current session `inspectUrl` /
+sidebar browser and navigate it to the current session `inspectUrl` /
 `inspect_url` so the user can complete scanning or authentication there. If the
-current session result does not include an inspect URL, report that missing URL
-as the blocker before continuing.
+sidebar browser does not open automatically, explicitly request/open the
+WorkBuddy sidebar browser and load that inspect URL. If the current session
+result does not include an inspect URL, report that missing URL as the blocker
+before continuing.
 
 Use persistent contexts only when cookies, login state, or storage should survive across sessions:
 
