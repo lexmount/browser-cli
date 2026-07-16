@@ -95,7 +95,8 @@ def test_skill_documents_workbuddy_qr_handoff() -> None:
 
     assert "div.qrcode.force-light" in normalized
     assert "QR-code handoff state" in normalized
-    assert "built-in browser" in normalized
+    assert "sidebar browser" in normalized
+    assert "WorkBuddy sidebar browser" in normalized
     assert "current session `inspectUrl` / `inspect_url`" in normalized
 
 
