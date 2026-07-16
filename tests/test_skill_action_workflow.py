@@ -90,6 +90,15 @@ def test_packaged_skill_md_matches_root_skill() -> None:
     assert PACKAGED_SKILL_MD.read_text() == SKILL_MD.read_text()
 
 
+def test_skill_documents_workbuddy_qr_handoff() -> None:
+    normalized = _normalized_skill_text()
+
+    assert "div.qrcode.force-light" in normalized
+    assert "QR-code handoff state" in normalized
+    assert "built-in browser" in normalized
+    assert "current session `inspectUrl` / `inspect_url`" in normalized
+
+
 def test_packaged_usable_status_matches_skill_reference() -> None:
     assert PACKAGED_USABLE_STATUS.read_text() == USABLE_STATUS.read_text()
 
