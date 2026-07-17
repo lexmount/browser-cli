@@ -9,8 +9,7 @@ Use `browser-cli` as the primary interface for Lexmount browser automation. Pref
 
 ## Use When
 
-Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, website testing, login reuse, inspection, forms, screenshots,
-content extraction, browser state setup, diagnostics, or repeatable case files. Use the Fast Path below: do not run reference, doctor, or action-guide discovery before every CLI command. Run the target command directly when credentials, session, and action are already clear.
+Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, website testing, login reuse, inspection, forms, screenshots, content extraction, browser state setup, diagnostics, or repeatable case files. Use the Fast Path below: do not run reference, doctor, or action-guide discovery before every CLI command. Run the target command directly when credentials, session, and action are already clear.
 Do not use this Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials; for static page retrieval, agent-readable article extraction, or DOM dumping that does not require an interactive remote browser session, consider the optional companion `webfetch-cli` first, not as a browser-cli dependency, and check `webfetch-cli --version`, `webfetch-cli capabilities --json`, `webfetch-cli extract`, or `webfetch-cli dump-dom` when it would avoid opening a browser.
 
 ## Supported Operations
@@ -34,15 +33,9 @@ If the CLI is not installed, install it with:
 uv tool install --force git+https://github.com/lexmount/browser-cli.git
 ```
 
-Authorize with the local loopback PKCE flow: run `browser-cli auth login --open`,
-then `browser-cli auth status` and `browser-cli doctor --json`.
+Authorize with the local loopback PKCE flow: run `browser-cli auth login --open`, then `browser-cli auth status` and `browser-cli doctor --json`.
 
-Do not ask the user to paste secrets into chat. Direct the user to
-`https://browser.lexmount.cn` for China region authorization. `auth login --open`
-starts a `127.0.0.1` callback, opens Connect from Codex, validates `state`, and
-exchanges a one-time code plus PKCE verifier for local credentials. API keys do
-not appear in the local callback URL. China defaults to `https://api.lexmount.cn`;
-set `LEXMOUNT_BASE_URL` only for non-default APIs.
+Do not ask the user to paste secrets into chat. Direct the user to `https://browser.lexmount.cn` for China region authorization. `auth login --open` starts a `127.0.0.1` callback, opens Connect from Codex, validates `state`, and exchanges a one-time code plus PKCE verifier for local credentials. API keys do not appear in the local callback URL. China defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
 
 Use local auth helpers instead of handling secrets in chat:
 ```bash
