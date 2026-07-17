@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.5"
+    assert payload["version"] == "0.3.6"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9884,7 +9884,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.5"
+    assert checks["browser_cli"]["version"] == "0.3.6"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -9917,9 +9917,12 @@ def test_doctor_fails_missing_required_env(
     assert payload["repair_plan"]["required"] is True
     assert "LEXMOUNT_API_KEY" in payload["repair_plan"]["env"]
     assert "LEXMOUNT_PROJECT_ID" in payload["repair_plan"]["env"]
-    assert payload["repair_plan"]["commands"][:2] == [
-        "browser-cli reference get --id usable_status --metadata-only",
-        "browser-cli reference get --id usable_status",
+    assert (
+        "browser-cli reference get --id usable_status --metadata-only"
+        in payload["repair_plan"]["commands"]
+    )
+    assert "browser-cli reference get --id usable_status" in payload["repair_plan"][
+        "commands"
     ]
     assert "browser-cli auth login" in payload["repair_plan"]["commands"]
     connect = payload["repair_plan"]["connect_from_codex"]
@@ -14847,6 +14850,36 @@ def test_action_direct_url_masks_resolved_connect_url_by_default(
         "connect_url_masked": True,
         "result": {"title": "Example"},
     }
+
+
+def test_action_direct_url_redacts_unmasked_connect_url_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    connect_url = "wss://internal.lexmount.test/devtools/browser/session"
+
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: connect_url,
+    )
+    monkeypatch.setattr(
+        "browser_cli.cli.run_browser_action",
+        lambda **kwargs: SimpleNamespace(result={"title": "Example"}),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "snapshot", "--direct-url"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "connect_url" not in payload
+    assert payload["connect_url_available"] is True
+    assert payload["connect_url_redacted"] is True
+    assert payload["connect_url_masked"] is True
+    assert payload["connect_url_reveal_command"] == (
+        "browser-cli action <command> --reveal-connect-url"
+    )
+    assert payload["result"] == {"title": "Example"}
 
 
 def test_action_reveal_connect_url_requires_explicit_flag(

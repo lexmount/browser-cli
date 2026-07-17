@@ -5355,6 +5355,15 @@ def _masked_connect_url_payload(
     if reveal_connect_url:
         return {"connect_url": connect_url, "connect_url_masked": False}
     masked = _mask_direct_url_secret(connect_url)
+    if masked == connect_url:
+        return {
+            "connect_url_available": True,
+            "connect_url_redacted": True,
+            "connect_url_masked": True,
+            "connect_url_reveal_command": (
+                "browser-cli action <command> --reveal-connect-url"
+            ),
+        }
     return {
         "connect_url": masked,
         "connect_url_masked": masked != connect_url,
