@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.6"
+    assert payload["version"] == "0.3.7"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9884,7 +9884,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.6"
+    assert checks["browser_cli"]["version"] == "0.3.7"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -13419,6 +13419,63 @@ def test_session_create_passes_context_options(
     assert payload["ok"] is True
     assert payload["command"] == "session.create"
     assert payload["session"] == {"session_id": "s1", "status": "active"}
+
+
+def test_session_create_redacts_unmasked_connect_url_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeAdmin:
+        def create_session(self, **kwargs: Any) -> DummyModel:
+            return DummyModel(
+                {
+                    "session_id": "s1",
+                    "status": "active",
+                    "connect_url": "wss://internal.lexmount.test/devtools/browser/s1",
+                    "session": {
+                        "session_id": "s1",
+                        "connect_url": "wss://internal.lexmount.test/devtools/browser/s1",
+                    },
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "create"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "connect_url" not in payload
+    assert payload["connect_url_available"] is True
+    assert payload["connect_url_redacted"] is True
+    assert payload["connect_url_masked"] is True
+    assert payload["connect_url_reveal_command"] == (
+        "browser-cli session create --reveal-connect-url"
+    )
+    assert "connect_url" not in payload["session"]
+    assert payload["session"]["connect_url_redacted"] is True
+
+
+def test_session_create_can_reveal_connect_url_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    connect_url = "wss://internal.lexmount.test/devtools/browser/s1"
+
+    class FakeAdmin:
+        def create_session(self, **kwargs: Any) -> DummyModel:
+            return DummyModel({"session_id": "s1", "connect_url": connect_url})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "create", "--reveal-connect-url"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["connect_url"] == connect_url
+    assert payload["connect_url_masked"] is False
 
 
 def test_session_create_normalizes_deprecated_browser_mode_alias(
