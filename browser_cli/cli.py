@@ -5351,6 +5351,7 @@ def _masked_connect_url_payload(
     connect_url: str,
     *,
     reveal_connect_url: bool,
+    reveal_command: str = "browser-cli action <command> --reveal-connect-url",
 ) -> dict[str, Any]:
     if reveal_connect_url:
         return {"connect_url": connect_url, "connect_url_masked": False}
@@ -5360,14 +5361,48 @@ def _masked_connect_url_payload(
             "connect_url_available": True,
             "connect_url_redacted": True,
             "connect_url_masked": True,
-            "connect_url_reveal_command": (
-                "browser-cli action <command> --reveal-connect-url"
-            ),
+            "connect_url_reveal_command": reveal_command,
         }
     return {
         "connect_url": masked,
         "connect_url_masked": masked != connect_url,
     }
+
+
+def _redact_connect_urls(
+    value: Any,
+    *,
+    reveal_connect_url: bool,
+    reveal_command: str,
+) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if key == "connect_url" and isinstance(item, str):
+                redacted.update(
+                    _masked_connect_url_payload(
+                        item,
+                        reveal_connect_url=reveal_connect_url,
+                        reveal_command=reveal_command,
+                    )
+                )
+            else:
+                redacted[key] = _redact_connect_urls(
+                    item,
+                    reveal_connect_url=reveal_connect_url,
+                    reveal_command=reveal_command,
+                )
+        return redacted
+    if isinstance(value, list):
+        return [
+            _redact_connect_urls(
+                item,
+                reveal_connect_url=reveal_connect_url,
+                reveal_command=reveal_command,
+            )
+            for item in value
+        ]
+    return value
 
 
 def _doctor_connect_url_payload(
@@ -11117,6 +11152,11 @@ def cmd_session_create(args: argparse.Namespace) -> None:
     except Exception as exc:
         _failure_from_exception(command, exc)
     payload = _model_payload(result)
+    payload = _redact_connect_urls(
+        payload,
+        reveal_connect_url=args.reveal_connect_url,
+        reveal_command="browser-cli session create --reveal-connect-url",
+    )
     if context_reuse is not None:
         payload["context_reuse"] = context_reuse
     _success(command, **payload)
@@ -29801,6 +29841,11 @@ def _add_session_target_args(parser: argparse.ArgumentParser) -> None:
 
 def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--context-id", help="Reuse an existing context")
+    parser.add_argument(
+        "--reveal-connect-url",
+        action="store_true",
+        help="Print the full session connect URL. Default output masks or redacts it.",
+    )
     parser.add_argument(
         "--create-context",
         action="store_true",
