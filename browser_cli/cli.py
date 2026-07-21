@@ -8167,6 +8167,7 @@ def _select_or_create_context_for_session(
     *,
     command: str,
     metadata_filter: dict[str, Any],
+    description: str | None = None,
     status: str | None,
     limit: int,
     selection_strategy: str,
@@ -8221,7 +8222,10 @@ def _select_or_create_context_for_session(
 
     if create_if_missing:
         try:
-            context = admin.create_context(metadata=metadata_filter or None)
+            context_kwargs: dict[str, Any] = {"metadata": metadata_filter or None}
+            if description is not None:
+                context_kwargs["description"] = description
+            context = admin.create_context(**context_kwargs)
         except Exception as exc:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
@@ -11127,6 +11131,7 @@ def cmd_session_create(args: argparse.Namespace) -> None:
                 admin,
                 command=command,
                 metadata_filter=context_metadata_filter,
+                description=args.context_description,
                 status=args.context_status,
                 limit=args.context_limit,
                 selection_strategy=args.context_selection,
@@ -11142,13 +11147,16 @@ def cmd_session_create(args: argparse.Namespace) -> None:
                     context_reuse=context_reuse,
                 )
 
-        result = admin.create_session(
-            context_id=context_id,
-            create_context=create_context,
-            context_mode=args.context_mode,
-            browser_mode=args.browser_mode,
-            metadata=args.metadata,
-        )
+        session_kwargs: dict[str, Any] = {
+            "context_id": context_id,
+            "create_context": create_context,
+            "context_mode": args.context_mode,
+            "browser_mode": args.browser_mode,
+            "metadata": args.metadata,
+        }
+        if args.context_description is not None:
+            session_kwargs["context_description"] = args.context_description
+        result = admin.create_session(**session_kwargs)
     except Exception as exc:
         _failure_from_exception(command, exc)
     payload = _model_payload(result)
@@ -11206,7 +11214,10 @@ def cmd_session_keepalive(args: argparse.Namespace) -> None:
 def cmd_context_create(args: argparse.Namespace) -> None:
     command = "context.create"
     try:
-        context = LexmountBrowserAdmin().create_context(metadata=args.metadata)
+        context_kwargs: dict[str, Any] = {"metadata": args.metadata}
+        if args.description is not None:
+            context_kwargs["description"] = args.description
+        context = LexmountBrowserAdmin().create_context(**context_kwargs)
     except Exception as exc:
         _failure_from_exception(command, exc)
     payload = _model_payload(context)
@@ -11376,7 +11387,10 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
 
     if args.create_if_missing:
         try:
-            context = admin.create_context(metadata=metadata_filter or None)
+            context_kwargs: dict[str, Any] = {"metadata": metadata_filter or None}
+            if args.description is not None:
+                context_kwargs["description"] = args.description
+            context = admin.create_context(**context_kwargs)
         except Exception as exc:
             _failure_from_exception(command, exc)
         created_context = _model_payload(context)
@@ -29857,6 +29871,13 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         type=_normalize_context_mode,
     )
     parser.add_argument(
+        "--context-description",
+        help=(
+            "Optional UTF-8 description for a newly created context when using "
+            "--create-context or --create-context-if-missing."
+        ),
+    )
+    parser.add_argument(
         "--browser-mode",
         default="normal",
         type=_normalize_browser_mode,
@@ -29972,6 +29993,10 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         type=_parse_metadata_json,
         help="JSON object sent as context metadata",
     )
+    context_create.add_argument(
+        "--description",
+        help="Optional UTF-8 description for the persistent context.",
+    )
     context_create.set_defaults(func=cmd_context_create)
 
     context_list = context_subparsers.add_parser("list", help="List contexts")
@@ -30039,6 +30064,10 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         "--create-if-missing",
         action="store_true",
         help="Create a context with the metadata filter when none is reusable.",
+    )
+    context_pick.add_argument(
+        "--description",
+        help="Optional UTF-8 description when --create-if-missing creates a context.",
     )
     context_pick.add_argument(
         "--dry-run",

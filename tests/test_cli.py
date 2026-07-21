@@ -13371,6 +13371,7 @@ def test_session_create_passes_context_options(
             context_mode: str,
             browser_mode: str,
             metadata: dict[str, Any] | None,
+            context_description: str | None = None,
         ) -> DummyModel:
             observed.update(
                 {
@@ -13379,6 +13380,7 @@ def test_session_create_passes_context_options(
                     "context_mode": context_mode,
                     "browser_mode": browser_mode,
                     "metadata": metadata,
+                    "context_description": context_description,
                 }
             )
             return DummyModel(
@@ -13400,6 +13402,8 @@ def test_session_create_passes_context_options(
                 "--create-context",
                 "--context-mode",
                 "read_only",
+                "--context-description",
+                "Office login context",
                 "--browser-mode",
                 "light",
                 "--metadata-json",
@@ -13414,6 +13418,7 @@ def test_session_create_passes_context_options(
         "context_mode": "read_only",
         "browser_mode": "light",
         "metadata": {"owner": "codex"},
+        "context_description": "Office login context",
     }
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
@@ -14088,9 +14093,17 @@ def test_context_commands_emit_json(
             self,
             *,
             metadata: dict[str, Any] | None,
+            description: str | None = None,
         ) -> DummyModel:
-            calls.append(("create", {"metadata": metadata}))
-            return DummyModel({"context_id": "ctx1", "metadata": metadata})
+            calls.append(("create", {"metadata": metadata, "description": description}))
+            return DummyModel(
+                {
+                    "context_id": "ctx1",
+                    "description": description,
+                    "display_name": description or "ctx1",
+                    "metadata": metadata,
+                }
+            )
 
         def list_contexts(
             self,
@@ -14118,9 +14131,20 @@ def test_context_commands_emit_json(
     monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
 
     with pytest.raises(SystemExit) as exc_info:
-        cli_main(["context", "create", "--metadata-json", '{"purpose":"test"}'])
+        cli_main(
+            [
+                "context",
+                "create",
+                "--metadata-json",
+                '{"purpose":"test"}',
+                "--description",
+                "Office login context",
+            ]
+        )
     assert exc_info.value.code == 0
-    assert json.loads(capsys.readouterr().out)["context"]["context_id"] == "ctx1"
+    created = json.loads(capsys.readouterr().out)["context"]
+    assert created["context_id"] == "ctx1"
+    assert created["description"] == "Office login context"
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["context", "list", "--status", "available", "--limit", "5"])
@@ -14141,7 +14165,13 @@ def test_context_commands_emit_json(
     assert json.loads(capsys.readouterr().out)["deleted"] is True
 
     assert calls == [
-        ("create", {"metadata": {"purpose": "test"}}),
+        (
+            "create",
+            {
+                "metadata": {"purpose": "test"},
+                "description": "Office login context",
+            },
+        ),
         ("list", {"status": "available", "limit": 5}),
         ("get", {"context_id": "ctx1"}),
         ("delete", {"context_id": "ctx1"}),
