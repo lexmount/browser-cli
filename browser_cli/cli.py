@@ -5500,15 +5500,21 @@ def _doctor_check_names(
 
 def _doctor_repair_plan(checks: list[dict[str, Any]]) -> dict[str, Any]:
     statuses = {"fail", "warn", "skipped"}
+    status_order = {"fail": 0, "warn": 1, "skipped": 2}
     commands: list[str] = []
     env: list[str] = []
     guidance: list[str] = []
     fixes: list[dict[str, Any]] = []
     connect_from_codex: dict[str, Any] | None = None
 
-    for check in checks:
-        if check.get("status") not in statuses:
-            continue
+    relevant_checks = [
+        check for check in checks if check.get("status") in statuses
+    ]
+    relevant_checks.sort(
+        key=lambda check: status_order.get(str(check.get("status")), len(status_order))
+    )
+
+    for check in relevant_checks:
         fix = check.get("fix")
         if not isinstance(fix, dict):
             continue
