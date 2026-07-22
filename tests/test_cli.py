@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.13"
+    assert payload["version"] == "0.3.14"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9884,7 +9884,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.13"
+    assert checks["browser_cli"]["version"] == "0.3.14"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -14754,6 +14754,57 @@ def test_context_get_enriches_missing_fields_from_raw_api(
     assert context["displayName"] == "bilibili"
     assert context["region_id"] == "qcloud-nanjing"
     assert context["regionId"] == "qcloud-nanjing"
+
+
+def test_context_get_reports_not_found_without_keyerror(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "success": False,
+                "error": "Context ctx-deleted not found",
+            }
+
+    class FakeContexts:
+        def get(self, context_id: str) -> Any:
+            assert context_id == "ctx-deleted"
+            raise KeyError("context")
+
+    class FakeClient:
+        api_key = "key"
+        project_id = "project"
+        base_url = "https://api.lexmount.cn"
+        contexts = FakeContexts()
+
+        def _post(self, url: str, **kwargs: Any) -> FakeResponse:
+            assert url == "https://api.lexmount.cn/instance/v1/contexts/ctx-deleted"
+            assert kwargs["json"] == {
+                "api_key": "key",
+                "project_id": "project",
+            }
+            return FakeResponse()
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = FakeClient()
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "get", "--context-id", "ctx-deleted"])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["command"] == "context.get"
+    assert payload["error"] == "RuntimeError"
+    assert payload["message"] == (
+        "Context ctx-deleted not found: Context ctx-deleted not found"
+    )
 
 
 def test_context_status_reports_reusable_and_locked_state(
