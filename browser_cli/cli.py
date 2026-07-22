@@ -6248,16 +6248,22 @@ def _doctor_invalid_action_guides(
         "when_to_use",
         "selection_order",
         "inspect_commands",
+        "recommended_core_commands",
         "preferred_commands",
         "fallback_commands",
+        "advanced_commands",
+        "debug_commands",
         "verify_commands",
         "read_fields",
     }
     text_fields = {"purpose", "custom_js_boundary"}
     command_fields = {
         "inspect_commands",
+        "recommended_core_commands",
         "preferred_commands",
         "fallback_commands",
+        "advanced_commands",
+        "debug_commands",
         "verify_commands",
     }
     workflow_names = set(DOCTOR_REQUIRED_WORKFLOWS)
@@ -20984,8 +20990,176 @@ def _scroll_into_view_role_expression(
 """.strip()
 
 
+ACTION_GUIDE_CORE_ACTIONS = frozenset(
+    {
+        "act",
+        "bounding-box-role",
+        "check-label",
+        "check-role",
+        "clear-role",
+        "click-label",
+        "click-role",
+        "click-text",
+        "dialog-snapshot",
+        "double-click-role",
+        "drag-role-to-role",
+        "exists-role",
+        "extract",
+        "fill-label",
+        "fill-role",
+        "blur-role",
+        "focus-role",
+        "form-snapshot",
+        "frame-snapshot",
+        "get-attribute-role",
+        "get-text-role",
+        "get-value-role",
+        "go-back",
+        "go-forward",
+        "hover-role",
+        "interactive-snapshot",
+        "link-snapshot",
+        "list-snapshot",
+        "open-url",
+        "page-info",
+        "press-key",
+        "press-role",
+        "reload",
+        "right-click-role",
+        "scroll",
+        "scroll-into-view-role",
+        "select-label",
+        "select-role",
+        "screenshot-role",
+        "set-viewport",
+        "table-snapshot",
+        "text-snapshot",
+        "uncheck-label",
+        "uncheck-role",
+        "wait-attribute-role",
+        "wait-dialog",
+        "wait-frame",
+        "wait-load-state",
+        "wait-network-idle",
+        "wait-role",
+        "wait-state-role",
+        "wait-text",
+        "wait-url",
+        "wait-value-role",
+    }
+)
+ACTION_GUIDE_DEBUG_ACTIONS = frozenset(
+    {
+        "accessibility-snapshot",
+        "console-snapshot",
+        "eval",
+        "network-snapshot",
+        "outline-snapshot",
+        "performance-snapshot",
+        "snapshot",
+        "wait-console",
+        "wait-network",
+    }
+)
+ACTION_GUIDE_ADVANCED_ACTIONS = frozenset(
+    {
+        "cookie-clear",
+        "cookie-delete",
+        "cookie-get",
+        "cookie-set",
+        "dispatch-event",
+        "select-option",
+        "set-value",
+        "storage-clear",
+        "storage-get",
+        "storage-remove",
+        "storage-set",
+        "submit",
+        "wait-cookie",
+        "wait-storage",
+    }
+)
+
+
+def _action_guide_action_name(command: str) -> str | None:
+    command_name = _browser_cli_command_reference_name(command)
+    if command_name is None or not command_name.startswith("action."):
+        return None
+    return command_name.removeprefix("action.")
+
+
+def _action_guide_command_tier(command: str, *, task: str) -> str:
+    action = _action_guide_action_name(command)
+    if action is None:
+        return "core"
+    if action == "set-file-input":
+        return "core" if task == "file_upload" else "advanced"
+    if action in ACTION_GUIDE_DEBUG_ACTIONS:
+        return "debug"
+    if action in ACTION_GUIDE_ADVANCED_ACTIONS:
+        return "advanced"
+    if action in ACTION_GUIDE_CORE_ACTIONS:
+        return "core"
+    return "fallback"
+
+
+def _tier_action_guide_commands(
+    commands: list[str],
+    *,
+    task: str,
+) -> dict[str, list[str]]:
+    tiers: dict[str, list[str]] = {
+        "core": [],
+        "fallback": [],
+        "advanced": [],
+        "debug": [],
+    }
+    for command in commands:
+        tier = _action_guide_command_tier(command, task=task)
+        tiers[tier].append(command)
+    return {tier: _dedupe_preserving_order(values) for tier, values in tiers.items()}
+
+
+def _with_action_guide_tiers(
+    tasks: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    for task, guide in tasks.items():
+        preferred = [
+            command
+            for command in guide.get("preferred_commands", [])
+            if isinstance(command, str)
+        ]
+        fallback = [
+            command
+            for command in guide.get("fallback_commands", [])
+            if isinstance(command, str)
+        ]
+        inspect = [
+            command
+            for command in guide.get("inspect_commands", [])
+            if isinstance(command, str)
+        ]
+        tiers = _tier_action_guide_commands(
+            [*inspect, *preferred, *fallback],
+            task=task,
+        )
+        core_commands = tiers["core"]
+        if not core_commands:
+            inspect_tiers = _tier_action_guide_commands(
+                inspect,
+                task=task,
+            )
+            core_commands = inspect_tiers["core"]
+        guide["recommended_core_commands"] = core_commands
+        guide["preferred_commands"] = core_commands
+        guide["fallback_commands"] = tiers["fallback"] or core_commands[:1]
+        guide["advanced_commands"] = tiers["advanced"]
+        guide["debug_commands"] = tiers["debug"]
+    return tasks
+
+
 def _action_guide_tasks() -> dict[str, dict[str, Any]]:
-    return {
+    tasks = {
         "form_interaction": {
             "purpose": "Inspect, fill, submit, and verify forms without page-specific JavaScript.",
             "related_workflows": ["form_interaction"],
@@ -22035,6 +22209,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ),
         },
     }
+    return _with_action_guide_tiers(tasks)
 
 
 def cmd_action_guide(args: argparse.Namespace) -> None:

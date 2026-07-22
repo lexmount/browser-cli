@@ -37,12 +37,15 @@ Start here when the user asks an agent to:
 - Reuse persistent login state through contexts and metadata filters.
 - Open pages, wait for readiness, navigate history, and capture
   screenshots or page snapshots.
-- Inspect page structure before acting: text, links, forms, tables, lists,
-  dialogs, frames, accessibility trees, interactive elements, console logs, and
-  network activity.
-- Click, type, fill, select, check, hover, press keys,
-  scrolling, and targeting by selector, role, label, text, or index.
-- Read and mutate browser state through storage and cookies.
+- Inspect page structure before acting: interactive elements, text, links,
+  forms, tables, lists, dialogs, and frames. Use accessibility trees, console
+  logs, and network activity as diagnostics when the core evidence is
+  insufficient.
+- Click, type, fill, select, check, hover, press keys, scrolling, and target by
+  role, label, text, or index first; use selector targeting as a stable-selector
+  fallback.
+- Read and mutate browser state through storage and cookies only for explicit
+  setup, cleanup, or assertions.
 - Run repeatable JSON/YAML browser case files instead of ad hoc scripts.
 - Diagnose setup, credential, API, selector, page, console, and network
   failures with structured repair hints.
@@ -68,11 +71,11 @@ catalog cannot express the browser task.
 | Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
 | Navigation and readiness | `browser-cli commands --workflow navigation_flow` | Open URLs, reload, move through history, and wait for URL, title, load state, or network idle before acting. |
 | Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
-| Interactive targets | `browser-cli action guide --task interactive_targeting` | Choose between role, label, text, selector, and index targeting for buttons, links, menus, and repeated controls. |
+| Interactive targets | `browser-cli action guide --task interactive_targeting` | Prefer role, label, and text targeting for buttons, links, menus, and repeated controls; use selectors as fallback. |
 | Content extraction | `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` | Extract bounded text, links, tables, lists, outline, and accessibility surfaces before custom JS. |
 | Visual evidence | `browser-cli action guide --task visual_capture` | Set a viewport, capture a full page, selector, or role screenshot, and gather bounded text as supporting evidence. |
 | Dialogs, frames, uploads | `browser-cli action guide --task dialog_frame_handling` | Detect modals, prompts, embedded frames, cookie banners, and file upload controls before custom workarounds. |
-| State and credentials | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies for setup, cleanup, or assertions. |
+| State and credentials | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies only for explicit setup, cleanup, or assertions. |
 | Diagnostics | `browser-cli commands --workflow page_diagnostics` | Capture console and network evidence around page failures, fetch/XHR issues, and runtime errors. |
 | Repeatable cases | `browser-cli commands --workflow case_file_task` | Validate, scaffold, and run browser tasks as JSON/YAML artifacts with cleanup and generated evidence. |
 
@@ -486,8 +489,9 @@ Agents should use `--workflows-only` for compact setup/task flow discovery,
 `--workflow <id>` for one concrete task path, and the command catalog when
 deciding whether a first-class action exists before writing custom JavaScript.
 Use `browser-cli action guide --task <task>` for a compact task-specific action
-route with `inspect_commands`, `preferred_commands`, `verify_commands`, and the
-`custom_js_boundary`.
+route with `recommended_core_commands` / `preferred_commands`, selector
+`fallback_commands`, `advanced_commands`, `debug_commands`, `verify_commands`,
+and the `custom_js_boundary`.
 Unknown groups return JSON with `error=unknown_group`, `available_groups`, and a
 `fix` object so agents can repair typos instead of treating an empty command
 list as capability absence. Unknown workflows similarly return
@@ -683,14 +687,8 @@ browser-cli action guide --task mouse_interaction
 browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 browser-cli action open-url --session-id <session_id> --url https://example.com
-browser-cli action wait-selector --session-id <session_id> --selector "main"
-browser-cli action click --session-id <session_id> --selector "button[type=submit]"
-browser-cli action type --session-id <session_id> --selector "input[name=q]" --text "hello"
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
-browser-cli action screenshot-selector --session-id <session_id> --selector "main" --output /tmp/main.png
 browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/submit.png
-browser-cli action eval --session-id <session_id> --script "() => document.title"
-browser-cli action snapshot --session-id <session_id> --max-chars 8000
 browser-cli action page-info --session-id <session_id>
 browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720
 browser-cli action reload --session-id <session_id>
@@ -700,73 +698,36 @@ browser-cli action wait-url --session-id <session_id> --url /dashboard
 browser-cli action wait-title --session-id <session_id> --title Dashboard --match contains
 browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
-browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action get-text-role --session-id <session_id> --role heading --name "Welcome"
-browser-cli action exists --session-id <session_id> --selector "button[type=submit]"
 browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
-browser-cli action count --session-id <session_id> --selector ".item"
-browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
-browser-cli action wait-state --session-id <session_id> --selector "button[type=submit]" --state enabled
 browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
-browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
-browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action get-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded
-browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
 browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
-browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action focus-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "hello"
 browser-cli action wait-value-role --session-id <session_id> --role textbox --name "Search" --value "hello"
-browser-cli action blur --session-id <session_id> --selector "input[name=q]"
 browser-cli action blur-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
-browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
-browser-cli action storage-remove --session-id <session_id> --area session --key draft
-browser-cli action storage-clear --session-id <session_id> --area session --prefix temp:
-browser-cli action wait-storage --session-id <session_id> --area local --key authToken
-browser-cli action cookie-get --session-id <session_id> --name consent
-browser-cli action cookie-set --session-id <session_id> --name consent --value yes --path /
-browser-cli action cookie-delete --session-id <session_id> --name consent --path /
-browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
-browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
-browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action clear-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "hello"
 browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./avatar.png
-browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
-browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
-browser-cli action scroll --session-id <session_id> --selector ".pane" --y 300
-browser-cli action scroll-into-view --session-id <session_id> --selector "button[type=submit]"
 browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
-browser-cli action bounding-box --session-id <session_id> --selector "button[type=submit]"
 browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"
-browser-cli action inspect --session-id <session_id> --selector "button[type=submit]"
-browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
 browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
-browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
-browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action check-label --session-id <session_id> --label "Remember me"
 browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
 browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "Remember me"
-browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action hover-role --session-id <session_id> --role button --name "Menu"
-browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
 browser-cli action click-label --session-id <session_id> --label "Remember me"
 browser-cli action click-text --session-id <session_id> --text "Submit"
 browser-cli action click-role --session-id <session_id> --role button --name "Submit"
-browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
-browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
@@ -777,23 +738,24 @@ browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --ma
 browser-cli action wait-dialog --session-id <session_id> --text "Confirm" --modal-only
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
 browser-cli action wait-frame --session-id <session_id> --url "/checkout" --readable-only
-browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
-browser-cli action network-snapshot --session-id <session_id> --max-entries 50
-browser-cli action wait-network --session-id <session_id> --url /api/save --method POST --status 201
-browser-cli action console-snapshot --session-id <session_id> --max-entries 50
-browser-cli action wait-console --session-id <session_id> --source pageerror --level error --timeout-ms 5000
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
-browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
+
+Selector fallback, browser-state, and diagnostic commands remain available.
+Consult `fallback_commands`, `advanced_commands`, and `debug_commands` from
+`browser-cli action guide --task <task>` before using commands such as
+`wait-selector`, `click`, `type`, `fill`, `query`, `inspect`,
+`screenshot-selector`, storage/cookie mutations, `network-snapshot`,
+`console-snapshot`, `accessibility-snapshot`, `snapshot`, or `eval`.
 
 `action guide` returns machine-readable task routes for `form_interaction`,
 `interactive_targeting`, `content_extraction`, `browser_state_management`,
 `file_upload`, `dialog_frame_handling`, `navigation_flow`, `link_navigation`,
 `visual_capture`, `semantic_waits`, `menu_keyboard_flow`, `mouse_interaction`, `page_diagnostics`, and `state_waits`, including
-selection order, inspect/preferred/fallback/verify commands, read fields, and
-the boundary for custom JavaScript.
+selection order, core/preferred/fallback/advanced/debug/verify commands, read
+fields, and the boundary for custom JavaScript.
 
 `page-info`, `set-viewport`, `screenshot-selector`, `screenshot-role`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`,
 `wait-load-state`, `wait-network-idle`, `get-text`, `get-text-role`, `exists`, `exists-role`, `count`, `query`,

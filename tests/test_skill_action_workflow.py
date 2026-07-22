@@ -119,7 +119,8 @@ def test_packaged_connect_from_codex_matches_skill_reference() -> None:
 def test_skill_prefers_semantic_actions_before_eval() -> None:
     normalized = _normalized_action_playbook_text()
 
-    assert "Inspect with `snapshot`, then `interactive-snapshot`" in normalized
+    assert "Inspect first with `interactive-snapshot`" in normalized
+    assert "`snapshot` or `accessibility-snapshot` as debug tools" in normalized
     assert "backward-compatible alias" in normalized
     assert "use `form-snapshot` before filling complex forms" in normalized
     assert "use `list-snapshot` before choosing from menus" in normalized
@@ -385,10 +386,11 @@ def test_skill_uses_first_browser_workflow_before_manual_session_steps() -> None
     assert "For form tasks, prefer the more specific form workflow" in normalized
     assert "browser-cli commands --workflow form_interaction" in normalized
     assert (
-        "Follow the guide's `inspect_commands`, `preferred_commands`, "
+        "Follow the guide's `recommended_core_commands`, `preferred_commands`, "
+        "`fallback_commands`, `advanced_commands`, `debug_commands`, "
         "`verify_commands`, and `custom_js_boundary`" in normalized
     )
-    assert "then follow workflow `read` fields for `form-snapshot`" in normalized
+    assert "Start with semantic form commands and verification" in normalized
     assert (
         "For visible labeled controls, buttons, links, menus, double-clicks,"
         in normalized
@@ -399,18 +401,21 @@ def test_skill_uses_first_browser_workflow_before_manual_session_steps() -> None
     )
     assert "browser-cli commands --workflow interactive_targeting" in normalized
     assert "for mouse gestures use `mouse_interaction`" in normalized
-    expected_mouse_actions = (
-        "`double-click-role`, `right-click-role`, `drag-role-to-role`, "
-        "`drag-to`, `double-click`, or `right-click`"
+    assert (
+        "with `double-click-role`, `right-click-role`, or `drag-role-to-role` first"
+        in normalized
     )
-    assert expected_mouse_actions in normalized
+    assert (
+        "use selector `drag-to`, `double-click`, or `right-click` only as fallback"
+        in normalized
+    )
     assert "and `click-text` before selectors" in normalized
     assert "For page content extraction" in normalized
     assert "browser-cli commands --workflow content_extraction" in normalized
     assert "browser-cli action guide --task content_extraction" in normalized
     assert "browser-cli action act --session-id <session_id>" in normalized
     assert "browser-cli action extract --session-id <session_id>" in normalized
-    assert "For browser state setup or cleanup" in normalized
+    assert "For browser state setup, cleanup, or assertions" in normalized
     assert "browser-cli commands --workflow browser_state_management" in normalized
     assert "browser-cli action guide --task browser_state_management" in normalized
     assert "For file uploads" in normalized
