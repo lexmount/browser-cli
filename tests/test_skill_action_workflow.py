@@ -120,7 +120,7 @@ def test_skill_prefers_semantic_actions_before_eval() -> None:
     normalized = _normalized_action_playbook_text()
 
     assert "Inspect with `snapshot`, then `interactive-snapshot`" in normalized
-    assert "interactive-only-snapshot` alias" in normalized
+    assert "backward-compatible alias" in normalized
     assert "use `form-snapshot` before filling complex forms" in normalized
     assert "use `list-snapshot` before choosing from menus" in normalized
     assert "use `text-snapshot` for bounded visible text" in normalized

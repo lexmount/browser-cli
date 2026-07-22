@@ -403,7 +403,7 @@ browser-cli session keepalive --session-id <session_id>
 Context lifecycle:
 
 ```bash
-browser-cli context create
+browser-cli context create --description "Office login context"
 browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>

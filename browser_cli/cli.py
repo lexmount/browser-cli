@@ -32480,7 +32480,7 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
     action_interactive_only_snapshot = action_subparsers.add_parser(
         "interactive-only-snapshot",
-        help="Alias for interactive-snapshot; capture visible interactive elements",
+        help=argparse.SUPPRESS,
     )
     _add_session_target_args(action_interactive_only_snapshot)
     _add_snapshot_filter_args(action_interactive_only_snapshot)
@@ -32488,6 +32488,17 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         func=cmd_action_interactive_snapshot,
         action_command_name="action.interactive-only-snapshot",
     )
+    visible_action_names = [
+        name
+        for name in action_subparsers.choices
+        if name != "interactive-only-snapshot"
+    ]
+    action_subparsers.metavar = "{" + ",".join(visible_action_names) + "}"
+    action_subparsers._choices_actions = [
+        action
+        for action in action_subparsers._choices_actions
+        if getattr(action, "dest", None) != "interactive-only-snapshot"
+    ]
 
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
