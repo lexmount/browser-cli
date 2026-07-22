@@ -5528,9 +5528,55 @@ def _context_get(admin: Any, context_id: str) -> Any:
     if callable(func):
         try:
             return func(context_id)
+        except KeyError as exc:
+            raw_context = _context_raw_get(admin, context_id)
+            if raw_context is not None:
+                return raw_context
+            raise RuntimeError(f"Context {context_id} not found") from exc
         except Exception as exc:
             raise_normalized_lexmount_error(exc)
-    return admin.get_context(context_id)
+    try:
+        return admin.get_context(context_id)
+    except KeyError as exc:
+        raw_context = _context_raw_get(admin, context_id)
+        if raw_context is not None:
+            return raw_context
+        raise RuntimeError(f"Context {context_id} not found") from exc
+
+
+def _context_raw_get(admin: Any, context_id: str) -> dict[str, Any] | None:
+    try:
+        client = getattr(admin, "client", None)
+        post = getattr(client, "_post", None)
+        base_url = getattr(client, "base_url", None)
+        api_key = getattr(client, "api_key", None)
+        project_id = getattr(client, "project_id", None)
+    except Exception:
+        return None
+    if not callable(post) or not base_url or not api_key or not project_id:
+        return None
+
+    request_payload: dict[str, Any] = {
+        "api_key": api_key,
+        "project_id": project_id,
+    }
+    try:
+        response = post(
+            f"{base_url.rstrip('/')}/instance/v1/contexts/{quote(context_id, safe='')}",
+            json=request_payload,
+        )
+        if getattr(response, "status_code", 200) >= 400:
+            raise _context_response_error(response, "get context")
+        raw_payload = response.json()
+    except Exception as exc:
+        raise_normalized_lexmount_error(exc)
+    if isinstance(raw_payload, dict) and raw_payload.get("success") is False:
+        message = raw_payload.get("error") or raw_payload.get("message") or "Context not found"
+        raise RuntimeError(f"Context {context_id} not found: {message}")
+    context = _context_unwrap_payload(raw_payload)
+    if context is None or context.get("context_id") is None:
+        raise RuntimeError(f"Context {context_id} not found")
+    return context
 
 
 def _context_raw_list_payload(
