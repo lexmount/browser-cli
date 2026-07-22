@@ -24,7 +24,7 @@ from importlib.metadata import PackageNotFoundError, version as distribution_ver
 from pathlib import Path
 from typing import Any, Callable, Iterable, NoReturn
 from urllib.error import HTTPError, URLError
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from browser_cli import __version__
@@ -5370,6 +5370,19 @@ def _context_api(admin: Any) -> Any:
 
 
 def _context_create(admin: Any, *, metadata: dict[str, Any] | None, description: str | None) -> Any:
+    if description is not None:
+        raw_context = _context_raw_create(admin, metadata=metadata, description=description)
+        if raw_context is not None:
+            created_payload = _context_payload(raw_context)
+            context_id = created_payload.get("context_id")
+            if context_id and created_payload.get("description") != description:
+                return _context_raw_update_description(
+                    admin,
+                    context_id=context_id,
+                    description=description,
+                )
+            return raw_context
+
     api = _context_api(admin)
     func = getattr(api, "create", None)
     if callable(func):
@@ -5385,6 +5398,117 @@ def _context_create(admin: Any, *, metadata: dict[str, Any] | None, description:
         metadata=metadata,
         description=description,
     )
+
+
+def _context_response_error(response: Any, action: str) -> RuntimeError:
+    status_code = getattr(response, "status_code", None)
+    try:
+        body = response.json()
+    except Exception:
+        body = getattr(response, "text", "")
+    return RuntimeError(f"{action} failed: status={status_code}, body={body}")
+
+
+def _context_unwrap_payload(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    for key in ("context", "data"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            return value
+    return payload
+
+
+def _context_raw_create(
+    admin: Any,
+    *,
+    metadata: dict[str, Any] | None,
+    description: str,
+) -> dict[str, Any] | None:
+    try:
+        client = getattr(admin, "client", None)
+        post = getattr(client, "_post", None)
+        base_url = getattr(client, "base_url", None)
+        api_key = getattr(client, "api_key", None)
+        project_id = getattr(client, "project_id", None)
+    except Exception:
+        return None
+    if not callable(post) or not base_url or not api_key or not project_id:
+        return None
+
+    request_payload: dict[str, Any] = {
+        "api_key": api_key,
+        "project_id": project_id,
+        "description": description,
+    }
+    if metadata:
+        request_payload["metadata"] = metadata
+
+    try:
+        response = post(
+            f"{base_url.rstrip('/')}/instance/v1/contexts/create-context",
+            json=request_payload,
+        )
+        if getattr(response, "status_code", 200) >= 400:
+            raise _context_response_error(response, "create context")
+        raw_payload = response.json()
+    except Exception as exc:
+        raise_normalized_lexmount_error(exc)
+    return _context_unwrap_payload(raw_payload)
+
+
+def _context_raw_update_description(
+    admin: Any,
+    *,
+    context_id: str,
+    description: str,
+) -> dict[str, Any]:
+    try:
+        client = getattr(admin, "client", None)
+        http_client = getattr(client, "_http_client", None)
+        patch = getattr(http_client, "patch", None)
+        base_url = getattr(client, "base_url", None)
+        api_key = getattr(client, "api_key", None)
+        project_id = getattr(client, "project_id", None)
+    except Exception as exc:
+        raise_normalized_lexmount_error(exc)
+    if not callable(patch) or not base_url or not api_key or not project_id:
+        raise RuntimeError(
+            "context description update requires a Lexmount client with raw HTTP support"
+        )
+
+    request_payload: dict[str, Any] = {
+        "api_key": api_key,
+        "project_id": project_id,
+        "description": description,
+    }
+    url = (
+        f"{base_url.rstrip('/')}/instance/v1/contexts/"
+        f"{quote(context_id, safe='')}/description"
+    )
+    try:
+        ensure_region = getattr(client, "_ensure_region_resolved", None)
+        if callable(ensure_region):
+            ensure_region()
+        rewrite_url = getattr(client, "_rewrite_url", None)
+        if callable(rewrite_url):
+            url = rewrite_url(url)
+        build_headers = getattr(client, "_build_auth_headers", None)
+        headers = (
+            build_headers({"Content-Type": "application/json"})
+            if callable(build_headers)
+            else {"Content-Type": "application/json"}
+        )
+        response = patch(url, json=request_payload, headers=headers)
+        if getattr(response, "status_code", 200) >= 400:
+            raise _context_response_error(response, "update context description")
+        raw_payload = response.json()
+    except Exception as exc:
+        raise_normalized_lexmount_error(exc)
+    context = _context_unwrap_payload(raw_payload)
+    if context is None:
+        return {"context_id": context_id, "description": description}
+    return context
 
 
 def _context_list(admin: Any, *, status: str | None, limit: int) -> Any:
@@ -11608,6 +11732,21 @@ def cmd_context_status(args: argparse.Namespace) -> None:
         reuse=reuse,
         context=payload,
     )
+
+
+def cmd_context_update_description(args: argparse.Namespace) -> None:
+    command = "context.update-description"
+    admin = LexmountBrowserAdmin()
+    try:
+        context = _context_raw_update_description(
+            admin,
+            context_id=args.context_id,
+            description=args.description,
+        )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    payload = _context_enrich_from_list(admin, _context_payload(context))
+    _success(command, context=payload)
 
 
 def cmd_context_pick(args: argparse.Namespace) -> None:
@@ -30340,6 +30479,18 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     context_status.add_argument("--context-id", required=True)
     context_status.set_defaults(func=cmd_context_status)
+
+    context_update_description = context_subparsers.add_parser(
+        "update-description",
+        help="Update one context description",
+    )
+    context_update_description.add_argument("--context-id", required=True)
+    context_update_description.add_argument(
+        "--description",
+        required=True,
+        help="New UTF-8 description. Pass an empty string to clear it.",
+    )
+    context_update_description.set_defaults(func=cmd_context_update_description)
 
     context_pick = context_subparsers.add_parser(
         "pick",

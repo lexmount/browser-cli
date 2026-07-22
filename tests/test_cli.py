@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.12"
+    assert payload["version"] == "0.3.13"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9884,7 +9884,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.12"
+    assert checks["browser_cli"]["version"] == "0.3.13"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -14406,6 +14406,217 @@ def test_context_list_enriches_sdk_fields_from_raw_api(
     assert context["displayName"] == "bilibili"
     assert context["region_id"] == "qcloud-nanjing"
     assert context["regionId"] == "qcloud-nanjing"
+
+
+def test_context_create_with_description_patches_when_create_response_drops_it(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    class FakeHttpClient:
+        def patch(self, url: str, **kwargs: Any) -> FakeResponse:
+            calls.append(("patch", url, kwargs["json"]))
+            assert kwargs["headers"] == {
+                "Content-Type": "application/json",
+                "x-api-key": "key",
+                "x-project-id": "project",
+            }
+            return FakeResponse(
+                {
+                    "context_id": "ctx-created",
+                    "status": "available",
+                    "description": "Office login context",
+                    "display_name": "Office login context",
+                    "region_id": "nanjing-1",
+                    "metadata": {"purpose": "test"},
+                }
+            )
+
+    class FakeClient:
+        api_key = "key"
+        project_id = "project"
+        base_url = "https://api.lexmount.cn"
+        _http_client = FakeHttpClient()
+
+        def _post(self, url: str, **kwargs: Any) -> FakeResponse:
+            calls.append(("post", url, kwargs["json"]))
+            return FakeResponse(
+                {
+                    "context_id": "ctx-created",
+                    "status": "available",
+                    "description": None,
+                    "display_name": "ctx-created",
+                    "metadata": {"purpose": "test"},
+                }
+            )
+
+        def _ensure_region_resolved(self) -> None:
+            calls.append(("ensure_region", "", {}))
+
+        def _rewrite_url(self, url: str) -> str:
+            calls.append(("rewrite_url", url, {}))
+            return url
+
+        def _build_auth_headers(self, headers: dict[str, str]) -> dict[str, str]:
+            return {
+                **headers,
+                "x-api-key": self.api_key,
+                "x-project-id": self.project_id,
+            }
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = FakeClient()
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "create",
+                "--metadata-json",
+                '{"purpose":"test"}',
+                "--description",
+                "Office login context",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    context = json.loads(capsys.readouterr().out)["context"]
+    assert context["context_id"] == "ctx-created"
+    assert context["description"] == "Office login context"
+    assert context["display_name"] == "Office login context"
+    assert context["region_id"] == "nanjing-1"
+    assert calls == [
+        (
+            "post",
+            "https://api.lexmount.cn/instance/v1/contexts/create-context",
+            {
+                "api_key": "key",
+                "project_id": "project",
+                "description": "Office login context",
+                "metadata": {"purpose": "test"},
+            },
+        ),
+        ("ensure_region", "", {}),
+        (
+            "rewrite_url",
+            "https://api.lexmount.cn/instance/v1/contexts/ctx-created/description",
+            {},
+        ),
+        (
+            "patch",
+            "https://api.lexmount.cn/instance/v1/contexts/ctx-created/description",
+            {
+                "api_key": "key",
+                "project_id": "project",
+                "description": "Office login context",
+            },
+        ),
+    ]
+
+
+def test_context_update_description_command_uses_raw_patch(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "context": {
+                    "context_id": "ctx-edit",
+                    "status": "available",
+                    "description": "Updated context",
+                    "display_name": "Updated context",
+                    "metadata": {},
+                }
+            }
+
+    class FakeHttpClient:
+        def patch(self, url: str, **kwargs: Any) -> FakeResponse:
+            calls.append(("patch", url, kwargs["json"]))
+            assert kwargs["headers"]["Content-Type"] == "application/json"
+            assert kwargs["headers"]["x-api-key"] == "key"
+            assert kwargs["headers"]["x-project-id"] == "project"
+            return FakeResponse()
+
+    class FakeClient:
+        api_key = "key"
+        project_id = "project"
+        base_url = "https://api.lexmount.cn"
+        _http_client = FakeHttpClient()
+
+        def _ensure_region_resolved(self) -> None:
+            calls.append(("ensure_region", "", {}))
+
+        def _rewrite_url(self, url: str) -> str:
+            calls.append(("rewrite_url", url, {}))
+            return url.replace("api.lexmount.cn", "region.lexmount.cn")
+
+        def _build_auth_headers(self, headers: dict[str, str]) -> dict[str, str]:
+            return {
+                **headers,
+                "x-api-key": self.api_key,
+                "x-project-id": self.project_id,
+            }
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = FakeClient()
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "update-description",
+                "--context-id",
+                "ctx-edit",
+                "--description",
+                "Updated context",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    context = payload["context"]
+    assert payload["command"] == "context.update-description"
+    assert context["context_id"] == "ctx-edit"
+    assert context["description"] == "Updated context"
+    assert context["display_name"] == "Updated context"
+    assert calls == [
+        ("ensure_region", "", {}),
+        (
+            "rewrite_url",
+            "https://api.lexmount.cn/instance/v1/contexts/ctx-edit/description",
+            {},
+        ),
+        (
+            "patch",
+            "https://region.lexmount.cn/instance/v1/contexts/ctx-edit/description",
+            {
+                "api_key": "key",
+                "project_id": "project",
+                "description": "Updated context",
+            },
+        ),
+    ]
 
 
 def test_context_get_enriches_missing_fields_from_list(
