@@ -14174,6 +14174,7 @@ def test_context_commands_emit_json(
         ),
         ("list", {"status": "available", "limit": 5}),
         ("get", {"context_id": "ctx1"}),
+        ("list", {"status": None, "limit": 100}),
         ("delete", {"context_id": "ctx1"}),
     ]
 
@@ -14333,6 +14334,61 @@ def test_context_list_preserves_sdk_data_context_fields(
             "regionId": "qcloud-nanjing",
         }
     ]
+
+
+def test_context_get_enriches_missing_fields_from_list(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[str] = []
+
+    class FakeContexts:
+        def get(self, context_id: str) -> Any:
+            calls.append(f"get:{context_id}")
+            return SimpleNamespace(
+                id=context_id,
+                status="available",
+                metadata={},
+                description=None,
+                display_name=context_id,
+                region_id=None,
+                created_at="2026-07-16T09:57:13.797000Z",
+                updated_at="2026-07-22T06:00:28.570000Z",
+            )
+
+        def list(self, *, status: str | None, limit: int) -> Any:
+            calls.append(f"list:{status}:{limit}")
+            return SimpleNamespace(
+                data=[
+                    SimpleNamespace(
+                        id="ctx-target",
+                        status="available",
+                        metadata={},
+                        description="bilibili",
+                        display_name="bilibili",
+                        region_id="qcloud-nanjing",
+                    )
+                ]
+            )
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = SimpleNamespace(contexts=FakeContexts())
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "get", "--context-id", "ctx-target"])
+
+    assert exc_info.value.code == 0
+    context = json.loads(capsys.readouterr().out)["context"]
+    assert context["context_id"] == "ctx-target"
+    assert context["description"] == "bilibili"
+    assert context["display_name"] == "bilibili"
+    assert context["displayName"] == "bilibili"
+    assert context["region_id"] == "qcloud-nanjing"
+    assert context["regionId"] == "qcloud-nanjing"
+    assert calls == ["get:ctx-target", "list:None:100"]
 
 
 def test_context_status_reports_reusable_and_locked_state(

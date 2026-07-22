@@ -5471,6 +5471,43 @@ def _context_list_payload(value: Any) -> dict[str, Any]:
     }
 
 
+def _context_payload_needs_list_enrichment(payload: dict[str, Any]) -> bool:
+    context_id = payload.get("context_id")
+    if not context_id:
+        return False
+    display_name = payload.get("display_name") or payload.get("displayName")
+    return (
+        payload.get("description") is None
+        and payload.get("region_id") is None
+        and payload.get("regionId") is None
+        and (display_name is None or display_name == context_id)
+    )
+
+
+def _context_enrich_from_list(admin: Any, payload: dict[str, Any]) -> dict[str, Any]:
+    if not _context_payload_needs_list_enrichment(payload):
+        return payload
+    context_id = payload.get("context_id")
+    try:
+        list_result = _context_list(admin, status=None, limit=100)
+    except Exception:
+        return payload
+    contexts = _context_list_payload(list_result).get("contexts", [])
+    for context in contexts:
+        if not isinstance(context, dict) or context.get("context_id") != context_id:
+            continue
+        enriched = dict(payload)
+        for key in ("description", "display_name", "displayName", "region_id", "regionId"):
+            if enriched.get(key) is None and context.get(key) is not None:
+                enriched[key] = context[key]
+        if enriched.get("display_name") in {None, context_id} and context.get("display_name"):
+            enriched["display_name"] = context["display_name"]
+        if enriched.get("displayName") in {None, context_id} and context.get("displayName"):
+            enriched["displayName"] = context["displayName"]
+        return enriched
+    return payload
+
+
 def _package_version(distribution: str) -> str | None:
     try:
         return distribution_version(distribution)
@@ -11442,7 +11479,8 @@ def cmd_context_get(args: argparse.Namespace) -> None:
         context = _context_get(admin, args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_context_payload(context))
+    payload = _context_enrich_from_list(admin, _context_payload(context))
+    _success(command, context=payload)
 
 
 def cmd_context_status(args: argparse.Namespace) -> None:
@@ -11452,7 +11490,7 @@ def cmd_context_status(args: argparse.Namespace) -> None:
         context = _context_get(admin, args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    payload = _context_payload(context)
+    payload = _context_enrich_from_list(admin, _context_payload(context))
     reuse = _context_reuse_state(payload)
     _success(
         command,
