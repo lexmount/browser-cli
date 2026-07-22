@@ -16,7 +16,7 @@ Do not use this Skill for local desktop app control, already-open local browser 
 - Setup and auth: install/version checks, credential state, scoped-token metadata, Connect from Codex requirements, doctor readiness, and smoke-session cleanup.
 - Sessions: create, list, get, keepalive, close, and recover stale sessions; Contexts: create, list, get, status, pick, delete, reuse by metadata, and explain `available`/`locked`/`unavailable` decisions.
 - Navigation and readiness: open URLs, reload, history navigation, and waits for URL, title, load state, network idle, selectors, roles, text, attributes, values, frames, dialogs, storage, cookies, console, and fetch/XHR.
-- Inspection and extraction: observe/extract/page-info plus snapshot, text, links, tables, lists, forms, dialogs, frames, accessibility, interactive-only, network, console, performance, and screenshots.
+- Inspection and extraction: observe/extract/page-info plus interactive, text, links, tables, lists, forms, dialogs, frames, accessibility, network, console, performance, and screenshots.
 - Interaction: act, click-label, click-text, click-role, click-index, fill, select, check/uncheck, hover, press, focus/blur, scroll, drag, file uploads, dialogs/frames, and storage/cookie state changes.
 - Repeatable automation: validate, scaffold, and run JSON/YAML cases with artifacts, events, expectations, and cleanup for reproducible tasks.
 ## Fast Path
@@ -223,8 +223,8 @@ Then follow the returned steps; use `browser-cli action observe --session-id <se
 ```bash
 browser-cli session create
 browser-cli action open-url --session-id <session_id> --url <url>
-browser-cli action snapshot --session-id <session_id>
-browser-cli action wait-selector --session-id <session_id> --selector <selector>
+browser-cli action interactive-snapshot --session-id <session_id>
+browser-cli action wait-role --session-id <session_id> --role button --name "<name>"
 browser-cli session close --session-id <session_id>
 ```
 
@@ -238,8 +238,8 @@ browser-cli commands --workflow case_file_task
 Run `browser-cli case schema` before hand-writing a case file. Generate starters with
 `browser-cli case scaffold --template page-inspection`, `browser-cli case scaffold --template agent-primitives`, `browser-cli case scaffold --template form-fill`, `browser-cli case scaffold --template content-extraction`, `browser-cli case scaffold --template browser-state`, `browser-cli case scaffold --template navigation-flow`, `browser-cli case scaffold --template file-upload`, `browser-cli case scaffold --template checkout-flow`, `browser-cli case scaffold --template interactive-targeting`, or `browser-cli case scaffold --template page-diagnostics`,
 validate, then run with `--close-created-session`. Read `supported_actions`, `required_fields`, `step_options.expect`,
-`scaffold_templates`, agent primitive and semantic/navigation/state actions such as `observe`, `act`, `extract`, `fill-label`, `fill`, `click-label`, `click-role`,
-`select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-network`, `wait-console`, `wait-role`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,
+`scaffold_templates`, agent primitive and semantic/navigation/state actions such as `observe`, `act`, `extract`, `fill-label`, `click-label`, `click-role`,
+`select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-role`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, plus fallback/advanced/debug commands such as `fill`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `wait-network`, `wait-console`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, and `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,
 `events_path`, `artifacts_dir`, `session`, and `steps`.
 
 For form tasks, prefer the more specific form workflow:
@@ -248,17 +248,17 @@ For form tasks, prefer the more specific form workflow:
 browser-cli commands --workflow form_interaction
 browser-cli action guide --task form_interaction
 ```
-Follow the guide's `inspect_commands`, `preferred_commands`, `verify_commands`, and `custom_js_boundary`, then follow workflow `read` fields for `form-snapshot`, semantic fill/select/check/click commands, `click-label`, `wait-role`, `wait-state-role`, `click-role`, `exists-role`, `get-text-role`, `bounding-box-role`, `hover-role`, `press-role`, `scroll-into-view-role`, and verification steps before custom JavaScript.
+Follow the guide's `recommended_core_commands`, `preferred_commands`, `fallback_commands`, `advanced_commands`, `debug_commands`, `verify_commands`, and `custom_js_boundary`. Start with semantic form commands and verification; use selector fallback, DOM events, or custom JavaScript only when the core commands cannot express the operation.
 
-For visible labeled controls, buttons, links, menus, double-clicks, right-click context menus, drag/drop, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, `drag-role-to-role`, `drag-to`, `double-click`, or `right-click`; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions such as `click-label`, `click-role`, and `click-text` before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
+For visible labeled controls, buttons, links, menus, double-clicks, right-click context menus, drag/drop, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, or `drag-role-to-role` first, and use selector `drag-to`, `double-click`, or `right-click` only as fallback; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions such as `click-label`, `click-role`, and `click-text` before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
 For page content extraction, prefer `browser-cli commands --workflow content_extraction`, `browser-cli action guide --task content_extraction`, and `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main`; choose narrower outline/text/link/table/list/accessibility snapshots only when the bundled extract result is too broad or truncated.
-For browser state setup or cleanup, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands for local/session storage and document.cookie-visible cookies before custom JS.
+For browser state setup, cleanup, or assertions, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands only for explicit local/session storage and document.cookie-visible cookie workflows, not ordinary page interaction.
 For file uploads, prefer `browser-cli commands --workflow file_upload` and `browser-cli action guide --task file_upload`; inspect controls, then use `set-file-input` before custom JS or OS file picker workarounds.
 For dialogs, cookie banners, confirmation prompts, and iframes, prefer `browser-cli commands --workflow dialog_frame_handling` and `browser-cli action guide --task dialog_frame_handling`; use dialog/frame snapshots and waits before custom JS.
 For menus, popovers, listboxes, and keyboard shortcuts, prefer `browser-cli commands --workflow menu_keyboard_flow` and `browser-cli action guide --task menu_keyboard_flow`; use role hover/focus/press, list snapshots, and `press-key` before custom JS.
 For page navigation, refresh, or history, prefer `browser-cli commands --workflow navigation_flow` and `browser-cli action guide --task navigation_flow`; use `open-url`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`, and `wait-load-state` before custom JS.
-For visual evidence, prefer `browser-cli commands --workflow visual_capture` and `browser-cli action guide --task visual_capture`; use `set-viewport`, `screenshot-role`, `screenshot-selector`, full-page `screenshot`, and bounded `text-snapshot` before custom JS.
-For semantic readiness and deterministic state transitions, prefer `browser-cli commands --workflow semantic_waits`, `browser-cli action guide --task semantic_waits`, `browser-cli commands --workflow state_waits`, and `browser-cli action guide --task state_waits`; choose `wait-role`, `wait-text`, `wait-state-role`, `wait-attribute-role`, `wait-network`, `wait-storage`, or `wait-cookie` before sleeps or custom JS.
+For visual evidence, prefer `browser-cli commands --workflow visual_capture` and `browser-cli action guide --task visual_capture`; use `set-viewport`, `screenshot-role`, full-page `screenshot`, and bounded `text-snapshot` first; use `screenshot-selector` only when a stable selector is already known.
+For semantic readiness and deterministic state transitions, prefer `browser-cli commands --workflow semantic_waits`, `browser-cli action guide --task semantic_waits`, `browser-cli commands --workflow state_waits`, and `browser-cli action guide --task state_waits`; choose `wait-role`, `wait-text`, `wait-state-role`, or `wait-attribute-role` first. Use `wait-network`, `wait-storage`, or `wait-cookie` only for explicit diagnostic or browser-state workflows before sleeps or custom JS.
 
 For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic workflow before writing custom probes:
 
@@ -425,12 +425,12 @@ If only the installed CLI is available, read the same packaged content with
 Core action rules:
 
 - Prefer built-in CLI actions over writing custom JavaScript.
-- Use `browser-cli action guide --task <task>` for task-specific
-  `selection_order`, `inspect_commands`, `preferred_commands`,
-  `verify_commands`, `read_fields`, and `custom_js_boundary`.
-- Inspect first with `snapshot`, `interactive-snapshot`, `accessibility-snapshot`,
-  `form-snapshot`, `list-snapshot`, `link-snapshot`, `table-snapshot`, `text-snapshot`, `dialog-snapshot`,
-  `frame-snapshot`, or `outline-snapshot` when page structure is unclear.
+- Use `browser-cli action guide --task <task>` for task-specific `selection_order`,
+  `recommended_core_commands`, fallback/advanced/debug commands, verify/read fields,
+  and `custom_js_boundary`.
+- Inspect first with `interactive-snapshot`, `form-snapshot`, `list-snapshot`,
+  `link-snapshot`, `table-snapshot`, `text-snapshot`, `dialog-snapshot`,
+  `frame-snapshot`, or `outline-snapshot`; use `snapshot` or `accessibility-snapshot` as debug tools.
 - Prefer semantic actions such as `wait-role`, `wait-state-role`, `get-attribute-role`,
   `wait-attribute-role`, `exists-role`, `get-text-role`,
   `bounding-box-role`, `click-label`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
@@ -442,6 +442,7 @@ Core action rules:
   `inspect`, `get-attribute`, `wait-text`, `get-text`, `click`, `type`,
   `fill`, `set-value`, `select-option`, `check`, and `uncheck` only when a stable
   selector is known.
+- Use storage/cookie commands only for explicit browser-state setup, cleanup, or assertions. Use network/console commands for diagnostics, not routine interaction setup.
 - For page failures, run `browser-cli commands --workflow page_diagnostics`;
   install console/network capture before reproducing the issue; use
   `set-viewport`, `screenshot-role`, and `screenshot-selector` when viewport

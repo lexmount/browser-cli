@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.16"
+    assert payload["version"] == "0.3.17"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -2181,9 +2181,18 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "bounding-box-role",
     ]
     assert "browser-cli action accessibility-snapshot" in guide["inspect_commands"][1]
-    assert "browser-cli action exists-role" in guide["preferred_commands"][1]
-    assert "browser-cli action get-text-role" in guide["preferred_commands"][2]
-    assert "browser-cli action bounding-box-role" in guide["preferred_commands"][3]
+    assert any(
+        "browser-cli action exists-role" in command
+        for command in guide["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action get-text-role" in command
+        for command in guide["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action bounding-box-role" in command
+        for command in guide["preferred_commands"]
+    )
     assert any(
         "browser-cli action click-label" in command
         for command in guide["preferred_commands"]
@@ -2200,13 +2209,26 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli action press-role" in command
         for command in guide["preferred_commands"]
     )
+    assert guide["preferred_commands"] == guide["recommended_core_commands"]
     assert any(
         "browser-cli action scroll-into-view-role" in command
-        for command in guide["fallback_commands"]
+        for command in guide["preferred_commands"]
     )
     assert any(
         "browser-cli action hover --session-id" in command
         for command in guide["fallback_commands"]
+    )
+    assert not any(
+        "browser-cli action click --session-id" in command
+        for command in guide["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action click --session-id" in command
+        for command in guide["fallback_commands"]
+    )
+    assert any(
+        "browser-cli action accessibility-snapshot" in command
+        for command in guide["debug_commands"]
     )
     assert "browser-cli action wait-url" in guide["verify_commands"][0]
     assert "result.nodes" in guide["read_fields"]
@@ -2249,7 +2271,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action click-role" in command
-        for command in payload["guide"]["fallback_commands"]
+        for command in payload["guide"]["preferred_commands"]
     )
     assert "result.items" in payload["guide"]["read_fields"]
     assert "result.keydown_accepted" in payload["guide"]["read_fields"]
@@ -2281,12 +2303,20 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
-        "browser-cli action right-click" in command
+        "browser-cli action right-click-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action drag-role-to-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert not any(
+        "browser-cli action drag-to" in command
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
         "browser-cli action drag-to" in command
-        for command in payload["guide"]["preferred_commands"]
+        for command in payload["guide"]["fallback_commands"]
     )
     assert any(
         "browser-cli action drag-role-to-role" in command
@@ -2407,7 +2437,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action screenshot-selector" in command
-        for command in payload["guide"]["preferred_commands"]
+        for command in payload["guide"]["fallback_commands"]
     )
     assert "result.screenshot" in payload["guide"]["read_fields"]
     assert "result.path" in payload["guide"]["read_fields"]
@@ -2471,10 +2501,6 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         for command in payload["guide"]["preferred_commands"]
     )
     assert any(
-        "browser-cli action fill --session-id" in command
-        for command in payload["guide"]["preferred_commands"]
-    )
-    assert any(
         "browser-cli action select-role" in command
         for command in payload["guide"]["preferred_commands"]
     )
@@ -2488,18 +2514,26 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action clear-role" in command
-        for command in payload["guide"]["fallback_commands"]
+        for command in payload["guide"]["preferred_commands"]
     )
     assert any(
         "browser-cli action focus-role" in command
-        for command in payload["guide"]["fallback_commands"]
+        for command in payload["guide"]["preferred_commands"]
     )
     assert any(
         "browser-cli action press-role" in command
-        for command in payload["guide"]["fallback_commands"]
+        for command in payload["guide"]["preferred_commands"]
     )
     assert any(
         "browser-cli action uncheck-role" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert not any(
+        "browser-cli action fill --session-id" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
+    assert any(
+        "browser-cli action fill --session-id" in command
         for command in payload["guide"]["fallback_commands"]
     )
     assert any(
@@ -2517,7 +2551,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert (
         "browser-cli action dispatch-event --session-id <session_id> "
         '--selector "<selector>" --event input --event change'
-    ) in payload["guide"]["fallback_commands"]
+    ) in payload["guide"]["advanced_commands"]
 
     with pytest.raises(SystemExit) as exc_info:
         cli_main(["action", "guide", "--task", "file_upload"])
@@ -2541,7 +2575,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action submit" in command
-        for command in payload["guide"]["fallback_commands"]
+        for command in payload["guide"]["advanced_commands"]
     )
     assert "result.requested_files" in payload["guide"]["read_fields"]
     assert "result.file_count" in payload["guide"]["read_fields"]
@@ -2605,7 +2639,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert "screenshot-selector" in payload["guide"]["selection_order"]
     assert any(
         "browser-cli action screenshot-role" in command
-        for command in payload["guide"]["fallback_commands"]
+        for command in payload["guide"]["preferred_commands"]
     )
     assert any(
         "browser-cli action screenshot-selector" in command
@@ -2642,7 +2676,7 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action snapshot" in command
-        for command in payload["guide"]["fallback_commands"]
+        for command in payload["guide"]["debug_commands"]
     )
     assert "result.texts" in payload["guide"]["read_fields"]
     assert "result.links" in payload["guide"]["read_fields"]
@@ -2671,13 +2705,16 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     ]
     assert "storage-set" in payload["guide"]["selection_order"]
     assert "cookie-set" in payload["guide"]["selection_order"]
+    assert payload["guide"]["preferred_commands"] == [
+        "browser-cli action page-info --session-id <session_id>"
+    ]
     assert any(
         "browser-cli action storage-set" in command
-        for command in payload["guide"]["preferred_commands"]
+        for command in payload["guide"]["advanced_commands"]
     )
     assert any(
         "browser-cli action cookie-set" in command
-        for command in payload["guide"]["preferred_commands"]
+        for command in payload["guide"]["advanced_commands"]
     )
     assert any(
         "browser-cli action wait-storage" in command
@@ -2720,11 +2757,11 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     )
     assert any(
         "browser-cli action wait-network" in command
-        for command in payload["guide"]["preferred_commands"]
+        for command in payload["guide"]["debug_commands"]
     )
     assert any(
         "browser-cli action wait-storage" in command
-        for command in payload["guide"]["preferred_commands"]
+        for command in payload["guide"]["advanced_commands"]
     )
     assert any(
         "browser-cli action get-attribute-role" in command
@@ -9896,7 +9933,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.16"
+    assert checks["browser_cli"]["version"] == "0.3.17"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"

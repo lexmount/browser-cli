@@ -52,22 +52,18 @@ browser-cli action guide --task state_waits
 browser-cli action guide --task page_diagnostics
 ```
 
-`action guide` is the compact machine-readable route for a known browser task;
-use it before loading the longer playbook when the task category is clear.
+`action guide` is the compact machine-readable route for a known browser task.
+Use `recommended_core_commands` / `preferred_commands` first. Treat
+`fallback_commands` as stable-selector escape hatches, `advanced_commands` as
+explicit state or DOM-event tools, and `debug_commands` as diagnostics rather
+than ordinary page interaction.
 
-Common actions:
+Core actions:
 
 ```bash
 browser-cli action open-url --session-id <session_id> --url https://example.com
-browser-cli action wait-selector --session-id <session_id> --selector "main"
-browser-cli action click --session-id <session_id> --selector "button"
-browser-cli action type --session-id <session_id> --selector "input[name=q]" --text "query"
-browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
 browser-cli action screenshot --session-id <session_id> --output /tmp/page.png
-browser-cli action screenshot-selector --session-id <session_id> --selector "main" --output /tmp/main.png
 browser-cli action screenshot-role --session-id <session_id> --role button --name "Submit" --output /tmp/submit.png
-browser-cli action eval --session-id <session_id> --script "() => document.title"
-browser-cli action snapshot --session-id <session_id> --max-chars 8000
 browser-cli action page-info --session-id <session_id>
 browser-cli action set-viewport --session-id <session_id> --width 1280 --height 720
 browser-cli action reload --session-id <session_id>
@@ -77,19 +73,10 @@ browser-cli action wait-url --session-id <session_id> --url /dashboard
 browser-cli action wait-title --session-id <session_id> --title Dashboard --match contains
 browser-cli action wait-load-state --session-id <session_id> --state complete
 browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
-browser-cli action get-text --session-id <session_id> --selector "main"
 browser-cli action get-text-role --session-id <session_id> --role heading --name "Welcome"
-browser-cli action exists --session-id <session_id> --selector "button"
 browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
-browser-cli action count --session-id <session_id> --selector ".item"
-browser-cli action wait-count --session-id <session_id> --selector ".item" --count 3 --comparison gte
-browser-cli action wait-state --session-id <session_id> --selector "button" --state enabled
 browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled
-browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
-browser-cli action inspect --session-id <session_id> --selector "button"
-browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
 browser-cli action get-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded
-browser-cli action wait-attribute --session-id <session_id> --selector "button" --name aria-busy --state absent
 browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
@@ -97,37 +84,22 @@ browser-cli action wait-role --session-id <session_id> --role button --name "Sub
 browser-cli action act --session-id <session_id> --kind click --role button --name "Submit"
 browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
 browser-cli action act --session-id <session_id> --kind select --role combobox --name "Plan" --option-label "Pro"
-browser-cli action focus --session-id <session_id> --selector "input[name=q]"
 browser-cli action focus-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
 browser-cli action get-value-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action wait-value --session-id <session_id> --selector "input[name=q]" --value "query"
 browser-cli action wait-value-role --session-id <session_id> --role textbox --name "Search" --value "query"
-browser-cli action blur --session-id <session_id> --selector "input[name=q]"
 browser-cli action blur-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action clear --session-id <session_id> --selector "input[name=q]"
 browser-cli action clear-role --session-id <session_id> --role textbox --name "Search"
-browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "query"
 browser-cli action set-file-input --session-id <session_id> --selector "input[type=file]" --file ./avatar.png
-browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
-browser-cli action submit --session-id <session_id> --selector "form"
 browser-cli action scroll --session-id <session_id> --y 600
-browser-cli action scroll-into-view --session-id <session_id> --selector "button"
 browser-cli action scroll-into-view-role --session-id <session_id> --role button --name "Submit"
-browser-cli action bounding-box --session-id <session_id> --selector "button"
 browser-cli action bounding-box-role --session-id <session_id> --role button --name "Submit"
-browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action select-label --session-id <session_id> --label "Plan" --option-label "Pro"
 browser-cli action select-role --session-id <session_id> --role combobox --name "Plan" --option-label "Pro"
-browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
-browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
 browser-cli action check-label --session-id <session_id> --label "Remember me"
 browser-cli action uncheck-label --session-id <session_id> --label "Remember me"
 browser-cli action check-role --session-id <session_id> --role checkbox --name "Remember me"
 browser-cli action uncheck-role --session-id <session_id> --role checkbox --name "Remember me"
-browser-cli action hover --session-id <session_id> --selector ".menu"
 browser-cli action hover-role --session-id <session_id> --role button --name "Menu"
-browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
 browser-cli action press-role --session-id <session_id> --role textbox --name "Search" --key Enter
 browser-cli action press-key --session-id <session_id> --key Escape
 browser-cli action click-label --session-id <session_id> --label "Remember me"
@@ -136,15 +108,42 @@ browser-cli action click-role --session-id <session_id> --role button --name "Su
 browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
 browser-cli action double-click-role --session-id <session_id> --role button --name "Edit"
 browser-cli action right-click-role --session-id <session_id> --role row --name "Invoice 123"
-browser-cli action double-click --session-id <session_id> --selector ".row"
-browser-cli action right-click --session-id <session_id> --selector ".row"
 browser-cli action drag-role-to-role --session-id <session_id> --source-role listitem --source-name "Todo" --target-role list --target-name "Done"
-browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"
 browser-cli action fill-label --session-id <session_id> --label "Email" --text "me@example.com"
 browser-cli action fill-role --session-id <session_id> --role textbox --name "Email" --text "me@example.com"
 ```
 
-Inspection and diagnostics:
+Fallback selector actions:
+
+```bash
+browser-cli action wait-selector --session-id <session_id> --selector "main"
+browser-cli action click --session-id <session_id> --selector "button"
+browser-cli action type --session-id <session_id> --selector "input[name=q]" --text "query"
+browser-cli action fill --session-id <session_id> --selector "input[name=email]" --text "me@example.com"
+browser-cli action get-text --session-id <session_id> --selector "main"
+browser-cli action exists --session-id <session_id> --selector "button"
+browser-cli action count --session-id <session_id> --selector ".item"
+browser-cli action query --session-id <session_id> --selector ".item" --max-nodes 20
+browser-cli action inspect --session-id <session_id> --selector "button"
+browser-cli action get-attribute --session-id <session_id> --selector "a" --name href
+browser-cli action focus --session-id <session_id> --selector "input[name=q]"
+browser-cli action get-value --session-id <session_id> --selector "input[name=q]"
+browser-cli action blur --session-id <session_id> --selector "input[name=q]"
+browser-cli action clear --session-id <session_id> --selector "input[name=q]"
+browser-cli action scroll-into-view --session-id <session_id> --selector "button"
+browser-cli action bounding-box --session-id <session_id> --selector "button"
+browser-cli action check --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action uncheck --session-id <session_id> --selector "input[type=checkbox]"
+browser-cli action hover --session-id <session_id> --selector ".menu"
+browser-cli action press --session-id <session_id> --selector "input[name=q]" --key Enter
+browser-cli action click-index --session-id <session_id> --selector ".item button" --index 2
+browser-cli action double-click --session-id <session_id> --selector ".row"
+browser-cli action right-click --session-id <session_id> --selector ".row"
+browser-cli action drag-to --session-id <session_id> --selector ".card" --target-selector ".dropzone"
+browser-cli action screenshot-selector --session-id <session_id> --selector "main" --output /tmp/main.png
+```
+
+Inspection:
 
 ```bash
 browser-cli action link-snapshot --session-id <session_id> --selector "main" --max-nodes 50
@@ -155,20 +154,18 @@ browser-cli action dialog-snapshot --session-id <session_id> --max-nodes 20 --ma
 browser-cli action wait-dialog --session-id <session_id> --text "Confirm" --modal-only
 browser-cli action frame-snapshot --session-id <session_id> --selector "main" --max-nodes 20 --max-chars 500
 browser-cli action wait-frame --session-id <session_id> --url "/checkout" --readable-only
-browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
-browser-cli action network-snapshot --session-id <session_id> --max-entries 50
-browser-cli action wait-network --session-id <session_id> --url /api/save --method POST --status 201
-browser-cli action console-snapshot --session-id <session_id> --max-entries 50
-browser-cli action wait-console --session-id <session_id> --source pageerror --level error --timeout-ms 5000
 browser-cli action outline-snapshot --session-id <session_id> --selector "main" --max-nodes 50
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
-browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
 ```
 
-Storage and cookies:
+Advanced browser state and DOM-event actions:
 
 ```bash
+browser-cli action set-value --session-id <session_id> --selector "input[name=q]" --value "query"
+browser-cli action dispatch-event --session-id <session_id> --selector "input[name=q]" --event input --event change
+browser-cli action submit --session-id <session_id> --selector "form"
+browser-cli action select-option --session-id <session_id> --selector "select" --value pro
 browser-cli action storage-get --session-id <session_id> --area local --key featureFlag
 browser-cli action storage-set --session-id <session_id> --area local --key seenIntro --value true
 browser-cli action storage-remove --session-id <session_id> --area session --key draft
@@ -179,6 +176,19 @@ browser-cli action cookie-set --session-id <session_id> --name consent --value y
 browser-cli action cookie-delete --session-id <session_id> --name consent --path /
 browser-cli action cookie-clear --session-id <session_id> --prefix tmp: --path /
 browser-cli action wait-cookie --session-id <session_id> --name consent --value yes
+```
+
+Debug diagnostics:
+
+```bash
+browser-cli action snapshot --session-id <session_id> --max-chars 8000
+browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
+browser-cli action performance-snapshot --session-id <session_id> --max-resources 50 --min-duration-ms 0
+browser-cli action network-snapshot --session-id <session_id> --max-entries 50
+browser-cli action wait-network --session-id <session_id> --url /api/save --method POST --status 201
+browser-cli action console-snapshot --session-id <session_id> --max-entries 50
+browser-cli action wait-console --session-id <session_id> --source pageerror --level error --timeout-ms 5000
+browser-cli action eval --session-id <session_id> --script "() => document.title"
 ```
 
 ## Structured Results And Masking
@@ -257,8 +267,10 @@ console/page error entries and the reported page URL.
 
 ## Action Selection Order
 
-1. Inspect with `snapshot`, then `interactive-snapshot` when selectors or roles
-   are unclear; use `action extract` for bundled bounded content; use `outline-snapshot` for page structure; use `form-snapshot`
+1. Inspect first with `interactive-snapshot` when targets are unclear; use
+   `snapshot` or `accessibility-snapshot` as debug tools when the core snapshots
+   do not expose enough detail; use `action extract` for bundled bounded
+   content; use `outline-snapshot` for page structure; use `form-snapshot`
    before filling complex forms; use `list-snapshot` before choosing from
    menus, search results, listboxes, or task lists; use `text-snapshot` for
    bounded visible text, alerts, and status messages; use `wait-dialog` or
@@ -275,7 +287,8 @@ console/page error entries and the reported page URL.
    `focus-role`, `blur-role`, and `clear-role` for role/name form controls,
    `select-label` or `select-role` for native selects, and
    `check-label`, `check-role`, or `uncheck-role` for checkbox or switch controls.
-3. Use selector actions when a stable selector is known: `exists`, `count`,
+3. Use selector actions only as fallback when a stable selector is known:
+   `exists`, `count`,
    `wait-count`, `wait-state`, `query`, `inspect`, `get-attribute`,
    `wait-attribute`, `wait-text`, `get-text`, `wait-selector`, `click`, `type`, `fill`,
    `focus`, `get-value`, `get-value-role`, `wait-value`, `wait-value-role`, `blur`, `clear`, `set-value`,
@@ -287,10 +300,12 @@ console/page error entries and the reported page URL.
    `network-snapshot` or `wait-network` for fetch/XHR debugging.
 6. For runtime errors, run `console-snapshot --install-only`, reproduce, then
    read `console-snapshot` or `wait-console`.
-7. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` for
-   localStorage/sessionStorage state; use `wait-storage` after async changes.
-8. Use `cookie-get`, `cookie-set`, `cookie-delete`, and `cookie-clear` for
-   document.cookie-visible cookies; use `wait-cookie` after consent/login flows.
+7. Use `storage-get`, `storage-set`, `storage-remove`, and `storage-clear` only
+   for explicit localStorage/sessionStorage setup, cleanup, or assertions; use
+   `wait-storage` after async changes.
+8. Use `cookie-get`, `cookie-set`, `cookie-delete`, and `cookie-clear` only for
+   explicit document.cookie-visible setup, cleanup, or assertions; use
+   `wait-cookie` after consent/login flows.
    Do not expect HttpOnly cookies here.
 9. Use `scroll`, `scroll-into-view`, `bounding-box`, `inspect`, `hover`,
    selector-scoped `press`, active/global `press-key`, or `dispatch-event` for
