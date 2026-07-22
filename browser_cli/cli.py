@@ -5571,8 +5571,8 @@ def _context_raw_get(admin: Any, context_id: str) -> dict[str, Any] | None:
     except Exception as exc:
         raise_normalized_lexmount_error(exc)
     if isinstance(raw_payload, dict) and raw_payload.get("success") is False:
-        message = raw_payload.get("error") or raw_payload.get("message") or "Context not found"
-        raise RuntimeError(f"Context {context_id} not found: {message}")
+        message = raw_payload.get("error") or raw_payload.get("message")
+        raise RuntimeError(message or f"Context {context_id} not found")
     context = _context_unwrap_payload(raw_payload)
     if context is None or context.get("context_id") is None:
         raise RuntimeError(f"Context {context_id} not found")
