@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.15"
+    assert payload["version"] == "0.3.16"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -7041,6 +7041,18 @@ def test_commands_catalog_filters_group_and_names_only(
     assert all(command.startswith("action.") for command in payload["commands"])
 
 
+def test_action_help_hides_interactive_snapshot_alias(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["action", "--help"])
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "interactive-snapshot" in output
+    assert "interactive-only-snapshot" not in output
+
+
 def _checks_by_name(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {check["name"]: check for check in payload["checks"]}
 
@@ -9884,7 +9896,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.15"
+    assert checks["browser_cli"]["version"] == "0.3.16"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"

@@ -786,7 +786,6 @@ browser-cli action outline-snapshot --session-id <session_id> --selector "main" 
 browser-cli action form-snapshot --session-id <session_id> --selector "form" --max-nodes 50
 browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 100
 browser-cli action interactive-snapshot --session-id <session_id>
-browser-cli action interactive-only-snapshot --session-id <session_id>
 ```
 
 `action guide` returns machine-readable task routes for `form_interaction`,
@@ -808,8 +807,10 @@ the boundary for custom JavaScript.
 `double-click`, `double-click-role`, `drag-role-to-role`, `drag-to`, `right-click`, `right-click-role`,
 `click-index`, `fill`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
-`interactive-snapshot`, and its `interactive-only-snapshot` alias are implemented as eval-backed DOM actions while the
-runtime action surface catches up. They are intended to reduce agent-written
+`interactive-snapshot` is implemented as an eval-backed DOM action while the
+runtime action surface catches up. `interactive-only-snapshot` remains a
+backward-compatible alias, but agent-facing guidance should prefer
+`interactive-snapshot`. These actions are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checkable`, `checked`, `selectable`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `clearable`, `cleared`,
