@@ -5448,7 +5448,7 @@ def _context_payload(value: Any) -> dict[str, Any]:
 
 def _context_list_payload(value: Any) -> dict[str, Any]:
     payload = _object_payload(value)
-    contexts_value = _payload_field(value, "contexts")
+    contexts_value = _payload_field(value, "contexts", "data")
     contexts_raw = contexts_value if isinstance(contexts_value, list) else []
     contexts = [
         _context_payload(context)
@@ -5466,7 +5466,7 @@ def _context_list_payload(value: Any) -> dict[str, Any]:
         **{
             key: item
             for key, item in payload.items()
-            if key not in {"contexts", "count", "status_filter", "statusFilter", "limit"}
+            if key not in {"contexts", "data", "count", "status_filter", "statusFilter", "limit"}
         },
     }
 
