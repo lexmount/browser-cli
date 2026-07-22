@@ -288,7 +288,7 @@ browser-cli commands --workflow persistent_login_state
 Then use the returned context-selection steps, typically:
 
 ```bash
-browser-cli context create
+browser-cli context create --description "Office login context"
 browser-cli context status --context-id <context_id>
 browser-cli session create --context-id <context_id> --context-mode read_write
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing --context-mode read_write

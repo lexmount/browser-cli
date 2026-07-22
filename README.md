@@ -645,7 +645,7 @@ Session management:
 
 ```bash
 browser-cli session create
-browser-cli session create --create-context
+browser-cli session create --create-context --context-description "Office login context"
 browser-cli session create --context-id <context_id> --context-mode read_write
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing
 browser-cli session list --status active
@@ -658,7 +658,7 @@ Context management:
 
 ```bash
 browser-cli context create
-browser-cli context create --metadata-json '{"purpose":"codex"}'
+browser-cli context create --description "Office login context" --metadata-json '{"purpose":"codex"}'
 browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
