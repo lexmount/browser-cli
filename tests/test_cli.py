@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.11"
+    assert payload["version"] == "0.3.12"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9884,7 +9884,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.11"
+    assert checks["browser_cli"]["version"] == "0.3.12"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -14336,6 +14336,78 @@ def test_context_list_preserves_sdk_data_context_fields(
     ]
 
 
+def test_context_list_enriches_sdk_fields_from_raw_api(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "contexts": [
+                    {
+                        "context_id": "ctx-sdk",
+                        "status": "available",
+                        "description": "bilibili",
+                        "display_name": "bilibili",
+                        "region_id": "qcloud-nanjing",
+                        "metadata": {},
+                    }
+                ]
+            }
+
+    class FakeContexts:
+        def list(self, *, status: str | None, limit: int) -> Any:
+            assert status is None
+            assert limit == 20
+            return SimpleNamespace(
+                data=[
+                    SimpleNamespace(
+                        id="ctx-sdk",
+                        status="available",
+                        metadata={},
+                        description=None,
+                        display_name="ctx-sdk",
+                        region_id=None,
+                    )
+                ]
+            )
+
+    class FakeClient:
+        api_key = "key"
+        project_id = "project"
+        base_url = "https://api.lexmount.cn"
+        contexts = FakeContexts()
+
+        def _post(self, url: str, **kwargs: Any) -> FakeResponse:
+            assert url == "https://api.lexmount.cn/instance/v1/contexts/list-contexts"
+            assert kwargs["json"] == {
+                "api_key": "key",
+                "project_id": "project",
+                "limit": 20,
+            }
+            return FakeResponse()
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = FakeClient()
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "list"])
+
+    assert exc_info.value.code == 0
+    context = json.loads(capsys.readouterr().out)["contexts"][0]
+    assert context["context_id"] == "ctx-sdk"
+    assert context["description"] == "bilibili"
+    assert context["display_name"] == "bilibili"
+    assert context["displayName"] == "bilibili"
+    assert context["region_id"] == "qcloud-nanjing"
+    assert context["regionId"] == "qcloud-nanjing"
+
+
 def test_context_get_enriches_missing_fields_from_list(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -14389,6 +14461,88 @@ def test_context_get_enriches_missing_fields_from_list(
     assert context["region_id"] == "qcloud-nanjing"
     assert context["regionId"] == "qcloud-nanjing"
     assert calls == ["get:ctx-target", "list:None:100"]
+
+
+def test_context_get_enriches_missing_fields_from_raw_api(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "contexts": [
+                    {
+                        "context_id": "ctx-target",
+                        "status": "available",
+                        "description": "bilibili",
+                        "display_name": "bilibili",
+                        "region_id": "qcloud-nanjing",
+                        "metadata": {},
+                    }
+                ]
+            }
+
+    class FakeContexts:
+        def get(self, context_id: str) -> Any:
+            return SimpleNamespace(
+                id=context_id,
+                status="available",
+                metadata={},
+                description=None,
+                display_name=context_id,
+                region_id=None,
+            )
+
+        def list(self, *, status: str | None, limit: int) -> Any:
+            assert status is None
+            assert limit == 100
+            return SimpleNamespace(
+                data=[
+                    SimpleNamespace(
+                        id="ctx-target",
+                        status="available",
+                        metadata={},
+                        description=None,
+                        display_name="ctx-target",
+                        region_id=None,
+                    )
+                ]
+            )
+
+    class FakeClient:
+        api_key = "key"
+        project_id = "project"
+        base_url = "https://api.lexmount.cn"
+        contexts = FakeContexts()
+
+        def _post(self, url: str, **kwargs: Any) -> FakeResponse:
+            assert url == "https://api.lexmount.cn/instance/v1/contexts/list-contexts"
+            assert kwargs["json"] == {
+                "api_key": "key",
+                "project_id": "project",
+                "limit": 100,
+            }
+            return FakeResponse()
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = FakeClient()
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "get", "--context-id", "ctx-target"])
+
+    assert exc_info.value.code == 0
+    context = json.loads(capsys.readouterr().out)["context"]
+    assert context["context_id"] == "ctx-target"
+    assert context["description"] == "bilibili"
+    assert context["display_name"] == "bilibili"
+    assert context["displayName"] == "bilibili"
+    assert context["region_id"] == "qcloud-nanjing"
+    assert context["regionId"] == "qcloud-nanjing"
 
 
 def test_context_status_reports_reusable_and_locked_state(
