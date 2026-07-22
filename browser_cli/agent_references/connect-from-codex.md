@@ -72,7 +72,8 @@ Recommended sections:
    - `browser-cli session list`
 6. Persistent Login Contexts
    - Link to context docs
-   - `browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing`
+   - `browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state`
+   - `browser-cli context status --context-id <context_id>`
    - `browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write`
    - Explain `available` versus `locked`
 
@@ -350,7 +351,8 @@ users to upload doctor JSON unless an explicit support flow sanitizes secrets.
 For persistent login state, the page should explain:
 
 ```bash
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --create-if-missing
+browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
+browser-cli context status --context-id <context_id>
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing --context-mode read_write
 ```
 
@@ -407,7 +409,7 @@ Useful actions:
      failure, command catalog warnings, executable PATH warnings, and
      quota/parallel limit
 4. Context reuse support
-   - explain `context pick --dry-run` and metadata-based `session create`
+   - explain `context list --include-reuse-state`, `context status`, and metadata-based `session create`
    - surface `selection_summary` fields such as `locked_matches`,
      `metadata_mismatches`, `reusable_matches`, `recommended_next_action`,
      `decision_reason`, and `would_create`

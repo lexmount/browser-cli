@@ -749,7 +749,6 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     ),
     "persistent_login_state": (
         "inspect_persistent_context_playbook",
-        "dry_run_context_pick",
         "inspect_context_status",
         "create_session_with_context",
         "close_session",
@@ -1009,12 +1008,12 @@ def _runtime_failure_fix(command: str, code: str) -> dict[str, Any]:
     elif command.startswith("context."):
         commands = [
             'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
-            'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --dry-run',
             "browser-cli context status --context-id <context_id>",
+            'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
             AGENT_DOCTOR_COMMAND,
         ]
         guidance = [
-            "Use context pick --dry-run to inspect availability before mutating persistent login state.",
+            "Use context list --include-reuse-state plus context status before mutating persistent login state.",
             "Treat availability=locked as busy and pick or create a different context.",
         ]
 
@@ -1644,7 +1643,7 @@ def _agent_examples() -> dict[str, Any]:
             ),
             "format": "markdown",
             "purpose": (
-                "Show how an agent should dry-run context selection, interpret "
+                "Show how an agent should inspect context candidates, interpret "
                 "available/locked/unavailable reuse state, create read-write or "
                 "read-only sessions, and clean up temporary sessions without "
                 "losing persistent login state."
@@ -1662,9 +1661,9 @@ def _agent_examples() -> dict[str, Any]:
             ],
             "grep_patterns": [
                 "Persistent Context Playbook",
-                "Dry-Run Context Selection",
-                "availability=available",
-                "availability=locked",
+                "Inspect Candidate Contexts",
+                "recommended_context_id",
+                "locked=true",
                 "metadata_values_redacted",
                 "context_reuse.selected",
                 "context-mode read_write",
@@ -2375,7 +2374,6 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli example get --id persistent_context_playbook --metadata-only",
                 "browser-cli example get --id persistent_context_playbook",
                 'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
-                'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
                 "browser-cli context status --context-id <context_id>",
                 'browser-cli session create --context-metadata-json \'{"purpose":"codex-login"}\' --context-selection newest --create-context-if-missing --context-mode read_write',
             ],
@@ -4584,26 +4582,6 @@ def _command_catalog() -> dict[str, Any]:
                             "selection_summary.locked_matches",
                             "selection_summary.availability_counts",
                             "metadata_values_redacted",
-                        ],
-                    },
-                    {
-                        "id": "dry_run_context_pick",
-                        "command": 'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
-                        "read": [
-                            "availability",
-                            "reusable",
-                            "locked",
-                            "reuse_reason",
-                            "selection_strategy",
-                            "selection_summary.recommended_next_action",
-                            "selection_summary.decision_reason",
-                            "selection_summary.locked_matches",
-                            "selection_summary.reusable_matches",
-                            "selection_summary.metadata_mismatches",
-                            "selection_summary.unavailable_matches",
-                            "selection_summary.unknown_matches",
-                            "selection_summary.availability_counts",
-                            "selection_summary.would_create",
                         ],
                     },
                     {
@@ -7539,12 +7517,13 @@ def _doctor_context_registry_fix() -> dict[str, Any]:
         commands=[
             "browser-cli doctor --json",
             "browser-cli commands --workflow persistent_login_state",
-            'browser-cli context pick --metadata-json \'{"purpose":"codex-login"}\' --selection newest --create-if-missing --dry-run',
+            'browser-cli context list --metadata-json \'{"purpose":"codex-login"}\' --selection newest --include-reuse-state',
+            "browser-cli context status --context-id <context_id>",
         ],
         guidance=[
             "Set LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE to a writable JSON file for isolated agent workspaces.",
             "Delete or repair the local context registry if it contains invalid JSON.",
-            "Use context pick --dry-run before creating a session that relies on persistent login state.",
+            "Use context list --include-reuse-state and context status before creating a session that relies on persistent login state.",
         ],
     )
 
@@ -21134,6 +21113,16 @@ def _with_action_guide_tiers(
             for command in guide.get("fallback_commands", [])
             if isinstance(command, str)
         ]
+        explicit_advanced = [
+            command
+            for command in guide.get("advanced_commands", [])
+            if isinstance(command, str)
+        ]
+        explicit_debug = [
+            command
+            for command in guide.get("debug_commands", [])
+            if isinstance(command, str)
+        ]
         inspect = [
             command
             for command in guide.get("inspect_commands", [])
@@ -21153,8 +21142,12 @@ def _with_action_guide_tiers(
         guide["recommended_core_commands"] = core_commands
         guide["preferred_commands"] = core_commands
         guide["fallback_commands"] = tiers["fallback"] or core_commands[:1]
-        guide["advanced_commands"] = tiers["advanced"]
-        guide["debug_commands"] = tiers["debug"]
+        guide["advanced_commands"] = _dedupe_preserving_order(
+            [*tiers["advanced"], *explicit_advanced]
+        )
+        guide["debug_commands"] = _dedupe_preserving_order(
+            [*tiers["debug"], *explicit_debug]
+        )
     return tasks
 
 
@@ -21400,7 +21393,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "selection_order": [
                 "interactive-snapshot",
-                "accessibility-snapshot",
                 "wait-role",
                 "exists-role",
                 "get-text-role",
@@ -21416,7 +21408,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "inspect_commands": [
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
             ],
             "preferred_commands": [
                 'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>"',
@@ -21438,6 +21429,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action hover --session-id <session_id> --selector "<selector>"',
                 'browser-cli action press --session-id <session_id> --selector "<selector>" --key Enter',
                 'browser-cli action click --session-id <session_id> --selector "<selector>"',
+            ],
+            "debug_commands": [
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
             ],
             "verify_commands": [
                 'browser-cli action wait-url --session-id <session_id> --url "<expected path>"',
@@ -26997,10 +26991,6 @@ def _case_scaffold_spec(args: argparse.Namespace) -> dict[str, Any]:
                     "max_nodes": 20,
                 },
                 {
-                    "action": "accessibility-snapshot",
-                    "max_nodes": 40,
-                },
-                {
                     "action": "act",
                     "kind": "click",
                     "role": "button",
@@ -30715,7 +30705,7 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
     context_pick = context_subparsers.add_parser(
         "pick",
-        help="Pick the first reusable context, optionally creating one",
+        help=argparse.SUPPRESS,
     )
     context_pick.add_argument(
         "--status",
@@ -30757,6 +30747,18 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_delete = context_subparsers.add_parser("delete", help="Delete context")
     context_delete.add_argument("--context-id", required=True)
     context_delete.set_defaults(func=cmd_context_delete)
+
+    visible_context_names = [
+        name
+        for name in context_subparsers.choices
+        if name != "pick"
+    ]
+    context_subparsers.metavar = "{" + ",".join(visible_context_names) + "}"
+    context_subparsers._choices_actions = [
+        action
+        for action in context_subparsers._choices_actions
+        if getattr(action, "dest", None) != "pick"
+    ]
 
 
 def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:

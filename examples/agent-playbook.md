@@ -391,8 +391,7 @@ When reusing persistent login state by metadata, prefer:
 
 ```bash
 browser-cli context status --context-id <context_id>
-browser-cli context pick --metadata-json '{"purpose":"login"}' --selection newest --create-if-missing --dry-run
-browser-cli context pick --metadata-json '{"purpose":"login"}' --selection newest --create-if-missing
+browser-cli context list --metadata-json '{"purpose":"login"}' --selection newest --include-reuse-state
 browser-cli session create --context-metadata-json '{"purpose":"login"}' --context-selection newest --create-context-if-missing --context-mode read_write
 ```
 

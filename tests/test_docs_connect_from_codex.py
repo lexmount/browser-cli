@@ -90,14 +90,14 @@ def test_connect_from_codex_doc_matches_current_cli_contracts() -> None:
     assert "repair_plan.guidance" in text
     assert "repair_plan.connect_from_codex" in text
     assert "repair_plan.connect_from_codex.url" in text
-    assert "context pick --dry-run" in text
+    assert "context list --include-reuse-state" in text
     assert "selection_summary" in text
     assert "locked_matches" in text
     assert "metadata_mismatches" in text
     assert "recommended_next_action" in text
     assert "decision_reason" in text
-    assert "would_create" in text
-    assert "browser-cli context pick --metadata-json" in text
+    assert "browser-cli context list --metadata-json" in text
+    assert "browser-cli context status --context-id <context_id>" in text
     assert "browser-cli session create --context-metadata-json" in text
     assert "persist metadata supplied during context creation" in text
     assert "server-side metadata" in text

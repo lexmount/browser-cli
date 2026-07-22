@@ -19,39 +19,10 @@ Proceed only when `doctor.ok=true`, `doctor.failed=0`, and
 `runtime_auth.usable=true`. If `api_connectivity.status=skipped`, do not treat
 live browser work as verified.
 
-## 2. Dry-Run Context Selection
+## 2. Inspect Candidate Contexts
 
-Before creating or mutating a session, ask browser-cli to explain which context
-would be reused:
-
-```bash
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing --dry-run
-```
-
-Read these fields before acting:
-
-- `availability`
-- `reusable`
-- `locked`
-- `reuse_reason`
-- `selection_strategy`
-- `selection_summary.recommended_next_action`
-- `selection_summary.decision_reason`
-- `selection_summary.locked_matches`
-- `selection_summary.reusable_matches`
-- `selection_summary.metadata_mismatches`
-- `selection_summary.availability_counts`
-- `selection_summary.would_create`
-
-Use `recommended_next_action` as the decision point. Reuse only when
-`availability=available` and `reusable=true`. If `availability=locked`, wait,
-pick another metadata filter, or ask the user before creating a competing
-read-write session. If `availability=unavailable`, create a new context only
-when the task still needs persistent login state.
-
-## 3. List Candidate Contexts
-
-When the dry-run decision is unclear, inspect the candidate pool:
+Before creating or mutating a session, inspect reusable, locked, and
+metadata-mismatched candidates without changing context state:
 
 ```bash
 browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
@@ -72,7 +43,7 @@ Metadata values are redacted by design. Store only labels such as `purpose`,
 `account_alias`, or `site`. Never store API keys, passwords, session secrets,
 or one-time codes in context metadata.
 
-## 4. Inspect A Known Context
+## 3. Inspect A Known Context
 
 If a context id comes from a previous run, user notes, or local registry state,
 inspect it before reuse:
@@ -95,7 +66,7 @@ Read:
 Prefer `availability` over raw status strings. Treat `locked=true` as busy, not
 as a failure to override.
 
-## 5. Create A Session With The Chosen Context
+## 4. Create A Session With The Chosen Context
 
 For login or setup work that should update cookies/storage, use `read_write`:
 
@@ -125,7 +96,7 @@ If `context_reuse.selected=false`, do not assume login state is present.
 Capture a fresh page snapshot or ask the user to log in through the selected
 context.
 
-## 6. Verify And Clean Up
+## 5. Verify And Clean Up
 
 Use normal action workflows after the session is created:
 

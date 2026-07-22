@@ -142,7 +142,8 @@ Read these fields:
 Dry-run selection before creating a session:
 
 ```bash
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing --dry-run
+browser-cli context status --context-id <context_id>
+browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing --context-mode read_write
 ```
 
 Create or reuse a context-backed session:
