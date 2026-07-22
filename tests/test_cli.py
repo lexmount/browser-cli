@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.9"
+    assert payload["version"] == "0.3.10"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9884,7 +9884,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.9"
+    assert checks["browser_cli"]["version"] == "0.3.10"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -14175,6 +14175,111 @@ def test_context_commands_emit_json(
         ("list", {"status": "available", "limit": 5}),
         ("get", {"context_id": "ctx1"}),
         ("delete", {"context_id": "ctx1"}),
+    ]
+
+
+def test_context_commands_preserve_raw_sdk_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeContexts:
+        def create(
+            self,
+            *,
+            metadata: dict[str, Any] | None,
+            description: str | None = None,
+        ) -> dict[str, Any]:
+            calls.append(("raw_create", {"metadata": metadata, "description": description}))
+            return {
+                "id": "ctx-raw",
+                "description": description,
+                "displayName": description or "ctx-raw",
+                "regionId": "qcloud-nanjing",
+                "status": "available",
+                "metadata": metadata,
+            }
+
+        def list(self, *, status: str | None, limit: int) -> Any:
+            calls.append(("raw_list", {"status": status, "limit": limit}))
+            return SimpleNamespace(
+                count=1,
+                status_filter=status,
+                limit=limit,
+                contexts=[
+                    SimpleNamespace(
+                        id="ctx-raw",
+                        description="Office login context",
+                        displayName="Office login context",
+                        regionId="qcloud-nanjing",
+                        status="available",
+                        created_at="2026-07-22T06:00:00Z",
+                        updated_at="2026-07-22T06:01:00Z",
+                        metadata={},
+                    )
+                ],
+            )
+
+        def get(self, context_id: str) -> dict[str, Any]:
+            calls.append(("raw_get", {"context_id": context_id}))
+            return {
+                "id": context_id,
+                "description": "Office login context",
+                "display_name": "Office login context",
+                "region_id": "qcloud-nanjing",
+                "status": "available",
+                "metadata": {},
+            }
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = SimpleNamespace(contexts=FakeContexts())
+
+        def create_context(self, **_kwargs: Any) -> DummyModel:
+            raise AssertionError("raw client should be used for context create")
+
+        def list_contexts(self, **_kwargs: Any) -> DummyModel:
+            raise AssertionError("raw client should be used for context list")
+
+        def get_context(self, _context_id: str) -> DummyModel:
+            raise AssertionError("raw client should be used for context get")
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "create", "--description", "Office login context"])
+    assert exc_info.value.code == 0
+    created = json.loads(capsys.readouterr().out)["context"]
+    assert created["context_id"] == "ctx-raw"
+    assert created["description"] == "Office login context"
+    assert created["display_name"] == "Office login context"
+    assert created["displayName"] == "Office login context"
+    assert created["region_id"] == "qcloud-nanjing"
+    assert created["regionId"] == "qcloud-nanjing"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "list", "--status", "available", "--limit", "5"])
+    assert exc_info.value.code == 0
+    listed = json.loads(capsys.readouterr().out)
+    context = listed["contexts"][0]
+    assert context["context_id"] == "ctx-raw"
+    assert context["description"] == "Office login context"
+    assert context["display_name"] == "Office login context"
+    assert context["displayName"] == "Office login context"
+    assert context["region_id"] == "qcloud-nanjing"
+    assert context["regionId"] == "qcloud-nanjing"
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "get", "--context-id", "ctx-raw"])
+    assert exc_info.value.code == 0
+    fetched = json.loads(capsys.readouterr().out)["context"]
+    assert fetched["description"] == "Office login context"
+    assert fetched["region_id"] == "qcloud-nanjing"
+    assert calls == [
+        ("raw_create", {"metadata": None, "description": "Office login context"}),
+        ("raw_list", {"status": "available", "limit": 5}),
+        ("raw_get", {"context_id": "ctx-raw"}),
     ]
 
 

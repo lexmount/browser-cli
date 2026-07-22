@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import inspect
 import json
 import mimetypes
 import os
@@ -55,6 +56,7 @@ from lex_browser_runtime.browser.lexmount import (
     LexmountBrowserAdmin,
     LexmountErrorInfo,
     build_direct_connect_url,
+    raise_normalized_lexmount_error,
 )
 from lex_browser_runtime.browser.models import (
     BrowserConfigError,
@@ -5314,6 +5316,159 @@ def _non_negative_int(value: str) -> int:
 
 def _model_payload(value: Any) -> dict[str, Any]:
     return value.model_dump(mode="json")
+
+
+def _object_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    if hasattr(value, "__dict__"):
+        return {
+            key: item
+            for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
+    return {}
+
+
+def _payload_field(value: Any, *names: str) -> Any:
+    if isinstance(value, dict):
+        for name in names:
+            if name in value:
+                return value[name]
+    for name in names:
+        if hasattr(value, name):
+            return getattr(value, name)
+    payload = _object_payload(value)
+    for name in names:
+        if name in payload:
+            return payload[name]
+    return None
+
+
+def _call_with_supported_kwargs(func: Callable[..., Any], **kwargs: Any) -> Any:
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        return func(**kwargs)
+    parameters = signature.parameters
+    if any(param.kind is inspect.Parameter.VAR_KEYWORD for param in parameters.values()):
+        return func(**kwargs)
+    supported = {key: value for key, value in kwargs.items() if key in parameters}
+    return func(**supported)
+
+
+def _context_api(admin: Any) -> Any:
+    try:
+        client = getattr(admin, "client", None)
+    except Exception as exc:
+        raise_normalized_lexmount_error(exc)
+    contexts = getattr(client, "contexts", None)
+    return contexts if contexts is not None else admin
+
+
+def _context_create(admin: Any, *, metadata: dict[str, Any] | None, description: str | None) -> Any:
+    api = _context_api(admin)
+    func = getattr(api, "create", None)
+    if callable(func):
+        kwargs: dict[str, Any] = {"metadata": metadata}
+        if description is not None:
+            kwargs["description"] = description
+        try:
+            return _call_with_supported_kwargs(func, **kwargs)
+        except Exception as exc:
+            raise_normalized_lexmount_error(exc)
+    return _call_with_supported_kwargs(
+        admin.create_context,
+        metadata=metadata,
+        description=description,
+    )
+
+
+def _context_list(admin: Any, *, status: str | None, limit: int) -> Any:
+    api = _context_api(admin)
+    func = getattr(api, "list", None)
+    if callable(func):
+        try:
+            return _call_with_supported_kwargs(func, status=status, limit=limit)
+        except Exception as exc:
+            raise_normalized_lexmount_error(exc)
+    return admin.list_contexts(status=status, limit=limit)
+
+
+def _context_get(admin: Any, context_id: str) -> Any:
+    api = _context_api(admin)
+    func = getattr(api, "get", None)
+    if callable(func):
+        try:
+            return func(context_id)
+        except Exception as exc:
+            raise_normalized_lexmount_error(exc)
+    return admin.get_context(context_id)
+
+
+def _context_payload(value: Any) -> dict[str, Any]:
+    payload = _object_payload(value)
+    context_id = _payload_field(value, "context_id", "contextId", "id")
+    description = _payload_field(value, "description")
+    display_name = _payload_field(value, "display_name", "displayName")
+    if display_name is None:
+        display_name = description or context_id
+    region_id = _payload_field(value, "region_id", "regionId")
+    status = _payload_field(value, "status")
+    locked = _payload_field(value, "locked")
+    if status is None and isinstance(locked, bool):
+        status = "locked" if locked else "available"
+
+    result: dict[str, Any] = {}
+    for key in ("context_id", "created_at", "updated_at", "metadata", "status"):
+        source_key = "id" if key == "context_id" else key
+        result[key] = (
+            context_id
+            if key == "context_id"
+            else status
+            if key == "status"
+            else payload.get(source_key)
+        )
+
+    result["description"] = description
+    result["display_name"] = display_name
+    result["displayName"] = display_name
+    result["region_id"] = region_id
+    result["regionId"] = region_id
+
+    forked_from = _payload_field(value, "forked_from", "forkedFrom")
+    if forked_from is not None:
+        result["forked_from"] = forked_from
+        result["forkedFrom"] = forked_from
+    return result
+
+
+def _context_list_payload(value: Any) -> dict[str, Any]:
+    payload = _object_payload(value)
+    contexts_value = _payload_field(value, "contexts")
+    contexts_raw = contexts_value if isinstance(contexts_value, list) else []
+    contexts = [
+        _context_payload(context)
+        for context in contexts_raw
+        if isinstance(context, dict) or hasattr(context, "model_dump") or hasattr(context, "__dict__")
+    ]
+    count = _payload_field(value, "count")
+    if count is None:
+        count = len(contexts)
+    return {
+        "count": count,
+        "status_filter": _payload_field(value, "status_filter", "statusFilter"),
+        "limit": _payload_field(value, "limit"),
+        "contexts": contexts,
+        **{
+            key: item
+            for key, item in payload.items()
+            if key not in {"contexts", "count", "status_filter", "statusFilter", "limit"}
+        },
+    }
 
 
 def _package_version(distribution: str) -> str | None:
@@ -11213,28 +11368,32 @@ def cmd_session_keepalive(args: argparse.Namespace) -> None:
 
 def cmd_context_create(args: argparse.Namespace) -> None:
     command = "context.create"
+    admin = LexmountBrowserAdmin()
     try:
-        context_kwargs: dict[str, Any] = {"metadata": args.metadata}
-        if args.description is not None:
-            context_kwargs["description"] = args.description
-        context = LexmountBrowserAdmin().create_context(**context_kwargs)
+        context = _context_create(
+            admin,
+            metadata=args.metadata,
+            description=args.description,
+        )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    payload = _model_payload(context)
+    payload = _context_payload(context)
     _record_context_metadata(payload)
     _success(command, context=payload)
 
 
 def cmd_context_list(args: argparse.Namespace) -> None:
     command = "context.list"
+    admin = LexmountBrowserAdmin()
     try:
-        result = LexmountBrowserAdmin().list_contexts(
+        result = _context_list(
+            admin,
             status=args.status,
             limit=args.limit,
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    payload = _model_payload(result)
+    payload = _context_list_payload(result)
     include_reuse_state = bool(
         getattr(args, "include_reuse_state", False)
         or getattr(args, "metadata_filter", None) is not None
@@ -11278,20 +11437,22 @@ def cmd_context_list(args: argparse.Namespace) -> None:
 
 def cmd_context_get(args: argparse.Namespace) -> None:
     command = "context.get"
+    admin = LexmountBrowserAdmin()
     try:
-        context = LexmountBrowserAdmin().get_context(args.context_id)
+        context = _context_get(admin, args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, context=_model_payload(context))
+    _success(command, context=_context_payload(context))
 
 
 def cmd_context_status(args: argparse.Namespace) -> None:
     command = "context.status"
+    admin = LexmountBrowserAdmin()
     try:
-        context = LexmountBrowserAdmin().get_context(args.context_id)
+        context = _context_get(admin, args.context_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    payload = _model_payload(context)
+    payload = _context_payload(context)
     reuse = _context_reuse_state(payload)
     _success(
         command,
@@ -11311,14 +11472,15 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
     metadata_filter = args.metadata_filter
     admin = LexmountBrowserAdmin()
     try:
-        result = admin.list_contexts(
+        result = _context_list(
+            admin,
             status=args.status,
             limit=args.limit,
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
 
-    payload = _model_payload(result)
+    payload = _context_list_payload(result)
     contexts = payload.get("contexts", [])
     registry = _read_context_registry()
     candidates = [
@@ -11387,13 +11549,14 @@ def cmd_context_pick(args: argparse.Namespace) -> None:
 
     if args.create_if_missing:
         try:
-            context_kwargs: dict[str, Any] = {"metadata": metadata_filter or None}
-            if args.description is not None:
-                context_kwargs["description"] = args.description
-            context = admin.create_context(**context_kwargs)
+            context = _context_create(
+                admin,
+                metadata=metadata_filter or None,
+                description=args.description,
+            )
         except Exception as exc:
             _failure_from_exception(command, exc)
-        created_context = _model_payload(context)
+        created_context = _context_payload(context)
         created_context_id = created_context.get("context_id")
         _record_context_metadata(created_context)
         reuse = _context_reuse_state(created_context)
