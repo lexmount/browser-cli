@@ -5409,6 +5409,57 @@ def _context_get(admin: Any, context_id: str) -> Any:
     return admin.get_context(context_id)
 
 
+def _context_raw_list_payload(
+    admin: Any,
+    *,
+    status: str | None,
+    limit: int | None,
+) -> dict[str, Any] | None:
+    try:
+        client = getattr(admin, "client", None)
+        post = getattr(client, "_post", None)
+        base_url = getattr(client, "base_url", None)
+        api_key = getattr(client, "api_key", None)
+        project_id = getattr(client, "project_id", None)
+    except Exception:
+        return None
+    if not callable(post) or not base_url or not api_key or not project_id:
+        return None
+
+    request_payload: dict[str, Any] = {
+        "api_key": api_key,
+        "project_id": project_id,
+    }
+    if limit is not None:
+        request_payload["limit"] = limit
+    if status:
+        request_payload["status"] = status
+
+    try:
+        response = post(
+            f"{base_url.rstrip('/')}/instance/v1/contexts/list-contexts",
+            json=request_payload,
+        )
+        if getattr(response, "status_code", 200) >= 400:
+            return None
+        raw_payload = response.json()
+    except Exception:
+        return None
+    if not isinstance(raw_payload, dict):
+        return None
+
+    return {
+        "count": raw_payload.get("count"),
+        "status_filter": status,
+        "limit": limit,
+        "contexts": [
+            _context_payload(context)
+            for context in raw_payload.get("contexts", [])
+            if isinstance(context, dict)
+        ],
+    }
+
+
 def _context_payload(value: Any) -> dict[str, Any]:
     payload = _object_payload(value)
     context_id = _payload_field(value, "context_id", "contextId", "id")
@@ -5444,6 +5495,61 @@ def _context_payload(value: Any) -> dict[str, Any]:
         result["forked_from"] = forked_from
         result["forkedFrom"] = forked_from
     return result
+
+
+def _merge_context_payload(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    context_id = base.get("context_id") or override.get("context_id")
+    merged = dict(base)
+    if context_id is not None:
+        merged["context_id"] = context_id
+
+    for key in ("created_at", "updated_at", "metadata", "status"):
+        if merged.get(key) is None and override.get(key) is not None:
+            merged[key] = override[key]
+
+    for key in ("description", "region_id", "regionId"):
+        if merged.get(key) is None and override.get(key) is not None:
+            merged[key] = override[key]
+
+    for key in ("display_name", "displayName"):
+        current = merged.get(key)
+        replacement = override.get(key)
+        if replacement is not None and (current is None or current == context_id):
+            merged[key] = replacement
+
+    return merged
+
+
+def _merge_context_list_payload(
+    payload: dict[str, Any],
+    override: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not override:
+        return payload
+    override_contexts = {
+        context.get("context_id"): context
+        for context in override.get("contexts", [])
+        if isinstance(context, dict) and context.get("context_id")
+    }
+    if not override_contexts:
+        return payload
+
+    contexts = payload.get("contexts", [])
+    if not contexts:
+        replacement_contexts = list(override_contexts.values())
+        return {
+            **payload,
+            "count": override.get("count") or len(replacement_contexts),
+            "contexts": replacement_contexts,
+        }
+
+    merged_contexts = [
+        _merge_context_payload(context, override_contexts.get(context.get("context_id"), {}))
+        if isinstance(context, dict)
+        else context
+        for context in contexts
+    ]
+    return {**payload, "contexts": merged_contexts}
 
 
 def _context_list_payload(value: Any) -> dict[str, Any]:
@@ -5492,19 +5598,15 @@ def _context_enrich_from_list(admin: Any, payload: dict[str, Any]) -> dict[str, 
         list_result = _context_list(admin, status=None, limit=100)
     except Exception:
         return payload
-    contexts = _context_list_payload(list_result).get("contexts", [])
+    list_payload = _merge_context_list_payload(
+        _context_list_payload(list_result),
+        _context_raw_list_payload(admin, status=None, limit=100),
+    )
+    contexts = list_payload.get("contexts", [])
     for context in contexts:
         if not isinstance(context, dict) or context.get("context_id") != context_id:
             continue
-        enriched = dict(payload)
-        for key in ("description", "display_name", "displayName", "region_id", "regionId"):
-            if enriched.get(key) is None and context.get(key) is not None:
-                enriched[key] = context[key]
-        if enriched.get("display_name") in {None, context_id} and context.get("display_name"):
-            enriched["display_name"] = context["display_name"]
-        if enriched.get("displayName") in {None, context_id} and context.get("displayName"):
-            enriched["displayName"] = context["displayName"]
-        return enriched
+        return _merge_context_payload(payload, context)
     return payload
 
 
@@ -11430,7 +11532,10 @@ def cmd_context_list(args: argparse.Namespace) -> None:
         )
     except Exception as exc:
         _failure_from_exception(command, exc)
-    payload = _context_list_payload(result)
+    payload = _merge_context_list_payload(
+        _context_list_payload(result),
+        _context_raw_list_payload(admin, status=args.status, limit=args.limit),
+    )
     include_reuse_state = bool(
         getattr(args, "include_reuse_state", False)
         or getattr(args, "metadata_filter", None) is not None
