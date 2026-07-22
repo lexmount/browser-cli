@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.17"
+    assert payload["version"] == "0.3.18"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -621,13 +621,12 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["persistent_login_state"][2]
     )
     assert (
-        "browser-cli context pick"
-        in payload["agent_entrypoints"]["persistent_login_state"][3]
-    )
-    assert "--dry-run" in payload["agent_entrypoints"]["persistent_login_state"][3]
-    assert (
         "browser-cli context status --context-id <context_id>"
         in payload["agent_entrypoints"]["persistent_login_state"]
+    )
+    assert (
+        "browser-cli session create --context-metadata-json"
+        in payload["agent_entrypoints"]["persistent_login_state"][4]
     )
     assert (
         "browser-cli action guide --task browser_state_management"
@@ -1409,32 +1408,27 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "reuse_candidates" in context_steps[1]["read"]
     assert "metadata_values_redacted" in context_steps[1]["read"]
     assert "selection_summary.availability_counts" in context_steps[1]["read"]
+    assert "selection_strategy" in context_steps[1]["read"]
+    assert "selection_summary.recommended_next_action" in context_steps[1]["read"]
+    assert "selection_summary.reusable_matches" in context_steps[1]["read"]
+    assert context_steps[2]["id"] == "inspect_context_status"
+    assert context_steps[2]["optional"] is True
+    assert context_steps[2]["command"] == (
+        "browser-cli context status --context-id <context_id>"
+    )
     assert "availability" in context_steps[2]["read"]
     assert "reusable" in context_steps[2]["read"]
     assert "locked" in context_steps[2]["read"]
     assert "reuse_reason" in context_steps[2]["read"]
-    assert "selection_strategy" in context_steps[2]["read"]
-    assert "selection_summary.recommended_next_action" in context_steps[2]["read"]
-    assert "selection_summary.reusable_matches" in context_steps[2]["read"]
-    assert "selection_summary.metadata_mismatches" in context_steps[2]["read"]
-    assert "selection_summary.availability_counts" in context_steps[2]["read"]
-    assert context_steps[3]["id"] == "inspect_context_status"
-    assert context_steps[3]["optional"] is True
-    assert context_steps[3]["command"] == (
-        "browser-cli context status --context-id <context_id>"
-    )
-    assert "availability" in context_steps[3]["read"]
-    assert "reusable" in context_steps[3]["read"]
-    assert "locked" in context_steps[3]["read"]
-    assert "normalized_status" in context_steps[3]["read"]
-    assert "context_reuse.availability" in context_steps[4]["read"]
-    assert "context_reuse.reusable" in context_steps[4]["read"]
-    assert "context_reuse.locked" in context_steps[4]["read"]
-    assert "context_reuse.reuse_reason" in context_steps[4]["read"]
-    assert "context_reuse.selection_strategy" in context_steps[4]["read"]
+    assert "normalized_status" in context_steps[2]["read"]
+    assert "context_reuse.availability" in context_steps[3]["read"]
+    assert "context_reuse.reusable" in context_steps[3]["read"]
+    assert "context_reuse.locked" in context_steps[3]["read"]
+    assert "context_reuse.reuse_reason" in context_steps[3]["read"]
+    assert "context_reuse.selection_strategy" in context_steps[3]["read"]
     assert (
         "context_reuse.selection_summary.recommended_next_action"
-        in (context_steps[4]["read"])
+        in (context_steps[3]["read"])
     )
     state_management_steps = workflows["browser_state_management"]["steps"]
     assert [step["id"] for step in state_management_steps] == [
@@ -2172,15 +2166,17 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     assert guide["related_workflows"] == ["interactive_targeting"]
     assert guide["selection_order"][:3] == [
         "interactive-snapshot",
-        "accessibility-snapshot",
         "wait-role",
+        "exists-role",
     ]
     assert guide["selection_order"][3:6] == [
-        "exists-role",
         "get-text-role",
         "bounding-box-role",
+        "click-label",
     ]
-    assert "browser-cli action accessibility-snapshot" in guide["inspect_commands"][1]
+    assert guide["inspect_commands"] == [
+        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
+    ]
     assert any(
         "browser-cli action exists-role" in command
         for command in guide["preferred_commands"]
@@ -2915,16 +2911,12 @@ def test_commands_catalog_returns_workflows_only(
         in payload["agent_workflows"]["case_file_task"]["steps"][23]["read"]
     )
     assert (
-        "selection_summary.recommended_next_action"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
-    )
-    assert (
         "reuse_candidates"
         in payload["agent_workflows"]["persistent_login_state"]["steps"][1]["read"]
     )
     assert (
         "context_reuse.availability"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][4]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][3]["read"]
     )
     assert (
         "result.document_cookie_scope"
@@ -2932,7 +2924,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert (
         "normalized_status"
-        in payload["agent_workflows"]["persistent_login_state"]["steps"][3]["read"]
+        in payload["agent_workflows"]["persistent_login_state"]["steps"][2]["read"]
     )
     assert (
         "unusable_exports"
@@ -3715,7 +3707,7 @@ def test_example_list_returns_packaged_agent_examples(
         "browser_cli.agent_examples:persistent-context-playbook.md"
     )
     assert "persistent_login_state" in persistent["related_workflows"]
-    assert "availability=locked" in persistent["grep_patterns"]
+    assert "locked=true" in persistent["grep_patterns"]
     assert payload["examples"]["page_inspection_case"]["format"] == "yaml"
     assert payload["examples"]["agent_primitives_case"]["format"] == "yaml"
     assert (
@@ -4022,7 +4014,7 @@ def test_example_get_returns_persistent_context_playbook(
     assert payload["content_format"] == "markdown"
     assert "# Persistent Context Playbook" in payload["content"]
     assert "browser-cli commands --workflow persistent_login_state" in payload["content"]
-    assert "availability=locked" in payload["content"]
+    assert "locked=true" in payload["content"]
     assert "metadata_values_redacted" in payload["content"]
     assert "context_reuse.selected" in payload["content"]
 
@@ -4669,14 +4661,12 @@ def test_case_scaffold_writes_interactive_targeting_case_file(
     assert payload["output"] == str(output)
     assert payload["wrote_file"] is True
     assert payload["case"]["steps"][2]["action"] == "interactive-snapshot"
-    assert payload["case"]["steps"][3]["action"] == "accessibility-snapshot"
-    assert payload["case"]["steps"][4]["action"] == "act"
-    assert payload["case"]["steps"][4]["kind"] == "click"
-    assert payload["case"]["steps"][7]["output"] == "interactive-targeting.png"
+    assert payload["case"]["steps"][3]["action"] == "act"
+    assert payload["case"]["steps"][3]["kind"] == "click"
+    assert payload["case"]["steps"][6]["output"] == "interactive-targeting.png"
     content = output.read_text()
     assert "name: interactive-targeting" in content
     assert "action: interactive-snapshot" in content
-    assert "action: accessibility-snapshot" in content
     assert "action: act" in content
     assert "kind: click" in content
     assert "action: wait-text" in content
@@ -4684,7 +4674,7 @@ def test_case_scaffold_writes_interactive_targeting_case_file(
     assert "action: click\n" not in content
     result = validate_case_file(output)
     assert result.valid is True
-    assert result.step_count == 8
+    assert result.step_count == 7
     assert payload["next_commands"] == [
         f"browser-cli case validate --file {str(output)}",
         f"browser-cli case run --file {str(output)} --close-created-session",
@@ -7352,7 +7342,6 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "persistent_login_state"
     ] == [
         "inspect_persistent_context_playbook",
-        "dry_run_context_pick",
         "inspect_context_status",
         "create_session_with_context",
         "close_session",
@@ -7713,7 +7702,6 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "open-url",
         "eval",
         "interactive-snapshot",
-        "accessibility-snapshot",
         "act",
         "wait-text",
         "get-text",
@@ -8173,10 +8161,8 @@ def test_doctor_warns_when_context_registry_json_is_invalid(
     assert registry["metadata_values_redacted"] is True
     assert registry["fix"]["code"] == "repair_context_registry"
     assert "LEXMOUNT_BROWSER_CONTEXT_REGISTRY_FILE" in registry["fix"]["env"]
-    assert any(
-        "context pick --metadata-json" in command
-        for command in registry["fix"]["commands"]
-    )
+    assert any("context list" in command for command in registry["fix"]["commands"])
+    assert any("context status" in command for command in registry["fix"]["commands"])
     repair = payload["repair_plan"]
     assert repair["required"] is False
     assert "repair_context_registry" in {
@@ -9419,7 +9405,6 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "persistent_login_state": {
                     "steps": [
                         {"id": "inspect_persistent_context_playbook"},
-                        {"id": "dry_run_context_pick"},
                         {"id": "inspect_context_status"},
                         {"id": "create_session_with_context"},
                         {"id": "close_session"},
@@ -9933,7 +9918,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.17"
+    assert checks["browser_cli"]["version"] == "0.3.18"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"

@@ -308,7 +308,7 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "do not report API key values" in normalized
 
 
-def test_skill_uses_context_pick_for_persistent_login_state() -> None:
+def test_skill_uses_context_crud_for_persistent_login_state() -> None:
     normalized = _normalized_skill_text()
 
     assert "pick reusable contexts, or detect locked contexts" in normalized
@@ -324,7 +324,7 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "`locked` means busy" in normalized
     assert "`unavailable` needs a different context" in normalized
     assert "browser-cli example get --id persistent_context_playbook --metadata-only" in normalized
-    assert "browser-cli context pick --metadata-json" in normalized
+    assert "browser-cli context list --metadata-json" in normalized
     assert "browser-cli context status --context-id <context_id>" in normalized
     assert "candidates include `locked: true`" in normalized
     assert "`selection_summary`" in normalized
@@ -333,13 +333,13 @@ def test_skill_uses_context_pick_for_persistent_login_state() -> None:
     assert "`reusable_matches`" in normalized
     assert "`recommended_next_action`" in normalized
     assert "`decision_reason`" in normalized
-    assert "`would_create`" in normalized
+    assert "`decision_reason`" in normalized
     assert "`metadata_diagnostics`" in normalized
     assert "values are redacted" in normalized
     assert "`local_registry`" in normalized
     assert "Never put API keys, passwords, or session secrets" in normalized
     assert (
-        "`context pick --metadata-json <json> --selection newest --dry-run` before creating a session"
+        "`session create --context-metadata-json <json> --context-selection newest --create-context-if-missing`"
         in normalized
     )
     assert (

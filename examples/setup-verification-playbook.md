@@ -159,15 +159,15 @@ browser-cli session close --session-id <session_id>
 For a login or reuse task, inspect context availability before mutating state:
 
 ```bash
-browser-cli context pick --metadata-json '{"purpose":"login"}' --selection newest --create-if-missing --dry-run
-browser-cli session create --context-metadata-json '{"purpose":"login"}' --context-selection newest --create-context-if-missing --context-mode read_write
+browser-cli context list --metadata-json '{"purpose":"login"}' --selection newest --include-reuse-state
 browser-cli context status --context-id <context_id>
+browser-cli session create --context-metadata-json '{"purpose":"login"}' --context-selection newest --create-context-if-missing --context-mode read_write
 ```
 
 If `availability` is `locked` or `unavailable`, do not force reuse. Read
-`selection_summary.recommended_next_action`,
+`recommended_context_id`, `selection_summary.recommended_next_action`,
 `selection_summary.decision_reason`, `selection_summary.locked_matches`,
-`would_create`, `metadata_diagnostics.missing_keys`,
+`metadata_diagnostics.missing_keys`,
 `metadata_diagnostics.metadata_source`, and `local_registry` before deciding.
 Metadata values are intentionally redacted; store labels such as purpose or
 account alias, not API keys, passwords, or session secrets.

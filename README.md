@@ -666,9 +666,7 @@ browser-cli context create --description "Office login context" --metadata-json 
 browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}'
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing --dry-run
-browser-cli context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --create-if-missing
+browser-cli context update-description --context-id <context_id> --description "Office login context"
 browser-cli context delete --context-id <context_id>
 ```
 
@@ -1321,10 +1319,10 @@ top-level `reusable`, `locked`, `reuse_reason`, `selection_strategy`,
 to inspect reusable, locked, and metadata-mismatched candidates without mutation; read
 `reuse_candidates`, `recommended_context_id`, and `selection_summary`. Use
 `context status --context-id <context_id>` before reusing a known context id. Use
-`context pick --metadata-json '{"purpose":"codex-login"}' --selection newest --dry-run`
-when you need to inspect or report candidates before creating a session; read
+`session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing --context-mode read_write`
+after candidate inspection to reuse or create persistent login state; read
 `selection_strategy`, `selection_summary.recommended_next_action`, `decision_reason`,
-`locked_matches`, `metadata_mismatches`, `reusable_matches`, and `would_create`
+`locked_matches`, `metadata_mismatches`, and `reusable_matches`
 before deciding whether to reuse, create, wait, or adjust filters. Candidate
 `metadata_diagnostics` reports matched, missing, and different metadata keys
 with values redacted. `metadata_diagnostics.metadata_source` can be

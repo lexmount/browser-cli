@@ -303,10 +303,7 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser_smoke_session.status" in text
     assert "`fix.commands`" in text
     assert "repair_plan.commands" in text
-    assert (
-        "browser-cli context pick --metadata-json "
-        '\'{"purpose":"login"}\' --selection newest --create-if-missing --dry-run'
-    ) in text
+    assert "browser-cli context list --metadata-json " in text
     assert "browser-cli context status --context-id <context_id>" in text
 
 
@@ -371,7 +368,7 @@ def test_setup_verification_playbook_guides_safe_setup_before_actions() -> None:
     assert "metadata_diagnostics.metadata_source" in text
     assert "local_registry" in text
     assert "not API keys, passwords, or session secrets" in text
-    assert "would_create" in text
+    assert "recommended_context_id" in text
     assert "browser-cli action form-snapshot" in text
     assert "browser-cli action fill-label" in text
     assert "browser-cli action fill-role" in text
@@ -420,10 +417,10 @@ def test_persistent_context_playbook_guides_reuse_decisions() -> None:
 
     assert "browser-cli commands --workflow persistent_login_state" in text
     assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
-    assert "browser-cli context pick" in text
-    assert "--dry-run" in text
-    assert "availability=available" in text
-    assert "availability=locked" in text
+    assert "browser-cli context list" in text
+    assert "--include-reuse-state" in text
+    assert "recommended_context_id" in text
+    assert "context status --context-id <context_id>" in text
     assert "metadata_values_redacted" in text
     assert "context_reuse.selected" in text
     assert "context-mode read_write" in text
