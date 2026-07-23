@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.19"
+    assert payload["version"] == "0.3.20"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9909,7 +9909,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.19"
+    assert checks["browser_cli"]["version"] == "0.3.20"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -14639,6 +14639,186 @@ def test_context_update_description_command_uses_raw_patch(
                 "api_key": "key",
                 "project_id": "project",
                 "description": "Updated context",
+            },
+        ),
+    ]
+
+
+def test_context_fork_command_uses_sdk_method(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[str] = []
+
+    class FakeContexts:
+        def fork(self, context_id: str) -> Any:
+            calls.append(f"fork:{context_id}")
+            return SimpleNamespace(
+                id="ctx-forked",
+                status="available",
+                metadata={},
+                description="Forked context",
+                display_name="Forked context",
+                region_id="qcloud-nanjing",
+                forked_from=context_id,
+            )
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = SimpleNamespace(contexts=FakeContexts())
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["context", "fork", "--context-id", "ctx-source"])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    context = payload["context"]
+    assert payload["command"] == "context.fork"
+    assert payload["source_context_id"] == "ctx-source"
+    assert payload["context_id"] == "ctx-forked"
+    assert context["context_id"] == "ctx-forked"
+    assert context["forked_from"] == "ctx-source"
+    assert context["forkedFrom"] == "ctx-source"
+    assert context["description"] == "Forked context"
+    assert context["region_id"] == "qcloud-nanjing"
+    assert calls == ["fork:ctx-source"]
+
+
+def test_context_fork_command_falls_back_to_raw_post_and_updates_description(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    class ForkResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "context": {
+                    "context_id": "ctx-forked",
+                    "status": "available",
+                    "metadata": {},
+                    "description": None,
+                    "display_name": "ctx-forked",
+                    "region_id": "qcloud-nanjing",
+                    "forked_from": "ctx-source",
+                }
+            }
+
+    class PatchResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "context": {
+                    "context_id": "ctx-forked",
+                    "status": "available",
+                    "metadata": {},
+                    "description": "Forked context",
+                    "display_name": "Forked context",
+                    "region_id": "qcloud-nanjing",
+                    "forked_from": "ctx-source",
+                }
+            }
+
+    class FakeHttpClient:
+        def post(self, url: str, **kwargs: Any) -> ForkResponse:
+            calls.append(("post", url, kwargs["json"]))
+            assert kwargs["headers"]["Content-Type"] == "application/json"
+            assert kwargs["headers"]["x-api-key"] == "key"
+            assert kwargs["headers"]["x-project-id"] == "project"
+            return ForkResponse()
+
+        def patch(self, url: str, **kwargs: Any) -> PatchResponse:
+            calls.append(("patch", url, kwargs["json"]))
+            assert kwargs["headers"]["Content-Type"] == "application/json"
+            assert kwargs["headers"]["x-api-key"] == "key"
+            assert kwargs["headers"]["x-project-id"] == "project"
+            return PatchResponse()
+
+    class FakeContexts:
+        pass
+
+    class FakeClient:
+        api_key = "key"
+        project_id = "project"
+        base_url = "https://api.lexmount.cn"
+        contexts = FakeContexts()
+        _http_client = FakeHttpClient()
+
+        def _ensure_region_resolved(self) -> None:
+            calls.append(("ensure_region", "", {}))
+
+        def _rewrite_url(self, url: str) -> str:
+            calls.append(("rewrite_url", url, {}))
+            return url.replace("api.lexmount.cn", "region.lexmount.cn")
+
+        def _build_auth_headers(self, headers: dict[str, str]) -> dict[str, str]:
+            return {
+                **headers,
+                "x-api-key": self.api_key,
+                "x-project-id": self.project_id,
+            }
+
+    class FakeAdmin:
+        def __init__(self) -> None:
+            self.client = FakeClient()
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", FakeAdmin)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "context",
+                "fork",
+                "--context-id",
+                "ctx-source",
+                "--description",
+                "Forked context",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    context = payload["context"]
+    assert payload["command"] == "context.fork"
+    assert payload["source_context_id"] == "ctx-source"
+    assert payload["context_id"] == "ctx-forked"
+    assert context["context_id"] == "ctx-forked"
+    assert context["description"] == "Forked context"
+    assert context["forked_from"] == "ctx-source"
+    assert context["forkedFrom"] == "ctx-source"
+    assert calls == [
+        ("ensure_region", "", {}),
+        (
+            "rewrite_url",
+            "https://api.lexmount.cn/instance/v1/contexts/ctx-source/fork",
+            {},
+        ),
+        (
+            "post",
+            "https://region.lexmount.cn/instance/v1/contexts/ctx-source/fork",
+            {
+                "api_key": "key",
+                "project_id": "project",
+            },
+        ),
+        ("ensure_region", "", {}),
+        (
+            "rewrite_url",
+            "https://api.lexmount.cn/instance/v1/contexts/ctx-forked/description",
+            {},
+        ),
+        (
+            "patch",
+            "https://region.lexmount.cn/instance/v1/contexts/ctx-forked/description",
+            {
+                "api_key": "key",
+                "project_id": "project",
+                "description": "Forked context",
             },
         ),
     ]

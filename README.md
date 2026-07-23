@@ -666,6 +666,7 @@ browser-cli context create --description "Office login context" --metadata-json 
 browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
 browser-cli context get --context-id <context_id>
 browser-cli context status --context-id <context_id>
+browser-cli context fork --context-id <context_id> --description "Forked login context"
 browser-cli context update-description --context-id <context_id> --description "Office login context"
 browser-cli context delete --context-id <context_id>
 ```
