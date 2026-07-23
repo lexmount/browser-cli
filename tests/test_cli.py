@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.21"
+    assert payload["version"] == "0.3.22"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -9875,7 +9875,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.21"
+    assert checks["browser_cli"]["version"] == "0.3.22"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -13415,6 +13415,30 @@ def test_session_create_passes_context_options(
     assert payload["ok"] is True
     assert payload["command"] == "session.create"
     assert payload["session"] == {"session_id": "s1", "status": "active"}
+
+
+def test_session_create_passes_media_storage_options(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    observed: dict[str, Any] = {}
+
+    class FakeAdmin:
+        def create_session(self, **kwargs: Any) -> DummyModel:
+            observed.update(kwargs)
+            return DummyModel({"session_id": "s1", "status": "active"})
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "create", "--enable-downloads", "--enable-recording"])
+
+    assert exc_info.value.code == 0
+    assert observed["downloads"] == {"enabled": True}
+    assert observed["recording"] == {"persistent": True}
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["command"] == "session.create"
 
 
 def test_session_create_redacts_unmasked_connect_url_by_default(

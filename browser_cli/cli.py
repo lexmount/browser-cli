@@ -11622,6 +11622,10 @@ def cmd_session_create(args: argparse.Namespace) -> None:
             "browser_mode": args.browser_mode,
             "metadata": args.metadata,
         }
+        if args.enable_downloads:
+            session_kwargs["downloads"] = {"enabled": True}
+        if args.enable_recording:
+            session_kwargs["recording"] = {"persistent": True}
         if args.context_description is not None:
             session_kwargs["context_description"] = args.context_description
         result = admin.create_session(**session_kwargs)
@@ -30567,6 +30571,16 @@ def _add_session_create_args(parser: argparse.ArgumentParser) -> None:
         "--browser-mode",
         default="normal",
         type=_normalize_browser_mode,
+    )
+    parser.add_argument(
+        "--enable-downloads",
+        action="store_true",
+        help="Create the session with persistent downloads storage enabled.",
+    )
+    parser.add_argument(
+        "--enable-recording",
+        action="store_true",
+        help="Create the session with persistent replay/recording storage enabled.",
     )
     parser.add_argument(
         "--metadata-json",

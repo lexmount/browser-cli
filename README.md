@@ -649,6 +649,8 @@ Session management:
 
 ```bash
 browser-cli session create
+browser-cli session create --enable-downloads
+browser-cli session create --enable-recording
 browser-cli session create --create-context --context-description "Office login context"
 browser-cli session create --context-id <context_id> --context-mode read_write
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing

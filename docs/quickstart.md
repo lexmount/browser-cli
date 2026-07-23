@@ -102,6 +102,8 @@ Create a session:
 
 ```bash
 browser-cli session create
+browser-cli session create --enable-downloads
+browser-cli session create --enable-recording
 ```
 
 Save `session.session_id` or top-level `session_id` from the JSON output, then
