@@ -43,7 +43,7 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "Navigation and readiness" in text
     assert "Inspection and extraction" in text
     assert "click-label, click-text, click-role" in text
-    assert "interactive-only" in text
+    assert "interactive-snapshot" in text
     assert "Repeatable automation" in text
     assert "optional companion `webfetch-cli`" in text
     assert "not as a browser-cli dependency" in text
@@ -72,7 +72,7 @@ def test_skill_guides_safe_one_off_sessions() -> None:
     assert "browser-cli session create" in text
     assert "browser-cli action open-url --session-id <session_id> --url <url>" in text
     assert "browser-cli action snapshot --session-id <session_id>" in text
-    assert "browser-cli action wait-selector --session-id <session_id>" in text
+    assert "browser-cli action wait-role --session-id <session_id>" in text
     assert "browser-cli session close --session-id <session_id>" in text
     assert "Always close temporary sessions" in normalized
 

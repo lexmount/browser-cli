@@ -769,9 +769,8 @@ fields, and the boundary for custom JavaScript.
 `click-index`, `fill`, `fill-label`, `fill-role`,
 `link-snapshot`, `table-snapshot`, `list-snapshot`, `text-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, `performance-snapshot`, `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`, `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot` is implemented as an eval-backed DOM action while the
-runtime action surface catches up. `interactive-only-snapshot` remains a
-backward-compatible alias, but agent-facing guidance should prefer
-`interactive-snapshot`. These actions are intended to reduce agent-written
+runtime action surface catches up. It is the single supported interactive
+snapshot command. These actions are intended to reduce agent-written
 JavaScript for common page work. For missing matches, parse structured fields
 such as `found`, `exists`, `checkable`, `checked`, `selectable`, `selected`, `clicked`, `filled`,
 `focused`, `value`, `readable`, `blurred`, `set`, `removed`, `clearable`, `cleared`,
@@ -837,7 +836,7 @@ Each action must receive exactly one browser target:
 By default, action output masks `api_key` inside resolved direct connect URLs.
 Use `--reveal-connect-url` only for local debugging.
 
-Diagnostics, case files, and compatibility aliases:
+Diagnostics and case files:
 
 ```bash
 browser-cli auth status
@@ -855,10 +854,6 @@ browser-cli case validate --file case.yaml
 browser-cli case run --file case.yaml
 browser-cli doctor
 browser-cli doctor --smoke-session
-browser-cli direct-url
-browser-cli prepare
-browser-cli list-contexts
-browser-cli close-session --session-id <session_id>
 ```
 
 ## JSON Output
@@ -989,7 +984,7 @@ the Codex Skill and reports
 workflow surface is too old or missing critical steps such as cleanup. That
 required surface includes selector actions, role-based text/existence/geometry
 checks, press/hover/scroll, select/check/uncheck, role/text/label actions,
-accessibility snapshot, interactive-only snapshot, and diagnostic commands. It
+accessibility snapshot, interactive snapshot, and diagnostic commands. It
 also reports `invalid_workflow_command_references` when a workflow step points
 at a command missing from the parser-backed catalog, and
 `invalid_agent_entrypoint_command_references` when a quick-start entrypoint does

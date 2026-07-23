@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.20"
+    assert payload["version"] == "0.3.21"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -104,28 +104,6 @@ def test_json_dump_handles_broken_pipe_without_traceback(
         cli_module._json_dump({"ok": True})
 
     assert exc_info.value.code == 141
-
-
-def test_direct_url_masks_secret_by_default(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setenv("LEXMOUNT_API_KEY", "key")
-    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
-    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
-
-    with pytest.raises(SystemExit) as exc_info:
-        cli_main(["direct-url"])
-
-    assert exc_info.value.code == 0
-    payload = json.loads(capsys.readouterr().out)
-    assert payload == {
-        "ok": True,
-        "command": "direct-url",
-        "mode": "direct",
-        "connect_url": "wss://api.lexmount.cn/connection?project_id=project&api_key=***",
-        "masked": True,
-    }
 
 
 @pytest.mark.parametrize(
@@ -243,7 +221,6 @@ def test_json_compatibility_flag_is_accepted_after_subcommands(
         (["session", "list", "--json"], "session.list"),
         (["session", "--json", "list"], "session.list"),
         (["context", "list", "--json"], "context.list"),
-        (["list-contexts", "--json"], "context.list"),
         (["action", "snapshot", "--session-id", "s1", "--json"], "action.snapshot"),
         (["action", "--json", "snapshot", "--session-id", "s1"], "action.snapshot"),
     ]
@@ -1710,7 +1687,6 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "link-snapshot",
         "table-snapshot",
         "list-snapshot",
-        "accessibility-snapshot",
         "get-text-role",
         "get-text",
         "snapshot",
@@ -1899,8 +1875,6 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "action.outline-snapshot",
         "action.extract",
         "action.interactive-snapshot",
-        "action.interactive-only-snapshot",
-        "direct-url",
     ):
         assert name in commands
 
@@ -2066,11 +2040,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert scroll_role["required_options"] == ["--role"]
     assert any("--block" in option["flags"] for option in scroll_role["options"])
     assert any("--name" in option["flags"] for option in scroll_role["options"])
-    interactive = commands["action.interactive-snapshot"]
-    interactive_only = commands["action.interactive-only-snapshot"]
-    assert interactive["aliases"] == ["action.interactive-only-snapshot"]
-    assert interactive_only["alias_of"] == "action.interactive-snapshot"
-    assert interactive_only["canonical_name"] == "action.interactive-snapshot"
+    assert "action.interactive-snapshot" in commands
+    assert "action.interactive-only-snapshot" not in commands
     assert any(
         "--smoke-session" in option["flags"] for option in commands["doctor"]["options"]
     )
@@ -4136,7 +4107,6 @@ def test_case_schema_returns_supported_actions_and_fields(
         "hover",
         "hover-role",
         "inspect",
-        "interactive-only-snapshot",
         "interactive-snapshot",
         "link-snapshot",
         "list-snapshot",
@@ -4393,7 +4363,7 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
         "ok": True,
         "command": "case.schema",
         "schema_version": 1,
-        "action_count": 108,
+        "action_count": 107,
         "supported_actions": [
             "accessibility-snapshot",
             "act",
@@ -4445,7 +4415,6 @@ def test_case_schema_names_only(capsys: pytest.CaptureFixture[str]) -> None:
             "hover",
             "hover-role",
             "inspect",
-            "interactive-only-snapshot",
             "interactive-snapshot",
             "link-snapshot",
             "list-snapshot",
@@ -5715,7 +5684,6 @@ def test_extended_case_step_extract_collects_requested_surfaces(tmp_path: Any) -
         ),
         ({"action": "get-value", "selector": "input"}, "readFormValue"),
         ({"action": "inspect", "selector": "button"}, "selected_options"),
-        ({"action": "interactive-only-snapshot"}, 'kind: "interactive"'),
         ({"action": "link-snapshot", "selector": "main"}, 'kind: "links"'),
         ({"action": "list-snapshot", "selector": "main"}, 'kind: "lists"'),
         ({"action": "outline-snapshot", "selector": "main"}, "heading_count"),
@@ -7055,12 +7023,12 @@ def test_commands_catalog_filters_group_and_names_only(
     assert "action.wait-console" in payload["commands"]
     assert "action.outline-snapshot" in payload["commands"]
     assert "action.interactive-snapshot" in payload["commands"]
-    assert "action.interactive-only-snapshot" in payload["commands"]
+    assert "action.interactive-only-snapshot" not in payload["commands"]
     assert "auth.login" not in payload["commands"]
     assert all(command.startswith("action.") for command in payload["commands"])
 
 
-def test_action_help_hides_interactive_snapshot_alias(
+def test_action_help_shows_only_interactive_snapshot(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with pytest.raises(SystemExit) as exc_info:
@@ -7561,7 +7529,6 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "action.submit",
         "action.accessibility-snapshot",
         "action.form-snapshot",
-        "action.interactive-only-snapshot",
         "action.storage-get",
         "action.storage-set",
         "action.storage-remove",
@@ -7596,8 +7563,8 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["command_catalog"]["missing_required_commands"] == []
     assert checks["case_schema"]["status"] == "pass"
     assert checks["case_schema"]["schema_version"] == 1
-    assert checks["case_schema"]["action_count"] == 108
-    assert checks["case_schema"]["supported_action_count"] == 108
+    assert checks["case_schema"]["action_count"] == 107
+    assert checks["case_schema"]["supported_action_count"] == 107
     assert checks["case_schema"]["required_case_scaffold_templates"] == [
         "page-inspection",
         "agent-primitives",
@@ -7618,7 +7585,6 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "click-label",
         "click-role",
         "drag-role-to-role",
-        "interactive-only-snapshot",
         "network-snapshot",
         "wait-network",
         "console-snapshot",
@@ -9909,7 +9875,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.20"
+    assert checks["browser_cli"]["version"] == "0.3.21"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -15684,44 +15650,6 @@ def test_context_pick_dry_run_reports_would_create_without_creating(
     assert calls == [("list", {"status": None, "limit": 20})]
 
 
-def test_compatibility_aliases_still_work(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    calls: list[str] = []
-
-    class FakeAdmin:
-        def create_session(self, **kwargs: Any) -> DummyModel:
-            calls.append("prepare")
-            return DummyModel({"session": {"session_id": "s1"}})
-
-        def list_contexts(self, **kwargs: Any) -> DummyModel:
-            calls.append("list-contexts")
-            return DummyModel({"count": 0, "contexts": []})
-
-        def close_session(self, session_id: str) -> None:
-            calls.append(f"close-session:{session_id}")
-
-    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
-
-    with pytest.raises(SystemExit) as exc_info:
-        cli_main(["prepare"])
-    assert exc_info.value.code == 0
-    assert json.loads(capsys.readouterr().out)["command"] == "session.create"
-
-    with pytest.raises(SystemExit) as exc_info:
-        cli_main(["list-contexts"])
-    assert exc_info.value.code == 0
-    assert json.loads(capsys.readouterr().out)["command"] == "context.list"
-
-    with pytest.raises(SystemExit) as exc_info:
-        cli_main(["close-session", "--session-id", "s1"])
-    assert exc_info.value.code == 0
-    assert json.loads(capsys.readouterr().out)["command"] == "session.close"
-
-    assert calls == ["prepare", "list-contexts", "close-session:s1"]
-
-
 def test_action_direct_url_masks_resolved_connect_url_by_default(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -20795,23 +20723,6 @@ def test_action_outline_snapshot_expression_extracts_headings_and_landmarks(
                 "url": "https://example.test",
             },
         ),
-        (
-            [
-                "action",
-                "interactive-only-snapshot",
-                "--session-id",
-                "s1",
-                "--include-hidden",
-            ],
-            "action.interactive-only-snapshot",
-            {"kind": "interactive", "node_count": 1, "nodes": []},
-            {
-                "kind": "interactive",
-                "node_count": 1,
-                "nodes": [],
-                "url": "https://example.test",
-            },
-        ),
     ],
 )
 def test_second_batch_eval_backed_action_commands_emit_structured_results(
@@ -22768,26 +22679,4 @@ def test_state_wait_eval_backed_action_commands_emit_structured_results(
         ),
         "connect_url_masked": True,
         "result": expected_result,
-    }
-
-
-def test_direct_url_can_reveal_secret_explicitly(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setenv("LEXMOUNT_API_KEY", "key")
-    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
-    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
-
-    with pytest.raises(SystemExit) as exc_info:
-        cli_main(["direct-url", "--reveal-url"])
-
-    assert exc_info.value.code == 0
-    payload = json.loads(capsys.readouterr().out)
-    assert payload == {
-        "ok": True,
-        "command": "direct-url",
-        "mode": "direct",
-        "connect_url": "wss://api.lexmount.cn/connection?project_id=project&api_key=key",
-        "masked": False,
     }

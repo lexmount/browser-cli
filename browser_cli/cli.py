@@ -302,7 +302,6 @@ DOCTOR_REQUIRED_COMMANDS = (
     "action.accessibility-snapshot",
     "action.form-snapshot",
     "action.interactive-snapshot",
-    "action.interactive-only-snapshot",
     "action.link-snapshot",
     "action.table-snapshot",
     "action.list-snapshot",
@@ -379,7 +378,6 @@ DOCTOR_REQUIRED_CASE_ACTIONS = (
     "hover",
     "hover-role",
     "inspect",
-    "interactive-only-snapshot",
     "interactive-snapshot",
     "link-snapshot",
     "list-snapshot",
@@ -853,9 +851,6 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
         "capture_visible_state",
     ),
 }
-COMMAND_ALIASES = {
-    "action.interactive-only-snapshot": "action.interactive-snapshot",
-}
 COMMON_DOM_EVENT_NAMES = (
     "input",
     "change",
@@ -1258,14 +1253,6 @@ def _catalog_leaf_commands(
             "required": True,
             "exactly_one_of": sorted(target_options.intersection(option_flags)),
         }
-    if name in COMMAND_ALIASES:
-        command["alias_of"] = COMMAND_ALIASES[name]
-        command["canonical_name"] = COMMAND_ALIASES[name]
-    aliases = sorted(
-        alias for alias, canonical in COMMAND_ALIASES.items() if canonical == name
-    )
-    if aliases:
-        command["aliases"] = aliases
     return [command]
 
 
@@ -3325,7 +3312,6 @@ def _command_catalog() -> dict[str, Any]:
                             "table-snapshot",
                             "list-snapshot",
                             "outline-snapshot",
-                            "accessibility-snapshot",
                             "snapshot",
                         ],
                         "preferred_commands": [
@@ -4448,7 +4434,6 @@ def _command_catalog() -> dict[str, Any]:
                             "link-snapshot",
                             "table-snapshot",
                             "list-snapshot",
-                            "accessibility-snapshot",
                             "get-text-role",
                             "get-text",
                             "snapshot",
@@ -6146,7 +6131,6 @@ def _doctor_command_catalog_check() -> dict[str, Any]:
         if isinstance(command, dict)
     }
     command_reference_names = set(command_names)
-    command_reference_names.update(COMMAND_ALIASES)
     workflows = catalog.get("agent_workflows")
     entrypoints = catalog.get("agent_entrypoints")
     workflow_names = set(workflows) if isinstance(workflows, dict) else set()
@@ -6384,7 +6368,6 @@ def _doctor_action_guide_command_names() -> set[str]:
         for command in catalog.get("commands", [])
         if isinstance(command, dict) and command.get("name")
     }
-    command_names.update(COMMAND_ALIASES)
     return command_names
 
 
@@ -25501,21 +25484,6 @@ def cmd_auth_login(args: argparse.Namespace) -> None:
     )
 
 
-def cmd_direct_url(args: argparse.Namespace) -> None:
-    command = "direct-url"
-    try:
-        connect_url = build_direct_connect_url()
-    except Exception as exc:
-        _failure_from_exception(command, exc)
-    reveal_url = bool(getattr(args, "reveal_url", False))
-    _success(
-        command,
-        mode="direct",
-        connect_url=connect_url if reveal_url else _mask_direct_url_secret(connect_url),
-        masked=not reveal_url,
-    )
-
-
 def _agent_reference_payload(
     reference_id: str,
     reference: dict[str, Any],
@@ -26000,7 +25968,6 @@ EXTENDED_CASE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "hover": ("selector",),
     "hover-role": ("role",),
     "inspect": ("selector",),
-    "interactive-only-snapshot": tuple(),
     "interactive-snapshot": tuple(),
     "link-snapshot": tuple(),
     "list-snapshot": tuple(),
@@ -27333,7 +27300,6 @@ def _case_action_schema() -> dict[str, Any]:
         "hover": [],
         "hover-role": ["name", "exact", "case_sensitive"],
         "inspect": ["include_html", "max_html_chars", "reveal_sensitive_values"],
-        "interactive-only-snapshot": ["include_hidden", "max_nodes"],
         "interactive-snapshot": ["include_hidden", "max_nodes"],
         "link-snapshot": [
             "selector",
@@ -27933,7 +27899,6 @@ def _case_action_schema() -> dict[str, Any]:
             "html_truncated",
             "url",
         ],
-        "interactive-only-snapshot": ["nodes", "node_count", "url", "title"],
         "interactive-snapshot": ["nodes", "node_count", "url", "title"],
         "link-snapshot": [
             "links",
@@ -28606,10 +28571,6 @@ def _case_action_schema() -> dict[str, Any]:
         "hover": {"action": "hover", "selector": ".menu-button"},
         "hover-role": {"action": "hover-role", "role": "button", "name": "Menu"},
         "inspect": {"action": "inspect", "selector": "button[type=submit]"},
-        "interactive-only-snapshot": {
-            "action": "interactive-only-snapshot",
-            "max_nodes": 80,
-        },
         "interactive-snapshot": {"action": "interactive-snapshot", "max_nodes": 80},
         "link-snapshot": {"action": "link-snapshot", "selector": "main"},
         "list-snapshot": {"action": "list-snapshot", "selector": "main"},
@@ -29680,7 +29641,7 @@ def _run_browser_cli_case_step(
                 case_sensitive=case_sensitive,
             ),
         )
-    if action in {"interactive-snapshot", "interactive-only-snapshot"}:
+    if action == "interactive-snapshot":
         return _case_eval_expression(
             page,
             _interactive_snapshot_expression(
@@ -32735,28 +32696,6 @@ def _add_action_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
         action_command_name="action.interactive-snapshot",
     )
 
-    action_interactive_only_snapshot = action_subparsers.add_parser(
-        "interactive-only-snapshot",
-        help=argparse.SUPPRESS,
-    )
-    _add_session_target_args(action_interactive_only_snapshot)
-    _add_snapshot_filter_args(action_interactive_only_snapshot)
-    action_interactive_only_snapshot.set_defaults(
-        func=cmd_action_interactive_snapshot,
-        action_command_name="action.interactive-only-snapshot",
-    )
-    visible_action_names = [
-        name
-        for name in action_subparsers.choices
-        if name != "interactive-only-snapshot"
-    ]
-    action_subparsers.metavar = "{" + ",".join(visible_action_names) + "}"
-    action_subparsers._choices_actions = [
-        action
-        for action in action_subparsers._choices_actions
-        if getattr(action, "dest", None) != "interactive-only-snapshot"
-    ]
-
 
 def _add_case_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     case = subparsers.add_parser("case", help="Validate or run a browser case file")
@@ -33364,41 +33303,6 @@ def _add_version_command(subparsers: argparse._SubParsersAction[Any]) -> None:
     version_parser.set_defaults(func=cmd_version)
 
 
-def _add_alias_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
-    prepare = subparsers.add_parser(
-        "prepare",
-        help="Backward-compatible alias for session create",
-    )
-    _add_session_create_args(prepare)
-    prepare.set_defaults(func=cmd_session_create)
-
-    list_contexts = subparsers.add_parser(
-        "list-contexts",
-        help="Backward-compatible alias for context list",
-    )
-    list_contexts.add_argument("--status", help="Optional status filter")
-    list_contexts.add_argument("--limit", type=int, default=20)
-    list_contexts.set_defaults(func=cmd_context_list)
-
-    close_session = subparsers.add_parser(
-        "close-session",
-        help="Backward-compatible alias for session close",
-    )
-    close_session.add_argument("--session-id", required=True)
-    close_session.set_defaults(func=cmd_session_close)
-
-    direct_url = subparsers.add_parser(
-        "direct-url",
-        help="Build the shared direct websocket URL",
-    )
-    direct_url.add_argument(
-        "--reveal-url",
-        action="store_true",
-        help="Print the full URL including api_key. Default output masks secrets.",
-    )
-    direct_url.set_defaults(func=cmd_direct_url)
-
-
 def build_parser() -> argparse.ArgumentParser:
     """Build the browser-cli parser."""
 
@@ -33430,7 +33334,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_reference_commands(subparsers)
     _add_example_commands(subparsers)
     _add_skill_commands(subparsers)
-    _add_alias_commands(subparsers)
     _add_json_compatibility_flag(parser)
 
     return parser
