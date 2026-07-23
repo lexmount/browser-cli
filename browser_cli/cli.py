@@ -790,7 +790,6 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "interactive_targeting": (
         "inspect_action_guide",
         "inspect_interactive_targets",
-        "inspect_accessibility_context",
         "choose_click_method",
         "wait_target_ready",
         "activate_target",
@@ -1963,7 +1962,6 @@ def _agent_examples() -> dict[str, Any]:
             "grep_patterns": [
                 "name: interactive-targeting",
                 "action: interactive-snapshot",
-                "action: accessibility-snapshot",
                 "action: act",
                 "kind: click",
                 "action: wait-text",
@@ -2304,7 +2302,6 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
                 "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
                 'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"',
                 'browser-cli action act --session-id <session_id> --kind fill --label "<label>" --value "<value>"',
@@ -2426,7 +2423,6 @@ def _command_catalog() -> dict[str, Any]:
             "interactive_targeting": [
                 "browser-cli action guide --task interactive_targeting",
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 'browser-cli action wait-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action exists-role --session-id <session_id> --role button --name "Submit"',
                 'browser-cli action get-text-role --session-id <session_id> --role button --name "Submit"',
@@ -2487,7 +2483,6 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200",
                 "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
             ],
             "state_waits": [
@@ -3140,7 +3135,6 @@ def _command_catalog() -> dict[str, Any]:
                             "result.title",
                         ],
                         "fallback_commands": [
-                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
                         ],
                     },
@@ -3241,7 +3235,6 @@ def _command_catalog() -> dict[str, Any]:
                             "browser-cli action page-info --session-id <session_id>",
                             "browser-cli action observe --session-id <session_id> --surface all --selector main",
                             "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             "browser-cli action form-snapshot --session-id <session_id> --selector form",
                             "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
@@ -3342,7 +3335,6 @@ def _command_catalog() -> dict[str, Any]:
                             "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20",
                             "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
                             "browser-cli action outline-snapshot --session-id <session_id> --selector body",
-                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
                         ],
                         "read": [
@@ -3936,16 +3928,6 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                     },
                     {
-                        "id": "inspect_accessibility_context",
-                        "command": "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
-                        "optional": True,
-                        "read": [
-                            "result.nodes",
-                            "result.node_count",
-                            "result.truncated",
-                        ],
-                    },
-                    {
                         "id": "choose_click_method",
                         "command": "<choose one preferred command using role/name/text/selector evidence from prior steps>",
                         "agent_action": True,
@@ -4331,7 +4313,6 @@ def _command_catalog() -> dict[str, Any]:
                             "result.truncated",
                         ],
                         "fallback_commands": [
-                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             'browser-cli action list-snapshot --session-id <session_id> --selector "nav, [role=menu], [role=listbox]" --max-items 50',
                         ],
                     },
@@ -4389,7 +4370,6 @@ def _command_catalog() -> dict[str, Any]:
                             "result.truncated",
                         ],
                         "fallback_commands": [
-                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
                         ],
                     },
@@ -4480,7 +4460,6 @@ def _command_catalog() -> dict[str, Any]:
                             "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200",
                             "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
-                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                             'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
                             'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
                         ],
@@ -4526,7 +4505,6 @@ def _command_catalog() -> dict[str, Any]:
                             "browser-cli action text-snapshot --session-id <session_id> --selector main --max-nodes 80 --max-chars 1000",
                             "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                             "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
-                            "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                         ],
                     },
                     {
@@ -21476,7 +21454,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "selection_order": [
                 "interactive-snapshot",
-                "accessibility-snapshot",
                 "double-click-role",
                 "right-click-role",
                 "drag-role-to-role",
@@ -21490,7 +21467,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "inspect_commands": [
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 'browser-cli action bounding-box-role --session-id <session_id> --role <role> --name "<name>"',
             ],
             "preferred_commands": [
@@ -21506,6 +21482,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action scroll-into-view-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action inspect --session-id <session_id> --selector "<selector>"',
                 "browser-cli action page-info --session-id <session_id>",
+            ],
+            "debug_commands": [
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
             ],
             "verify_commands": [
                 'browser-cli action wait-text --session-id <session_id> --text "<expected menu or edit state>"',
@@ -21619,7 +21598,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "page-info",
                 "link-snapshot",
                 "interactive-snapshot",
-                "accessibility-snapshot",
                 "wait-role",
                 "click-role",
                 "click-text",
@@ -21771,7 +21749,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             "inspect_commands": [
                 "browser-cli action page-info --session-id <session_id>",
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
             ],
             "preferred_commands": [
                 'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>" --state visible',
@@ -21785,6 +21762,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "browser-cli action wait-load-state --session-id <session_id> --state networkidle",
                 'browser-cli action exists --session-id <session_id> --selector "<selector>"',
                 'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
+            ],
+            "debug_commands": [
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
             ],
             "verify_commands": [
                 'browser-cli action exists-role --session-id <session_id> --role <role> --name "<name>"',
@@ -21832,7 +21812,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "selection_order": [
                 "interactive-snapshot",
-                "accessibility-snapshot",
                 "hover-role",
                 "focus-role",
                 "press-role",
@@ -21845,7 +21824,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "inspect_commands": [
                 "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 'browser-cli action list-snapshot --session-id <session_id> --selector "nav, [role=menu], [role=listbox]" --max-items 50',
             ],
             "preferred_commands": [
@@ -21862,6 +21840,9 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 'browser-cli action click-role --session-id <session_id> --role menuitem --name "<item>"',
                 'browser-cli action click-text --session-id <session_id> --text "<item>"',
                 'browser-cli action press --session-id <session_id> --selector "<selector>" --key Enter',
+            ],
+            "debug_commands": [
+                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
             ],
             "verify_commands": [
                 'browser-cli action wait-text --session-id <session_id> --text "<expected text>"',
@@ -21902,7 +21883,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ),
         },
         "content_extraction": {
-            "purpose": "Extract page text, links, tables, lists, outline, accessibility nodes, or bounded HTML before custom JavaScript.",
+            "purpose": "Extract page text, links, tables, lists, outline, or bounded HTML before custom JavaScript.",
             "related_workflows": ["content_extraction"],
             "when_to_use": [
                 "The task asks to summarize, report, compare, or extract page content.",
@@ -21916,7 +21897,6 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "link-snapshot",
                 "table-snapshot",
                 "list-snapshot",
-                "accessibility-snapshot",
                 "get-text-role",
                 "get-text",
                 "snapshot",
@@ -21935,13 +21915,14 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
                 "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
                 "browser-cli action table-snapshot --session-id <session_id> --selector table --max-rows 20 --max-cells 200",
                 "browser-cli action list-snapshot --session-id <session_id> --selector main --max-items 50",
-                "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 120",
                 'browser-cli action get-text-role --session-id <session_id> --role <role> --name "<name>"',
                 'browser-cli action get-text --session-id <session_id> --selector "<selector>"',
             ],
             "fallback_commands": [
                 "browser-cli action snapshot --session-id <session_id> --max-chars 4000",
                 "browser-cli action text-snapshot --session-id <session_id> --max-nodes 120 --max-chars 2000",
+            ],
+            "debug_commands": [
                 "browser-cli action accessibility-snapshot --session-id <session_id> --max-nodes 160",
             ],
             "verify_commands": [

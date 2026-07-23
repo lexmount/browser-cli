@@ -30,8 +30,6 @@ steps:
       }
   - action: interactive-snapshot
     max_nodes: 20
-  - action: accessibility-snapshot
-    max_nodes: 40
   - action: act
     kind: click
     role: button
