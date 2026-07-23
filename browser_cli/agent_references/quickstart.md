@@ -143,6 +143,7 @@ Dry-run selection before creating a session:
 
 ```bash
 browser-cli context status --context-id <context_id>
+browser-cli context fork --context-id <context_id> --description "Forked login context"
 browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing --context-mode read_write
 ```
 

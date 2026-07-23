@@ -212,6 +212,7 @@ DOCTOR_REQUIRED_COMMANDS = (
     "auth.connect-requirements",
     "auth.export-env",
     "auth.clear-credentials",
+    "context.fork",
     "context.pick",
     "context.status",
     "session.create",
@@ -5356,6 +5357,17 @@ def _context_create(admin: Any, *, metadata: dict[str, Any] | None, description:
     )
 
 
+def _context_fork(admin: Any, context_id: str) -> Any:
+    api = _context_api(admin)
+    func = getattr(api, "fork", None)
+    if callable(func):
+        try:
+            return func(context_id)
+        except Exception as exc:
+            raise_normalized_lexmount_error(exc)
+    return _context_raw_fork(admin, context_id)
+
+
 def _context_response_error(response: Any, action: str) -> RuntimeError:
     status_code = getattr(response, "status_code", None)
     try:
@@ -5464,6 +5476,52 @@ def _context_raw_update_description(
     context = _context_unwrap_payload(raw_payload)
     if context is None:
         return {"context_id": context_id, "description": description}
+    return context
+
+
+def _context_raw_fork(admin: Any, context_id: str) -> dict[str, Any]:
+    try:
+        client = getattr(admin, "client", None)
+        http_client = getattr(client, "_http_client", None)
+        post = getattr(http_client, "post", None)
+        base_url = getattr(client, "base_url", None)
+        api_key = getattr(client, "api_key", None)
+        project_id = getattr(client, "project_id", None)
+    except Exception as exc:
+        raise_normalized_lexmount_error(exc)
+    if not callable(post) or not base_url or not api_key or not project_id:
+        raise RuntimeError("context fork requires a Lexmount client with raw HTTP support")
+
+    request_payload: dict[str, Any] = {
+        "api_key": api_key,
+        "project_id": project_id,
+    }
+    url = (
+        f"{base_url.rstrip('/')}/instance/v1/contexts/"
+        f"{quote(context_id, safe='')}/fork"
+    )
+    try:
+        ensure_region = getattr(client, "_ensure_region_resolved", None)
+        if callable(ensure_region):
+            ensure_region()
+        rewrite_url = getattr(client, "_rewrite_url", None)
+        if callable(rewrite_url):
+            url = rewrite_url(url)
+        build_headers = getattr(client, "_build_auth_headers", None)
+        headers = (
+            build_headers({"Content-Type": "application/json"})
+            if callable(build_headers)
+            else {"Content-Type": "application/json"}
+        )
+        response = post(url, json=request_payload, headers=headers)
+        if getattr(response, "status_code", 200) >= 400:
+            raise _context_response_error(response, "fork context")
+        raw_payload = response.json()
+    except Exception as exc:
+        raise_normalized_lexmount_error(exc)
+    context = _context_unwrap_payload(raw_payload)
+    if context is None:
+        raise RuntimeError(f"fork context failed: no context returned for {context_id}")
     return context
 
 
@@ -11739,6 +11797,36 @@ def cmd_context_status(args: argparse.Namespace) -> None:
         locked=reuse["locked"],
         reuse_reason=reuse["reason"],
         reuse=reuse,
+        context=payload,
+    )
+
+
+def cmd_context_fork(args: argparse.Namespace) -> None:
+    command = "context.fork"
+    admin = LexmountBrowserAdmin()
+    try:
+        context = _context_fork(admin, args.context_id)
+        if args.description is not None:
+            payload = _context_payload(context)
+            forked_context_id = payload.get("context_id")
+            if not forked_context_id:
+                raise RuntimeError("fork context failed: no context_id returned")
+            context = _context_raw_update_description(
+                admin,
+                context_id=forked_context_id,
+                description=args.description,
+            )
+    except Exception as exc:
+        _failure_from_exception(command, exc)
+    payload = _context_enrich_from_list(admin, _context_payload(context))
+    forked_from = payload.get("forked_from") or payload.get("forkedFrom") or args.context_id
+    payload["forked_from"] = forked_from
+    payload["forkedFrom"] = forked_from
+    _record_context_metadata(payload)
+    _success(
+        command,
+        source_context_id=args.context_id,
+        context_id=payload.get("context_id"),
         context=payload,
     )
 
@@ -30671,6 +30759,17 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     )
     context_status.add_argument("--context-id", required=True)
     context_status.set_defaults(func=cmd_context_status)
+
+    context_fork = context_subparsers.add_parser(
+        "fork",
+        help="Fork one context",
+    )
+    context_fork.add_argument("--context-id", required=True)
+    context_fork.add_argument(
+        "--description",
+        help="Optional UTF-8 description for the forked context.",
+    )
+    context_fork.set_defaults(func=cmd_context_fork)
 
     context_update_description = context_subparsers.add_parser(
         "update-description",
