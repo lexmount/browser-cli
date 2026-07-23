@@ -12585,19 +12585,78 @@ def _eval_backed_result_payload(result: Any) -> dict[str, Any]:
     return payload
 
 
+_TRANSIENT_NAVIGATION_EVAL_ERROR_PATTERNS = (
+    "execution context was destroyed",
+    "cannot find context with specified id",
+    "most likely because of a navigation",
+)
+
+
+def _is_transient_navigation_eval_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return any(
+        pattern in message for pattern in _TRANSIENT_NAVIGATION_EVAL_ERROR_PATTERNS
+    )
+
+
+def _run_eval_with_transient_navigation_retry(
+    *,
+    connect_url: str,
+    expression: str,
+    timeout_ms: float,
+    poll_ms: float,
+) -> Any:
+    deadline = time.monotonic() + max(0.0, timeout_ms / 1000.0)
+    retry_delay = max(0.025, poll_ms / 1000.0)
+    while True:
+        try:
+            return run_browser_action(
+                connect_url=connect_url,
+                action="eval",
+                request=EvalRequest(expression=expression),
+            )
+        except Exception as exc:
+            if not _is_transient_navigation_eval_error(exc):
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            time.sleep(min(retry_delay, remaining))
+
+
 def _run_eval_backed_action_command(
     args: argparse.Namespace,
     command: str,
     expression: str,
+    *,
+    retry_transient_navigation: bool = False,
+    retry_timeout_ms: float | None = None,
+    retry_poll_ms: float | None = None,
 ) -> None:
     try:
         target = _target_from_args(args)
         connect_url = resolve_browser_action_connect_url(target)
-        result = run_browser_action(
-            connect_url=connect_url,
-            action="eval",
-            request=EvalRequest(expression=expression),
-        )
+        if retry_transient_navigation:
+            result = _run_eval_with_transient_navigation_retry(
+                connect_url=connect_url,
+                expression=expression,
+                timeout_ms=(
+                    float(retry_timeout_ms)
+                    if retry_timeout_ms is not None
+                    else float(getattr(args, "timeout_ms", 0) or 0)
+                ),
+                poll_ms=(
+                    float(retry_poll_ms)
+                    if retry_poll_ms is not None
+                    else float(getattr(args, "poll_ms", 250) or 250)
+                ),
+            )
+        else:
+            result = run_browser_action(
+                connect_url=connect_url,
+                action="eval",
+                request=EvalRequest(expression=expression),
+            )
     except Exception as exc:
         _failure_from_exception(command, exc)
     _success(
@@ -13875,7 +13934,7 @@ def _label_control_helpers_expression() -> str:
       }
       element ||= labelElement.querySelector(fieldSelector);
       if (element) {
-        return { element, label_element: nodeInfo(labelElement) };
+        return { element, label_element: labelElement };
       }
     }
     const element = [...document.querySelectorAll(fieldSelector)]
@@ -14098,7 +14157,7 @@ def _fill_label_expression(
     )
       ? String((element.isContentEditable ? element.textContent : element.value) ?? "").length
       : null,
-    label_element: match.label_element,
+    label_element: match.label_element ? nodeInfo(match.label_element) : null,
     element: nodeInfo(element)
   }};
 }}
@@ -14310,7 +14369,7 @@ def _check_label_expression(
       label: requestedLabel,
       requested_checked: requestedChecked,
       element: nodeInfo(element),
-      label_element: match.label_element
+      label_element: match.label_element ? nodeInfo(match.label_element) : null
     }};
   }}
   const previousChecked = hasNativeChecked
@@ -14335,7 +14394,7 @@ def _check_label_expression(
     checked: currentChecked,
     changed: previousChecked !== currentChecked,
     element: nodeInfo(element),
-    label_element: match.label_element
+    label_element: match.label_element ? nodeInfo(match.label_element) : null
   }};
 }}
 """.strip()
@@ -14468,7 +14527,7 @@ def _select_label_expression(
       requested_value: requestedValueInput,
       requested_option_label: requestedOptionLabel,
       element: nodeInfo(element),
-      label_element: match.label_element
+      label_element: match.label_element ? nodeInfo(match.label_element) : null
     }};
   }}
   const options = [...element.options];
@@ -14496,7 +14555,7 @@ def _select_label_expression(
         previous_value: previousValue,
         previous_option_label: previousOptionLabel,
         element: nodeInfo(element),
-        label_element: match.label_element
+        label_element: match.label_element ? nodeInfo(match.label_element) : null
       }};
     }}
     requestedValue = option.value;
@@ -14519,7 +14578,7 @@ def _select_label_expression(
     previous_option_label: previousOptionLabel,
     changed: previousValue !== element.value,
     element: nodeInfo(element),
-    label_element: match.label_element
+    label_element: match.label_element ? nodeInfo(match.label_element) : null
   }};
 }}
 """.strip()
@@ -22486,6 +22545,9 @@ def cmd_action_wait_load_state(args: argparse.Namespace) -> None:
             timeout_ms=args.timeout_ms,
             poll_ms=args.poll_ms,
         ),
+        retry_transient_navigation=True,
+        retry_timeout_ms=args.timeout_ms,
+        retry_poll_ms=args.poll_ms,
     )
 
 
@@ -28957,8 +29019,28 @@ def _case_step_result(page: Any, result: Any) -> dict[str, Any]:
     return payload
 
 
-def _case_eval_expression(page: Any, expression: str) -> dict[str, Any]:
-    return _case_step_result(page, page.evaluate(expression))
+def _case_eval_expression(
+    page: Any,
+    expression: str,
+    *,
+    retry_transient_navigation: bool = False,
+    timeout_ms: float = 0,
+    poll_ms: float = 250,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + max(0.0, timeout_ms / 1000.0)
+    retry_delay = max(0.025, poll_ms / 1000.0)
+    while True:
+        try:
+            return _case_step_result(page, page.evaluate(expression))
+        except Exception as exc:
+            if not retry_transient_navigation or not _is_transient_navigation_eval_error(
+                exc
+            ):
+                raise
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            time.sleep(min(retry_delay, remaining))
 
 
 def _case_step_optional_str(step: dict[str, Any], name: str) -> str | None:
@@ -30132,13 +30214,18 @@ def _run_browser_cli_case_step(
             ),
         )
     if action == "wait-load-state":
+        timeout_ms = _case_step_float(step, "timeout_ms", default=30000)
+        poll_ms = _case_step_float(step, "poll_ms", default=250)
         return _case_eval_expression(
             page,
             _wait_load_state_expression(
                 state=str(step.get("state", "complete")),
-                timeout_ms=_case_step_float(step, "timeout_ms", default=30000),
-                poll_ms=_case_step_float(step, "poll_ms", default=250),
+                timeout_ms=timeout_ms,
+                poll_ms=poll_ms,
             ),
+            retry_transient_navigation=True,
+            timeout_ms=timeout_ms,
+            poll_ms=poll_ms,
         )
     if action == "wait-network-idle":
         return _case_eval_expression(

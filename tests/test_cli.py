@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.21"
+    assert payload["version"] == "0.3.22"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -5292,6 +5292,19 @@ def test_extended_case_step_uses_semantic_action_expression(tmp_path: Any) -> No
     assert "Email" in page.expressions[0]
 
 
+def test_label_helper_keeps_label_dom_until_result_boundary() -> None:
+    expression = cli_module._click_label_expression(
+        label="Agree",
+        exact=False,
+        case_sensitive=False,
+    )
+
+    assert "return { element, label_element: labelElement };" in expression
+    assert "return { element, label_element: nodeInfo(labelElement) };" not in expression
+    assert "const labelElement = match.label_element;" in expression
+    assert "label_element: labelElement ? nodeInfo(labelElement) : null" in expression
+
+
 @pytest.mark.parametrize(
     ("step", "expression_snippet", "expected"),
     [
@@ -5401,6 +5414,53 @@ def test_extended_case_step_uses_navigation_status_expressions(
     assert expression_snippet in page.expressions[0]
     for key, value in expected.items():
         assert result[key] == value
+    assert result["url"] == "https://example.test/dashboard"
+
+
+def test_case_wait_load_state_retries_transient_navigation_eval_error(
+    tmp_path: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_module.time, "sleep", lambda _seconds: None)
+
+    class FakePage:
+        url = "https://example.test/dashboard"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def evaluate(self, expression: str) -> dict[str, Any]:
+            assert "requestedState" in expression
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError(
+                    "Page.evaluate: Execution context was destroyed, "
+                    "most likely because of a navigation."
+                )
+            return {
+                "found": True,
+                "state": "complete",
+                "requested_state": "complete",
+                "target_state": "complete",
+                "waited_ms": 25,
+            }
+
+    page = FakePage()
+    result = cli_module._run_browser_cli_case_step(
+        page,
+        {
+            "action": "wait-load-state",
+            "state": "complete",
+            "timeout_ms": 1000,
+            "poll_ms": 1,
+        },
+        tmp_path,
+        0,
+    )
+
+    assert page.calls == 2
+    assert result["found"] is True
+    assert result["state"] == "complete"
     assert result["url"] == "https://example.test/dashboard"
 
 
@@ -9875,7 +9935,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.21"
+    assert checks["browser_cli"]["version"] == "0.3.22"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
@@ -17072,6 +17132,71 @@ def test_eval_backed_action_reports_missing_selector(
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "action.get-text"
     assert payload["result"] == {"found": False, "url": "https://example.test"}
+
+
+def test_wait_load_state_retries_transient_navigation_eval_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    connect_url = "wss://example.test/devtools"
+    calls: list[str] = []
+    monkeypatch.setattr(cli_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        "browser_cli.cli.resolve_browser_action_connect_url",
+        lambda target: connect_url,
+    )
+
+    def fake_run_browser_action(
+        *,
+        connect_url: str,
+        action: str,
+        request: Any,
+    ) -> SimpleNamespace:
+        assert action == "eval"
+        calls.append(request.expression)
+        if len(calls) == 1:
+            raise RuntimeError(
+                "Page.evaluate: Execution context was destroyed, "
+                "most likely because of a navigation."
+            )
+        return SimpleNamespace(
+            result={
+                "url": "https://example.test",
+                "value": {
+                    "found": True,
+                    "state": "complete",
+                    "requested_state": "complete",
+                    "target_state": "complete",
+                    "waited_ms": 25,
+                },
+            }
+        )
+
+    monkeypatch.setattr("browser_cli.cli.run_browser_action", fake_run_browser_action)
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "action",
+                "wait-load-state",
+                "--session-id",
+                "s1",
+                "--state",
+                "complete",
+                "--timeout-ms",
+                "1000",
+                "--poll-ms",
+                "1",
+            ]
+        )
+
+    assert exc_info.value.code == 0
+    assert len(calls) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["command"] == "action.wait-load-state"
+    assert payload["result"]["found"] is True
+    assert payload["result"]["state"] == "complete"
+    assert payload["result"]["url"] == "https://example.test"
 
 
 def test_action_set_viewport_emits_structured_result(
