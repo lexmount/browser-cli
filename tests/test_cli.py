@@ -81,7 +81,7 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.18"
+    assert payload["version"] == "0.3.19"
     assert payload["version_source"] == "package_fallback"
     assert payload["lex_browser_runtime_version"] == "unknown"
     assert payload["lex_browser_runtime_version_known"] is False
@@ -1041,7 +1041,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
     )
     assert "result.nodes" in first_steps[4]["read"]
-    assert "browser-cli action accessibility-snapshot" in first_steps[4]["fallback_commands"][0]
+    assert "browser-cli action text-snapshot" in first_steps[4]["fallback_commands"][0]
     assert first_steps[5]["agent_action"] is True
     assert first_steps[5]["selection_order"][:4] == [
         "wait-text",
@@ -1582,7 +1582,6 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert [step["id"] for step in targeting_steps] == [
         "inspect_action_guide",
         "inspect_interactive_targets",
-        "inspect_accessibility_context",
         "choose_click_method",
         "wait_target_ready",
         "activate_target",
@@ -1597,10 +1596,8 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     )
     assert "result.nodes" in targeting_steps[1]["read"]
     assert "result.node_count" in targeting_steps[1]["read"]
-    assert targeting_steps[2]["optional"] is True
-    assert "result.truncated" in targeting_steps[2]["read"]
-    assert targeting_steps[3]["agent_action"] is True
-    assert targeting_steps[3]["selection_order"] == [
+    assert targeting_steps[2]["agent_action"] is True
+    assert targeting_steps[2]["selection_order"] == [
         "exists-role",
         "get-text-role",
         "bounding-box-role",
@@ -1613,45 +1610,45 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "click-index",
     ]
     assert (
-        "browser-cli action exists-role" in targeting_steps[3]["preferred_commands"][0]
+        "browser-cli action exists-role" in targeting_steps[2]["preferred_commands"][0]
     )
     assert (
         "browser-cli action get-text-role"
-        in targeting_steps[3]["preferred_commands"][1]
+        in targeting_steps[2]["preferred_commands"][1]
     )
     assert (
         "browser-cli action bounding-box-role"
-        in targeting_steps[3]["preferred_commands"][2]
+        in targeting_steps[2]["preferred_commands"][2]
     )
     assert (
-        "browser-cli action click-label" in targeting_steps[3]["preferred_commands"][3]
+        "browser-cli action click-label" in targeting_steps[2]["preferred_commands"][3]
     )
     assert (
-        "browser-cli action hover-role" in targeting_steps[3]["preferred_commands"][5]
+        "browser-cli action hover-role" in targeting_steps[2]["preferred_commands"][5]
     )
     assert (
-        "browser-cli action press-role" in targeting_steps[3]["preferred_commands"][6]
+        "browser-cli action press-role" in targeting_steps[2]["preferred_commands"][6]
     )
-    assert (
-        "browser-cli action scroll-into-view-role"
-        in targeting_steps[3]["preferred_commands"][7]
-    )
-    assert "result.element" in targeting_steps[4]["read"]
-    assert (
-        "browser-cli action exists-role" in targeting_steps[4]["fallback_commands"][0]
-    )
-    assert "browser-cli action wait-text" in targeting_steps[4]["fallback_commands"][1]
-    assert "result.clicked" in targeting_steps[5]["read"]
-    assert "result.label" in targeting_steps[5]["read"]
-    assert "result.click_target" in targeting_steps[5]["read"]
-    assert "result.hovered" in targeting_steps[5]["read"]
-    assert "result.pressed" in targeting_steps[5]["read"]
-    assert "result.scrolled" in targeting_steps[5]["read"]
     assert (
         "browser-cli action scroll-into-view-role"
-        in targeting_steps[5]["alternative_commands"][3]
+        in targeting_steps[2]["preferred_commands"][7]
     )
-    assert "browser-cli action wait-url" in targeting_steps[6]["fallback_commands"][0]
+    assert "result.element" in targeting_steps[3]["read"]
+    assert (
+        "browser-cli action exists-role" in targeting_steps[3]["fallback_commands"][0]
+    )
+    assert "browser-cli action wait-text" in targeting_steps[3]["fallback_commands"][1]
+    assert "result.clicked" in targeting_steps[4]["read"]
+    assert "result.label" in targeting_steps[4]["read"]
+    assert "result.click_target" in targeting_steps[4]["read"]
+    assert "result.hovered" in targeting_steps[4]["read"]
+    assert "result.pressed" in targeting_steps[4]["read"]
+    assert "result.scrolled" in targeting_steps[4]["read"]
+    assert (
+        "browser-cli action scroll-into-view-role"
+        in targeting_steps[4]["alternative_commands"][3]
+    )
+    assert "browser-cli action wait-url" in targeting_steps[5]["fallback_commands"][0]
     menu_steps = workflows["menu_keyboard_flow"]["steps"]
     assert [step["id"] for step in menu_steps] == [
         "inspect_action_guide",
@@ -1670,10 +1667,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
     )
     assert "result.nodes" in menu_steps[1]["read"]
-    assert (
-        "browser-cli action accessibility-snapshot"
-        in menu_steps[1]["fallback_commands"][0]
-    )
+    assert "browser-cli action list-snapshot" in menu_steps[1]["fallback_commands"][0]
     assert menu_steps[2]["agent_action"] is True
     assert "browser-cli action hover-role" in menu_steps[2]["command"]
     assert "result.hovered" in menu_steps[2]["read"]
@@ -2248,9 +2242,9 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     ]
     assert payload["guide"]["selection_order"][:4] == [
         "interactive-snapshot",
-        "accessibility-snapshot",
         "hover-role",
         "focus-role",
+        "press-role",
     ]
     assert "press-key" in payload["guide"]["selection_order"]
     assert any(
@@ -2289,10 +2283,10 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
     ]
     assert payload["guide"]["selection_order"][:5] == [
         "interactive-snapshot",
-        "accessibility-snapshot",
         "double-click-role",
         "right-click-role",
         "drag-role-to-role",
+        "double-click",
     ]
     assert any(
         "browser-cli action double-click-role" in command
@@ -2385,8 +2379,8 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "page-info",
         "link-snapshot",
         "interactive-snapshot",
-        "accessibility-snapshot",
         "wait-role",
+        "click-role",
     ]
     assert any(
         "browser-cli action link-snapshot" in command
@@ -3810,7 +3804,7 @@ def test_example_get_returns_interactive_targeting_case_file(
     assert payload["content_format"] == "yaml"
     assert "name: interactive-targeting" in payload["content"]
     assert "action: interactive-snapshot" in payload["content"]
-    assert "action: accessibility-snapshot" in payload["content"]
+    assert "action: accessibility-snapshot" not in payload["content"]
     assert "action: act" in payload["content"]
     assert "kind: click" in payload["content"]
     assert "action: wait-text" in payload["content"]
@@ -6691,7 +6685,6 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
     assert [step["id"] for step in steps] == [
         "inspect_action_guide",
         "inspect_interactive_targets",
-        "inspect_accessibility_context",
         "choose_click_method",
         "wait_target_ready",
         "activate_target",
@@ -6705,9 +6698,8 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
         "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
     )
     assert "result.nodes" in steps[1]["read"]
-    assert steps[2]["optional"] is True
-    assert steps[3]["agent_action"] is True
-    assert steps[3]["selection_order"] == [
+    assert steps[2]["agent_action"] is True
+    assert steps[2]["selection_order"] == [
         "exists-role",
         "get-text-role",
         "bounding-box-role",
@@ -6719,14 +6711,14 @@ def test_commands_catalog_returns_interactive_targeting_workflow(
         "click-text",
         "click-index",
     ]
-    assert "browser-cli action exists-role" in steps[3]["preferred_commands"][0]
-    assert "browser-cli action get-text-role" in steps[3]["preferred_commands"][1]
-    assert "browser-cli action bounding-box-role" in steps[3]["preferred_commands"][2]
-    assert "browser-cli action click-label" in steps[3]["preferred_commands"][3]
-    assert "browser-cli action click-role" in steps[3]["preferred_commands"][4]
-    assert "browser-cli action hover-role" in steps[3]["preferred_commands"][5]
-    assert "browser-cli action click-label" in steps[5]["alternative_commands"][0]
-    assert "browser-cli action click-text" in steps[5]["alternative_commands"][4]
+    assert "browser-cli action exists-role" in steps[2]["preferred_commands"][0]
+    assert "browser-cli action get-text-role" in steps[2]["preferred_commands"][1]
+    assert "browser-cli action bounding-box-role" in steps[2]["preferred_commands"][2]
+    assert "browser-cli action click-label" in steps[2]["preferred_commands"][3]
+    assert "browser-cli action click-role" in steps[2]["preferred_commands"][4]
+    assert "browser-cli action hover-role" in steps[2]["preferred_commands"][5]
+    assert "browser-cli action click-label" in steps[4]["alternative_commands"][0]
+    assert "browser-cli action click-text" in steps[4]["alternative_commands"][4]
     assert steps[-1]["id"] == "verify_after_click"
     assert "browser-cli action wait-url" in steps[-1]["fallback_commands"][0]
 
@@ -7389,7 +7381,6 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ] == [
         "inspect_action_guide",
         "inspect_interactive_targets",
-        "inspect_accessibility_context",
         "choose_click_method",
         "wait_target_ready",
         "activate_target",
@@ -9918,7 +9909,7 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.18"
+    assert checks["browser_cli"]["version"] == "0.3.19"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
     assert checks["lex_browser_runtime"]["version"] == "unknown"
