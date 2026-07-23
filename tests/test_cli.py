@@ -13513,6 +13513,82 @@ def test_session_create_passes_media_storage_options(
     assert payload["command"] == "session.create"
 
 
+def test_runtime_session_create_falls_back_for_media_options() -> None:
+    from lex_browser_runtime.browser.lexmount import LexmountBrowserAdmin
+
+    observed: dict[str, Any] = {}
+
+    class FakeResponse:
+        status_code = 202
+
+        def json(self) -> dict[str, str]:
+            return {"session_id": "session_media", "project_id": "project_1"}
+
+    class FakeSessions:
+        def create(self, *, browser_mode: str = "normal") -> Any:
+            raise AssertionError(f"unexpected SDK create fallback: {browser_mode}")
+
+        def _build_create_payload(self, **kwargs: Any) -> dict[str, Any]:
+            observed["build_payload"] = kwargs
+            return {
+                "browser_mode": kwargs["browser_mode"],
+                "context": kwargs["context"],
+            }
+
+        def _with_requested_region(self, data: dict[str, Any]) -> dict[str, Any]:
+            data["region_id"] = "nanjing-1"
+            return data
+
+        def get(self, session_id: str, *, project_id: str | None = None) -> Any:
+            observed["get"] = {"session_id": session_id, "project_id": project_id}
+            return SimpleNamespace(
+                id=session_id,
+                status="active",
+                browser_type="normal",
+                project_id=project_id,
+                inspect_url="https://inspect.example/session_media",
+            )
+
+        def _get_web_socket_debugger_url(self, session_id: str) -> str:
+            observed["ws_session_id"] = session_id
+            return f"wss://connect.example/{session_id}"
+
+    class FakeClient:
+        base_url = "https://api.lexmount.example"
+        project_id = "project_1"
+        sessions = FakeSessions()
+
+        def _post(self, url: str, *, json: dict[str, Any]) -> FakeResponse:
+            observed["post"] = {"url": url, "json": json}
+            return FakeResponse()
+
+    result = LexmountBrowserAdmin(client=FakeClient()).create_session(
+        context_id="context_1",
+        context_mode="read_only",
+        browser_mode="normal",
+        downloads={"enabled": True},
+        recording={"persistent": True},
+    )
+
+    assert observed["post"] == {
+        "url": "https://api.lexmount.example/instance/v2",
+        "json": {
+            "browser_mode": "normal",
+            "context": {"id": "context_1", "mode": "read_only"},
+            "downloads": {"enabled": True},
+            "recording": {"persistent": True},
+            "region_id": "nanjing-1",
+        },
+    }
+    assert observed["get"] == {
+        "session_id": "session_media",
+        "project_id": "project_1",
+    }
+    assert observed["ws_session_id"] == "session_media"
+    assert result.session.session_id == "session_media"
+    assert result.session.connect_url == "wss://connect.example/session_media"
+
+
 def test_session_create_redacts_unmasked_connect_url_by_default(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
