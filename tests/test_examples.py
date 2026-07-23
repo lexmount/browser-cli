@@ -47,9 +47,7 @@ def test_form_fill_case_uses_semantic_case_actions() -> None:
 
 
 def test_interactive_targeting_case_uses_semantic_targets() -> None:
-    text = (
-        REPO_ROOT / "examples" / "cases" / "interactive-targeting.yaml"
-    ).read_text()
+    text = (REPO_ROOT / "examples" / "cases" / "interactive-targeting.yaml").read_text()
 
     assert "action: interactive-snapshot" in text
     assert "action: accessibility-snapshot" not in text
@@ -74,9 +72,7 @@ def test_agent_primitives_case_uses_observe_act_extract() -> None:
 
 
 def test_content_extraction_case_uses_bounded_extraction_actions() -> None:
-    text = (
-        REPO_ROOT / "examples" / "cases" / "content-extraction.yaml"
-    ).read_text()
+    text = (REPO_ROOT / "examples" / "cases" / "content-extraction.yaml").read_text()
 
     assert "name: content-extraction" in text
     assert "action: extract" in text
@@ -192,11 +188,18 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli commands --workflow case_file_task" in text
     assert "browser-cli case schema" in text
     assert "browser-cli case schema --action fill-label" in text
-    assert "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
-    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
+    )
+    assert (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
+        in text
+    )
     assert "browser-cli example get --id agent_primitives_case --metadata-only" in text
     assert "browser-cli example get --id form_fill_case --metadata-only" in text
-    assert "browser-cli example get --id content_extraction_case --metadata-only" in text
+    assert (
+        "browser-cli example get --id content_extraction_case --metadata-only" in text
+    )
     assert "browser-cli example get --id browser_state_case --metadata-only" in text
     assert "browser-cli example get --id navigation_flow_case --metadata-only" in text
     assert "browser-cli example get --id file_upload_case --metadata-only" in text
@@ -253,7 +256,10 @@ def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     assert "browser-cli reference get --id usable_status --metadata-only" in text
     assert "browser-cli reference get --id usable_status" in text
     assert "browser-cli example list" in text
-    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
+    assert (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
+        in text
+    )
     assert "browser-cli example get --id page_inspection_case --metadata-only" in text
     assert "browser-cli example get --id navigation_flow_case --metadata-only" in text
     assert "browser-cli example get --id file_upload_case --metadata-only" in text
@@ -314,7 +320,9 @@ def test_auth_lifecycle_playbook_guides_secret_safe_auth() -> None:
     assert "browser-cli commands --workflow connect_from_codex_auth" in text
     assert "browser-cli commands --workflow device_code_auth" in text
     assert "browser-cli commands --workflow scoped_token_lifecycle" in text
-    assert "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
+    assert (
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in text
+    )
     assert "browser-cli auth status" in text
     assert "browser-cli auth scopes" in text
     assert "browser-cli auth token-info --required-scope browser.actions:run" in text
@@ -416,7 +424,10 @@ def test_persistent_context_playbook_guides_reuse_decisions() -> None:
     text = (REPO_ROOT / "examples" / "persistent-context-playbook.md").read_text()
 
     assert "browser-cli commands --workflow persistent_login_state" in text
-    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in text
+    assert (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
+        in text
+    )
     assert "browser-cli context list" in text
     assert "--include-reuse-state" in text
     assert "recommended_context_id" in text

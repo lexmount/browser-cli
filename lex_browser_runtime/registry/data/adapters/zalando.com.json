@@ -1,0 +1,125 @@
+{
+  "domain": "zalando.com",
+  "endpoints": [
+    {
+      "domain": "zalando.com",
+      "url_pattern": "https://en\\.zalando\\.de/.*/_black_size-M/\\?.*price_from=50.*price_to=150.*order=activation_date.*",
+      "method": "GET",
+      "description": "Zalando filtered listing HTML. After the Germany storefront and direct filtered listing URL are loaded, call the current listing URL with browser_api_call fetch_mode=browser. The runtime compacts the hydration cache into ranked product cards with brand, name, price, detail URL, available sizes, and rating visibility.",
+      "example_url": "https://en.zalando.de/womens-clothing-winter-coat/_black_size-M/?price_from=50&price_to=150&order=activation_date",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "api",
+      "strategy": "listing_hydration_product_cards",
+      "strategy_notes": [
+        "Use the direct listing URL after selecting Germany and clearing the cookie dialog. Do not open product details just to read sizes or absent ratings.",
+        "Call browser_api_call on the current en.zalando.de listing URL with fetch_mode=browser so the request uses the browser session and avoids external HTTP 403.",
+        "Answer top products from the compact zalando_listing items. If rating is missing or the compact result says rating=not shown, record customer rating as not shown.",
+        "The compact items include sizes from the listing hydration simples/simplesWithStock arrays; treat those as available sizes."
+      ],
+      "max_followup_calls": 1,
+      "output_contract": [
+        "brand",
+        "name",
+        "price",
+        "sizes",
+        "rating"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "zalando_direct_listing_hydration",
+          "site_pattern": "zalando.com",
+          "trigger": "Zalando listing tasks with category, color, size, price, brand, or newest/sort filters",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "direct_url",
+              "description": "Build the filtered en.zalando.de listing URL before reading product cards.",
+              "url_template": "https://en.zalando.de/<category-path>/<filter-suffix>/?price_from=<min>&price_to=<max>&order=<sort>"
+            },
+            {
+              "type": "api_call",
+              "description": "Call browser_api_call on the current listing URL so the runtime compacts hydration product cards.",
+              "fetch_mode": "browser",
+              "max_calls": 1,
+              "output_contract": [
+                "brand",
+                "name",
+                "price",
+                "sizes",
+                "rating"
+              ]
+            }
+          ],
+          "observable_validation": [
+            "current URL encodes the requested category/filter/sort state",
+            "zalando_listing compact output has product cards with brand, price, URL, sizes, and rating visibility",
+            "missing rating is accepted as not shown instead of opening detail pages repeatedly"
+          ],
+          "notes": [
+            "Use UK storefronts only for GBP tasks; Euro tasks should stay on en.zalando.de."
+          ]
+        }
+      ],
+      "discovered_at": "2026-05-16T05:35:00+08:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    },
+    {
+      "domain": "zalando.com",
+      "url_pattern": "https://en\\.zalando\\.de/.*\\.html$",
+      "method": "GET",
+      "description": "Zalando product detail HTML. Use browser_api_call fetch_mode=browser for top listing candidates that need material composition or rating verification; the runtime compacts material and rating fields from the detail page.",
+      "example_url": "https://en.zalando.de/boss-jasper-blazer-jacket-dark-blue-bb122a10a-k11.html",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "api",
+      "strategy": "detail_material_rating_compaction",
+      "strategy_notes": [
+        "Call detail URLs with browser_api_call rather than navigating product tabs when only materials or rating are missing.",
+        "Use this only for the top listing candidates returned by zalando_listing; cap follow-up calls at three.",
+        "If rating is missing or rating=not shown, record customer rating as not shown instead of repeatedly opening review widgets."
+      ],
+      "max_followup_calls": 3,
+      "output_contract": [
+        "materials",
+        "rating"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "zalando_detail_material_rating_compaction",
+          "site_pattern": "zalando.com",
+          "trigger": "Top Zalando listing candidates need material composition or rating after listing hydration",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "api_call",
+              "description": "Call browser_api_call on each top product detail URL and use the zalando_detail compact result.",
+              "fetch_mode": "browser",
+              "max_calls": 3,
+              "output_contract": [
+                "materials",
+                "rating"
+              ]
+            }
+          ],
+          "observable_validation": [
+            "zalando_detail compact output contains materials or rating for the requested product URL",
+            "rating=not shown is accepted after one compact detail call"
+          ],
+          "notes": [
+            "Do not navigate product detail pages solely for materials when browser_api_call can compact the same HTML."
+          ]
+        }
+      ],
+      "discovered_at": "2026-05-16T07:15:00+08:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    }
+  ],
+  "updated_at": "2026-05-16T05:35:00+08:00"
+}

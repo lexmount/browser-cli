@@ -1582,9 +1582,7 @@ def _agent_examples() -> dict[str, Any]:
         },
         "auth_lifecycle_playbook": {
             "path": "examples/auth-lifecycle-playbook.md",
-            "content_command": (
-                "browser-cli example get --id auth_lifecycle_playbook"
-            ),
+            "content_command": ("browser-cli example get --id auth_lifecycle_playbook"),
             "metadata_command": "browser-cli example list",
             "package_resource": (
                 "browser_cli.agent_examples:auth-lifecycle-playbook.md"
@@ -1782,9 +1780,7 @@ def _agent_examples() -> dict[str, Any]:
             "path": "examples/cases/browser-state.yaml",
             "content_command": "browser-cli example get --id browser_state_case",
             "metadata_command": "browser-cli example list",
-            "package_resource": (
-                "browser_cli.agent_examples.cases:browser-state.yaml"
-            ),
+            "package_resource": ("browser_cli.agent_examples.cases:browser-state.yaml"),
             "format": "yaml",
             "purpose": (
                 "Validate and run a browser-state case that opens a stable "
@@ -1845,9 +1841,7 @@ def _agent_examples() -> dict[str, Any]:
             "path": "examples/cases/file-upload.yaml",
             "content_command": "browser-cli example get --id file_upload_case",
             "metadata_command": "browser-cli example list",
-            "package_resource": (
-                "browser_cli.agent_examples.cases:file-upload.yaml"
-            ),
+            "package_resource": ("browser_cli.agent_examples.cases:file-upload.yaml"),
             "format": "yaml",
             "purpose": (
                 "Validate and run a self-contained file-upload case that builds "
@@ -1875,9 +1869,7 @@ def _agent_examples() -> dict[str, Any]:
             "path": "examples/cases/checkout-flow.yaml",
             "content_command": "browser-cli example get --id checkout_flow_case",
             "metadata_command": "browser-cli example list",
-            "package_resource": (
-                "browser_cli.agent_examples.cases:checkout-flow.yaml"
-            ),
+            "package_resource": ("browser_cli.agent_examples.cases:checkout-flow.yaml"),
             "format": "yaml",
             "purpose": (
                 "Validate and run a self-contained multi-step checkout case "
@@ -2020,12 +2012,7 @@ def _default_codex_skill_dir() -> Path:
             / "skills"
             / DEFAULT_CODEX_SKILL_DIRECTORY_NAME
         )
-    return (
-        Path.home()
-        / ".codex"
-        / "skills"
-        / DEFAULT_CODEX_SKILL_DIRECTORY_NAME
-    )
+    return Path.home() / ".codex" / "skills" / DEFAULT_CODEX_SKILL_DIRECTORY_NAME
 
 
 def _skill_dir_from_args(args: argparse.Namespace) -> Path:
@@ -2053,7 +2040,9 @@ def _skill_status_command(skill_dir: Path) -> str:
     return " ".join(shlex.quote(part) for part in parts)
 
 
-def _packaged_skill_resource_items() -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+def _packaged_skill_resource_items() -> tuple[
+    list[dict[str, Any]], list[dict[str, str]]
+]:
     items: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for relative_path, package_resource in _packaged_skill_resources().items():
@@ -3176,8 +3165,8 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                         "preferred_commands": [
                             'browser-cli action wait-text --session-id <session_id> --text "<expected visible text>"',
-                            'browser-cli action page-info --session-id <session_id>',
-                            'browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80',
+                            "browser-cli action page-info --session-id <session_id>",
+                            "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
                             "browser-cli action screenshot --session-id <session_id> --output <path>",
                         ],
                     },
@@ -5268,9 +5257,7 @@ def _object_payload(value: Any) -> dict[str, Any]:
         return model_dump(mode="json")
     if hasattr(value, "__dict__"):
         return {
-            key: item
-            for key, item in vars(value).items()
-            if not key.startswith("_")
+            key: item for key, item in vars(value).items() if not key.startswith("_")
         }
     return {}
 
@@ -5296,7 +5283,9 @@ def _call_with_supported_kwargs(func: Callable[..., Any], **kwargs: Any) -> Any:
     except (TypeError, ValueError):
         return func(**kwargs)
     parameters = signature.parameters
-    if any(param.kind is inspect.Parameter.VAR_KEYWORD for param in parameters.values()):
+    if any(
+        param.kind is inspect.Parameter.VAR_KEYWORD for param in parameters.values()
+    ):
         return func(**kwargs)
     supported = {key: value for key, value in kwargs.items() if key in parameters}
     return func(**supported)
@@ -5311,9 +5300,13 @@ def _context_api(admin: Any) -> Any:
     return contexts if contexts is not None else admin
 
 
-def _context_create(admin: Any, *, metadata: dict[str, Any] | None, description: str | None) -> Any:
+def _context_create(
+    admin: Any, *, metadata: dict[str, Any] | None, description: str | None
+) -> Any:
     if description is not None:
-        raw_context = _context_raw_create(admin, metadata=metadata, description=description)
+        raw_context = _context_raw_create(
+            admin, metadata=metadata, description=description
+        )
         if raw_context is not None:
             created_payload = _context_payload(raw_context)
             context_id = created_payload.get("context_id")
@@ -5475,15 +5468,16 @@ def _context_raw_fork(admin: Any, context_id: str) -> dict[str, Any]:
     except Exception as exc:
         raise_normalized_lexmount_error(exc)
     if not callable(post) or not base_url or not api_key or not project_id:
-        raise RuntimeError("context fork requires a Lexmount client with raw HTTP support")
+        raise RuntimeError(
+            "context fork requires a Lexmount client with raw HTTP support"
+        )
 
     request_payload: dict[str, Any] = {
         "api_key": api_key,
         "project_id": project_id,
     }
     url = (
-        f"{base_url.rstrip('/')}/instance/v1/contexts/"
-        f"{quote(context_id, safe='')}/fork"
+        f"{base_url.rstrip('/')}/instance/v1/contexts/{quote(context_id, safe='')}/fork"
     )
     try:
         ensure_region = getattr(client, "_ensure_region_resolved", None)
@@ -5666,7 +5660,9 @@ def _context_payload(value: Any) -> dict[str, Any]:
     return result
 
 
-def _merge_context_payload(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+def _merge_context_payload(
+    base: dict[str, Any], override: dict[str, Any]
+) -> dict[str, Any]:
     context_id = base.get("context_id") or override.get("context_id")
     merged = dict(base)
     if context_id is not None:
@@ -5713,7 +5709,9 @@ def _merge_context_list_payload(
         }
 
     merged_contexts = [
-        _merge_context_payload(context, override_contexts.get(context.get("context_id"), {}))
+        _merge_context_payload(
+            context, override_contexts.get(context.get("context_id"), {})
+        )
         if isinstance(context, dict)
         else context
         for context in contexts
@@ -5728,7 +5726,9 @@ def _context_list_payload(value: Any) -> dict[str, Any]:
     contexts = [
         _context_payload(context)
         for context in contexts_raw
-        if isinstance(context, dict) or hasattr(context, "model_dump") or hasattr(context, "__dict__")
+        if isinstance(context, dict)
+        or hasattr(context, "model_dump")
+        or hasattr(context, "__dict__")
     ]
     count = _payload_field(value, "count")
     if count is None:
@@ -5741,7 +5741,15 @@ def _context_list_payload(value: Any) -> dict[str, Any]:
         **{
             key: item
             for key, item in payload.items()
-            if key not in {"contexts", "data", "count", "status_filter", "statusFilter", "limit"}
+            if key
+            not in {
+                "contexts",
+                "data",
+                "count",
+                "status_filter",
+                "statusFilter",
+                "limit",
+            }
         },
     }
 
@@ -7140,7 +7148,9 @@ def _doctor_device_code_contract_check() -> dict[str, Any]:
         )
 
     missing_device_code_fields = [
-        field for field in DOCTOR_REQUIRED_DEVICE_CODE_FIELDS if field not in device_code
+        field
+        for field in DOCTOR_REQUIRED_DEVICE_CODE_FIELDS
+        if field not in device_code
     ]
     invalid_fields: list[str] = []
     if device_code.get("available") is not False:
@@ -9284,7 +9294,12 @@ def _extract_api_key_response_payload(
             or response_payload.get("api_key")
             or response_payload.get("apiKey")
         )
-        if isinstance(project_id, str) and project_id and isinstance(api_key, str) and api_key:
+        if (
+            isinstance(project_id, str)
+            and project_id
+            and isinstance(api_key, str)
+            and api_key
+        ):
             scopes = _scope_list(candidate.get("scopes"))
             if scopes is None:
                 scopes = _scope_list(candidate.get("scope"))
@@ -9364,9 +9379,7 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
     try:
         raw_data = path.read_text(encoding="utf-8")
     except OSError as exc:
-        status.update(
-            {"readable": False, "error": "read_error", "message": str(exc)}
-        )
+        status.update({"readable": False, "error": "read_error", "message": str(exc)})
         return status
 
     status["readable"] = True
@@ -9429,7 +9442,9 @@ def _local_api_key_credentials_status(raw_path: str | None = None) -> dict[str, 
         }
     )
     if kind != "api_key":
-        status["warnings"].append("Credential file does not contain api_key credentials.")
+        status["warnings"].append(
+            "Credential file does not contain api_key credentials."
+        )
     if not status["has_api_key"]:
         status["warnings"].append("API-key credentials are missing api_key.")
     if not project_id:
@@ -10258,7 +10273,9 @@ class _CodexConnectCallbackHandler(BaseHTTPRequestHandler):
         return
 
 
-def _safe_callback_result(result: dict[str, Any] | None, expected_state: str) -> dict[str, Any]:
+def _safe_callback_result(
+    result: dict[str, Any] | None, expected_state: str
+) -> dict[str, Any]:
     if not result:
         return {"received": False, "state_valid": False, "code_present": False}
     query = result.get("query") if isinstance(result.get("query"), dict) else {}
@@ -10308,9 +10325,7 @@ def _exchange_codex_connect_code(
         )
     credentials: dict[str, Any] = {
         "saved": False,
-        "credentials_file": str(
-            _device_token_credentials_path(credentials_file)[0]
-        ),
+        "credentials_file": str(_device_token_credentials_path(credentials_file)[0]),
     }
     if response.get("ok") and api_key_payload:
         credentials = _write_api_key_credentials(
@@ -10560,9 +10575,7 @@ def _run_codex_connect_loopback_login(
             "attempted": True,
             "available": True,
             "authenticated": authenticated,
-            "credentials_saved": bool(
-                exchange.get("credentials", {}).get("saved")
-            ),
+            "credentials_saved": bool(exchange.get("credentials", {}).get("saved")),
             "reason": "authenticated" if authenticated else "exchange_failed",
             "connect_url": connect_url,
             "connect_base_url": connect_base_url,
@@ -10570,7 +10583,9 @@ def _run_codex_connect_loopback_login(
             "exchange_endpoint": exchange_endpoint,
             "redirect_uri": redirect_uri,
             "project_id": exchange.get("project_id") or project_id,
-            "project_id_source": "exchange" if exchange.get("project_id") else project_id_source,
+            "project_id_source": "exchange"
+            if exchange.get("project_id")
+            else project_id_source,
             "requested_scopes": scopes,
             "requested_expires_in": expires_in,
             "open_result": open_result,
@@ -11806,7 +11821,9 @@ def cmd_context_fork(args: argparse.Namespace) -> None:
     except Exception as exc:
         _failure_from_exception(command, exc)
     payload = _context_enrich_from_list(admin, _context_payload(context))
-    forked_from = payload.get("forked_from") or payload.get("forkedFrom") or args.context_id
+    forked_from = (
+        payload.get("forked_from") or payload.get("forkedFrom") or args.context_id
+    )
     payload["forked_from"] = forked_from
     payload["forkedFrom"] = forked_from
     _record_context_metadata(payload)
@@ -12032,7 +12049,7 @@ def _run_with_playwright_page(
         from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
     except Exception as exc:
         raise BrowserConfigError(
-            "Failed to import Playwright. Install lex-browser-runtime[browser] "
+            "Failed to import Playwright. Install browser-cli with browser support "
             "or provide an environment that already includes playwright."
         ) from exc
 
@@ -12979,7 +12996,9 @@ def _act_fill_text(command: str, args: argparse.Namespace) -> str:
     )
 
 
-def _act_select_value(command: str, args: argparse.Namespace) -> tuple[str | None, str | None]:
+def _act_select_value(
+    command: str, args: argparse.Namespace
+) -> tuple[str | None, str | None]:
     has_value = _act_present(args.value)
     has_option_label = _act_present(args.option_label)
     if has_value and has_option_label:
@@ -13000,7 +13019,9 @@ def _act_select_value(command: str, args: argparse.Namespace) -> tuple[str | Non
     )
 
 
-def _act_target_payload(args: argparse.Namespace, selection: str | None) -> dict[str, Any]:
+def _act_target_payload(
+    args: argparse.Namespace, selection: str | None
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"selection": selection or "page"}
     if selection == "role":
         payload.update(
@@ -13127,7 +13148,9 @@ def _act_plan(
                     target="selector",
                 )
             underlying_command = "action.select-option"
-            expression = _select_option_expression(selector=args.selector, value=value or "")
+            expression = _select_option_expression(
+                selector=args.selector, value=value or ""
+            )
     elif kind in {"check", "uncheck"}:
         selection = _act_select_target(
             command,
@@ -13136,7 +13159,9 @@ def _act_plan(
         )
         checked = kind == "check"
         if selection == "label":
-            underlying_command = "action.check-label" if checked else "action.uncheck-label"
+            underlying_command = (
+                "action.check-label" if checked else "action.uncheck-label"
+            )
             expression = _check_label_expression(
                 label=args.label,
                 checked=checked,
@@ -13144,7 +13169,9 @@ def _act_plan(
                 case_sensitive=args.case_sensitive,
             )
         elif selection == "role":
-            underlying_command = "action.check-role" if checked else "action.uncheck-role"
+            underlying_command = (
+                "action.check-role" if checked else "action.uncheck-role"
+            )
             expression = _check_role_expression(
                 role=args.role,
                 name=args.name,
@@ -13262,9 +13289,8 @@ def _act_plan(
             {
                 key: value
                 for key, value in {
-                    "value_present": kind == "fill" and (
-                        _act_present(args.value) or _act_present(args.text)
-                    ),
+                    "value_present": kind == "fill"
+                    and (_act_present(args.value) or _act_present(args.text)),
                     "key": args.key if kind == "press" else None,
                     "option_label": args.option_label if kind == "select" else None,
                     "x": args.x if kind == "scroll" else None,
@@ -23803,14 +23829,14 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         )
     )
 
-    runtime_version = _package_version("lex-browser-runtime")
     checks.append(
         _doctor_check(
             "lex_browser_runtime",
             "pass",
-            "lex-browser-runtime import succeeded",
-            version=runtime_version or "unknown",
-            version_known=runtime_version is not None,
+            "bundled lex_browser_runtime import succeeded",
+            version=browser_cli_version,
+            version_known=True,
+            version_source="bundled",
         )
     )
 
@@ -24402,7 +24428,9 @@ def cmd_auth_status(args: argparse.Namespace) -> None:
         if not value
     ]
     device_token_status = _local_device_token_status(args.credentials_file)
-    api_key_credentials_status = _local_api_key_credentials_status(args.credentials_file)
+    api_key_credentials_status = _local_api_key_credentials_status(
+        args.credentials_file
+    )
     auth_source = _auth_source(
         env_configured=configured,
         device_token_status=device_token_status,
@@ -24662,7 +24690,9 @@ def cmd_auth_logout(args: argparse.Namespace) -> None:
 def cmd_auth_clear_credentials(args: argparse.Namespace) -> None:
     command = "auth.clear-credentials"
     path, path_source = _device_token_credentials_path(args.credentials_file)
-    api_key_credentials_before = _local_api_key_credentials_status(args.credentials_file)
+    api_key_credentials_before = _local_api_key_credentials_status(
+        args.credentials_file
+    )
     device_token_before = _local_device_token_status(args.credentials_file)
     present_before = bool(path.exists())
     warnings: list[str] = []
@@ -25897,14 +25927,14 @@ def cmd_commands(args: argparse.Namespace) -> None:
 
 def cmd_version(args: argparse.Namespace) -> None:
     cli_version, version_source = _browser_cli_version()
-    runtime_version = _package_version("lex-browser-runtime")
     _success(
         "version",
         package="browser-cli",
         version=cli_version,
         version_source=version_source,
-        lex_browser_runtime_version=runtime_version or "unknown",
-        lex_browser_runtime_version_known=runtime_version is not None,
+        lex_browser_runtime_version=cli_version,
+        lex_browser_runtime_version_known=True,
+        lex_browser_runtime_version_source="bundled",
         python_version=sys.version.split()[0],
         executable=sys.executable,
     )
@@ -26105,9 +26135,8 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
         ).items():
             if field not in step:
                 continue
-            allow_list = (
-                (str(action) == "dispatch-event" and field == "event")
-                or (str(action) in {"extract", "observe"} and field == "surface")
+            allow_list = (str(action) == "dispatch-event" and field == "event") or (
+                str(action) in {"extract", "observe"} and field == "surface"
             )
             raw_values = (
                 step[field]
@@ -26152,7 +26181,9 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
             if has_inline_files:
                 inline_files = step["inline_files"]
                 if not isinstance(inline_files, list) or not inline_files:
-                    errors.append(f"steps[{index}].inline_files must be a non-empty array")
+                    errors.append(
+                        f"steps[{index}].inline_files must be a non-empty array"
+                    )
                 else:
                     for file_index, inline_file in enumerate(inline_files):
                         path = f"steps[{index}].inline_files[{file_index}]"
@@ -26178,7 +26209,9 @@ def _validate_browser_cli_case_spec(spec: dict[str, Any]) -> list[str]:
                                 try:
                                     base64.b64decode(data_base64, validate=True)
                                 except Exception:
-                                    errors.append(f"{path}.data_base64 must be valid base64")
+                                    errors.append(
+                                        f"{path}.data_base64 must be valid base64"
+                                    )
                         mime_type = inline_file.get("type")
                         if mime_type is not None and not isinstance(mime_type, str):
                             errors.append(f"{path}.type must be a string")
@@ -30331,7 +30364,7 @@ def run_browser_cli_case_file(
             from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
         except Exception as exc:
             raise BrowserConfigError(
-                "Failed to import Playwright. Install lex-browser-runtime[browser] "
+                "Failed to import Playwright. Install browser-cli with browser support "
                 "or provide an environment that already includes playwright."
             ) from exc
 
@@ -30804,9 +30837,7 @@ def _add_context_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     context_delete.set_defaults(func=cmd_context_delete)
 
     visible_context_names = [
-        name
-        for name in context_subparsers.choices
-        if name != "pick"
+        name for name in context_subparsers.choices if name != "pick"
     ]
     context_subparsers.metavar = "{" + ",".join(visible_context_names) + "}"
     context_subparsers._choices_actions = [

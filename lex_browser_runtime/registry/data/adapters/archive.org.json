@@ -1,0 +1,64 @@
+{
+  "domain": "archive.org",
+  "endpoints": [
+    {
+      "domain": "archive.org",
+      "url_pattern": "https://archive\\.org/advancedsearch\\.php.*",
+      "method": "GET",
+      "description": "Archive.org structured search. Use output=json, rows, sort[]=downloads desc, and fl[]=identifier/title/date/downloads/runtime/collection/mediatype to list collection or media search results without clicking filters. browser_api_call compacts response.response.docs into items with metadata_url.",
+      "example_url": "https://archive.org/advancedsearch.php?q=collection:nasa%20AND%20mediatype:movies&fl[]=identifier&fl[]=title&fl[]=date&fl[]=downloads&fl[]=runtime&sort[]=downloads%20desc&rows=5&output=json",
+      "requires_auth": false,
+      "strategy": "list_detail_fanout",
+      "strategy_notes": [
+        "Use advancedsearch as the list call, then call metadata only for top-ranked identifiers when duration or upload_date is missing.",
+        "Keep rows small, usually 5 or fewer, because the task only needs the top answer or a short ranking."
+      ],
+      "followup_url_template": "https://archive.org/metadata/{identifier}",
+      "max_followup_calls": 5,
+      "output_contract": [
+        "identifier",
+        "title",
+        "upload_date",
+        "views_or_downloads",
+        "duration",
+        "item_url"
+      ],
+      "discovered_at": "2026-05-14T16:40:00+00:00",
+      "usage_count": 0,
+      "success_count": 27,
+      "failure_count": 1,
+      "source_version": 0,
+      "last_used_at": "2026-06-03T03:43:35.315514+00:00",
+      "last_used_successfully_at": "2026-06-03T03:43:35.315514+00:00",
+      "last_used_failed_at": "2026-05-15T11:46:34.160752+00:00"
+    },
+    {
+      "domain": "archive.org",
+      "url_pattern": "https://archive\\.org/metadata/[A-Za-z0-9_.%-]+",
+      "method": "GET",
+      "description": "Archive.org item metadata. Use after advancedsearch returns identifiers when upload date or duration is missing. browser_api_call compacts metadata and files into title, upload_date, duration, views_or_downloads, and item URL.",
+      "example_url": "https://archive.org/metadata/MSFC-0601215",
+      "requires_auth": false,
+      "strategy": "detail",
+      "strategy_notes": [
+        "Use metadata detail responses to verify missing media fields from the ranked list before answering."
+      ],
+      "output_contract": [
+        "identifier",
+        "title",
+        "upload_date",
+        "duration",
+        "views_or_downloads",
+        "item_url"
+      ],
+      "discovered_at": "2026-05-14T16:40:00+00:00",
+      "usage_count": 0,
+      "success_count": 59,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-06-03T03:43:49.192607+00:00",
+      "last_used_successfully_at": "2026-06-03T03:43:49.192607+00:00"
+    }
+  ],
+  "updated_at": "2026-06-03T03:43:49.192607+00:00"
+}

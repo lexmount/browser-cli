@@ -1,0 +1,82 @@
+{
+  "domain": "suning.com",
+  "endpoints": [
+    {
+      "domain": "suning.com",
+      "url_pattern": "https://review\\.suning\\.com/ajax/review_satisfy/general-\\d+-\\d+-----satisfy\\.htm",
+      "method": "GET",
+      "description": "Suning product review-satisfaction JSONP endpoint. Build the URL from product links as general-<commodityCode>-<shopCode>-----satisfy.htm to get goodRate, totalCount, qualityStar, and star-count fields without opening login-gated product detail pages.",
+      "example_url": "https://review.suning.com/ajax/review_satisfy/general-12363386110-0071203769-----satisfy.htm",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "review_satisfy_good_rate",
+      "strategy_notes": [
+        "Extract commodityCode and shopCode from product.suning.com/<shopCode>/<commodityCode>.html links.",
+        "Use this after the search/list page has visible candidate products that satisfy keyword, price, size/capacity, and spec filters.",
+        "Rank candidates by goodRate first, then totalCount or visible review count as a tie-breaker."
+      ],
+      "max_followup_calls": 8,
+      "output_contract": [
+        "commodityCode",
+        "shopCode",
+        "goodRate",
+        "totalCount",
+        "qualityStar",
+        "fiveStarCount"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "suning_list_then_review_satisfy",
+          "site_pattern": "suning.com",
+          "trigger": "Suning product-search tasks that ask for score, good-rate, rating, or top-rated products.",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "page_program",
+              "description": "Only after the list page is loaded, extract visible product cards and active filters; do not force hidden price/filter controls.",
+              "max_calls": 1,
+              "output_contract": [
+                "model",
+                "price",
+                "specs",
+                "visible_review_count",
+                "product_url"
+              ]
+            },
+            {
+              "type": "api_call",
+              "description": "For top eligible product URLs, call review_satisfy to get goodRate and totalCount.",
+              "url_template": "https://review.suning.com/ajax/review_satisfy/general-<commodityCode>-<shopCode>-----satisfy.htm",
+              "method": "GET",
+              "fetch_mode": "http",
+              "max_calls": 8,
+              "output_contract": [
+                "goodRate",
+                "totalCount",
+                "qualityStar",
+                "fiveStarCount"
+              ]
+            }
+          ],
+          "observable_validation": [
+            "The search/list URL or visible chips prove the requested keyword and price/spec filters.",
+            "Product cards expose product URLs from which commodityCode and shopCode can be parsed.",
+            "review_satisfy compact output returns goodRate/totalCount before ranking by user score."
+          ],
+          "notes": [
+            "If detail pages redirect to login, stay on the list page plus review_satisfy data and mark missing detail fields as not shown."
+          ]
+        }
+      ],
+      "discovered_at": "2026-05-18T00:30:00+08:00",
+      "usage_count": 0,
+      "success_count": 81,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-04T11:52:23.862238+00:00",
+      "last_used_successfully_at": "2026-06-04T11:52:23.862238+00:00"
+    }
+  ],
+  "updated_at": "2026-06-04T11:52:23.862238+00:00"
+}

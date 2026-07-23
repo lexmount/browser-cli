@@ -63,8 +63,9 @@ def test_version_command_outputs_json(
     assert payload["package"] == "browser-cli"
     assert payload["version"] == "0.2.0"
     assert payload["version_source"] == "package_metadata"
-    assert payload["lex_browser_runtime_version"] == "1.2.3"
+    assert payload["lex_browser_runtime_version"] == "0.2.0"
     assert payload["lex_browser_runtime_version_known"] is True
+    assert payload["lex_browser_runtime_version_source"] == "bundled"
     assert payload["python_version"]
     assert payload["executable"]
 
@@ -83,8 +84,9 @@ def test_version_command_falls_back_to_package_constant(
     assert payload["command"] == "version"
     assert payload["version"] == "0.3.22"
     assert payload["version_source"] == "package_fallback"
-    assert payload["lex_browser_runtime_version"] == "unknown"
-    assert payload["lex_browser_runtime_version_known"] is False
+    assert payload["lex_browser_runtime_version"] == "0.3.22"
+    assert payload["lex_browser_runtime_version_known"] is True
+    assert payload["lex_browser_runtime_version_source"] == "bundled"
 
 
 def test_json_dump_handles_broken_pipe_without_traceback(
@@ -298,7 +300,9 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "first_browser_task" in references["usable_status"]["related_workflows"]
     assert "first_browser_task" in references["action_playbook"]["related_workflows"]
     assert "agent_browser_primitives" in references["quickstart"]["related_workflows"]
-    assert "agent_browser_primitives" in references["action_playbook"]["related_workflows"]
+    assert (
+        "agent_browser_primitives" in references["action_playbook"]["related_workflows"]
+    )
     assert "form_interaction" in references["action_playbook"]["related_workflows"]
     assert "interactive_targeting" in references["action_playbook"]["related_workflows"]
     assert "mouse_interaction" in references["action_playbook"]["related_workflows"]
@@ -786,9 +790,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["page_diagnostics"]
     )
     workflows = payload["agent_workflows"]
-    setup_steps = {
-        step["id"]: step for step in workflows["setup_and_verify"]["steps"]
-    }
+    setup_steps = {step["id"]: step for step in workflows["setup_and_verify"]["steps"]}
     assert workflows["setup_and_verify"]["steps"][0]["id"] == (
         "inspect_skill_positioning"
     )
@@ -800,8 +802,7 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         == "browser-cli reference get --id skill_positioning"
     )
     assert (
-        "reference.content_command"
-        in setup_steps["inspect_skill_positioning"]["read"]
+        "reference.content_command" in setup_steps["inspect_skill_positioning"]["read"]
     )
     assert setup_steps["inspect_quickstart"]["command"] == (
         "browser-cli reference get --id quickstart --metadata-only"
@@ -824,18 +825,11 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "force_install_command" in setup_steps["skill_status"]["read"]
     assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
     assert (
-        "repair_plan.connect_from_codex.url"
-        in setup_steps["doctor"]["on_failure_read"]
+        "repair_plan.connect_from_codex.url" in setup_steps["doctor"]["on_failure_read"]
     )
     assert setup_steps["smoke_session"]["optional"] is True
-    assert (
-        "browser_smoke_session.status"
-        in setup_steps["smoke_session"]["read"]
-    )
-    assert (
-        "browser_smoke_session.session_id"
-        in setup_steps["smoke_session"]["read"]
-    )
+    assert "browser_smoke_session.status" in setup_steps["smoke_session"]["read"]
+    assert "browser_smoke_session.session_id" in setup_steps["smoke_session"]["read"]
     assert (
         "browser_smoke_session.fix.commands"
         in setup_steps["smoke_session"]["on_failure_read"]
@@ -1026,7 +1020,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "click-text",
         "fill-label",
     ]
-    assert "browser-cli action guide --task interactive_targeting" in first_steps[5]["fallback_commands"]
+    assert (
+        "browser-cli action guide --task interactive_targeting"
+        in first_steps[5]["fallback_commands"]
+    )
     assert first_steps[6]["agent_action"] is True
     assert "result.matched" in first_steps[6]["read"]
     assert first_steps[-1] == {
@@ -1067,7 +1064,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "click-role" in primitive_steps[3]["selection_order"]
     assert "result.plan.underlying_command" in primitive_steps[3]["read"]
     assert "result.action_result.clicked" in primitive_steps[3]["read"]
-    assert "browser-cli commands --workflow form_interaction" in primitive_steps[3]["fallback_commands"]
+    assert (
+        "browser-cli commands --workflow form_interaction"
+        in primitive_steps[3]["fallback_commands"]
+    )
     assert primitive_steps[4]["optional"] is True
     assert primitive_steps[4]["command"] == (
         "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
@@ -1075,7 +1075,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "extract" in primitive_steps[4]["selection_order"]
     assert "text-snapshot" in primitive_steps[4]["selection_order"]
     assert "result.extractions.text.texts" in primitive_steps[4]["read"]
-    assert "browser-cli commands --workflow content_extraction" in primitive_steps[4]["fallback_commands"]
+    assert (
+        "browser-cli commands --workflow content_extraction"
+        in primitive_steps[4]["fallback_commands"]
+    )
     assert primitive_steps[5]["agent_action"] is True
     assert "result.link_count" in primitive_steps[5]["read"]
     one_off_steps = workflows["one_off_page_task"]["steps"]
@@ -1264,9 +1267,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "required_fields" in case_steps[1]["read"]
     assert "top_level" in case_steps[1]["read"]
     assert case_steps[2]["command"] == "browser-cli case schema --action act"
-    assert "browser-cli case schema --action observe" in case_steps[2]["fallback_commands"]
-    assert "browser-cli case schema --action extract" in case_steps[2]["fallback_commands"]
-    assert "browser-cli case schema --action fill-label" in case_steps[2]["fallback_commands"]
+    assert (
+        "browser-cli case schema --action observe" in case_steps[2]["fallback_commands"]
+    )
+    assert (
+        "browser-cli case schema --action extract" in case_steps[2]["fallback_commands"]
+    )
+    assert (
+        "browser-cli case schema --action fill-label"
+        in case_steps[2]["fallback_commands"]
+    )
     assert "action_schema.result_fields" in case_steps[2]["read"]
     assert case_steps[3]["command"] == (
         "browser-cli example get --id agent_primitives_case --metadata-only"
@@ -1702,7 +1712,10 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert "result.extractions.text.texts" in extraction_steps[3]["read"]
     assert "result.tables" in extraction_steps[3]["read"]
     assert "result.headings" in extraction_steps[3]["read"]
-    assert "browser-cli action text-snapshot" in extraction_steps[3]["fallback_commands"][0]
+    assert (
+        "browser-cli action text-snapshot"
+        in extraction_steps[3]["fallback_commands"][0]
+    )
     assert extraction_steps[4]["agent_action"] is True
     assert "result.truncated" in extraction_steps[4]["read"]
     assert "result.truncated_surfaces" in extraction_steps[4]["read"]
@@ -2805,10 +2818,7 @@ def test_commands_catalog_returns_workflows_only(
     )
     assert setup_steps["skill_status"]["command"] == "browser-cli skill status"
     assert setup_steps["doctor"]["command"] == "browser-cli doctor --json"
-    assert (
-        "browser_smoke_session.status"
-        in setup_steps["smoke_session"]["read"]
-    )
+    assert "browser_smoke_session.status" in setup_steps["smoke_session"]["read"]
     first_steps = payload["agent_workflows"]["first_browser_task"]["steps"]
     assert first_steps[0]["command"] == "browser-cli doctor --json"
     assert first_steps[0]["success_condition"] == (
@@ -3011,7 +3021,10 @@ def test_commands_catalog_returns_first_browser_task_workflow(
     assert "result.nodes" in steps[4]["read"]
     assert steps[5]["agent_action"] is True
     assert "fill-label" in steps[5]["selection_order"]
-    assert "browser-cli action guide --task form_interaction" in steps[5]["fallback_commands"]
+    assert (
+        "browser-cli action guide --task form_interaction"
+        in steps[5]["fallback_commands"]
+    )
     assert steps[6]["agent_action"] is True
     assert "result.matched" in steps[6]["read"]
     assert steps[-1] == {
@@ -3557,9 +3570,10 @@ def test_skill_install_writes_packaged_skill_resources(
     assert (skill_dir / "SKILL.md").is_file()
     assert (skill_dir / "agents" / "openai.yaml").is_file()
     assert (skill_dir / "references" / "action-playbook.md").is_file()
-    assert "browser-cli action act --session-id <session_id>" in (
-        skill_dir / "SKILL.md"
-    ).read_text()
+    assert (
+        "browser-cli action act --session-id <session_id>"
+        in (skill_dir / "SKILL.md").read_text()
+    )
 
     with pytest.raises(SystemExit) as status_exc:
         cli_main(["skill", "status", "--skill-dir", str(skill_dir)])
@@ -3978,7 +3992,9 @@ def test_example_get_returns_persistent_context_playbook(
     assert payload["example_id"] == "persistent_context_playbook"
     assert payload["content_format"] == "markdown"
     assert "# Persistent Context Playbook" in payload["content"]
-    assert "browser-cli commands --workflow persistent_login_state" in payload["content"]
+    assert (
+        "browser-cli commands --workflow persistent_login_state" in payload["content"]
+    )
     assert "locked=true" in payload["content"]
     assert "metadata_values_redacted" in payload["content"]
     assert "context_reuse.selected" in payload["content"]
@@ -4297,9 +4313,7 @@ def test_case_schema_returns_supported_actions_and_fields(
     assert "history_length" in payload["actions"]["go-forward"]["result_fields"]
     assert payload["actions"]["reload"]["example_step"] == {"action": "reload"}
     assert payload["actions"]["go-back"]["example_step"] == {"action": "go-back"}
-    assert payload["actions"]["go-forward"]["example_step"] == {
-        "action": "go-forward"
-    }
+    assert payload["actions"]["go-forward"]["example_step"] == {"action": "go-forward"}
     assert "matched" in payload["actions"]["wait-state-role"]["result_fields"]
     assert "attribute_found" in payload["actions"]["wait-attribute"]["result_fields"]
     assert "requested_count" in payload["actions"]["wait-count"]["result_fields"]
@@ -5171,12 +5185,10 @@ def test_case_validate_agent_primitives_reject_invalid_surfaces(tmp_path: Any) -
 
     assert result.valid is False
     assert any(
-        error.startswith("steps[0].surface must be one of")
-        for error in result.errors
+        error.startswith("steps[0].surface must be one of") for error in result.errors
     )
     assert any(
-        error.startswith("steps[1].surface must be one of")
-        for error in result.errors
+        error.startswith("steps[1].surface must be one of") for error in result.errors
     )
 
 
@@ -6426,7 +6438,9 @@ def test_commands_catalog_returns_case_file_task_workflow(
     assert steps[2]["command"] == "browser-cli case schema --action act"
     assert "browser-cli case schema --action observe" in steps[2]["fallback_commands"]
     assert "browser-cli case schema --action extract" in steps[2]["fallback_commands"]
-    assert "browser-cli case schema --action fill-label" in steps[2]["fallback_commands"]
+    assert (
+        "browser-cli case schema --action fill-label" in steps[2]["fallback_commands"]
+    )
     assert "action_schema.example_step" in steps[2]["read"]
     assert steps[3]["command"] == (
         "browser-cli example get --id agent_primitives_case --metadata-only"
@@ -7113,7 +7127,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["browser_cli"]["version"] == "0.2.0"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_metadata"
-    assert checks["lex_browser_runtime"]["version"] == "1.2.3"
+    assert checks["lex_browser_runtime"]["version"] == "0.2.0"
+    assert checks["lex_browser_runtime"]["version_known"] is True
+    assert checks["lex_browser_runtime"]["version_source"] == "bundled"
     assert checks["command_catalog"]["status"] == "pass"
     assert checks["command_catalog"]["schema_version"] == 1
     assert checks["command_catalog"]["workflow_count"] == 25
@@ -7805,9 +7821,10 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ]
     assert checks["auth_login_contract"]["requested_expires_in"] == "7d"
     assert checks["auth_login_contract"]["missing_runtime_auth"] == []
-    assert "LEXMOUNT_API_KEY" in checks["auth_login_contract"]["secret_policy"][
-        "do_not_paste_in_chat"
-    ]
+    assert (
+        "LEXMOUNT_API_KEY"
+        in checks["auth_login_contract"]["secret_policy"]["do_not_paste_in_chat"]
+    )
     assert checks["auth_login_contract"]["verification"]["doctor_command"] == (
         "browser-cli doctor --json"
     )
@@ -7822,13 +7839,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "POST /api/auth/device/token",
     ]
     assert (
-        checks["device_code_contract"]["missing_required_device_code_endpoints"]
-        == []
+        checks["device_code_contract"]["missing_required_device_code_endpoints"] == []
     )
-    assert (
-        checks["device_code_contract"]["missing_required_browser_site_support"]
-        == []
-    )
+    assert checks["device_code_contract"]["missing_required_browser_site_support"] == []
     assert checks["device_code_contract"]["required_site_capabilities"] == [
         "device_code_oauth"
     ]
@@ -7845,18 +7858,17 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["device_code_contract"]["connect_from_codex_url"].startswith(
         "https://browser.lexmount.cn/connect/codex?"
     )
-    assert (
-        checks["device_code_contract"]["connect_from_codex_url_masked"] is False
-    )
+    assert checks["device_code_contract"]["connect_from_codex_url_masked"] is False
     assert checks["device_code_contract"]["requested_scopes"] == [
         "browser:sessions",
         "browser:contexts",
         "browser:actions",
     ]
     assert checks["device_code_contract"]["requested_expires_in"] == "7d"
-    assert "raw device_code" in checks["device_code_contract"]["secret_policy"][
-        "do_not_paste_in_chat"
-    ]
+    assert (
+        "raw device_code"
+        in checks["device_code_contract"]["secret_policy"]["do_not_paste_in_chat"]
+    )
     assert checks["device_code_contract"]["verification"]["workflow_command"] == (
         "browser-cli commands --workflow device_code_auth"
     )
@@ -8814,9 +8826,7 @@ def test_doctor_warns_when_auth_login_contract_is_incomplete(
     assert contract["missing_handoff_fields"] == ["secret_policy"]
     assert contract["missing_setup_blocks"] == ["local_env", "verify"]
     assert "secret_policy" in contract["invalid_fields"]
-    assert "setup_blocks.local_env.safe_to_paste_in_chat" in contract[
-        "invalid_fields"
-    ]
+    assert "setup_blocks.local_env.safe_to_paste_in_chat" in contract["invalid_fields"]
     assert "setup_blocks.verify.commands" in contract["invalid_fields"]
     assert contract["fix"]["code"] == "repair_auth_login_contract"
     assert "browser-cli auth login" in payload["repair_plan"]["commands"]
@@ -8863,9 +8873,10 @@ def test_doctor_warns_when_device_code_contract_is_incomplete(
     assert contract["missing_required_device_code_endpoints"] == [
         "POST /api/auth/device/token"
     ]
-    assert "Issue scoped, project-bound, short-lived access tokens." in contract[
-        "missing_required_browser_site_support"
-    ]
+    assert (
+        "Issue scoped, project-bound, short-lived access tokens."
+        in contract["missing_required_browser_site_support"]
+    )
     assert "required_endpoints" in contract["invalid_fields"]
     assert "required_browser_site_support" in contract["invalid_fields"]
     assert contract["fallback_handoff_setup_block_ids"] == [
@@ -8876,9 +8887,7 @@ def test_doctor_warns_when_device_code_contract_is_incomplete(
     ]
     assert contract["missing_fallback_setup_blocks"] == []
     assert contract["fix"]["code"] == "repair_device_code_contract"
-    assert "browser-cli auth login --device-code" in payload["repair_plan"][
-        "commands"
-    ]
+    assert "browser-cli auth login --device-code" in payload["repair_plan"]["commands"]
     assert (
         "browser-cli commands --workflow device_code_auth"
         in payload["repair_plan"]["commands"]
@@ -9038,9 +9047,10 @@ def test_doctor_warns_when_packaged_skill_resources_are_stale(
     checks = _checks_by_name(payload)
     skill_resources = checks["agent_skill_resources"]
     assert skill_resources["status"] == "warn"
-    assert "browser-cli action act --session-id <session_id>" in skill_resources[
-        "missing_patterns"
-    ]
+    assert (
+        "browser-cli action act --session-id <session_id>"
+        in skill_resources["missing_patterns"]
+    )
     assert skill_resources["fix"]["code"] == "repair_packaged_agent_skill_resources"
     assert "browser-cli skill install --force" in payload["repair_plan"]["commands"]
     assert "api_connectivity" in payload["skipped_checks"]
@@ -9495,39 +9505,39 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
     assert catalog["missing_required_commands"] == []
     assert catalog["missing_required_workflows"] == []
     assert catalog["missing_required_workflow_steps"] == {
-            "case_file_task": [
-                "inspect_semantic_case_action",
-                "inspect_agent_primitives_case_example",
-                "inspect_form_case_example",
-                "inspect_content_extraction_case_example",
-                "inspect_browser_state_case_example",
-                "inspect_navigation_flow_case_example",
-                "inspect_file_upload_case_example",
-                "inspect_checkout_flow_case_example",
-                "inspect_interactive_targeting_case_example",
-                "inspect_page_diagnostics_case_example",
-                "scaffold_agent_primitives_case_file",
-                "scaffold_form_case_file",
-                "scaffold_content_extraction_case_file",
-                "scaffold_browser_state_case_file",
-                "scaffold_navigation_flow_case_file",
-                "scaffold_file_upload_case_file",
-                "scaffold_checkout_flow_case_file",
-                "scaffold_interactive_targeting_case_file",
-                "scaffold_page_diagnostics_case_file",
-            ],
+        "case_file_task": [
+            "inspect_semantic_case_action",
+            "inspect_agent_primitives_case_example",
+            "inspect_form_case_example",
+            "inspect_content_extraction_case_example",
+            "inspect_browser_state_case_example",
+            "inspect_navigation_flow_case_example",
+            "inspect_file_upload_case_example",
+            "inspect_checkout_flow_case_example",
+            "inspect_interactive_targeting_case_example",
+            "inspect_page_diagnostics_case_example",
+            "scaffold_agent_primitives_case_file",
+            "scaffold_form_case_file",
+            "scaffold_content_extraction_case_file",
+            "scaffold_browser_state_case_file",
+            "scaffold_navigation_flow_case_file",
+            "scaffold_file_upload_case_file",
+            "scaffold_checkout_flow_case_file",
+            "scaffold_interactive_targeting_case_file",
+            "scaffold_page_diagnostics_case_file",
+        ],
         "one_off_page_task": ["close_session"],
         "first_browser_task": ["verify_or_capture", "close_session"],
         "agent_browser_primitives": ["extract_content", "verify_result"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
-            "setup_and_verify": [
-                "inspect_skill_positioning",
-                "inspect_quickstart",
-                "inspect_usable_status",
-                "skill_status",
-                "smoke_session",
-            ],
+        "setup_and_verify": [
+            "inspect_skill_positioning",
+            "inspect_quickstart",
+            "inspect_usable_status",
+            "skill_status",
+            "smoke_session",
+        ],
         "connect_from_codex_site_requirements": [
             "inspect_connect_from_codex_reference"
         ],
@@ -9878,8 +9888,9 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert checks["browser_cli"]["version"] == "0.3.22"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
-    assert checks["lex_browser_runtime"]["version"] == "unknown"
-    assert checks["lex_browser_runtime"]["version_known"] is False
+    assert checks["lex_browser_runtime"]["version"] == "0.3.22"
+    assert checks["lex_browser_runtime"]["version_known"] is True
+    assert checks["lex_browser_runtime"]["version_source"] == "bundled"
     assert checks["api_connectivity"]["status"] == "pass"
 
 
@@ -9912,9 +9923,10 @@ def test_doctor_fails_missing_required_env(
         "browser-cli reference get --id usable_status --metadata-only"
         in payload["repair_plan"]["commands"]
     )
-    assert "browser-cli reference get --id usable_status" in payload["repair_plan"][
-        "commands"
-    ]
+    assert (
+        "browser-cli reference get --id usable_status"
+        in payload["repair_plan"]["commands"]
+    )
     assert "browser-cli auth login" in payload["repair_plan"]["commands"]
     connect = payload["repair_plan"]["connect_from_codex"]
     assert connect["available"] is False
@@ -11336,9 +11348,7 @@ def test_auth_clear_credentials_deletes_api_key_file_without_revealing_secret(
     assert payload["api_key_credentials_before"]["kind"] == "api_key"
     assert payload["api_key_credentials_before"]["valid"] is True
     assert payload["device_token_before"]["kind"] == "api_key"
-    assert (
-        payload["next_steps"][0] == "Local browser-cli credentials file was removed."
-    )
+    assert payload["next_steps"][0] == "Local browser-cli credentials file was removed."
     assert os.environ.get("LEXMOUNT_API_KEY") is None
     assert os.environ.get("LEXMOUNT_PROJECT_ID") is None
     assert os.environ.get("LEXMOUNT_BASE_URL") is None
@@ -13109,7 +13119,9 @@ def test_auth_login_open_saves_exchange_api_base_url_for_custom_connect_base(
     assert payload["exchange"]["ok"] is True
     assert payload["exchange"]["api_base_url"] == "https://apitest.local.lexmount.net/"
     assert payload["exchange"]["has_api_base_url"] is True
-    assert payload["credentials"]["api_base_url"] == "https://apitest.local.lexmount.net"
+    assert (
+        payload["credentials"]["api_base_url"] == "https://apitest.local.lexmount.net"
+    )
     assert "secret-api-key-from-exchange" not in stdout
     assert exchange_requests[0]["url"] == (
         "https://test.local.lexmount.net/api/connect/codex/exchange"
@@ -14207,7 +14219,9 @@ def test_context_commands_preserve_raw_sdk_fields(
             metadata: dict[str, Any] | None,
             description: str | None = None,
         ) -> dict[str, Any]:
-            calls.append(("raw_create", {"metadata": metadata, "description": description}))
+            calls.append(
+                ("raw_create", {"metadata": metadata, "description": description})
+            )
             return {
                 "id": "ctx-raw",
                 "description": description,

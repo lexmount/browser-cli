@@ -19,7 +19,10 @@ def test_skill_has_doctor_first_workflow() -> None:
     assert "browser-cli version" in text
     assert "browser-cli doctor --json" in text
     assert "browser-cli doctor --smoke-session" in text
-    assert "before creating a browser session only when there is no recent successful auth/status signal" in text
+    assert (
+        "before creating a browser session only when there is no recent successful auth/status signal"
+        in text
+    )
     assert "after credential changes" in text
     assert "when a session/context/action command fails" in text
 

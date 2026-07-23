@@ -4,10 +4,9 @@
 for operating Lexmount remote browser sessions from local shells, Codex, and
 other agents.
 
-It owns command parsing, JSON output, installation docs, and agent-facing
-ergonomics. Browser lifecycle and page action behavior stay in
-`lex-browser-runtime`, so this project does not maintain a second copy of the
-runtime implementation.
+It owns command parsing, JSON output, installation docs, agent-facing
+ergonomics, and the bundled `lex_browser_runtime` implementation used for
+browser lifecycle and page actions.
 
 ## Quickstart
 
@@ -291,7 +290,7 @@ uv run ruff check .
 
 ## Credentials
 
-`browser-cli` reads the same environment variables as `lex-browser-runtime`:
+`browser-cli` and its bundled runtime read these environment variables:
 
 ```bash
 export LEXMOUNT_API_KEY="<api-key>"
@@ -398,8 +397,9 @@ browser-cli doctor --smoke-session
 compatibility no-op at the top level and after subcommands. Use
 `browser-cli --version` or `browser-cli version` to read the installed
 browser-cli version, lex-browser-runtime version, Python version, and executable
-path as JSON. Use `browser-cli doctor --skip-api` only when the live API should
-not be called.
+path as JSON. The runtime version is reported as bundled with the browser-cli
+package. Use `browser-cli doctor --skip-api` only when the live API should not
+be called.
 Use `browser-cli doctor --smoke-session` when you need stronger proof that the
 credentials can create and close a temporary browser session, not just reach the
 API.

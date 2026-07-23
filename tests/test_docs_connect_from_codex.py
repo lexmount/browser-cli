@@ -4,9 +4,7 @@ from pathlib import Path
 
 
 DOC = Path(__file__).resolve().parents[1] / "docs" / "connect-from-codex.md"
-REFERENCE = (
-    Path(__file__).resolve().parents[1] / "references" / "connect-from-codex.md"
-)
+REFERENCE = Path(__file__).resolve().parents[1] / "references" / "connect-from-codex.md"
 PACKAGED_REFERENCE = (
     Path(__file__).resolve().parents[1]
     / "browser_cli"

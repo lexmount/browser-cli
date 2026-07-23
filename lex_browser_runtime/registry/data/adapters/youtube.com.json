@@ -1,0 +1,79 @@
+{
+  "domain": "youtube.com",
+  "endpoints": [
+    {
+      "domain": "youtube.com",
+      "url_pattern": "https://www\\.youtube\\.com/results\\?.*",
+      "method": "GET",
+      "description": "YouTube search result page. Runtime compacts ytInitialData into video cards with title, channel, views, published time, duration, videoId, URL, and available filter links. For multi-topic or multi-filter tasks, prefer collect_youtube_search_results when available so the runtime can batch search and save JSON files.",
+      "example_url": "https://www.youtube.com/results?search_query=<encoded query>",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "api",
+      "strategy": "youtube_search_cards_and_filters",
+      "strategy_notes": [
+        "Open youtube.com once, then use collect_youtube_search_results for tasks that ask for many topics/categories or saved JSON files.",
+        "For single-query tasks, compact a /results URL into videoRenderer cards and filter links without relying on the heavy accessibility tree.",
+        "Do not open video pages or download media for search-result collection tasks."
+      ],
+      "output_contract": [
+        "items[].videoId",
+        "items[].title",
+        "items[].channel",
+        "items[].views",
+        "items[].published",
+        "items[].duration",
+        "items[].url",
+        "filterOptions[].label",
+        "filterOptions[].url"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "youtube_batch_search_results",
+          "site_pattern": "youtube.com",
+          "trigger": "YouTube search tasks with multiple topics, categories, upload-date filters, duration filters, sort orders, or saved JSON outputs.",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "page_program",
+              "description": "Call collect_youtube_search_results once with all requested searches. Set query, limit, sort, upload_date, duration, and file_name for each search.",
+              "max_calls": 1,
+              "output_contract": [
+                "savedFiles",
+                "results[].items"
+              ]
+            },
+            {
+              "type": "api_call",
+              "description": "For single search pages, compact https://www.youtube.com/results?search_query=<encoded query> into video cards and filter links.",
+              "fetch_mode": "browser",
+              "max_calls": 3,
+              "output_contract": [
+                "title",
+                "channel",
+                "views",
+                "published",
+                "duration",
+                "url"
+              ]
+            }
+          ],
+          "observable_validation": [
+            "Saved JSON files exist for every requested topic/category when the task asks to save files.",
+            "Each compact result row includes a YouTube watch URL or videoId plus title.",
+            "The final answer should be based on the savedFiles list and compact rows, not repeated YouTube scrolling."
+          ],
+          "notes": [
+            "The runtime only reads search result pages; it does not download or automate video playback."
+          ]
+        }
+      ],
+      "discovered_at": "2026-06-16T10:30:00+00:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 1
+    }
+  ],
+  "updated_at": "2026-06-16T10:30:00+00:00"
+}

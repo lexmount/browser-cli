@@ -1,0 +1,294 @@
+{
+  "source": "全国主要城市政府官网列表",
+  "compiled_at": "2026-06-08",
+  "records": [
+    {
+      "scope": "city_official",
+      "province": "北京市",
+      "level": "城市本级门户",
+      "area": "北京市",
+      "name": "北京市人民政府",
+      "url": "http://www.beijing.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "上海市",
+      "level": "城市本级门户",
+      "area": "上海市",
+      "name": "中国上海",
+      "url": "https://www.shanghai.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "广东省",
+      "level": "城市本级门户",
+      "area": "广州市",
+      "name": "广州市人民政府",
+      "url": "http://www.gz.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "广东省",
+      "level": "城市本级门户",
+      "area": "深圳市",
+      "name": "深圳政府在线",
+      "url": "http://www.sz.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "天津市",
+      "level": "城市本级门户",
+      "area": "天津市",
+      "name": "天津市科学技术局政务网",
+      "url": "http://kxjs.tj.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "重庆市",
+      "level": "城市本级门户",
+      "area": "重庆市",
+      "name": "重庆市政府网",
+      "url": "http://www.cq.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "浙江省",
+      "level": "城市本级门户",
+      "area": "杭州市",
+      "name": "杭州市人民政府门户网站",
+      "url": "http://www.hangzhou.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "江苏省",
+      "level": "城市本级门户",
+      "area": "南京市",
+      "name": "中共南京市委南京市人民政府",
+      "url": "http://www.nanjing.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "四川省",
+      "level": "城市本级门户",
+      "area": "成都市",
+      "name": "成都市人民政府",
+      "url": "http://www.chengdu.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "湖北省",
+      "level": "城市本级门户",
+      "area": "武汉市",
+      "name": "武汉市人民政府门户网站",
+      "url": "http://www.wuhan.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "陕西省",
+      "level": "城市本级门户",
+      "area": "西安市",
+      "name": "西安市人民政府",
+      "url": "http://www.xa.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "河南省",
+      "level": "城市本级门户",
+      "area": "郑州市",
+      "name": "郑州市人民政府门户网站",
+      "url": "https://www.zhengzhou.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "湖南省",
+      "level": "城市本级门户",
+      "area": "长沙市",
+      "name": "长沙市人民政府",
+      "url": "http://www.changsha.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "安徽省",
+      "level": "城市本级门户",
+      "area": "合肥市",
+      "name": "合肥市人民政府",
+      "url": "https://www.hefei.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "山东省",
+      "level": "城市本级门户",
+      "area": "济南市",
+      "name": "济南市人民政府",
+      "url": "http://www.jinan.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "山东省",
+      "level": "城市本级门户",
+      "area": "青岛市",
+      "name": "青岛政务网",
+      "url": "http://www.qingdao.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "浙江省",
+      "level": "城市本级门户",
+      "area": "宁波市",
+      "name": "宁波市人民政府门户网站",
+      "url": "http://www.ningbo.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "福建省",
+      "level": "城市本级门户",
+      "area": "厦门市",
+      "name": "厦门市人民政府门户网站",
+      "url": "http://www.xm.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "江苏省",
+      "level": "城市本级门户",
+      "area": "苏州市",
+      "name": "苏州市人民政府",
+      "url": "http://www.suzhou.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "辽宁省",
+      "level": "城市本级门户",
+      "area": "沈阳市",
+      "name": "沈阳市委市政府门户网站",
+      "url": "http://www.shenyang.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "辽宁省",
+      "level": "城市本级门户",
+      "area": "大连市",
+      "name": "大连市人民政府",
+      "url": "http://www.dl.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "黑龙江省",
+      "level": "城市本级门户",
+      "area": "哈尔滨市",
+      "name": "哈尔滨市人民政府",
+      "url": "https://www.harbin.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "吉林省",
+      "level": "城市本级门户",
+      "area": "长春市",
+      "name": "长春市人民政府",
+      "url": "http://www.changchun.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "福建省",
+      "level": "城市本级门户",
+      "area": "福州市",
+      "name": "福州市人民政府网站",
+      "url": "http://www.fuzhou.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "江西省",
+      "level": "城市本级门户",
+      "area": "南昌市",
+      "name": "南昌市人民政府",
+      "url": "http://www.nc.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "广西壮族自治区",
+      "level": "城市本级门户",
+      "area": "南宁市",
+      "name": "广西南宁市人民政府门户网站",
+      "url": "http://www.nanning.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "云南省",
+      "level": "城市本级门户",
+      "area": "昆明市",
+      "name": "昆明市人民政府门户网站",
+      "url": "http://www.km.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "贵州省",
+      "level": "城市本级门户",
+      "area": "贵阳市",
+      "name": "贵阳市人民政府",
+      "url": "http://www.guiyang.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "山西省",
+      "level": "城市本级门户",
+      "area": "太原市",
+      "name": "太原市人民政府门户网站",
+      "url": "https://www.taiyuan.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "河北省",
+      "level": "城市本级门户",
+      "area": "石家庄市",
+      "name": "石家庄市人民政府",
+      "url": "http://www.sjz.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "内蒙古自治区",
+      "level": "城市本级门户",
+      "area": "呼和浩特市",
+      "name": "呼和浩特市人民政府",
+      "url": "http://www.huhhot.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "新疆维吾尔自治区",
+      "level": "城市本级门户",
+      "area": "乌鲁木齐市",
+      "name": "乌鲁木齐市人民政府",
+      "url": "http://www.wlmq.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "甘肃省",
+      "level": "城市本级门户",
+      "area": "兰州市",
+      "name": "兰州市人民政府",
+      "url": "http://www.lanzhou.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "宁夏回族自治区",
+      "level": "城市本级门户",
+      "area": "银川市",
+      "name": "银川市人民政府",
+      "url": "https://www.yinchuan.gov.cn"
+    },
+    {
+      "scope": "city_official",
+      "province": "青海省",
+      "level": "城市本级门户",
+      "area": "西宁市",
+      "name": "西宁市人民政府",
+      "url": "http://www.xining.gov.cn/"
+    },
+    {
+      "scope": "city_official",
+      "province": "海南省",
+      "level": "城市本级门户",
+      "area": "海口市",
+      "name": "海口市人民政府",
+      "url": "http://www.haikou.gov.cn"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "domain": "you.163.com",
+  "endpoints": [
+    {
+      "domain": "you.163.com",
+      "url_pattern": "https://you\\.163\\.com/xhr/search/search(?:\\.json)?\\?.*",
+      "method": "GET",
+      "description": "NetEase Yanxuan product search API. Use keyword, page, size, floorPrice, upperPrice, sortType, categoryId, descSorted and matchType query params. browser_api_call compacts the result into product ids, names, prices, sellVolume, material-like attrs, thread count hints, specs and detail URLs.",
+      "example_url": "https://you.163.com/xhr/search/search.json?keyword=%E5%BA%8A%E4%B8%8A%E5%9B%9B%E4%BB%B6%E5%A5%97&page=1&sortType=0&categoryId=0&descSorted=true&matchType=0&floorPrice=300&upperPrice=500&size=40",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "search_api_then_rank_candidates",
+      "strategy_notes": [
+        "For search/filter/ranking tasks, call the search API first with keyword plus floorPrice/upperPrice and size=40.",
+        "If pagination says totalPage>1, call only the next page needed to collect candidates, then rank locally by sellVolume.",
+        "Use detail calls only for the top ranked candidates whose compact search fields already satisfy price and material hints.",
+        "If rating/commentGoodRates is missing after compact search plus top detail calls, report it as not exposed instead of opening many product pages."
+      ],
+      "max_followup_calls": 2,
+      "output_contract": [
+        "items[].id",
+        "items[].name",
+        "items[].retailPrice",
+        "items[].sellVolume",
+        "items[].material",
+        "items[].thread_count",
+        "items[].detail_url"
+      ],
+      "discovered_at": "2026-05-16T00:45:00+08:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    },
+    {
+      "domain": "you.163.com",
+      "url_pattern": "https://you\\.163\\.com/xhr/comment/(?:itemGoodRates|listByItem|listByItemByTag|tags)(?:\\.json)?\\?.*itemId=\\d+.*",
+      "method": "GET",
+      "description": "NetEase Yanxuan comment APIs. itemGoodRates returns goodCmtRate/star/default-good count; listByItem and listByItemByTag return comment stars, content snippets, sku info and pagination; tags returns comment tag counts. Use this instead of opening product pages just to click the review tab.",
+      "example_url": "https://you.163.com/xhr/comment/listByItem.json?itemId=4194092&page=1&size=20&orderBy=0",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "comment_api_for_rating_and_keywords",
+      "strategy_notes": [
+        "After selecting top candidates from search/detail compact rows, call itemGoodRates and listByItem for only those candidates.",
+        "Use star/avgStar/goodCmtRate as rating evidence; use comment content and tags as user-good-keyword evidence.",
+        "If both itemGoodRates and listByItem expose no rating or comments, mark rating/keywords as not shown for that candidate and move on.",
+        "Do not open the product detail review tab unless the comment API fails."
+      ],
+      "max_followup_calls": 8,
+      "output_contract": [
+        "itemId",
+        "goodRate",
+        "star",
+        "avgStar",
+        "defaultGoodCount",
+        "keywords",
+        "comments[].content"
+      ],
+      "discovered_at": "2026-05-16T01:00:00+08:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    },
+    {
+      "domain": "you.163.com",
+      "url_pattern": "https://you\\.163\\.com/item/detail\\?id=\\d+",
+      "method": "GET",
+      "description": "NetEase Yanxuan product detail HTML. The page contains var JSON_DATA_FROMFTL; browser_api_call compacts it into product id/name, retailPrice, sellVolume, commentCount, material, thread_count, attrs, specs, and SKU samples. Use after collecting candidate item ids from the search/list page.",
+      "example_url": "https://you.163.com/item/detail?id=4212234",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "code_extraction",
+      "strategy": "detail_fanout_from_list_ids",
+      "strategy_notes": [
+        "Prefer the /xhr/search/search API to collect and rank candidates first; use this endpoint only for top detail verification.",
+        "Use the visible/search page to collect item ids only if the search API is unavailable, then call this endpoint for at most 8-10 candidates.",
+        "Rank by sellVolume when the task asks for销量; filter by retailPrice and material/thread_count from the compacted detail.",
+        "If commentGoodRates or review keywords are empty in the compacted detail and a single comment-interface check does not expose them, record that the field was not shown rather than trying more regex variants."
+      ],
+      "max_followup_calls": 8,
+      "output_contract": [
+        "id",
+        "name",
+        "retailPrice",
+        "sellVolume",
+        "commentCount",
+        "material",
+        "thread_count",
+        "specs"
+      ],
+      "discovered_at": "2026-05-15T15:55:00+00:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    }
+  ],
+  "updated_at": "2026-05-15T15:55:00+00:00"
+}

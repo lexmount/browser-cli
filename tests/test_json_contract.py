@@ -92,7 +92,7 @@ def test_success_output_contract_for_version(
     assert payload["ok"] is True
     assert payload["command"] == "version"
     assert payload["version"] == "0.2.0"
-    assert payload["lex_browser_runtime_version"] == "1.2.3"
+    assert payload["lex_browser_runtime_version"] == "0.2.0"
     assert output.endswith("}\n")
 
 

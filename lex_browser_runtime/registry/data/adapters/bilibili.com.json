@@ -1,0 +1,135 @@
+{
+  "domain": "bilibili.com",
+  "endpoints": [
+    {
+      "domain": "bilibili.com",
+      "url_pattern": "https://api\\.bilibili\\.com/x/web-interface/search/type.*",
+      "method": "GET",
+      "description": "Bilibili video search API. Use search_type=video plus keyword, order, page, page_size, and optional pubtime_begin/pubtime_end. The runtime compacts result cards into title, uploader, play count, danmaku, duration, publish date, bvid, and detail URL candidates.",
+      "example_url": "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=<encoded query>&order=click&page=1&page_size=10",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "api",
+      "strategy": "video_search_cards",
+      "strategy_notes": [
+        "Use browser fetch from a bilibili.com/search page; direct external HTTP can return the Bilibili error shell.",
+        "For current-year filters, set pubtime_begin/pubtime_end to Unix seconds for the requested year.",
+        "Call /x/web-interface/view for only the top selected bvids when likes, coins, favorites, or exact stat fields are required."
+      ],
+      "followup_url_template": "https://api.bilibili.com/x/web-interface/view?bvid={bvid}",
+      "max_followup_calls": 4,
+      "output_contract": [
+        "title",
+        "uploader",
+        "play",
+        "danmaku",
+        "duration",
+        "publishDate",
+        "bvid"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "bilibili_search_then_detail_stats",
+          "site_pattern": "bilibili.com",
+          "trigger": "Bilibili video search, top-video, ranking, or latest filtered video tasks.",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "direct_url",
+              "description": "Open the Bilibili search route first so browser-context API fetch has the right origin/session.",
+              "url_template": "https://search.bilibili.com/all?keyword=<encoded query>"
+            },
+            {
+              "type": "api_call",
+              "description": "Call the video search API with the task keyword, sort, and date filters; compact rows expose bvid and visible card stats.",
+              "url_template": "https://api.bilibili.com/x/web-interface/search/type?search_type=video&keyword=<encoded query>&order=<sort>&page=1&page_size=10",
+              "method": "GET",
+              "fetch_mode": "browser",
+              "max_calls": 1,
+              "output_contract": [
+                "title",
+                "uploader",
+                "play",
+                "danmaku",
+                "duration",
+                "publishDate",
+                "bvid"
+              ]
+            },
+            {
+              "type": "api_call",
+              "description": "Fetch detail stats only for the top selected bvids when the task asks for likes, coins, favorites, shares, or exact playback stats.",
+              "url_template": "https://api.bilibili.com/x/web-interface/view?bvid={bvid}",
+              "method": "GET",
+              "fetch_mode": "http",
+              "max_calls": 3,
+              "output_contract": [
+                "likes",
+                "coins",
+                "favorites",
+                "shares",
+                "play",
+                "danmaku"
+              ]
+            },
+            {
+              "type": "stop_rule",
+              "description": "Refuse tasks that request unauthorized downloads or artificial traffic/play-count manipulation.",
+              "max_calls": 1
+            }
+          ],
+          "observable_validation": [
+            "Search compact rows include bvid plus title/uploader/play fields matching the requested keyword.",
+            "Detail compact rows include likes and coins before final answer when the task asks for them.",
+            "After top rows and requested stats are present, answer from compact state instead of opening video pages."
+          ],
+          "notes": [
+            "Do not repeatedly inspect the same Bilibili DOM list once compact search/detail stats are available."
+          ]
+        }
+      ],
+      "discovered_at": "2026-05-18T00:30:00+08:00",
+      "usage_count": 0,
+      "success_count": 40,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-03T03:48:58.780448+00:00",
+      "last_used_successfully_at": "2026-06-03T03:48:58.780448+00:00"
+    },
+    {
+      "domain": "bilibili.com",
+      "url_pattern": "https://api\\.bilibili\\.com/x/web-interface/view.*",
+      "method": "GET",
+      "description": "Bilibili video detail/stat API. Use bvid from search cards to get title, uploader, publish date, duration, play count, danmaku, likes, coins, favorites, and shares.",
+      "example_url": "https://api.bilibili.com/x/web-interface/view?bvid=BV1oXwmefEYy",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "video_detail_stats",
+      "strategy_notes": [
+        "Use this only after selecting top candidates from search/list rows; cap detail fan-out to the number requested by the task.",
+        "If a stat is not exposed, mark it as not shown rather than opening video pages repeatedly."
+      ],
+      "output_contract": [
+        "title",
+        "uploader",
+        "play",
+        "danmaku",
+        "likes",
+        "coins",
+        "favorites",
+        "shares",
+        "publishDate",
+        "duration"
+      ],
+      "discovered_at": "2026-05-18T00:30:00+08:00",
+      "usage_count": 0,
+      "success_count": 54,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-05-20T08:06:37.739659+00:00",
+      "last_used_successfully_at": "2026-05-20T08:06:37.739659+00:00"
+    }
+  ],
+  "updated_at": "2026-06-03T03:48:58.780448+00:00"
+}

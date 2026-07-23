@@ -1,0 +1,72 @@
+{
+  "domain": "ctrip.com",
+  "endpoints": [
+    {
+      "domain": "ctrip.com",
+      "url_pattern": "https://trains\\.ctrip\\.com/trainbooking/[A-Za-z-]+\\?date=\\d{4}-\\d{2}-\\d{2}.*",
+      "method": "GET",
+      "description": "Ctrip train route SSR page. The HTML contains __NEXT_DATA__ with trainInfoList; browser_api_call compacts it into route, trainCount, pricedSecondClassCount, fastest train by runMinutes, and cheapest train by secondClassPrice.",
+      "example_url": "https://trains.ctrip.com/trainbooking/beijing-shanghai?date=2026-05-18",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "ctrip_train_route_compact",
+      "strategy_notes": [
+        "Construct the route URL directly as https://trains.ctrip.com/trainbooking/<fromSlug>-<toSlug>?date=<YYYY-MM-DD>.",
+        "Use browser_api_call with fetch_mode=http on each route URL instead of navigating route pages one by one.",
+        "For batch train tasks, compute fastest from runMinutes and cheapest from secondClassPrice from the compact route summary, then save the collected JSON."
+      ],
+      "max_followup_calls": 25,
+      "output_contract": [
+        "route",
+        "date",
+        "trainCount",
+        "pricedSecondClassCount",
+        "fastest.trainNumber",
+        "fastest.runMinutes",
+        "cheapest.trainNumber",
+        "cheapest.secondClassPrice"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "ctrip_train_batch_route_contract",
+          "site_pattern": "ctrip.com",
+          "trigger": "Ctrip train tasks asking for route ticket data, fastest trains, cheapest second-class prices, or repeated city-pair collection.",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "api_call",
+              "description": "Call the compact train route page for each requested city pair and date.",
+              "url_template": "https://trains.ctrip.com/trainbooking/<fromSlug>-<toSlug>?date=<YYYY-MM-DD>",
+              "method": "GET",
+              "fetch_mode": "http",
+              "max_calls": 25,
+              "output_contract": [
+                "route",
+                "trainCount",
+                "fastest",
+                "cheapest"
+              ]
+            }
+          ],
+          "observable_validation": [
+            "Compact route result includes a nonzero trainCount and pricedSecondClassCount.",
+            "fastest.runMinutes and cheapest.secondClassPrice are present before saving the route result."
+          ],
+          "notes": [
+            "Do not scroll Ctrip route pages for batch collection once compact route data is available.",
+            "If a route slug is uncertain, open one visible route page to verify the slug, then continue through compact route calls."
+          ]
+        }
+      ],
+      "discovered_at": "2026-05-18T01:35:00+08:00",
+      "usage_count": 0,
+      "success_count": 188,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-03T03:54:48.947545+00:00",
+      "last_used_successfully_at": "2026-06-03T03:54:48.947545+00:00"
+    }
+  ],
+  "updated_at": "2026-06-03T03:54:48.947545+00:00"
+}

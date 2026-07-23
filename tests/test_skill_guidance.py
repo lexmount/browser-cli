@@ -32,7 +32,10 @@ def test_skill_declares_when_to_use_and_supported_operations() -> None:
     assert "## Supported Operations" in text
     assert "Lexmount remote browser" in text
     assert "Use the Fast Path below" in text
-    assert "do not run reference, doctor, or action-guide discovery before every CLI command" in text
+    assert (
+        "do not run reference, doctor, or action-guide discovery before every CLI command"
+        in text
+    )
     assert "browser-cli reference get --id connect_from_codex" in text
     assert "browser-cli reference get --id quickstart" in text
     assert "browser-cli reference get --id usable_status" in text

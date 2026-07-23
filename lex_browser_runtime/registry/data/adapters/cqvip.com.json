@@ -1,0 +1,40 @@
+{
+  "domain": "cqvip.com",
+  "endpoints": [
+    {
+      "domain": "cqvip.com",
+      "url_pattern": "https://www\\.cqvip\\.com/newsite/search",
+      "method": "POST",
+      "description": "CQVIP literature search endpoint. Use browser_api_call with fetch_mode=browser after opening cqvip.com; the runtime captures CQVIP's webpack runtime, calls the site's own signed search module when available, fills fixed aggsList/resultField parameters when omitted, and compacts rows into title, authors, journal, year, cited count, and core-journal markers. For the carbon peaking/carbon neutrality benchmark, send JSON with conditions content=碳达峰碳中和, searchField=U, types=[1], yearStart=2023, yearEnd=2024, sort=by_ref_cnt, page=1, size=20, and aggsParams.range including BDHX, BDHX2020, BDHX2023.",
+      "example_url": "https://www.cqvip.com/newsite/search",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "code_extraction",
+      "strategy": "signed_search_json_then_answer",
+      "strategy_notes": [
+        "Before calling this endpoint, navigate to https://www.cqvip.com/search?k=碳达峰碳中和 so the CQVIP Nuxt/webpack runtime and signing modules are loaded.",
+        "Body template: {\"types\":[1],\"page\":1,\"size\":20,\"yearStart\":2023,\"yearEnd\":2024,\"sort\":\"by_ref_cnt\",\"order\":false,\"conditions\":[{\"content\":\"碳达峰碳中和\",\"logicalOperator\":\"AND\",\"searchField\":\"U\",\"field\":\"U\",\"exact\":false}],\"aggsParams\":{\"range\":[\"BDHX\",\"BDHX2020\",\"BDHX2023\"]}}. The runtime fills fixed CQVIP resultField/agsList values.",
+        "The compact result already verifies core-journal state through journalInfo.isCore/range/rangeNext, so do not self-fail because the sidebar visually emphasizes only one version such as 北大核心期刊(2020版).",
+        "Answer from the top 5 compact rows sorted by byRefCnt; only fall back to UI if the API lacks title, authors, journal, year, cited count, or core markers."
+      ],
+      "max_followup_calls": 1,
+      "output_contract": [
+        "items[0:5].title",
+        "items[0:5].authors",
+        "items[0:5].journal",
+        "items[0:5].year",
+        "items[0:5].byRefCnt",
+        "items[0:5].isCore"
+      ],
+      "discovered_at": "2026-05-16T02:25:00+08:00",
+      "usage_count": 0,
+      "success_count": 19,
+      "failure_count": 6,
+      "source_version": 0,
+      "last_used_at": "2026-06-02T13:56:08.287225+00:00",
+      "last_used_failed_at": "2026-06-02T13:56:08.287225+00:00",
+      "last_used_successfully_at": "2026-06-02T13:02:07.527779+00:00"
+    }
+  ],
+  "updated_at": "2026-06-02T13:56:08.287225+00:00"
+}

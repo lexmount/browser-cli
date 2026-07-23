@@ -1,0 +1,131 @@
+{
+  "domain": "sina.com.cn",
+  "endpoints": [
+    {
+      "domain": "sina.com.cn",
+      "url_pattern": "https://hq\\.sinajs\\.cn/etag\\.php\\?list=fx_[A-Za-z0-9_]+(?:&.*)?",
+      "method": "GET",
+      "description": "Sina Finance foreign-exchange quote feed. For USD/CNY tasks on finance.sina.com.cn, call exactly https://hq.sinajs.cn/etag.php?list=fx_susdcny with header Referer: https://finance.sina.com.cn/. Do not invent rn=...list URLs; the query string must contain ?list=fx_susdcny. The runtime parses hq_str_fx_* variables into quote fields including price/current, open, high, low, previous_close, change, change_pct, date, and time.",
+      "example_url": "https://hq.sinajs.cn/etag.php?list=fx_susdcny",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "code_extraction",
+      "strategy": "forex_quote_feed",
+      "strategy_notes": [
+        "Use this quote feed before slow DOM exploration on Sina forex pages; visible quote widgets often render placeholders.",
+        "For USDCNY or 美元兑人民币 tasks, symbol is fx_susdcny and the exact URL is https://hq.sinajs.cn/etag.php?list=fx_susdcny.",
+        "This endpoint exposes current rate, open, high, low, previous close, change, and quote date/time; it does not expose a one-week trend, so only use page/K-line follow-up for the trend if required."
+      ],
+      "max_followup_calls": 1,
+      "output_contract": [
+        "fx_susdcny.price",
+        "fx_susdcny.open",
+        "fx_susdcny.high",
+        "fx_susdcny.low",
+        "fx_susdcny.previous_close",
+        "fx_susdcny.change_pct",
+        "fx_susdcny.date"
+      ],
+      "discovered_at": "2026-05-20T12:30:00+08:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    },
+    {
+      "domain": "sina.com.cn",
+      "url_pattern": "https://vip\\.stock\\.finance\\.sina\\.com\\.cn/forex/api/jsonp\\.php/.*NewForexService\\.getDayKLine\\?symbol=fx_[A-Za-z0-9_]+.*",
+      "method": "GET",
+      "description": "Sina Finance foreign-exchange daily K-line feed used by the official chart runtime. For USD/CNY one-week trend tasks, call https://vip.stock.finance.sina.com.cn/forex/api/jsonp.php/var%20_fx_susdcny2026_5_20=/NewForexService.getDayKLine?symbol=fx_susdcny&_=2026_5_20 with Referer: https://finance.sina.com.cn/. The runtime parses the JavaScript payload into recent daily closes and a last-seven-trading-days direction.",
+      "example_url": "https://vip.stock.finance.sina.com.cn/forex/api/jsonp.php/var%20_fx_susdcny2026_5_20=/NewForexService.getDayKLine?symbol=fx_susdcny&_=2026_5_20",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "code_extraction",
+      "strategy": "forex_kline_trend_feed",
+      "strategy_notes": [
+        "Use this immediately after the fx_susdcny quote feed when the task asks for one-week trend or recent movement.",
+        "Do not inspect the rendered K-line chart by DOM or screenshot; this endpoint is the official data source used by the page chart.",
+        "Answer the trend from runtime fields: direction, from/to dates, firstClose, lastClose, changePct, and recentCloses."
+      ],
+      "max_followup_calls": 1,
+      "output_contract": [
+        "symbol",
+        "trend.direction",
+        "trend.fromDate",
+        "trend.toDate",
+        "trend.firstClose",
+        "trend.lastClose",
+        "trend.changePct",
+        "lastSevenTradingDays[].date",
+        "lastSevenTradingDays[].close"
+      ],
+      "discovered_at": "2026-05-20T12:45:00+08:00",
+      "usage_count": 0,
+      "success_count": 4,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-06-03T04:20:32.088441+00:00",
+      "last_used_successfully_at": "2026-06-03T04:20:32.088441+00:00"
+    },
+    {
+      "domain": "sina.com.cn",
+      "url_pattern": "https://hq\\.sinajs\\.cn/(?:etag\\.php)?\\?.*list=.*",
+      "method": "GET",
+      "description": "Sina Finance quote feed used by finance.sina.com.cn pages. Use browser_api_call with header Referer: https://finance.sina.com.cn/ and list=hf_XAU,SGE_AU9999 to fetch current international spot gold and Shanghai Gold Exchange Au9999 quote fields without relying on slow quote-page DOM. browser_api_call parses hq_str variables into quote objects with symbol, name, price, time, previous_close, and change_pct when available.",
+      "example_url": "https://hq.sinajs.cn/etag.php?list=hf_XAU,SGE_AU9999",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "code_extraction",
+      "strategy": "quote_api_plus_dom_snippet",
+      "strategy_notes": [
+        "For finance.sina.com.cn gold tasks, call the quote feed before navigating quote pages because the DOM often shows placeholder -- values or redirects.",
+        "Use hf_XAU for international spot gold in USD/oz and SGE_AU9999 for Shanghai Gold Exchange Au9999 in CNY/g.",
+        "After quotes, call https://finance.sina.com.cn/roll/c/57085.shtml for analyst outlook. Prefer compact list titles with stance over opening article pages.",
+        "Only open article pages if both the quote feed and roll list lack an analyst or market-view sentence; do not leave Sina Finance content."
+      ],
+      "max_followup_calls": 2,
+      "output_contract": [
+        "hf_XAU.price",
+        "hf_XAU.change_pct",
+        "SGE_AU9999.price",
+        "SGE_AU9999.change_pct",
+        "analysis_outlook"
+      ],
+      "discovered_at": "2026-05-15T09:20:00+00:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    },
+    {
+      "domain": "sina.com.cn",
+      "url_pattern": "https://finance\\.sina\\.com\\.cn/roll/c/57085\\.shtml",
+      "method": "GET",
+      "description": "Sina Finance gold-analysis roll list. Use browser_api_call on this URL after the quote feed to obtain compact analyst article titles and inferred bullish/bearish/neutral stance without opening slow article tabs. The old /roll/index.d.html?cid=57085 URL only returns a JavaScript redirect, so use the canonical /roll/c/57085.shtml page.",
+      "example_url": "https://finance.sina.com.cn/roll/c/57085.shtml",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "code_extraction",
+      "strategy": "gold_analysis_list_then_answer",
+      "strategy_notes": [
+        "For gold outlook tasks, this list is enough when article titles contain explicit phrases such as 偏弱, 看跌, 打压, 震荡, 看涨, or 上行.",
+        "Answer from the compact list after one roll-list call. Do not click multiple article pages unless the list has no stance-bearing titles.",
+        "If the list returns several bearish and neutral titles, summarize the dominant stance instead of seeking a single definitive article."
+      ],
+      "max_followup_calls": 1,
+      "output_contract": [
+        "analysis_items[].title",
+        "analysis_items[].stance",
+        "dominant_outlook"
+      ],
+      "discovered_at": "2026-05-16T01:55:00+08:00",
+      "usage_count": 0,
+      "success_count": 6,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-05-15T22:35:24.190135+00:00",
+      "last_used_successfully_at": "2026-05-15T22:35:24.190135+00:00"
+    }
+  ],
+  "updated_at": "2026-06-03T04:20:32.088441+00:00"
+}

@@ -1,0 +1,137 @@
+{
+  "domain": "douban.com",
+  "endpoints": [
+    {
+      "domain": "douban.com",
+      "url_pattern": "https://book\\.douban\\.com/j/subject_suggest\\?q=.*",
+      "method": "GET",
+      "description": "Douban book subject suggestion JSON. Use it to resolve a book title to the canonical subject id/url before detail and review collection.",
+      "example_url": "https://book.douban.com/j/subject_suggest?q=%E4%B8%89%E4%BD%93",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "douban_book_subject_resolve",
+      "strategy_notes": [
+        "Use the first exact title/author match to get the canonical book subject URL.",
+        "Then call the subject detail page and review/comment pages through browser_api_call instead of navigating repeatedly."
+      ],
+      "output_contract": [
+        "id",
+        "title",
+        "author",
+        "year",
+        "url"
+      ],
+      "discovered_at": "2026-05-18T01:45:00+08:00",
+      "usage_count": 0,
+      "success_count": 24,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-03T03:57:12.263545+00:00",
+      "last_used_successfully_at": "2026-06-03T03:57:12.263545+00:00"
+    },
+    {
+      "domain": "douban.com",
+      "url_pattern": "https://(?:book|music|movie)\\.douban\\.com/subject/\\d+/?$",
+      "method": "GET",
+      "description": "Douban subject detail HTML. browser_api_call compacts title, author/creator, publisher/label, publish year/date, rating, rating count, ISBN/barcode, and genre fields.",
+      "example_url": "https://book.douban.com/subject/2567698/",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "douban_subject_detail",
+      "strategy_notes": [
+        "Use subject detail HTML once after resolving or receiving a subject URL.",
+        "For book tasks, the compact detail is enough for title, author, publisher, publish year, rating, and rating count."
+      ],
+      "output_contract": [
+        "title",
+        "author",
+        "publisher",
+        "publishYear",
+        "rating",
+        "ratingCount"
+      ],
+      "discovered_at": "2026-05-18T01:45:00+08:00",
+      "usage_count": 0,
+      "success_count": 24,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-03T03:57:17.593419+00:00",
+      "last_used_successfully_at": "2026-06-03T03:57:17.593419+00:00"
+    },
+    {
+      "domain": "douban.com",
+      "url_pattern": "https://(?:book|music|movie)\\.douban\\.com/subject/\\d+/(?:reviews|comments/).*",
+      "method": "GET",
+      "description": "Douban review/comment list HTML. browser_api_call compacts visible review/comment rows with user, title, rating label, date, votes/useful count, and text snippets.",
+      "example_url": "https://book.douban.com/subject/2567698/reviews?sort=hotest",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "douban_review_comment_list",
+      "strategy_notes": [
+        "For top 10 review tasks, call /reviews?sort=hotest once and use the first 10 compact review rows.",
+        "For 100 short-comment tasks, call /comments/?start=0,20,40,60,80&limit=20&status=P&sort=score and save the compact rows."
+      ],
+      "max_followup_calls": 12,
+      "output_contract": [
+        "count",
+        "items.user",
+        "items.text"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "douban_subject_detail_reviews_contract",
+          "site_pattern": "douban.com",
+          "trigger": "Douban book/movie/music tasks asking for subject details plus top reviews, comments, rating, or rating count.",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "api_call",
+              "description": "Resolve the subject id with book subject_suggest when needed, or use the subject URL already given in the task.",
+              "url_template": "https://book.douban.com/j/subject_suggest?q=<encoded title>",
+              "method": "GET",
+              "fetch_mode": "http",
+              "max_calls": 5,
+              "output_contract": [
+                "id",
+                "url",
+                "title"
+              ]
+            },
+            {
+              "type": "api_call",
+              "description": "Fetch compact subject details and review/comment list pages.",
+              "url_template": "https://book.douban.com/subject/<id>/",
+              "method": "GET",
+              "fetch_mode": "http",
+              "max_calls": 12,
+              "output_contract": [
+                "title",
+                "rating",
+                "ratingCount",
+                "items"
+              ]
+            }
+          ],
+          "observable_validation": [
+            "Subject detail title/author match the requested book, movie, or album.",
+            "Review/comment compact rows include text snippets before saving JSON."
+          ],
+          "notes": [
+            "Use HTTP compact pages before DOM navigation; Douban list pages are mostly static HTML and batch well."
+          ]
+        }
+      ],
+      "discovered_at": "2026-05-18T01:45:00+08:00",
+      "usage_count": 0,
+      "success_count": 43,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-03T03:57:32.440149+00:00",
+      "last_used_successfully_at": "2026-06-03T03:57:32.440149+00:00"
+    }
+  ],
+  "updated_at": "2026-06-03T03:57:32.440149+00:00"
+}
