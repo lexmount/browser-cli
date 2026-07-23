@@ -16,9 +16,7 @@ PACKAGED_ACTION_PLAYBOOK = (
     / "agent_references"
     / "action-playbook.md"
 )
-USABLE_STATUS = (
-    Path(__file__).resolve().parents[1] / "references" / "usable-status.md"
-)
+USABLE_STATUS = Path(__file__).resolve().parents[1] / "references" / "usable-status.md"
 PACKAGED_USABLE_STATUS = (
     Path(__file__).resolve().parents[1]
     / "browser_cli"
@@ -254,9 +252,17 @@ def test_skill_uses_auth_helpers_for_setup() -> None:
     assert "`required_runtime_auth`" in normalized
     assert "`browser_site_contract.scope_ui_fields`" in normalized
     assert "`browser_site_contract.browser_site_acceptance_tests`" in normalized
-    assert "Prefer `browser-cli auth login --open` when credentials are missing" in normalized
-    assert "`selected_flow`, `authenticated`, `credentials_saved`, `reason`" in normalized
-    assert "`open_result`, `loopback_callback`, `exchange`, and safe `credentials` metadata" in normalized
+    assert (
+        "Prefer `browser-cli auth login --open` when credentials are missing"
+        in normalized
+    )
+    assert (
+        "`selected_flow`, `authenticated`, `credentials_saved`, `reason`" in normalized
+    )
+    assert (
+        "`open_result`, `loopback_callback`, `exchange`, and safe `credentials` metadata"
+        in normalized
+    )
     assert "use the returned `handoff` as the manual fallback contract" in normalized
     assert "browser-cli auth login --open" in normalized
     assert "inspect `open_result`" in normalized
@@ -322,7 +328,10 @@ def test_skill_uses_context_crud_for_persistent_login_state() -> None:
     assert "`available` can be reused" in normalized
     assert "`locked` means busy" in normalized
     assert "`unavailable` needs a different context" in normalized
-    assert "browser-cli example get --id persistent_context_playbook --metadata-only" in normalized
+    assert (
+        "browser-cli example get --id persistent_context_playbook --metadata-only"
+        in normalized
+    )
     assert "browser-cli context list --metadata-json" in normalized
     assert "browser-cli context status --context-id <context_id>" in normalized
     assert "candidates include `locked: true`" in normalized

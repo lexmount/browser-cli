@@ -1,0 +1,79 @@
+{
+  "domain": "docin.com",
+  "endpoints": [
+    {
+      "domain": "docin.com",
+      "url_pattern": "https://www\\.docin\\.com/search\\.do\\?.*",
+      "method": "GET",
+      "description": "Docin document search/list HTML. browser_api_call compacts search.do pages into ranked candidate document links with id, title, detail URL, pageCount hints, file-format hints, upload-date hints, and snippets. Use this before detail fanout when Docin DOM/AX state is slow or unstable.",
+      "example_url": "https://www.docin.com/search.do?searchcat=1001&nkey=%E5%B8%82%E5%9C%BA%E8%90%A5%E9%94%80%E6%96%B9%E6%A1%88",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "search_result_candidate_extract",
+      "strategy_notes": [
+        "Build a search URL with searchcat=1001 and nkey=<url-encoded keywords> for general document search.",
+        "For PPT most-read tasks, use observed Docin filter params dt=3 (PPT), od=2 (most read), numpage=2 (9-100 pages), and yearType=1/2 (current/previous calendar year), then verify exact page/date constraints from detail pages.",
+        "Call the compacted candidate detail URLs with the Docin detail adapter only when fields such as exact page count, upload time, or format must be verified.",
+        "If this endpoint returns 403 or the visible page shows slider verification, avoid repeated filter clicking; try one direct filtered URL and then report blocking if no p-<id>.html candidates are observable."
+      ],
+      "max_followup_calls": 4,
+      "output_contract": [
+        "query",
+        "totalCount",
+        "items",
+        "items[].id",
+        "items[].title",
+        "items[].url",
+        "filters",
+        "items[].pageCount",
+        "items[].format",
+        "items[].uploadTimeHint",
+        "items[].snippet"
+      ],
+      "discovered_at": "2026-06-04T09:00:00+00:00",
+      "usage_count": 0,
+      "success_count": 7,
+      "failure_count": 10,
+      "source_version": 0,
+      "last_used_at": "2026-06-04T11:32:15.874264+00:00",
+      "last_used_successfully_at": "2026-06-04T09:08:11.290384+00:00",
+      "last_used_failed_at": "2026-06-04T11:32:15.874264+00:00"
+    },
+    {
+      "domain": "docin.com",
+      "url_pattern": "https://www\\.docin\\.com/p-\\d+\\.html",
+      "method": "GET",
+      "description": "Docin document detail HTML. browser_api_call compacts it into title, pageCount, uploadTime, format, fileSize, readCount, commentCount, favoriteCount, categories, and audit/unavailable status. Use it for search-result detail fanout instead of opening heavy reader tabs.",
+      "example_url": "https://www.docin.com/p-4795498866.html",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "detail_fanout_from_search_results",
+      "strategy_notes": [
+        "Use Docin search/list pages to collect candidate p-<id>.html links after applying query, format, year, and sort filters.",
+        "Call this detail endpoint for top candidates to verify page count, upload time, format, read count, and audit status without switching tabs.",
+        "If the compacted detail says unavailable_reason=审核中, skip that candidate immediately.",
+        "Docin may not expose true download count or rating in detail HTML; if absent after one compact detail call, report readCount/visible score fields and mark missing fields as not shown."
+      ],
+      "max_followup_calls": 12,
+      "output_contract": [
+        "title",
+        "pageCount",
+        "uploadTime",
+        "format",
+        "readCount",
+        "unavailable_reason"
+      ],
+      "discovered_at": "2026-05-15T16:30:00+00:00",
+      "usage_count": 0,
+      "success_count": 96,
+      "failure_count": 1,
+      "source_version": 0,
+      "last_used_at": "2026-06-04T09:11:49.380520+00:00",
+      "last_used_successfully_at": "2026-06-04T09:11:49.380520+00:00",
+      "last_used_failed_at": "2026-06-02T13:11:56.089263+00:00"
+    }
+  ],
+  "updated_at": "2026-06-04T11:32:15.874264+00:00"
+}

@@ -1,0 +1,69 @@
+{
+  "domain": "dangdang.com",
+  "endpoints": [
+    {
+      "domain": "dangdang.com",
+      "url_pattern": "https://product\\.dangdang\\.com/index\\.php\\?r=comment(?:%2F|/)list.*productId=\\d+.*",
+      "method": "GET",
+      "description": "Dangdang product comment API. After the search/list page ranking is stable, call this endpoint for each top product id instead of opening product pages just to find 好评率. browser_api_call compacts summary.goodRate, total comments, good/neutral/bad counts, default-good count, and average score.",
+      "example_url": "https://product.dangdang.com/index.php?r=comment/list&productId=1716189444&mainProductId=1716189444&pageIndex=1",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "list_ids_then_comment_api_for_good_rate",
+      "strategy_notes": [
+        "Use run_page_program extract_all on #search_nature_rg > ul > li after applying filters/sort to collect the top product ids, titles, prices, authors, and detail URLs.",
+        "For each top result, call this endpoint with productId=<id>, mainProductId=<id>, and pageIndex=1. This is a public same-site Dangdang API and should use fetch_mode=http.",
+        "Use goodRate directly as 好评率; append % if the compact result returns a numeric string. Do not navigate product detail pages just to verify 好评率.",
+        "If author is missing from the list item, use the product detail HTML adapter for that one item only; otherwise answer from list fields plus this comment summary."
+      ],
+      "max_followup_calls": 5,
+      "output_contract": [
+        "productId",
+        "goodRate",
+        "totalCommentCount",
+        "averageScore"
+      ],
+      "discovered_at": "2026-05-16T04:25:00+08:00",
+      "usage_count": 0,
+      "success_count": 56,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-06-02T14:09:45.138361+00:00",
+      "last_used_successfully_at": "2026-06-02T14:09:45.138361+00:00"
+    },
+    {
+      "domain": "dangdang.com",
+      "url_pattern": "https://product\\.dangdang\\.com/\\d+\\.html",
+      "method": "GET",
+      "description": "Dangdang product detail HTML. Use only for top items when list text lacks author/publisher/age evidence. browser_api_call compacts prodSpuInfo plus author, publisher, publish time, category path, and age hints from title/subtitle.",
+      "example_url": "https://product.dangdang.com/1716189444.html",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "code_extraction",
+      "strategy": "detail_html_only_for_missing_fields",
+      "strategy_notes": [
+        "Do not use product detail HTML for 好评率; use the comment/list API for that field.",
+        "Call this detail endpoint only for top products whose author, publisher, or age fields are missing from the list item.",
+        "If compact detail still lacks an optional field after one call, record 未显示 rather than opening the product page."
+      ],
+      "max_followup_calls": 5,
+      "output_contract": [
+        "id",
+        "title",
+        "author",
+        "publisher",
+        "publishTime",
+        "ageHints"
+      ],
+      "discovered_at": "2026-05-16T04:25:00+08:00",
+      "usage_count": 0,
+      "success_count": 15,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-06-02T14:08:13.531210+00:00",
+      "last_used_successfully_at": "2026-06-02T14:08:13.531210+00:00"
+    }
+  ],
+  "updated_at": "2026-06-02T14:09:45.138361+00:00"
+}

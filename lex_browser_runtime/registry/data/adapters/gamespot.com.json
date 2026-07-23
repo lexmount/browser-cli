@@ -1,0 +1,105 @@
+{
+  "domain": "gamespot.com",
+  "endpoints": [
+    {
+      "domain": "gamespot.com",
+      "url_pattern": "https://www\\.gamespot\\.com/wp-json/wp/v2/search\\?.*subtype=reviews.*",
+      "method": "GET",
+      "description": "GameSpot WordPress REST search endpoint for review candidates. Use browser-context fetch because direct external HTTP can hit Cloudflare. The compact output returns candidate review titles, article URLs, and self API URLs.",
+      "example_url": "https://www.gamespot.com/wp-json/wp/v2/search?search=The%20Legend%20of%20Zelda%20Tears%20of%20the%20Kingdom%20review&subtype=reviews&per_page=20",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "api",
+      "strategy": "review_rest_search_candidate_extract",
+      "strategy_notes": [
+        "Build the search query from the task title plus the word review; keep subtype=reviews and per_page=20.",
+        "Pick the candidate whose title best matches the requested game/article, then call its apiUrl/self href.",
+        "Do not use tracking endpoints such as beacon.wikia-services.com as data APIs."
+      ],
+      "max_followup_calls": 3,
+      "output_contract": [
+        "query",
+        "subtype",
+        "items",
+        "items[].id",
+        "items[].title",
+        "items[].url",
+        "items[].apiUrl"
+      ],
+      "discovered_at": "2026-06-04T09:30:00+00:00",
+      "usage_count": 0,
+      "success_count": 4,
+      "failure_count": 1,
+      "source_version": 0,
+      "last_used_at": "2026-06-04T11:38:37.960562+00:00",
+      "last_used_successfully_at": "2026-06-04T11:00:26.426440+00:00",
+      "last_used_failed_at": "2026-06-04T11:38:37.960562+00:00"
+    },
+    {
+      "domain": "gamespot.com",
+      "url_pattern": "https://www\\.gamespot\\.com/wp-json/wp/v2/reviews/\\d+.*",
+      "method": "GET",
+      "description": "GameSpot WordPress REST review detail endpoint. Use browser-context fetch to compact review scorecard data such as title, reviewer, score, pros, cons, verdict, and article URL without relying on the heavy article DOM.",
+      "example_url": "https://www.gamespot.com/wp-json/wp/v2/reviews/1158242?_embed=1",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "api",
+      "strategy": "review_rest_scorecard_extract",
+      "strategy_notes": [
+        "Use the apiUrl/self href returned by the review search endpoint; add _embed=1 when author details are needed.",
+        "If score or pros/cons are absent from REST detail, open the article URL once and extract visible scorecard fields.",
+        "Return missing scorecard fields as not shown only after the REST detail and one article HTML check do not expose them."
+      ],
+      "max_followup_calls": 3,
+      "output_contract": [
+        "title",
+        "articleUrl",
+        "score",
+        "reviewer",
+        "pros",
+        "cons",
+        "verdict",
+        "publishedAt"
+      ],
+      "discovered_at": "2026-06-04T09:30:00+00:00",
+      "usage_count": 0,
+      "success_count": 4,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-06-04T11:00:32.538868+00:00",
+      "last_used_successfully_at": "2026-06-04T11:00:32.538868+00:00"
+    },
+    {
+      "domain": "gamespot.com",
+      "url_pattern": "https://www\\.gamespot\\.com/reviews/.*",
+      "method": "GET",
+      "description": "GameSpot review article HTML fallback. Use browser-context fetch only when REST detail is insufficient, then compact JSON-LD/body text into scorecard-like fields.",
+      "example_url": "https://www.gamespot.com/reviews/the-legend-of-zelda-tears-of-the-kingdom-review/1900-6418063/",
+      "requires_auth": false,
+      "fetch_mode": "browser",
+      "preferred_runtime": "api",
+      "strategy": "review_html_scorecard_fallback",
+      "strategy_notes": [
+        "Use this after REST search/detail, not before.",
+        "Extract score, reviewer, The Good, The Bad, and verdict from JSON-LD or visible article text."
+      ],
+      "max_followup_calls": 2,
+      "output_contract": [
+        "title",
+        "score",
+        "reviewer",
+        "pros",
+        "cons",
+        "textSnippet"
+      ],
+      "discovered_at": "2026-06-04T09:30:00+00:00",
+      "usage_count": 0,
+      "success_count": 3,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-06-04T11:00:39.890272+00:00",
+      "last_used_successfully_at": "2026-06-04T11:00:39.890272+00:00"
+    }
+  ],
+  "updated_at": "2026-06-04T11:38:37.960562+00:00"
+}

@@ -1,0 +1,62 @@
+{
+  "domain": "thepaper.cn",
+  "endpoints": [
+    {
+      "domain": "thepaper.cn",
+      "url_pattern": "https://api\\.thepaper\\.cn/search/web/news",
+      "method": "POST",
+      "description": "Search ThePaper news. Use headers Content-Type: application/json and Client-Type: 1. Body JSON has word, orderType, pageNum, pageSize, searchType. orderType=1 means newest first, orderType=3 relevance, searchType=1 news. contId maps to https://www.thepaper.cn/newsDetail_forward_{contId}. For latest climate-change news use word=气候变化, orderType=1, pageNum=1, pageSize=10, searchType=1.",
+      "example_url": "https://api.thepaper.cn/search/web/news",
+      "requires_auth": false,
+      "strategy": "list_detail_fanout",
+      "strategy_notes": [
+        "Use the POST search response to get contId candidates, then fetch only the top 1-3 detail pages when exact source/date/content is needed.",
+        "For recency tasks, set orderType=1 before deciding which contId to enrich."
+      ],
+      "followup_url_template": "https://www.thepaper.cn/newsDetail_forward_{contId}",
+      "max_followup_calls": 3,
+      "output_contract": [
+        "contId",
+        "name",
+        "pubTime",
+        "source",
+        "nodeInfo"
+      ],
+      "discovered_at": "2026-05-14T15:00:00+00:00",
+      "usage_count": 1,
+      "success_count": 20,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-05-19T10:33:52.237085+00:00",
+      "last_used_successfully_at": "2026-05-19T10:33:52.237085+00:00"
+    },
+    {
+      "domain": "thepaper.cn",
+      "url_pattern": "https://www\\.thepaper\\.cn/newsDetail_forward_\\d+",
+      "method": "GET",
+      "description": "Fetch ThePaper article details for a contId. The HTML includes Next.js __NEXT_DATA__, and browser_api_call parses it to detailData.contentDetail with name, author, source, pubTime, publishTime, and nodeInfo. Use this instead of navigating detail pages when exact source/date is required.",
+      "example_url": "https://www.thepaper.cn/newsDetail_forward_33177739",
+      "requires_auth": false,
+      "strategy": "html_detail",
+      "strategy_notes": [
+        "Use the parsed Next.js detail data as the authoritative source for source/date after search has identified the contId."
+      ],
+      "output_contract": [
+        "name",
+        "author",
+        "source",
+        "pubTime",
+        "publishTime",
+        "nodeInfo"
+      ],
+      "discovered_at": "2026-05-14T15:15:00+00:00",
+      "usage_count": 1,
+      "success_count": 25,
+      "failure_count": 0,
+      "source_version": 0,
+      "last_used_at": "2026-05-19T10:34:28.423866+00:00",
+      "last_used_successfully_at": "2026-05-19T10:34:28.423866+00:00"
+    }
+  ],
+  "updated_at": "2026-05-19T10:34:28.423866+00:00"
+}

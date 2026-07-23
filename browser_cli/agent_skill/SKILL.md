@@ -222,6 +222,8 @@ Then follow the returned steps; use `browser-cli action observe --session-id <se
 
 ```bash
 browser-cli session create
+browser-cli session create --enable-downloads
+browser-cli session create --enable-recording
 browser-cli action open-url --session-id <session_id> --url <url>
 browser-cli action interactive-snapshot --session-id <session_id>
 browser-cli action wait-role --session-id <session_id> --role button --name "<name>"

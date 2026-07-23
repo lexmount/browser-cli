@@ -1,0 +1,64 @@
+{
+  "domain": "academia.edu",
+  "endpoints": [
+    {
+      "domain": "academia.edu",
+      "url_pattern": "https://api\\.academia\\.edu/v0/profiles/works\\?.*user_id=\\d+.*",
+      "method": "GET",
+      "description": "Academia profile works API. Use it after identifying a profile user_id; browser_api_call compacts paper titles, years, abstracts, and automatically joins public view counts so the agent can rank top viewed works without scrolling or opening paper pages.",
+      "example_url": "https://api.academia.edu/v0/profiles/works?user_id=32808396&per_page=50&offset=0",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "profile_works_with_runtime_view_count_join",
+      "strategy_notes": [
+        "Extract user_id from the Academia profile page once, for example data-follow-user-id on the Follow button. For Yoshua Bengio, the observed profile user_id is 32808396.",
+        "Call this endpoint with per_page=50&offset=0 to fetch the visible profile works in one batch. The runtime automatically calls the public works/views API for the returned ids and merges view counts into the compact result.",
+        "Rank by the compact result's views field and answer from the top_by_views summary. Do not scroll the profile or open individual paper detail pages just to find views or abstracts.",
+        "If publication_date.year is missing from the compact metadata, record the year as Not shown instead of doing extra detail-page navigation."
+      ],
+      "max_followup_calls": 1,
+      "output_contract": [
+        "id",
+        "title",
+        "year",
+        "views",
+        "abstract"
+      ],
+      "discovered_at": "2026-05-16T05:10:00+08:00",
+      "usage_count": 0,
+      "success_count": 6,
+      "failure_count": 4,
+      "source_version": 0,
+      "last_used_at": "2026-06-03T03:39:42.296251+00:00",
+      "last_used_successfully_at": "2026-05-19T10:24:11.864946+00:00",
+      "last_used_failed_at": "2026-06-03T03:39:42.296251+00:00"
+    },
+    {
+      "domain": "academia.edu",
+      "url_pattern": "https://api\\.academia\\.edu/v0/works/views\\?.*work_ids(?:%5B%5D|\\[\\])=\\d+.*",
+      "method": "GET",
+      "description": "Academia public work view-count API. Usually called automatically by the profile works runtime join; only call directly when view counts are needed for an already known set of work ids.",
+      "example_url": "https://api.academia.edu/v0/works/views?work_ids[]=93866354&work_ids[]=37817255",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "work_ids_to_view_counts",
+      "strategy_notes": [
+        "Prefer the profile works endpoint first because it returns titles, publication years, and abstracts; this endpoint only returns id-to-view-count mappings.",
+        "Batch all known work ids in a single URL where possible."
+      ],
+      "max_followup_calls": 1,
+      "output_contract": [
+        "id",
+        "views"
+      ],
+      "discovered_at": "2026-05-16T05:10:00+08:00",
+      "usage_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "source_version": 0
+    }
+  ],
+  "updated_at": "2026-06-03T03:39:42.296251+00:00"
+}

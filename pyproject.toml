@@ -5,7 +5,13 @@ description = "Standalone CLI for operating Lexmount browser sessions"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "lex-browser-runtime[skill] @ git+https://github.com/lexmount/website-skills.git@main",
+    "httpx>=0.27",
+    "lexmount>=0.5.14",
+    "playwright>=1.40",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "regex>=2024.11.6",
+    "websocket-client>=1.8",
 ]
 
 [project.scripts]
@@ -16,7 +22,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["browser_cli*"]
+include = ["browser_cli*", "lex_browser_runtime*"]
 
 [tool.setuptools.package-data]
 browser_cli = [
@@ -25,6 +31,11 @@ browser_cli = [
     "agent_examples/*.md",
     "agent_examples/cases/*.yaml",
     "agent_metadata/*.yaml",
+]
+lex_browser_runtime = [
+    "registry/data/gov_portals.json",
+    "registry/data/site_hints.yaml",
+    "registry/data/adapters/*.json",
 ]
 
 [dependency-groups]

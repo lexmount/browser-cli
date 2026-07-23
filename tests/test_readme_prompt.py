@@ -70,8 +70,7 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
         in prompt
     )
     assert (
-        "browser-cli example get --id auth_lifecycle_playbook --metadata-only"
-        in prompt
+        "browser-cli example get --id auth_lifecycle_playbook --metadata-only" in prompt
     )
     assert (
         "browser-cli example get --id persistent_context_playbook --metadata-only"
@@ -213,7 +212,10 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "navigation_flow" in text
     assert "agent_browser_primitives" in text
     assert "observe, act, extract, and verify" in text
-    assert "action act` for deterministic click/fill/select/check/press/hover/scroll plans" in text
+    assert (
+        "action act` for deterministic click/fill/select/check/press/hover/scroll plans"
+        in text
+    )
     assert "browser-cli action act --session-id <session_id>" in text
     assert "browser-cli action extract --session-id <session_id>" in text
     assert "interactive_targeting" in text
@@ -235,7 +237,10 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
 
     assert "Browserbase Skills" in text
     assert "https://github.com/browserbase/skills" in text
-    assert "https://raw.githubusercontent.com/browserbase/skills/main/skills/browser/SKILL.md" in text
+    assert (
+        "https://raw.githubusercontent.com/browserbase/skills/main/skills/browser/SKILL.md"
+        in text
+    )
     assert "https://docs.browserbase.com/integrations/mcp/introduction" in text
     assert "https://docs.browserbase.com/integrations/mcp/setup" in text
     assert "browser-cli reference get --id skill_positioning" in text
@@ -249,7 +254,10 @@ def test_skill_positioning_doc_compares_browserbase_skills() -> None:
     assert "browse snapshot" in text
     assert "agent_browser_primitives" in text
     assert "browser-cli action observe --session-id <session_id>" in text
-    assert 'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"' in text
+    assert (
+        'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"'
+        in text
+    )
     assert "browser-cli action extract --session-id <session_id>" in text
     assert "deterministic `action act` plans" in normalized
     assert "natural-language act still needs a wrapper above the CLI" in normalized

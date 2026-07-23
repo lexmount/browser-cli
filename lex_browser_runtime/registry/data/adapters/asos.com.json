@@ -1,0 +1,56 @@
+{
+  "domain": "asos.com",
+  "endpoints": [
+    {
+      "domain": "asos.com",
+      "url_pattern": "https://www\\.asos\\.com/api/product/search/v\\d+/",
+      "method": "GET",
+      "description": "ASOS search results plus facets. Use country=GB, store=COM, currency=GBP, lang=en-GB for GBP tasks. sort=freshness means newest arrivals. For midi dresses: base_colour=1,9 means Pink/Red; attribute_10155=6403 means Petite; attribute_10313=50365 means Occasion/formal. Use base_colour=1,9, not refine=base_colour:1,9. If GBP prices are all above the user's cap, answer that ASOS returned fewer than 3 exact matches; do not redo the same filters in UI.",
+      "example_url": "https://www.asos.com/api/product/search/v2/?country=GB&store=COM&currency=GBP&lang=en-GB&q=midi%20dresses&limit=10&offset=0&sort=freshness&base_colour=1,9&attribute_10155=6403&attribute_10313=50365",
+      "requires_auth": false,
+      "strategy": "search",
+      "strategy_notes": [
+        "Treat this as the filtered product list source; if productIds are needed for size availability, call the summaries endpoint once for top candidates.",
+        "Do not reapply the same filters in UI after the API has returned a valid filtered result."
+      ],
+      "followup_url_template": "https://www.asos.com/api/product/catalogue/v4/summaries?store=COM&country=GB&lang=en-GB&expand=variants&productIds={productIds}",
+      "max_followup_calls": 1,
+      "output_contract": [
+        "productId",
+        "name",
+        "brandName",
+        "price",
+        "url",
+        "variant availability"
+      ],
+      "last_used_at": "2026-05-20T08:00:13.607462+00:00",
+      "success_count": 37,
+      "last_used_successfully_at": "2026-05-20T08:00:13.607462+00:00",
+      "failure_count": 2,
+      "last_used_failed_at": "2026-05-19T11:46:58.406689+00:00"
+    },
+    {
+      "domain": "asos.com",
+      "url_pattern": "https://www\\.asos\\.com/api/product/catalogue/v\\d+/summaries",
+      "method": "GET",
+      "description": "Returns product summaries for productIds. Add expand=variants to get available sizes; use variant displaySizeText or brandSize where isAvailable is true.",
+      "example_url": "https://www.asos.com/api/product/catalogue/v4/summaries?store=COM&country=GB&lang=en-GB&expand=variants&productIds=210549841,209844330,209844039",
+      "requires_auth": false,
+      "strategy": "detail",
+      "strategy_notes": [
+        "Use one summaries call for the productIds already selected from search; do not fan out one product at a time."
+      ],
+      "output_contract": [
+        "productId",
+        "name",
+        "brandName",
+        "variants",
+        "available sizes"
+      ],
+      "last_used_at": "2026-05-14T13:01:48.829467+00:00",
+      "success_count": 2,
+      "last_used_successfully_at": "2026-05-14T13:01:48.829467+00:00"
+    }
+  ],
+  "updated_at": "2026-05-20T08:00:13.607462+00:00"
+}

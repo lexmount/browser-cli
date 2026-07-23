@@ -1,0 +1,143 @@
+{
+  "domain": "3dmgame.com",
+  "endpoints": [
+    {
+      "domain": "3dmgame.com",
+      "url_pattern": "https://www\\.3dmgame\\.com/news/\\d+/\\d+\\.html",
+      "method": "GET",
+      "description": "3DM article detail HTML. browser_api_call compacts ordinary HTML into title, pubTime, source, text, and important links. Use this for patch说明 pages to extract version, date, update points, and related resource/download links without navigating the page.",
+      "example_url": "https://www.3dmgame.com/news/202509/3927674.html",
+      "requires_auth": false,
+      "strategy": "html_detail",
+      "strategy_notes": [
+        "Use the compacted article detail as the primary evidence for patch version/date/summary and only navigate if related links are missing."
+      ],
+      "output_contract": [
+        "title",
+        "pubTime",
+        "source",
+        "text",
+        "important links"
+      ],
+      "discovered_at": "2026-05-14T15:45:00+00:00",
+      "usage_count": 0,
+      "success_count": 28,
+      "failure_count": 1,
+      "source_version": 0,
+      "last_used_at": "2026-05-19T10:24:51.797727+00:00",
+      "last_used_successfully_at": "2026-05-19T10:24:51.797727+00:00",
+      "last_used_failed_at": "2026-05-15T11:46:52.701844+00:00"
+    },
+    {
+      "domain": "3dmgame.com",
+      "url_pattern": "https://mod\\.3dmgame\\.com/api/search/getModlist",
+      "method": "POST",
+      "description": "3DM Mod search/list API. Use JSON body {\"search\":\"<game or mod keyword>\",\"page\":1,\"limit\":50,\"order\":2} to get mod candidates with game name, title, update time, and download counts.",
+      "example_url": "https://mod.3dmgame.com/api/search/getModlist",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "mod_search_by_keyword",
+      "strategy_notes": [
+        "Use the search field, not keyword, for the query string; order=2 returns download/popularity-oriented ordering.",
+        "Filter candidates by game_name when the task names a specific game, then call /api/mods/{id} only for the top needed candidates."
+      ],
+      "max_followup_calls": 12,
+      "output_contract": [
+        "id",
+        "gameName",
+        "title",
+        "downloadCount",
+        "updateTime",
+        "detailUrl"
+      ],
+      "runtime_strategies": [
+        {
+          "name": "three_dm_mod_search_detail_budget",
+          "site_pattern": "3dmgame.com",
+          "trigger": "3DM Mod tasks asking for top mods, download counts, update times, or downloadable resources.",
+          "confidence": "auto",
+          "actions": [
+            {
+              "type": "api_call",
+              "description": "Call the mod list API with the task's game/mod keyword, then filter compact rows by gameName/title.",
+              "url_template": "https://mod.3dmgame.com/api/search/getModlist",
+              "method": "POST",
+              "fetch_mode": "http",
+              "body_template": "{\"search\":\"<keyword>\",\"page\":1,\"limit\":50,\"order\":2}",
+              "max_calls": 5,
+              "output_contract": [
+                "id",
+                "gameName",
+                "title",
+                "downloadCount",
+                "updateTime"
+              ]
+            },
+            {
+              "type": "api_call",
+              "description": "Fetch detail only for top selected candidates to expose resources and version fields.",
+              "url_template": "https://mod.3dmgame.com/api/mods/{id}",
+              "method": "GET",
+              "fetch_mode": "http",
+              "max_calls": 12,
+              "output_contract": [
+                "resources",
+                "version",
+                "description",
+                "downloadCount",
+                "updateTime"
+              ]
+            }
+          ],
+          "observable_validation": [
+            "Compact search rows include ids plus gameName/title matching the requested game or mod keyword.",
+            "Detail rows include resources or explicit missing resource fields before final answer."
+          ],
+          "notes": [
+            "Do not open every mod detail page in the browser; use the compact API rows and capped detail fan-out."
+          ]
+        }
+      ],
+      "discovered_at": "2026-05-17T15:55:00+00:00",
+      "usage_count": 0,
+      "success_count": 87,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-03T03:37:44.495318+00:00",
+      "last_used_successfully_at": "2026-06-03T03:37:44.495318+00:00"
+    },
+    {
+      "domain": "3dmgame.com",
+      "url_pattern": "https://mod\\.3dmgame\\.com/api/mods/\\d+",
+      "method": "GET",
+      "description": "3DM Mod detail API. Returns title, game, version, download count, update time, description/content, and resource download entries.",
+      "example_url": "https://mod.3dmgame.com/api/mods/192561",
+      "requires_auth": false,
+      "fetch_mode": "http",
+      "preferred_runtime": "api",
+      "strategy": "mod_detail",
+      "strategy_notes": [
+        "Use this after search/list candidate selection, not as an unbounded fan-out.",
+        "Answer missing download/resource fields explicitly if the detail API omits them."
+      ],
+      "output_contract": [
+        "id",
+        "gameName",
+        "title",
+        "downloadCount",
+        "updateTime",
+        "version",
+        "resources"
+      ],
+      "discovered_at": "2026-05-17T15:55:00+00:00",
+      "usage_count": 0,
+      "success_count": 138,
+      "failure_count": 0,
+      "source_version": 1,
+      "last_used_at": "2026-06-03T03:37:49.401144+00:00",
+      "last_used_successfully_at": "2026-06-03T03:37:49.401144+00:00"
+    }
+  ],
+  "updated_at": "2026-06-03T03:37:49.401144+00:00"
+}
