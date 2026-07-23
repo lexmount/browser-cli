@@ -30,7 +30,7 @@ Codex browser surface.
   load state, network idle, selectors, roles, text, attributes, values, frames,
   dialogs, storage, cookies, console entries, and network requests.
 - Inspection: page info, HTML/text snapshots, screenshots, outline,
-  accessibility, interactive-only, form, link, table, list, dialog, frame,
+  accessibility, interactive, form, link, table, list, dialog, frame,
   performance, network, and console snapshots.
 - Agent primitives: `action observe` returns page info plus bounded observation
   surfaces, `action act` runs deterministic click/fill/select/check/press/hover/scroll plans,

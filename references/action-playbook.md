@@ -210,8 +210,7 @@ plus `click-label`, `click-text`, `click-role`, `click-index`, `double-click`, `
 `network-snapshot`, `wait-network`, `console-snapshot`, `wait-console`,
 `outline-snapshot`, `form-snapshot`, `accessibility-snapshot`,
 `interactive-snapshot` is DOM/eval-backed, so always parse its structured
-`result` fields. `interactive-only-snapshot` remains a backward-compatible
-alias, but agent-facing guidance should prefer `interactive-snapshot`.
+`result` fields. It is the single supported interactive snapshot command.
 
 Important result fields include `found`, `exists`, `count`, `checkable`,
 `checked`, `selectable`, `selected`, `clicked`, `filled`, `focused`, `value`, `readable`, `blurred`,

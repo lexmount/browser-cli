@@ -103,9 +103,9 @@ recovery, one-off page, case file task, persistent login state, form
 interaction, interactive targeting, and page diagnostics steps with `command`,
 `read`, `success_condition`,
 `on_failure_read`, and `cleanup` hints.
-Command entries may expose `aliases` on canonical commands plus `alias_of` and
-`canonical_name` on alias commands, so agents can map user-facing phrasing back
-to the preferred action without parsing help text.
+Command entries describe supported command names directly. The CLI intentionally
+does not expose compatibility command aliases, so agents should call the
+canonical command path shown in the catalog.
 Workflow `read` arrays include current auth availability fields, scope catalog
 fields, export usability fields, and context reuse availability fields when
 those values drive the next agent decision.
@@ -219,7 +219,6 @@ The CLI must not print API keys by default.
 
 Default behavior:
 
-- `direct-url` masks the `api_key` query parameter.
 - `doctor` does not include the full direct `connect_url` by default; it reports
   `connect_url_available`, `connect_url_redacted`, and
   `connect_url_reveal_command` so internal hosts are not exposed accidentally.
@@ -460,7 +459,7 @@ Default behavior:
   wait-role, blur, blur-role,
   clear, clear-role, set-value, set-file-input, dispatch-event, submit,
   form-snapshot,
-  accessibility snapshot, and interactive-only snapshot.
+  accessibility snapshot, and interactive snapshot.
 - `doctor` reports an `action_guides` check with
   `required_action_guides`, `missing_required_action_guides`,
   `required_guide_fields`, `invalid_action_guides`,
@@ -497,7 +496,6 @@ Default behavior:
 
 Explicit reveal behavior:
 
-- `direct-url --reveal-url` may print the full URL.
 - `doctor --reveal-connect-url` may print the full direct URL only after
   configuration checks reject internal API base URLs.
 - `action ... --reveal-connect-url` may print the full resolved connect URL.

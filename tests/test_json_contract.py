@@ -155,12 +155,12 @@ def test_commands_catalog_output_contract(
     assert "--url" in open_url["required_options"]
 
 
-def test_json_contract_documents_command_alias_metadata() -> None:
+def test_json_contract_documents_no_command_aliases() -> None:
     text = JSON_CONTRACT.read_text()
 
-    assert "`aliases`" in text
-    assert "`alias_of`" in text
-    assert "`canonical_name`" in text
+    assert "does not expose compatibility command aliases" in text
+    assert "`alias_of`" not in text
+    assert "`canonical_name`" not in text
 
 
 def test_json_contract_documents_version_output() -> None:
@@ -477,7 +477,7 @@ def test_json_contract_documents_doctor_required_action_surface() -> None:
         "submit",
         "performance-snapshot",
         "accessibility snapshot",
-        "interactive-only snapshot",
+        "interactive snapshot",
     ):
         assert phrase in text
 
@@ -585,39 +585,6 @@ def test_context_pick_dry_run_selection_summary_contract(
         "value_redacted": True,
     }
     assert "codex" not in json.dumps(diagnostics)
-
-
-def test_direct_url_secret_masking_contract(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setenv("LEXMOUNT_API_KEY", "super-secret-key")
-    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
-    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
-
-    exit_code, payload, output = run_cli_json(["direct-url"], capsys)
-
-    assert exit_code == 0
-    assert payload["ok"] is True
-    assert payload["masked"] is True
-    assert "super-secret-key" not in output
-    assert "api_key=***" in payload["connect_url"]
-
-
-def test_direct_url_reveal_requires_explicit_flag(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setenv("LEXMOUNT_API_KEY", "super-secret-key")
-    monkeypatch.setenv("LEXMOUNT_PROJECT_ID", "project")
-    monkeypatch.delenv("LEXMOUNT_BASE_URL", raising=False)
-
-    exit_code, payload, output = run_cli_json(["direct-url", "--reveal-url"], capsys)
-
-    assert exit_code == 0
-    assert payload["masked"] is False
-    assert "super-secret-key" in output
-    assert "api_key=super-secret-key" in payload["connect_url"]
 
 
 def test_action_connect_url_secret_masking_contract(
