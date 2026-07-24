@@ -7,6 +7,7 @@ import os
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, NoReturn
 from urllib.parse import quote_plus
 
@@ -444,7 +445,21 @@ class LexmountBrowserAdmin:
             if recording is not None:
                 session_kwargs["recording"] = recording
             try:
-                session = self.client.sessions.create(**session_kwargs)
+                create_method = self.client.sessions.create
+                if (
+                    downloads is not None or recording is not None
+                ) and not (
+                    accepts_keyword_arg(create_method, "downloads")
+                    and accepts_keyword_arg(create_method, "recording")
+                ):
+                    session = self._create_session_with_media_options(
+                        browser_mode=browser_mode,
+                        context=session_kwargs.get("context"),
+                        downloads=downloads,
+                        recording=recording,
+                    )
+                else:
+                    session = create_method(**session_kwargs)
             except Exception as exc:
                 if created_context and resolved_context_id:
                     try:
@@ -469,6 +484,125 @@ class LexmountBrowserAdmin:
             context_mode=context_mode,
             browser_mode=browser_mode,
             session=serialize_session(session),
+        )
+
+    def _create_session_with_media_options(
+        self,
+        *,
+        browser_mode: str,
+        context: dict[str, Any] | None,
+        downloads: dict[str, bool] | None,
+        recording: dict[str, bool] | None,
+    ) -> Any:
+        """Create a media-enabled session for SDKs missing media kwargs."""
+
+        sessions = self.client.sessions
+        build_payload = getattr(sessions, "_build_create_payload", None)
+        if not callable(build_payload):
+            raise BrowserRuntimeError(
+                "Installed lexmount SDK does not support media storage options."
+            )
+
+        data = build_payload(
+            browser_mode=browser_mode,
+            context=context,
+            extension_ids=None,
+            proxy=None,
+            official_proxy=False,
+            weak_lock=False,
+            custom_image_id=None,
+            window_size=None,
+            context_description=None,
+        )
+        if downloads is not None:
+            data["downloads"] = downloads
+        if recording is not None:
+            data["recording"] = recording
+
+        with_requested_region = getattr(sessions, "_with_requested_region", None)
+        if callable(with_requested_region):
+            data = with_requested_region(data)
+
+        response = self.client._post(
+            f"{self.client.base_url}/instance/v2",
+            json=data,
+        )
+        if response.status_code >= 400:
+            handle_error = getattr(sessions, "_handle_create_error_response", None)
+            if callable(handle_error):
+                handle_error(response)
+            raise BrowserRuntimeError(
+                f"Lexmount session create failed with HTTP {response.status_code}."
+            )
+
+        payload = response.json()
+        session_id = payload.get("session_id")
+        if not session_id:
+            raise BrowserRuntimeError(
+                "Lexmount session create response missing session_id."
+            )
+
+        project_id = payload.get("project_id") or getattr(
+            self.client,
+            "project_id",
+            None,
+        )
+        session = self._poll_created_session(
+            session_id=str(session_id),
+            project_id=project_id,
+            browser_mode=browser_mode,
+        )
+        return session
+
+    def _poll_created_session(
+        self,
+        *,
+        session_id: str,
+        project_id: str | None,
+        browser_mode: str,
+        poll_interval_sec: float = 1.0,
+        poll_timeout_sec: float = 600.0,
+    ) -> Any:
+        sessions = self.client.sessions
+        get_method = sessions.get
+        deadline = time.time() + poll_timeout_sec
+        last_session: Any | None = None
+
+        while time.time() < deadline:
+            if project_id is not None and accepts_keyword_arg(get_method, "project_id"):
+                last_session = get_method(session_id, project_id=project_id)
+            else:
+                last_session = get_method(session_id)
+            status = getattr(last_session, "status", None)
+            if status == "active":
+                break
+            if status in {"create_failed", "closed", "error"}:
+                raise BrowserRuntimeError(
+                    f"Lexmount session {session_id} entered terminal status {status}."
+                )
+            time.sleep(poll_interval_sec)
+        else:
+            raise BrowserRuntimeError(
+                f"Timed out waiting for Lexmount session {session_id} to become active."
+            )
+
+        get_ws = getattr(sessions, "_get_web_socket_debugger_url", None)
+        ws = getattr(last_session, "ws", None)
+        if not ws and callable(get_ws):
+            ws = get_ws(session_id)
+
+        return SimpleNamespace(
+            id=getattr(last_session, "id", None) or session_id,
+            session_id=getattr(last_session, "session_id", None) or session_id,
+            status=getattr(last_session, "status", None),
+            browser_type=getattr(last_session, "browser_type", None) or browser_mode,
+            project_id=getattr(last_session, "project_id", None) or project_id,
+            created_at=getattr(last_session, "created_at", None),
+            inspect_url=getattr(last_session, "inspect_url", None),
+            inspect_url_dbg=getattr(last_session, "inspect_url_dbg", None),
+            container_id=getattr(last_session, "container_id", None),
+            connect_url=getattr(last_session, "connect_url", None),
+            ws=ws,
         )
 
     def list_sessions(
