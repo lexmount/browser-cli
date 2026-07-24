@@ -41,7 +41,7 @@ lex_browser_runtime = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
-    "ruff>=0.8",
+    "ruff>=0.8,<0.16",
 ]
 
 [tool.pytest.ini_options]
