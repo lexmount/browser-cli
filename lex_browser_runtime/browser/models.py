@@ -50,7 +50,6 @@ class CreateBrowserRequest(BaseModel):
         default=False,
         alias="lexmount_recording_persistent",
     )
-    weak_lock: bool = Field(default=False, alias="lexmount_weak_lock")
     async_create: bool = Field(default=True, alias="lexmount_async_create")
     poll_interval_sec: float = Field(
         default=1.0,
