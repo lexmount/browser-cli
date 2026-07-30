@@ -509,7 +509,6 @@ class LexmountBrowserAdmin:
             extension_ids=None,
             proxy=None,
             official_proxy=False,
-            weak_lock=False,
             custom_image_id=None,
             window_size=None,
             context_description=None,

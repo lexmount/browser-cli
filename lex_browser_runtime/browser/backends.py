@@ -205,7 +205,6 @@ class LexmountBackend:
             optional_params = {
                 "extension_ids": request.extension_ids,
                 "proxy": proxy,
-                "weak_lock": request.weak_lock,
                 "async_create": request.async_create,
                 "poll_interval_sec": request.poll_interval_sec,
                 "poll_timeout_sec": request.poll_timeout_sec,
