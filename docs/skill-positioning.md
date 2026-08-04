@@ -1,5 +1,11 @@
 # browser-cli Skill Positioning
 
+The installed Lexmount Browser Skill uses browser-cli for authentication,
+contexts, and remote-session lifecycle, then routes routine page operations
+through its bundled ACE client. The browser-cli page-action surface described
+below remains available as a specialized fallback and as a lower-level product
+capability; it is not the default Codex page-operation plane.
+
 This document explains when agents should use `browser-cli`, what the current
 Skill supports, and where it still trails a polished cloud-browser agent
 experience.

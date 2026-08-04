@@ -82,9 +82,9 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.22"
+    assert payload["version"] == "0.3.23"
     assert payload["version_source"] == "package_fallback"
-    assert payload["lex_browser_runtime_version"] == "0.3.22"
+    assert payload["lex_browser_runtime_version"] == "0.3.23"
     assert payload["lex_browser_runtime_version_known"] is True
     assert payload["lex_browser_runtime_version_source"] == "bundled"
 
@@ -432,33 +432,41 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "browser-cli commands --workflow first_browser_task"
         in payload["agent_entrypoints"]["first_browser_task"]
     )
-    assert (
-        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
-        in payload["agent_entrypoints"]["first_browser_task"]
+    assert any(
+        "--lexmount-session-id <lexmount-session-id> sessions" in command
+        for command in payload["agent_entrypoints"]["first_browser_task"]
+    )
+    assert any(
+        "scripts/cdp.py navigate <ace-session-id>" in command
+        for command in payload["agent_entrypoints"]["first_browser_task"]
+    )
+    assert "browser-cli action" not in json.dumps(
+        payload["agent_entrypoints"]["first_browser_task"]
     )
     assert (
         "browser-cli commands --workflow agent_browser_primitives"
         in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
-    assert (
-        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
-        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    assert "browser-cli reference get --id ace_page_api" in payload[
+        "agent_entrypoints"
+    ]["agent_browser_primitives"]
+    assert any(
+        "scripts/cdp.py content <ace-session-id>" in command
+        for command in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
-    assert (
-        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
-        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    assert any(
+        "scripts/cdp.py action <ace-session-id>" in command
+        for command in payload["agent_entrypoints"]["agent_browser_primitives"]
     )
-    assert (
-        'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"'
-        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    assert "browser-cli action" not in json.dumps(
+        payload["agent_entrypoints"]["agent_browser_primitives"]
     )
-    assert (
-        "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000"
-        in payload["agent_entrypoints"]["agent_browser_primitives"]
+    assert any(
+        "--lexmount-session-id <lexmount-session-id> attach" in command
+        for command in payload["agent_entrypoints"]["one_off_page_task"]
     )
-    assert (
-        "browser-cli action page-info --session-id <session_id>"
-        in payload["agent_entrypoints"]["one_off_page_task"]
+    assert "browser-cli action" not in json.dumps(
+        payload["agent_entrypoints"]["one_off_page_task"]
     )
     assert (
         "browser-cli case run --file <case.yaml> --close-created-session"
@@ -995,42 +1003,34 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
     assert [step["id"] for step in first_steps] == [
         "check_readiness",
         "create_session",
-        "open_url",
-        "inspect_page",
+        "discover_targets",
+        "attach_target",
+        "navigate_page",
         "inspect_targets",
         "choose_first_action",
-        "verify_or_capture",
+        "verify_result",
+        "detach_ace",
         "close_session",
     ]
     assert first_steps[0]["command"] == "browser-cli doctor --json"
     assert "ready_for_browser_actions" in first_steps[0]["read"]
-    assert "repair_plan.guidance" in first_steps[0]["read"]
+    assert "repair_plan" in first_steps[0]["read"]
     assert first_steps[0]["success_condition"] == (
         "ok=true and ready_for_browser_actions=true"
     )
-    assert first_steps[4]["command"] == (
-        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
-    )
-    assert "result.nodes" in first_steps[4]["read"]
-    assert "browser-cli action text-snapshot" in first_steps[4]["fallback_commands"][0]
-    assert first_steps[5]["agent_action"] is True
-    assert first_steps[5]["selection_order"][:4] == [
-        "wait-text",
-        "click-role",
-        "click-text",
-        "fill-label",
-    ]
-    assert (
-        "browser-cli action guide --task interactive_targeting"
-        in first_steps[5]["fallback_commands"]
-    )
+    assert first_steps[2]["command"].endswith("> sessions")
+    assert "scripts/cdp.py" in first_steps[3]["command"]
+    assert " attach " in first_steps[3]["command"]
+    assert "scripts/cdp.py navigate" in first_steps[4]["command"]
+    assert "scripts/cdp.py content" in first_steps[5]["command"]
+    assert "contexts" in first_steps[5]["read"]
     assert first_steps[6]["agent_action"] is True
-    assert "result.matched" in first_steps[6]["read"]
-    assert first_steps[-1] == {
-        "id": "close_session",
-        "command": "browser-cli session close --session-id <session_id>",
-        "cleanup": True,
-    }
+    assert "action with jq verification" in first_steps[6]["selection_order"]
+    assert "outline" in first_steps[7]["read"]
+    assert "scripts/cdp.py detach" in first_steps[8]["command"]
+    assert first_steps[-1]["cleanup"] is True
+    assert "browser-cli session close" in first_steps[-1]["command"]
+    assert "browser-cli action" not in json.dumps(first_steps)
     primitive_steps = workflows["agent_browser_primitives"]["steps"]
     assert [step["id"] for step in primitive_steps] == [
         "inspect_action_surface",
@@ -1040,56 +1040,37 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         "extract_content",
         "verify_result",
     ]
-    assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
-    assert "custom_js_boundary" in primitive_steps[0]["read"]
-    assert primitive_steps[1]["command"] == (
-        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
-    )
-    assert "result.page_info" in primitive_steps[1]["read"]
-    assert "result.snapshots.interactive.nodes" in primitive_steps[1]["read"]
-    assert "result.snapshots.text.texts" in primitive_steps[1]["read"]
-    assert "browser-cli action page-info" in primitive_steps[1]["fallback_commands"][0]
+    assert primitive_steps[0]["command"] == "browser-cli reference get --id ace_page_api"
+    assert "scripts/cdp.py content" in primitive_steps[1]["command"]
+    assert "outline" in primitive_steps[1]["read"]
     assert primitive_steps[2]["agent_action"] is True
     assert primitive_steps[2]["selection_order"] == [
-        "observe",
-        "act",
-        "extract",
-        "verify",
+        "content",
+        "navigate",
+        "action",
+        "call",
     ]
-    assert primitive_steps[3]["optional"] is True
-    assert primitive_steps[3]["command"] == (
-        'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"'
-    )
-    assert primitive_steps[3]["selection_order"][0] == "act"
-    assert "click-role" in primitive_steps[3]["selection_order"]
-    assert "result.plan.underlying_command" in primitive_steps[3]["read"]
-    assert "result.action_result.clicked" in primitive_steps[3]["read"]
-    assert (
-        "browser-cli commands --workflow form_interaction"
-        in primitive_steps[3]["fallback_commands"]
-    )
-    assert primitive_steps[4]["optional"] is True
-    assert primitive_steps[4]["command"] == (
-        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
-    )
-    assert "extract" in primitive_steps[4]["selection_order"]
-    assert "text-snapshot" in primitive_steps[4]["selection_order"]
-    assert "result.extractions.text.texts" in primitive_steps[4]["read"]
-    assert (
-        "browser-cli commands --workflow content_extraction"
-        in primitive_steps[4]["fallback_commands"]
-    )
-    assert primitive_steps[5]["agent_action"] is True
-    assert "result.link_count" in primitive_steps[5]["read"]
+    assert primitive_steps[3]["agent_action"] is True
+    assert "scripts/cdp.py action" in primitive_steps[3]["command"]
+    assert "changes" in primitive_steps[3]["read"]
+    assert "contexts" in primitive_steps[4]["read"]
+    assert "outline" in primitive_steps[5]["read"]
+    assert "browser-cli action" not in json.dumps(primitive_steps)
     one_off_steps = workflows["one_off_page_task"]["steps"]
-    assert one_off_steps[0]["id"] == "create_session"
-    assert "result.nodes" in one_off_steps[3]["read"]
-    assert "result.node_count" in one_off_steps[3]["read"]
-    assert one_off_steps[-1] == {
-        "id": "close_session",
-        "command": "browser-cli session close --session-id <session_id>",
-        "cleanup": True,
-    }
+    assert [step["id"] for step in one_off_steps] == [
+        "create_session",
+        "discover_targets",
+        "attach_target",
+        "navigate_page",
+        "inspect_page",
+        "detach_ace",
+        "close_session",
+    ]
+    assert "outline" in one_off_steps[4]["read"]
+    assert "scripts/cdp.py detach" in one_off_steps[-2]["command"]
+    assert one_off_steps[-1]["cleanup"] is True
+    assert "browser-cli session close" in one_off_steps[-1]["command"]
+    assert "browser-cli action" not in json.dumps(one_off_steps)
     navigation_steps = workflows["navigation_flow"]["steps"]
     assert [step["id"] for step in navigation_steps] == [
         "inspect_action_guide",
@@ -2824,28 +2805,29 @@ def test_commands_catalog_returns_workflows_only(
     assert first_steps[0]["success_condition"] == (
         "ok=true and ready_for_browser_actions=true"
     )
-    assert first_steps[5]["agent_action"] is True
-    assert "click-role" in first_steps[5]["selection_order"]
-    assert "result.matched" in first_steps[6]["read"]
+    assert first_steps[6]["agent_action"] is True
+    assert "action with jq verification" in first_steps[6]["selection_order"]
+    assert "outline" in first_steps[7]["read"]
+    assert "scripts/cdp.py detach" in first_steps[-2]["command"]
     assert first_steps[-1]["cleanup"] is True
+    assert "browser-cli session close" in first_steps[-1]["command"]
+    assert "browser-cli action" not in json.dumps(first_steps)
     primitive_steps = payload["agent_workflows"]["agent_browser_primitives"]["steps"]
-    assert primitive_steps[0]["command"] == "browser-cli action guide --names-only"
-    assert primitive_steps[1]["command"] == (
-        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
+    assert primitive_steps[0]["command"] == (
+        "browser-cli reference get --id ace_page_api"
     )
+    assert "scripts/cdp.py content" in primitive_steps[1]["command"]
     assert primitive_steps[2]["selection_order"] == [
-        "observe",
-        "act",
-        "extract",
-        "verify",
+        "content",
+        "navigate",
+        "action",
+        "call",
     ]
-    assert primitive_steps[3]["optional"] is True
-    assert "fill-label" in primitive_steps[3]["selection_order"]
-    assert primitive_steps[4]["optional"] is True
-    assert "extract" in primitive_steps[4]["selection_order"]
-    assert "table-snapshot" in primitive_steps[4]["selection_order"]
-    assert "result.extractions.links.links" in primitive_steps[4]["read"]
-    assert "result.link_count" in primitive_steps[5]["read"]
+    assert primitive_steps[3]["agent_action"] is True
+    assert "changes" in primitive_steps[3]["read"]
+    assert "contexts" in primitive_steps[4]["read"]
+    assert "outline" in primitive_steps[5]["read"]
+    assert "browser-cli action" not in json.dumps(primitive_steps)
     assert (
         "required_token_lifecycle"
         in payload["agent_workflows"]["connect_from_codex_site_requirements"]["steps"][
@@ -2860,14 +2842,15 @@ def test_commands_catalog_returns_workflows_only(
         "device_code.required_endpoints"
         in payload["agent_workflows"]["device_code_auth"]["steps"][0]["read"]
     )
-    assert payload["agent_workflows"]["one_off_page_task"]["steps"][-1] == {
-        "id": "close_session",
-        "command": "browser-cli session close --session-id <session_id>",
-        "cleanup": True,
-    }
-    assert (
-        "result.nodes"
-        in payload["agent_workflows"]["one_off_page_task"]["steps"][3]["read"]
+    one_off_steps = payload["agent_workflows"]["one_off_page_task"]["steps"]
+    assert one_off_steps[-2]["id"] == "detach_ace"
+    assert "scripts/cdp.py detach" in one_off_steps[-2]["command"]
+    assert one_off_steps[-1]["id"] == "close_session"
+    assert "browser-cli session close" in one_off_steps[-1]["command"]
+    assert one_off_steps[-1]["cleanup"] is True
+    assert "outline" in one_off_steps[4]["read"]
+    assert "browser-cli action" not in json.dumps(
+        payload["agent_workflows"]["one_off_page_task"]
     )
     assert (
         "result.navigation_requested"
@@ -2978,12 +2961,13 @@ def test_commands_catalog_returns_single_workflow(
         "browser-cli example get --id agent_playbook"
     )
     assert payload["workflow"]["steps"][0]["id"] == "create_session"
-    assert "result.nodes" in payload["workflow"]["steps"][3]["read"]
-    assert payload["workflow"]["steps"][-1] == {
-        "id": "close_session",
-        "command": "browser-cli session close --session-id <session_id>",
-        "cleanup": True,
-    }
+    assert "outline" in payload["workflow"]["steps"][4]["read"]
+    assert payload["workflow"]["steps"][-2]["id"] == "detach_ace"
+    assert "scripts/cdp.py detach" in payload["workflow"]["steps"][-2]["command"]
+    assert payload["workflow"]["steps"][-1]["id"] == "close_session"
+    assert "browser-cli session close" in payload["workflow"]["steps"][-1]["command"]
+    assert payload["workflow"]["steps"][-1]["cleanup"] is True
+    assert "browser-cli action" not in json.dumps(payload["workflow"])
     assert (
         "browser-cli session create"
         in payload["agent_entrypoints"]["one_off_page_task"]
@@ -3006,32 +2990,32 @@ def test_commands_catalog_returns_first_browser_task_workflow(
     assert [step["id"] for step in steps] == [
         "check_readiness",
         "create_session",
-        "open_url",
-        "inspect_page",
+        "discover_targets",
+        "attach_target",
+        "navigate_page",
         "inspect_targets",
         "choose_first_action",
-        "verify_or_capture",
+        "verify_result",
+        "detach_ace",
         "close_session",
     ]
     assert steps[0]["command"] == "browser-cli doctor --json"
     assert "ready_for_browser_actions" in steps[0]["read"]
-    assert steps[4]["command"] == (
-        "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80"
-    )
-    assert "result.nodes" in steps[4]["read"]
-    assert steps[5]["agent_action"] is True
-    assert "fill-label" in steps[5]["selection_order"]
-    assert (
-        "browser-cli action guide --task form_interaction"
-        in steps[5]["fallback_commands"]
-    )
+    assert steps[2]["command"].endswith("> sessions")
+    assert "scripts/cdp.py" in steps[3]["command"]
+    assert " attach " in steps[3]["command"]
+    assert "scripts/cdp.py navigate" in steps[4]["command"]
+    assert "scripts/cdp.py content" in steps[5]["command"]
+    assert "contexts" in steps[5]["read"]
     assert steps[6]["agent_action"] is True
-    assert "result.matched" in steps[6]["read"]
-    assert steps[-1] == {
-        "id": "close_session",
-        "command": "browser-cli session close --session-id <session_id>",
-        "cleanup": True,
-    }
+    assert "action with outline verification" in steps[6]["selection_order"]
+    assert "outline" in steps[7]["read"]
+    assert steps[-2]["id"] == "detach_ace"
+    assert "scripts/cdp.py detach" in steps[-2]["command"]
+    assert steps[-1]["id"] == "close_session"
+    assert "browser-cli session close" in steps[-1]["command"]
+    assert steps[-1]["cleanup"] is True
+    assert "browser-cli action" not in json.dumps(payload["workflow"])
     assert (
         "browser-cli commands --workflow first_browser_task"
         in payload["agent_entrypoints"]["first_browser_task"]
@@ -3059,26 +3043,17 @@ def test_commands_catalog_returns_agent_browser_primitives_workflow(
         "extract_content",
         "verify_result",
     ]
-    assert steps[0]["command"] == "browser-cli action guide --names-only"
-    assert steps[1]["command"] == (
-        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
-    )
-    assert "result.snapshots.interactive.nodes" in steps[1]["read"]
+    assert steps[0]["command"] == "browser-cli reference get --id ace_page_api"
+    assert "scripts/cdp.py content" in steps[1]["command"]
+    assert "outline" in steps[1]["read"]
     assert steps[2]["agent_action"] is True
-    assert steps[2]["selection_order"] == ["observe", "act", "extract", "verify"]
-    assert steps[3]["optional"] is True
-    assert steps[3]["command"] == (
-        'browser-cli action act --session-id <session_id> --kind click --role button --name "<button name>"'
-    )
-    assert steps[3]["selection_order"][0] == "act"
-    assert "click-role" in steps[3]["selection_order"]
-    assert "result.plan.selection" in steps[3]["read"]
-    assert steps[4]["optional"] is True
-    assert "extract" in steps[4]["selection_order"]
-    assert "text-snapshot" in steps[4]["selection_order"]
-    assert "result.extractions.text.texts" in steps[4]["read"]
-    assert steps[5]["agent_action"] is True
-    assert "result.node_count" in steps[5]["read"]
+    assert steps[2]["selection_order"] == ["content", "navigate", "action", "call"]
+    assert steps[3]["agent_action"] is True
+    assert "scripts/cdp.py action" in steps[3]["command"]
+    assert "changes" in steps[3]["read"]
+    assert "contexts" in steps[4]["read"]
+    assert "outline" in steps[5]["read"]
+    assert "browser-cli action" not in json.dumps(payload["workflow"])
     assert (
         "browser-cli commands --workflow agent_browser_primitives"
         in payload["agent_entrypoints"]["agent_browser_primitives"]
@@ -3314,7 +3289,15 @@ def test_reference_list_returns_packaged_agent_references(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 5
+    assert payload["reference_count"] == 6
+    ace = payload["references"]["ace_page_api"]
+    assert ace["id"] == "ace_page_api"
+    assert ace["path"] == "references/ace-page-api.md"
+    assert ace["content_command"] == "browser-cli reference get --id ace_page_api"
+    assert ace["package_resource"] == (
+        "browser_cli.agent_references:ace-page-api.md"
+    )
+    assert "Lexmount Session Initialization" in ace["grep_patterns"]
     reference = payload["references"]["action_playbook"]
     assert reference["id"] == "action_playbook"
     assert reference["path"] == "references/action-playbook.md"
@@ -3374,8 +3357,9 @@ def test_reference_list_names_only(capsys: pytest.CaptureFixture[str]) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["command"] == "reference.list"
-    assert payload["reference_count"] == 5
+    assert payload["reference_count"] == 6
     assert payload["references"] == [
+        "ace_page_api",
         "action_playbook",
         "connect_from_codex",
         "quickstart",
@@ -3517,6 +3501,7 @@ def test_reference_get_fails_unknown_reference_as_json(
     assert payload["error"] == "unknown_reference"
     assert payload["reference_id"] == "missing"
     assert payload["available_references"] == [
+        "ace_page_api",
         "action_playbook",
         "connect_from_codex",
         "quickstart",
@@ -3543,11 +3528,14 @@ def test_skill_status_reports_missing_local_skill(
     assert payload["current"] is False
     assert payload["installed"] is False
     assert payload["skill_dir"] == str(skill_dir)
-    assert payload["resource_count"] == 7
+    assert payload["resource_count"] == 10
     assert "SKILL.md" in payload["missing_files"]
     assert payload["stale_files"] == []
     assert payload["package_errors"] == []
     assert payload["force_install_command"].endswith("--force")
+    assert "managed_skill_count" not in payload
+    assert "managed_skills" not in payload
+    assert "all_current" not in payload
 
 
 def test_skill_install_writes_packaged_skill_resources(
@@ -3570,10 +3558,17 @@ def test_skill_install_writes_packaged_skill_resources(
     assert (skill_dir / "SKILL.md").is_file()
     assert (skill_dir / "agents" / "openai.yaml").is_file()
     assert (skill_dir / "references" / "action-playbook.md").is_file()
+    assert (skill_dir / "references" / "ace-page-api.md").is_file()
+    assert (skill_dir / "scripts" / "cdp.py").is_file()
+    assert (skill_dir / "scripts" / "cdp_daemon.py").is_file()
+    assert os.access(skill_dir / "scripts" / "cdp.py", os.X_OK)
+    assert os.access(skill_dir / "scripts" / "cdp_daemon.py", os.X_OK)
     assert (
-        "browser-cli action act --session-id <session_id>"
+        "--lexmount-session-id <lexmount-session-id> sessions"
         in (skill_dir / "SKILL.md").read_text()
     )
+    assert not (tmp_path / "ace-protocol").exists()
+    assert "managed_skills" not in payload
 
     with pytest.raises(SystemExit) as status_exc:
         cli_main(["skill", "status", "--skill-dir", str(skill_dir)])
@@ -3583,6 +3578,27 @@ def test_skill_install_writes_packaged_skill_resources(
     assert status_payload["status"] == "current"
     assert status_payload["missing_files"] == []
     assert status_payload["stale_files"] == []
+    assert "managed_skills" not in status_payload
+
+
+def test_skill_install_leaves_legacy_sibling_directory_untouched(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+    legacy_dir = tmp_path / "ace-protocol"
+    legacy_dir.mkdir()
+    marker = legacy_dir / "keep.txt"
+    marker.write_text("user-owned legacy install", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["after"]["status"] == "current"
+    assert marker.read_text(encoding="utf-8") == "user-owned legacy install"
+    assert sorted(path.name for path in legacy_dir.iterdir()) == ["keep.txt"]
 
 
 def test_skill_install_requires_force_for_stale_files(
@@ -3612,6 +3628,38 @@ def test_skill_install_requires_force_for_stale_files(
     force_payload = json.loads(capsys.readouterr().out)
     assert force_payload["after"]["status"] == "current"
     assert "SKILL.md" in force_payload["updated_files"]
+
+
+def test_skill_install_requires_force_for_stale_bundled_ace_script(
+    tmp_path: Any,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    skill_dir = tmp_path / "lexmount-browser"
+
+    with pytest.raises(SystemExit) as initial_exc:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir)])
+    assert initial_exc.value.code == 0
+    capsys.readouterr()
+    (skill_dir / "scripts" / "cdp.py").write_text(
+        "old integrated ace script", encoding="utf-8"
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir)])
+
+    assert exc_info.value.code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"] == "would_overwrite_skill_files"
+    assert payload["conflicting_files"] == ["scripts/cdp.py"]
+
+    with pytest.raises(SystemExit) as force_exc:
+        cli_main(["skill", "install", "--skill-dir", str(skill_dir), "--force"])
+
+    assert force_exc.value.code == 0
+    force_payload = json.loads(capsys.readouterr().out)
+    assert force_payload["after"]["status"] == "current"
+    assert "scripts/cdp.py" in force_payload["updated_files"]
+    assert os.access(skill_dir / "scripts" / "cdp.py", os.X_OK)
 
 
 def test_example_list_returns_packaged_agent_examples(
@@ -7308,11 +7356,13 @@ def test_doctor_checks_install_env_direct_url_and_api(
     ] == [
         "check_readiness",
         "create_session",
-        "open_url",
-        "inspect_page",
+        "discover_targets",
+        "attach_target",
+        "navigate_page",
         "inspect_targets",
         "choose_first_action",
-        "verify_or_capture",
+        "verify_result",
+        "detach_ace",
         "close_session",
     ]
     assert checks["command_catalog"]["required_workflow_steps"][
@@ -7329,8 +7379,11 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "one_off_page_task"
     ] == [
         "create_session",
-        "open_url",
-        "find_targets",
+        "discover_targets",
+        "attach_target",
+        "navigate_page",
+        "inspect_page",
+        "detach_ace",
         "close_session",
     ]
     assert checks["command_catalog"]["required_workflow_steps"]["navigation_flow"] == [
@@ -7966,16 +8019,16 @@ def test_doctor_checks_install_env_direct_url_and_api(
     assert checks["agent_prompt"]["display_name"] == "Lexmount Browser CLI"
     assert (
         checks["agent_prompt"]["short_description"]
-        == "Control Lexmount browsers from Codex"
+        == "Control Lexmount sessions with bundled ACE page operations"
     )
     assert checks["agent_prompt"]["default_prompt_present"] is True
-    assert checks["agent_prompt"]["required_pattern_count"] > 20
+    assert checks["agent_prompt"]["required_pattern_count"] == 6
     assert checks["agent_prompt"]["missing_fields"] == []
     assert checks["agent_prompt"]["missing_patterns"] == []
     assert checks["agent_prompt"]["mismatched_fields"] == []
     assert checks["agent_skill_resources"]["status"] == "pass"
-    assert checks["agent_skill_resources"]["resource_count"] == 7
-    assert checks["agent_skill_resources"]["expected_resource_count"] == 7
+    assert checks["agent_skill_resources"]["resource_count"] == 10
+    assert checks["agent_skill_resources"]["expected_resource_count"] == 10
     assert checks["agent_skill_resources"]["missing_patterns"] == []
     assert checks["agent_skill_resources"]["package_errors"] == []
     skill_resources = {
@@ -7992,8 +8045,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "browser-cli skill install --force"
     )
     assert checks["agent_references"]["status"] == "pass"
-    assert checks["agent_references"]["reference_count"] == 5
+    assert checks["agent_references"]["reference_count"] == 6
     assert checks["agent_references"]["required_references"] == [
+        "ace_page_api",
         "action_playbook",
         "connect_from_codex",
         "quickstart",
@@ -9038,7 +9092,7 @@ def test_doctor_warns_when_agent_prompt_metadata_is_incomplete(
             [
                 "interface:",
                 '  display_name: "Wrong"',
-                '  short_description: "Control Lexmount browsers from Codex"',
+                '  short_description: "Control Lexmount sessions with bundled ACE page operations"',
                 '  default_prompt: "Use $browser-cli."',
             ]
         ),
@@ -9058,9 +9112,8 @@ def test_doctor_warns_when_agent_prompt_metadata_is_incomplete(
     assert agent_prompt["display_name"] == "Wrong"
     assert agent_prompt["mismatched_fields"] == ["display_name"]
     assert agent_prompt["missing_fields"] == []
-    assert "doctor --json" in agent_prompt["missing_patterns"]
-    assert "commands --workflow" in agent_prompt["missing_patterns"]
-    assert "click-label" in agent_prompt["missing_patterns"]
+    assert "bundled ACE" in agent_prompt["missing_patterns"]
+    assert "--lexmount-session-id" in agent_prompt["missing_patterns"]
     assert agent_prompt["fix"]["code"] == "repair_packaged_agent_prompt"
     assert (
         "browser-cli commands --workflow setup_and_verify"
@@ -9107,10 +9160,7 @@ def test_doctor_warns_when_packaged_skill_resources_are_stale(
     checks = _checks_by_name(payload)
     skill_resources = checks["agent_skill_resources"]
     assert skill_resources["status"] == "warn"
-    assert (
-        "browser-cli action act --session-id <session_id>"
-        in skill_resources["missing_patterns"]
-    )
+    assert "Control plane and page plane" in skill_resources["missing_patterns"]
     assert skill_resources["fix"]["code"] == "repair_packaged_agent_skill_resources"
     assert "browser-cli skill install --force" in payload["repair_plan"]["commands"]
     assert "api_connectivity" in payload["skipped_checks"]
@@ -9131,6 +9181,14 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     def fail_read(reference_id: str) -> str:
         if reference_id == "action_playbook":
             raise FileNotFoundError("missing packaged reference")
+        if reference_id == "ace_page_api":
+            return (
+                "Lexmount Session Initialization\n"
+                "High-level `navigate`\n"
+                "High-level `content`\n"
+                "High-level `action`\n"
+                "Page.getAIPageContent\n"
+            )
         if reference_id == "usable_status":
             return (
                 "Current Baseline\n"
@@ -9181,6 +9239,7 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
     references = checks["agent_references"]
     assert references["status"] == "warn"
     assert references["required_references"] == [
+        "ace_page_api",
         "action_playbook",
         "connect_from_codex",
         "quickstart",
@@ -9382,8 +9441,9 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                     "steps": [
                         {"id": "check_readiness"},
                         {"id": "create_session"},
-                        {"id": "open_url"},
-                        {"id": "inspect_page"},
+                        {"id": "discover_targets"},
+                        {"id": "attach_target"},
+                        {"id": "navigate_page"},
                         {"id": "inspect_targets"},
                         {"id": "choose_first_action"},
                     ],
@@ -9399,8 +9459,10 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
                 "one_off_page_task": {
                     "steps": [
                         {"id": "create_session"},
-                        {"id": "open_url"},
-                        {"id": "find_targets"},
+                        {"id": "discover_targets"},
+                        {"id": "attach_target"},
+                        {"id": "navigate_page"},
+                        {"id": "inspect_page"},
                     ],
                 },
                 "navigation_flow": {
@@ -9586,8 +9648,8 @@ def test_doctor_warns_when_agent_workflow_missing_required_steps(
             "scaffold_interactive_targeting_case_file",
             "scaffold_page_diagnostics_case_file",
         ],
-        "one_off_page_task": ["close_session"],
-        "first_browser_task": ["verify_or_capture", "close_session"],
+        "one_off_page_task": ["detach_ace", "close_session"],
+        "first_browser_task": ["verify_result", "detach_ace", "close_session"],
         "agent_browser_primitives": ["extract_content", "verify_result"],
         "navigation_flow": ["verify_navigation_result"],
         "link_navigation": ["verify_navigation_result"],
@@ -9945,10 +10007,10 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.22"
+    assert checks["browser_cli"]["version"] == "0.3.23"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
-    assert checks["lex_browser_runtime"]["version"] == "0.3.22"
+    assert checks["lex_browser_runtime"]["version"] == "0.3.23"
     assert checks["lex_browser_runtime"]["version_known"] is True
     assert checks["lex_browser_runtime"]["version_source"] == "bundled"
     assert checks["api_connectivity"]["status"] == "pass"
@@ -13419,6 +13481,43 @@ def test_session_list_passes_status_filter(
     }
 
 
+def test_session_list_always_recursively_redacts_connect_urls(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    connect_url = "wss://browser.example.test/devtools/browser/list-secret"
+
+    class FakeAdmin:
+        def list_sessions(self, *, status: str | None) -> DummyModel:
+            return DummyModel(
+                {
+                    "sessions": [
+                        {
+                            "session_id": "s1",
+                            "status": "active",
+                            "connection": {"connect_url": connect_url},
+                        }
+                    ]
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "list"])
+
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    assert connect_url not in stdout
+    connection = json.loads(stdout)["sessions"][0]["connection"]
+    assert "connect_url" not in connection
+    assert connection["connect_url_available"] is True
+    assert connection["connect_url_redacted"] is True
+    assert connection["connect_url_reveal_command"].endswith(
+        "--reveal-connect-url"
+    )
+
+
 def test_session_create_passes_context_options(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -13794,6 +13893,52 @@ def test_session_create_can_reuse_context_by_metadata(
             },
         ),
     ]
+
+
+def test_session_get_redacts_by_default_and_reveals_only_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    connect_url = "wss://browser.example.test/devtools/browser/get-secret"
+
+    class FakeAdmin:
+        def get_session(self, session_id: str) -> DummyModel:
+            return DummyModel(
+                {
+                    "session_id": session_id,
+                    "status": "active",
+                    "connect_url": connect_url,
+                    "nested": {"connect_url": connect_url},
+                }
+            )
+
+    monkeypatch.setattr("browser_cli.cli.LexmountBrowserAdmin", lambda: FakeAdmin())
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(["session", "get", "--session-id", "s1"])
+    assert exc_info.value.code == 0
+    stdout = capsys.readouterr().out
+    assert connect_url not in stdout
+    session = json.loads(stdout)["session"]
+    assert "connect_url" not in session
+    assert session["connect_url_redacted"] is True
+    assert "connect_url" not in session["nested"]
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli_main(
+            [
+                "session",
+                "get",
+                "--session-id",
+                "s1",
+                "--reveal-connect-url",
+            ]
+        )
+    assert exc_info.value.code == 0
+    session = json.loads(capsys.readouterr().out)["session"]
+    assert session["connect_url"] == connect_url
+    assert session["nested"]["connect_url"] == connect_url
+    assert session["connect_url_masked"] is False
 
 
 def test_session_create_reuses_context_metadata_from_local_registry(

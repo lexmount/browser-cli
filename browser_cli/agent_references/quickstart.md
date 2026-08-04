@@ -104,21 +104,21 @@ Create a session:
 browser-cli session create
 ```
 
-Save `session.session_id` or top-level `session_id` from the JSON output, then
-use it in action commands:
+Save `session.session_id` or top-level `session_id` as the Lexmount session ID.
+Use it only to initialize ACE target discovery and attachment:
 
 ```bash
-browser-cli action open-url --session-id <session_id> --url https://example.com
-browser-cli action page-info --session-id <session_id>
-browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
-browser-cli action snapshot --session-id <session_id> --max-chars 4000
-browser-cli action screenshot --session-id <session_id> --output /tmp/browser-cli-page.png
+uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> sessions
+uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> attach <target-id>
+uv run --script <skill-dir>/scripts/cdp.py navigate <ace-session-id> https://example.com --format=outline
+uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=outline
 ```
 
-Close the session when done:
+Detach ACE, then close the temporary Lexmount session:
 
 ```bash
-browser-cli session close --session-id <session_id>
+uv run --script <skill-dir>/scripts/cdp.py detach <ace-session-id>
+browser-cli session close --session-id <lexmount-session-id>
 ```
 
 ## Persistent Login State
@@ -172,16 +172,17 @@ browser-cli commands --workflow content_extraction
 browser-cli commands --workflow page_diagnostics
 ```
 
-Use the first-class observe, act, and extract primitives before choosing targets or custom JavaScript:
+Use the bundled ACE primitives for ordinary page work:
 
 ```bash
-browser-cli action observe --session-id <session_id> --surface interactive --surface text
-browser-cli action act --session-id <session_id> --kind click --role button --name "Submit"
-browser-cli action act --session-id <session_id> --kind fill --label "Email" --value "me@example.com"
-browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
+browser-cli reference get --id ace_page_api
+uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=outline
+uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=json --jq-context '<expression>'
+uv run --script <skill-dir>/scripts/cdp.py action <ace-session-id> <node-id> click --outline
 ```
 
-Before writing custom JavaScript, inspect the action guide:
+Use the action guide only for a specialized browser-cli fallback such as
+screenshots, uploads, browser state, complex waits, or diagnostics:
 
 ```bash
 browser-cli action guide --names-only

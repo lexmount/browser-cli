@@ -1,5 +1,13 @@
 # Browser Action Playbook
 
+This playbook documents the specialized `browser-cli action` fallback plane.
+For routine Lexmount page navigation, inspection, extraction, clicking, input,
+and selection, initialize the bundled ACE client from the Lexmount session ID
+and use `references/ace-page-api.md` instead. Use this playbook only for
+screenshots, uploads, browser state, complex waits, diagnostics, or another
+operation that neither an ACE high-level command nor a safe raw CDP call can
+express. Never fall back after an uncertain ACE action result.
+
 Load this reference when choosing browser actions, filling forms, diagnosing
 runtime or network issues, handling frames/dialogs, or deciding whether custom
 JavaScript is necessary.

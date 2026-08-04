@@ -1,499 +1,239 @@
 ---
 name: browser-cli
-description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/clear-credentials/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, act/click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
+description: Operate Lexmount remote browsers from Codex with browser-cli for authentication, contexts, and browser-session lifecycle, plus the bundled ACE CDP client for routine page navigation, inspection, extraction, and interaction. Use for remote browsing, authenticated browser reuse, page automation, screenshots, uploads, browser-state work, diagnostics, repeatable cases, and Lexmount setup without exposing credentials or direct CDP URLs.
 ---
 
-# browser-cli
+# Lexmount Browser
 
-Use `browser-cli` as the primary interface for Lexmount browser automation. Prefer CLI commands and JSON output over importing Python internals or writing ad hoc Playwright scripts.
+Use one Skill with two strict operation planes.
 
-## Use When
+## Control plane and page plane
 
-Use this Skill when a task needs a Lexmount remote browser rather than a local tab: browsing, website testing, login reuse, inspection, forms, screenshots, content extraction, browser state setup, diagnostics, or repeatable case files. Use the Fast Path below: do not run reference, doctor, or action-guide discovery before every CLI command. Run the target command directly when credentials, session, and action are already clear.
-Do not use this Skill for local desktop app control, already-open local browser tabs, static docs lookup, or tasks that do not need Lexmount credentials; for static page retrieval, agent-readable article extraction, or DOM dumping that does not require an interactive remote browser session, consider the optional companion `webfetch-cli` first, not as a browser-cli dependency, and check `webfetch-cli --version`, `webfetch-cli capabilities --json`, `webfetch-cli extract`, or `webfetch-cli dump-dom` when it would avoid opening a browser.
+- Use `browser-cli` for setup, authentication, contexts, Lexmount session
+  creation/list/get/keepalive/close, and specialized fallbacks.
+- Use `scripts/cdp.py` as the default page-operation plane after a Lexmount
+  session exists. Route routine navigation, reading, extraction, clicking,
+  input, selection, target handling, and raw CDP calls through ACE.
+- Never use `inspect_url` as a CDP endpoint. Keep the Lexmount `session_id`, CDP
+  `targetId`, and daemon-local ACE `sessionId` distinct.
+- Stop if ACE cannot attach. Do not silently switch to `browser-cli action`.
+  Do not replay an action whose side effects are uncertain.
 
-## Supported Operations
-- Setup and auth: install/version checks, credential state, scoped-token metadata, Connect from Codex requirements, doctor readiness, and smoke-session cleanup.
-- Sessions: create, list, get, keepalive, close, and recover stale sessions; Contexts: create, list, get, status, pick, delete, reuse by metadata, and explain `available`/`locked`/`unavailable` decisions.
-- Navigation and readiness: open URLs, reload, history navigation, and waits for URL, title, load state, network idle, selectors, roles, text, attributes, values, frames, dialogs, storage, cookies, console, and fetch/XHR.
-- Inspection and extraction: observe/extract/page-info plus interactive, text, links, tables, lists, forms, dialogs, frames, accessibility, network, console, performance, and screenshots.
-- Interaction: act, click-label, click-text, click-role, click-index, fill, select, check/uncheck, hover, press, focus/blur, scroll, drag, file uploads, dialogs/frames, and storage/cookie state changes.
-- Repeatable automation: validate, scaffold, and run JSON/YAML cases with artifacts, events, expectations, and cleanup for reproducible tasks.
-## Fast Path
+Resolve `<skill-dir>` to this Skill directory. Invoke ACE only through:
 
-Avoid repeated setup discovery. For ordinary browser work, run the next necessary command directly, for example `browser-cli auth status`, `browser-cli session create`, `browser-cli action open-url --session-id <session_id> --url <url>`, `browser-cli action snapshot --session-id <session_id>`, then `browser-cli session close --session-id <session_id>`.
+```bash
+uv run --script <skill-dir>/scripts/cdp.py <arguments>
+```
 
-Run heavier checks only when they change the next action: first use in a new environment (`browser-cli --version`, `browser-cli auth status`); missing/unclear credentials (`browser-cli auth login --open`, then `browser-cli doctor --json`); no recent successful auth/status signal before creating a browser session (`browser-cli doctor --json`); unclear command/API failure (inspect JSON error, then doctor if still unclear); unsure command shape (`browser-cli commands --names-only`, `browser-cli commands --workflow <id>`, or `browser-cli reference list`); unsure action arguments (`browser-cli action guide --task <task>`); stale skill (`browser-cli skill status`, then `browser-cli skill install --force` only if needed).
+Do not invoke `cdp_daemon.py` directly, write custom WebSocket code, or start a
+second CDP client.
 
-## Setup
+## Fast path
 
-If the CLI is not installed, install it with:
+For a normal temporary browser task:
+
+```bash
+browser-cli auth status
+browser-cli doctor --json
+browser-cli session create
+uv run --script <skill-dir>/scripts/cdp.py \
+  --lexmount-session-id <lexmount-session-id> sessions
+uv run --script <skill-dir>/scripts/cdp.py \
+  --lexmount-session-id <lexmount-session-id> attach <target-id>
+uv run --script <skill-dir>/scripts/cdp.py \
+  navigate <ace-session-id> <url> --format=outline
+```
+
+Run `doctor --json` only when there is no recent successful readiness signal,
+after credentials change, or after an unclear session failure. Read `ok`,
+`ready_for_browser_actions`, `failed_checks`, `warning_checks`, and
+`repair_plan` before creating a session.
+
+`--lexmount-session-id` is valid only for `sessions` and `attach`. It runs a
+trusted local `browser-cli session get --reveal-connect-url`, validates the
+active session and WebSocket URL, and passes the URL privately to the ACE
+  daemon. A real URL must not enter chat, shell output, logs, state files,
+  docs, screenshots, or committed fixtures.
+
+After `attach`, keep the returned ACE `sessionId` for all page operations. The
+remaining commands reuse the selected daemon connection and do not need the
+Lexmount session ID or WebSocket URL.
+
+## Setup and authentication
+
+Check installation and local credentials with:
+
+```bash
+browser-cli --version
+browser-cli auth status
+browser-cli doctor --json
+```
+
+If browser-cli is missing, install it with:
 
 ```bash
 uv tool install --force git+https://github.com/lexmount/browser-cli.git
 ```
 
-Authorize with the local loopback PKCE flow: run `browser-cli auth login --open`, then `browser-cli auth status` and `browser-cli doctor --json`.
+Prefer local loopback PKCE when credentials are missing:
 
-Do not ask the user to paste secrets into chat. Direct the user to `https://browser.lexmount.cn` for China region authorization. `auth login --open` starts a `127.0.0.1` callback, opens Connect from Codex, validates `state`, and exchanges a one-time code plus PKCE verifier for local credentials. API keys do not appear in the local callback URL. China defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
-
-Use local auth helpers instead of handling secrets in chat:
 ```bash
-browser-cli auth status
-browser-cli auth status --credentials-file ~/.config/lexmount/browser-cli/credentials.json
-browser-cli auth scopes
-browser-cli auth scopes --scope browser:actions --include-site-contract
-browser-cli auth token-info --required-scope browser:actions
-browser-cli auth refresh --credentials-file ~/.config/lexmount/browser-cli/credentials.json
-browser-cli auth logout --credentials-file ~/.config/lexmount/browser-cli/credentials.json
-browser-cli auth clear-credentials --credentials-file ~/.config/lexmount/browser-cli/credentials.json
-browser-cli auth connect-requirements
-browser-cli auth login
 browser-cli auth login --open
-browser-cli auth login --device-code
-browser-cli auth export-env
-```
-
-When setup or auth is unclear, inspect the installed workflow contract first:
-
-```bash
-browser-cli commands --workflow setup_and_verify
-browser-cli commands --workflow connect_from_codex_site_requirements
-browser-cli commands --workflow connect_from_codex_auth
-browser-cli commands --workflow device_code_auth
-browser-cli commands --workflow scoped_token_lifecycle
-```
-
-When the task is to inspect or explain what browser.lexmount.cn must implement, run
-`browser-cli reference get --id connect_from_codex`, `browser-cli auth scopes --include-site-contract`,
-`browser-cli auth connect-requirements --checklist`, or `browser-cli commands --workflow connect_from_codex_site_requirements` first.
-Read `browser_site_contract.scope_ui_fields`,
-`browser_site_contract.browser_site_acceptance_tests`, `known_scopes`,
-`default_scopes`, `connect_from_codex.site_capability_status.missing`,
-`required_device_code_endpoints`, `required_api_contract`, `required_token_lifecycle`,
-`required_runtime_auth`, `setup_blocks`, `implementation_checklist.phases`,
-`implementation_checklist.blocked_until`, and `verification.doctor_command`.
-
-Prefer `browser-cli auth login --open` when credentials are missing. Inspect
-top-level `selected_flow`, `authenticated`, `credentials_saved`, `reason`,
-`open_result`, `loopback_callback`, `exchange`, and safe `credentials` metadata.
-If it succeeds, run `browser-cli auth status` and `browser-cli doctor --json`.
-If it cannot complete, use the returned `handoff` as the manual fallback
-contract: follow `copyable_commands`, local shell env guidance, and
-`verification.doctor_command`. Follow `secret_policy`: never paste
-`LEXMOUNT_API_KEY`, revealed export output, authorization codes, code verifiers,
-or full direct URLs into chat.
-If the user asks for device-code login, run `browser-cli auth login --device-code`
-and parse `available`, `reason`, `device_code`, `polling`, `credentials`, and
-`fallback_handoff`; while `available` is false, guide the user through the
-manual env fallback. When an endpoint is explicitly configured, use `--wait`
-only after approval instructions are visible; never report access, refresh, or
-raw device-code values. Prefer
-`browser-cli commands --workflow device_code_auth` when the task is to inspect
-or explain the device-code authorization path.
-
-`auth export-env` prints placeholders by default. With `--from-current`, it still masks `LEXMOUNT_API_KEY` unless `--reveal-secrets` is explicitly used in a trusted local terminal. Check top-level `usable` and `unusable_exports`, plus `safe_to_paste_in_chat`, `local_shell_only`, `contains_secret_values`, `contains_secret_placeholders`, `safety`, `setup_block`, and `verification.doctor_command` before treating returned `commands` as runnable; only run local-shell setup blocks in the user's local terminal, never in chat.
-
-`auth status` reports `auth_source`, `runtime_auth_usable`, `runtime_auth`, safe
-`api_key_credentials`, and safe `device_token` metadata. Read `runtime_auth.usable`,
-`runtime_auth.source`, and `runtime_auth.bearer_runtime.required_support`
-before choosing a credential source. When env credentials are incomplete, read
-`missing_env` and the `fix` object instead of inventing setup steps. Use
-`auth scopes` to inspect known Connect from Codex scopes, `default_scopes`,
-`permission_count`, `risk`, `destructive`, `unknown_scopes`, and the optional
-`browser_site_contract` before explaining requested permissions. Use
-`auth token-info --required-scope <scope>` to check scoped-token coverage. Use
-`auth refresh --credentials-file <path>` to inspect `refresh_needed`,
-`has_refresh_token`, `refresh_available`, `refreshed`, `reason`,
-`refresh_endpoint`, and `remote_refresh`; add `--token-base-url <url>` or set
-`LEXMOUNT_BROWSER_TOKEN_BASE_URL` when browser.lexmount.cn exposes
-`POST /api/auth/token/refresh`. `remote_refresh` reports safe metadata such as
-`response_payload_source` and `response_summary`; token data may be top-level or
-under `token`, `device_token`, `credential`, or `credentials`. Use `auth clear-credentials --credentials-file <path>` to delete local browser-cli credentials, including API-key credentials or device-token metadata, without changing the parent shell; inspect `unset_env_commands` when env variables are still present. Use `auth logout --credentials-file <path>` for the device-token lifecycle flow; `--revoke` calls `POST /api/auth/token/revoke` only when a token lifecycle base URL is configured. Treat explicit `remote_revoke.revoked=false` as not confirmed.
-These commands never report access or refresh token values. Until bearer-token
-runtime support lands, require env API-key credentials for browser actions when
-`runtime_auth.usable` is false.
-For scoped token checks, refresh, or local logout, prefer the lifecycle workflow:
-
-```bash
-browser-cli commands --workflow scoped_token_lifecycle
-```
-
-Follow its `read` fields for `device_token.valid`, `scope_check.missing_scopes`,
-`refresh_available`, `refreshed`, `revoke_available`, and `warnings`.
-
-For the current usable baseline, readiness fields, and browser.lexmount.cn
-boundary, read `browser-cli reference get --id usable_status`.
-
-After credentials are configured, run:
-
-```bash
+browser-cli auth status
 browser-cli doctor --json
-browser-cli doctor --smoke-session
 ```
 
-Run `browser-cli doctor --json` before creating a browser session only when there is no recent successful auth/status signal, after credential changes, or when a session/context/action command fails for an unclear reason. Use `browser-cli doctor --smoke-session` only when you need
-proof that credentials can create and close a temporary browser session. `--json`
-is accepted as a no-op compatibility flag at the top level and after
-subcommands; browser-cli output is always JSON. Parse the JSON before deciding
-what to do:
+Never ask the user to paste API keys, access tokens, refresh tokens,
+authorization codes, PKCE verifiers, revealed export output, or direct connect
+URLs into chat. Use `browser-cli auth scopes`, `token-info`, `refresh`,
+`logout`, `clear-credentials`, `connect-requirements`, and `export-env` for
+credential lifecycle work. Read [references/connect-from-codex.md](references/connect-from-codex.md)
+when coordinating browser.lexmount.cn implementation.
 
-- `ok: true` and `failed: 0`: continue with browser work.
-- `ready_for_browser_actions: true`: browser sessions/actions can be attempted.
-- `browser_smoke_session` with `status: "pass"`: a temporary browser session was
-  created and closed.
-- `browser_smoke_session` with `status: "fail"`: follow its `fix` commands,
-  especially a manual `session close` command when `created` is true and
-  `closed` is false.
-- `command_catalog` with `status: "warn"`: inspect
-  `missing_required_commands`, `missing_required_agent_entrypoints`, `invalid_workflow_command_references`, and `invalid_agent_entrypoint_command_references`; if `action_guides` warns, inspect `missing_required_action_guides`, `invalid_action_guides`, and `invalid_guide_command_references`; follow its `fix` guidance before relying on
-  the full Skill workflow.
-- `case_schema` with `status: "warn"`: inspect `missing_required_case_actions`,
-  `missing_case_scaffold_templates`, `checked_case_scaffold_templates`,
-  `invalid_case_scaffold_templates`, `missing_action_schemas`,
-  `invalid_action_schemas`; reinstall if needed.
-- `auth_login_contract` or `device_code_contract` with `status: "warn"`: inspect
-  `missing_handoff_fields`, `missing_setup_blocks`, `missing_required_device_code_endpoints`, `missing_required_browser_site_support`, `invalid_fields`, and `secret_policy`; reinstall if needed.
-- `agent_references` with `status: "warn"`: run
-  `browser-cli reference get --id quickstart`,
-  `browser-cli reference get --id action_playbook`, or follow its `fix`
-  commands before relying on detailed setup or action guidance.
-- `agent_examples` with `status: "warn"`: run `browser-cli example list`, inspect
-  `invalid_examples` and `checked_examples`, and reinstall browser-cli if
-  packaged playbooks or case files are unreadable or invalid.
-- `repair_plan`: prefer its aggregated `commands`, `env`, `guidance`, and
-  `fixes` when explaining setup repair steps.
-- `warnings > 0` or a check with `status: "warn"`: continue only after
-  reporting warning check names and any `fix` guidance; warnings usually mean
-  local installation/PATH hygiene rather than unusable credentials.
-- `ok: false`: stop before creating sessions, inspect `checks` with
-  `status: "fail"`, and follow each check's `fix` object when present.
-- `api_connectivity` with `status: "skipped"`: do not treat live API access as
-  verified.
-- `env.LEXMOUNT_BASE_URL` with `status: "fail"` and `value_internal: true`: unset it, rerun `browser-cli auth login --open`, and verify a public API base URL before browser work.
-
-Use `browser-cli doctor --skip-api` only for offline setup checks or when the
-user explicitly asks to avoid a live API call. Do not treat a skipped API check
-as proof that browser sessions will work.
-
-Run `browser-cli commands --workflows-only` for a compact agent workflow map,
-`browser-cli commands --workflow <id>` for one task path, and
-`browser-cli commands --names-only`, `browser-cli commands --group action`, or
-`browser-cli action guide --task <task>` when the installed CLI version is
-uncertain or before writing custom JavaScript.
-Use the catalog's `browser_target.exactly_one_of`, `required_options`,
-`required_one_of`, `json_output`, `secret_policy`, `agent_references`,
-`agent_examples`, `agent_entrypoints`, and `agent_workflows` fields instead of
-parsing `--help` text. Follow `agent_references` when detailed action guidance is needed; use `browser-cli reference get --id connect_from_codex` for browser.lexmount.cn requirements, `browser-cli reference get --id usable_status` for the current usable baseline,
-and `agent_references.action_playbook.content_command` or
-`browser-cli reference get --id action_playbook` for action guidance from an
-installed CLI. Use `browser-cli example list` and
-`browser-cli example get --id setup_verification_playbook`, `browser-cli example get --id auth_lifecycle_playbook`, `browser-cli example get --id persistent_context_playbook`, `browser-cli example get --id page_inspection_case`, `browser-cli example get --id agent_primitives_case`, `browser-cli example get --id form_fill_case`, `browser-cli example get --id content_extraction_case`, `browser-cli example get --id browser_state_case`, `browser-cli example get --id navigation_flow_case`, `browser-cli example get --id file_upload_case`, `browser-cli example get --id checkout_flow_case`, `browser-cli example get --id interactive_targeting_case`, or `browser-cli example get --id page_diagnostics_case` when a common task or case
-file template would help. Use `browser-cli case scaffold --template page-inspection`, `browser-cli case scaffold --template agent-primitives`, `browser-cli case scaffold --template content-extraction`, `browser-cli case scaffold --template browser-state`, `browser-cli case scaffold --template navigation-flow`, `browser-cli case scaffold --template file-upload`, `browser-cli case scaffold --template checkout-flow`, `browser-cli case scaffold --template interactive-targeting`, or `browser-cli case scaffold --template page-diagnostics`
-to generate a valid starter case before hand-writing YAML, then follow each workflow step's `read` array first;
-it names the auth availability, export usability, and context reuse fields that
-drive the next decision.
-
-## Workflow
-
-If setup is uncertain, run `browser-cli auth status` first. Use `browser-cli commands --workflow setup_and_verify` and `browser-cli doctor --json` only when auth status is missing, stale, or not enough to decide whether creating a session is safe. Inspect doctor `context_registry` before persistent login reuse; warnings identify invalid JSON, non-file paths, or unwritable locations and include `repair_context_registry`. If credentials are missing, run
-`browser-cli commands --workflow connect_from_codex_auth`, then
-`browser-cli auth login` and guide the user to set local environment variables.
-If the task is to coordinate browser.lexmount.cn changes, run `browser-cli commands --workflow connect_from_codex_site_requirements` and `browser-cli auth connect-requirements --checklist`.
-
-If an existing session is stale, inactive, or possibly consuming quota, inspect
-the recovery workflow before creating more sessions:
+Inspect packaged guidance only when it changes the next action:
 
 ```bash
-browser-cli commands --workflow session_recovery
-```
-
-Use its `read` fields for `sessions`, `session.status`, `final_status`,
-`closed`, and replacement `session.session_id`.
-
-For a first browser task or observe/act/extract planning:
-
-```bash
+browser-cli commands --workflows-only
 browser-cli commands --workflow first_browser_task
 browser-cli commands --workflow agent_browser_primitives
+browser-cli reference get --id quickstart
+browser-cli reference get --id ace_page_api
 ```
 
-Then follow the returned steps; use `browser-cli action observe --session-id <session_id> --surface interactive --surface text` before choosing targets, `browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"` for deterministic act plans, and `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` for bounded content, typically:
+## Contexts and sessions
+
+Use temporary sessions unless login cookies or storage must survive. For
+persistent state, inspect `browser-cli commands --workflow
+persistent_login_state`, then select or create a context and honor
+`context_reuse`, `availability`, `locked`, `reuse_reason`, and
+`selection_summary.recommended_next_action`.
+
+Never place secrets in context metadata. Use `read_write` only when the task
+should update persistent state; use `read_only` for inspection.
+
+Useful lifecycle commands:
 
 ```bash
 browser-cli session create
-browser-cli session create --enable-downloads
-browser-cli session create --enable-recording
-browser-cli action open-url --session-id <session_id> --url <url>
-browser-cli action interactive-snapshot --session-id <session_id>
-browser-cli action wait-role --session-id <session_id> --role button --name "<name>"
-browser-cli session close --session-id <session_id>
+browser-cli session list --status active
+browser-cli session get --session-id <lexmount-session-id>
+browser-cli session keepalive --session-id <lexmount-session-id>
+browser-cli session close --session-id <lexmount-session-id>
+browser-cli context list --include-reuse-state
+browser-cli context status --context-id <context-id>
 ```
 
-For repeatable smoke tests, demos, or regression checks, prefer a case file
-workflow before writing browser automation code:
+Session create/get/list output hides direct connection URLs by default. Do not
+use `--reveal-connect-url` manually for routine page work; let the bundled ACE
+client resolve it internally.
+
+## ACE page workflow
+
+Use these commands after attachment:
+
+- `sessions`
+- `attach TARGET_ID`
+- `detach SESSION_ID`
+- `navigate SESSION_ID URL (--format {outline,json} | --no-content)`
+- `content SESSION_ID --format {outline,json}`
+- `action SESSION_ID NODE_ID ACTION`
+- `call SESSION_ID METHOD [--params JSON | --params-file FILE]`
+
+Read [references/ace-page-api.md](references/ace-page-api.md) before raw ACE
+`Page` calls or when exact output, readiness, jq, action, or error semantics
+matter. The same reference is available through:
 
 ```bash
-browser-cli commands --workflow case_file_task
+browser-cli reference get --id ace_page_api
 ```
 
-Run `browser-cli case schema` before hand-writing a case file. Generate starters with
-`browser-cli case scaffold --template page-inspection`, `browser-cli case scaffold --template agent-primitives`, `browser-cli case scaffold --template form-fill`, `browser-cli case scaffold --template content-extraction`, `browser-cli case scaffold --template browser-state`, `browser-cli case scaffold --template navigation-flow`, `browser-cli case scaffold --template file-upload`, `browser-cli case scaffold --template checkout-flow`, `browser-cli case scaffold --template interactive-targeting`, or `browser-cli case scaffold --template page-diagnostics`,
-validate, then run with `--close-created-session`. Read `supported_actions`, `required_fields`, `step_options.expect`,
-`scaffold_templates`, agent primitive and semantic/navigation/state actions such as `observe`, `act`, `extract`, `fill-label`, `click-label`, `click-role`,
-`select-label`, `check-role`, `hover-role`, `press-role`, `scroll-into-view-role`, `press-key`, `get-text-role`, `exists-role`, `page-info`, `wait-url`, `wait-title`, `wait-load-state`, `wait-network-idle`, `wait-role`, `text-snapshot`, `link-snapshot`, `table-snapshot`, `list-snapshot`, `dialog-snapshot`, `wait-dialog`, `frame-snapshot`, `wait-frame`, plus fallback/advanced/debug commands such as `fill`, `query`, `inspect`, `count`, `wait-count`, `wait-state`, `wait-attribute`, `get-attribute`, `get-value`, `wait-value`, `bounding-box`, `set-value`, `set-file-input`, `dispatch-event`, `submit`, `wait-network`, `wait-console`, `storage-get`, `storage-set`, `storage-remove`, `storage-clear`, `wait-storage`, `cookie-get`, `cookie-set`, `cookie-delete`, `cookie-clear`, `wait-cookie`, `performance-snapshot`, `network-snapshot`, `console-snapshot`, and `click-index`, plus `valid`, `errors`, `step_count`, `next_commands`,
-`events_path`, `artifacts_dir`, `session`, and `steps`.
-
-For form tasks, prefer the more specific form workflow:
+For an unknown page or ordinary visible facts, start with:
 
 ```bash
-browser-cli commands --workflow form_interaction
-browser-cli action guide --task form_interaction
+uv run --script <skill-dir>/scripts/cdp.py \
+  content <ace-session-id> --format=outline
 ```
-Follow the guide's `recommended_core_commands`, `preferred_commands`, `fallback_commands`, `advanced_commands`, `debug_commands`, `verify_commands`, and `custom_js_boundary`. Start with semantic form commands and verification; use selector fallback, DOM events, or custom JavaScript only when the core commands cannot express the operation.
 
-For visible labeled controls, buttons, links, menus, double-clicks, right-click context menus, drag/drop, and repeated controls, prefer `browser-cli commands --workflow interactive_targeting` plus `browser-cli action guide --task interactive_targeting`; for mouse gestures use `mouse_interaction` with `double-click-role`, `right-click-role`, or `drag-role-to-role` first, and use selector `drag-to`, `double-click`, or `right-click` only as fallback; for links, use `link_navigation` and `link-snapshot` before scraping hrefs. Confirm targets with `exists-role`, `get-text-role`, or `bounding-box-role`, choose semantic actions such as `click-label`, `click-role`, and `click-text` before selectors, then verify with `page-info`, `wait-url`, or `wait-text`.
-For page content extraction, prefer `browser-cli commands --workflow content_extraction`, `browser-cli action guide --task content_extraction`, and `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main`; choose narrower outline/text/link/table/list/accessibility snapshots only when the bundled extract result is too broad or truncated.
-For browser state setup, cleanup, or assertions, prefer `browser-cli commands --workflow browser_state_management` and `browser-cli action guide --task browser_state_management`; use storage/cookie commands only for explicit local/session storage and document.cookie-visible cookie workflows, not ordinary page interaction.
-For file uploads, prefer `browser-cli commands --workflow file_upload` and `browser-cli action guide --task file_upload`; inspect controls, then use `set-file-input` before custom JS or OS file picker workarounds.
-For dialogs, cookie banners, confirmation prompts, and iframes, prefer `browser-cli commands --workflow dialog_frame_handling` and `browser-cli action guide --task dialog_frame_handling`; use dialog/frame snapshots and waits before custom JS.
-For menus, popovers, listboxes, and keyboard shortcuts, prefer `browser-cli commands --workflow menu_keyboard_flow` and `browser-cli action guide --task menu_keyboard_flow`; use role hover/focus/press, list snapshots, and `press-key` before custom JS.
-For page navigation, refresh, or history, prefer `browser-cli commands --workflow navigation_flow` and `browser-cli action guide --task navigation_flow`; use `open-url`, `reload`, `go-back`, `go-forward`, `wait-url`, `wait-title`, and `wait-load-state` before custom JS.
-For visual evidence, prefer `browser-cli commands --workflow visual_capture` and `browser-cli action guide --task visual_capture`; use `set-viewport`, `screenshot-role`, full-page `screenshot`, and bounded `text-snapshot` first; use `screenshot-selector` only when a stable selector is already known.
-For semantic readiness and deterministic state transitions, prefer `browser-cli commands --workflow semantic_waits`, `browser-cli action guide --task semantic_waits`, `browser-cli commands --workflow state_waits`, and `browser-cli action guide --task state_waits`; choose `wait-role`, `wait-text`, `wait-state-role`, or `wait-attribute-role` first. Use `wait-network`, `wait-storage`, or `wait-cookie` only for explicit diagnostic or browser-state workflows before sleeps or custom JS.
-
-For page failures, fetch/XHR issues, or runtime errors, prefer the diagnostic workflow before writing custom probes:
+For a known target, repeated structures, select options, or exact hierarchy,
+use one bounded jq query:
 
 ```bash
-browser-cli commands --workflow page_diagnostics
-browser-cli action guide --task page_diagnostics
+uv run --script <skill-dir>/scripts/cdp.py \
+  content <ace-session-id> --format=json --jq-context '<expression>'
 ```
 
-Install console/network capture before reproducing the issue, then read the workflow's console, network, and visible-state steps.
+Interact only with a current node ID that advertises the required action. Use
+the exact option value returned for native selects. Prefer an action with a
+post-action observation chosen before execution:
 
-When page inspection finds `div.qrcode.force-light`, treat it as a QR-code
-handoff state. Do not only report that a QR code exists. In WorkBuddy, open the
-sidebar browser and navigate it to the current session `inspectUrl` /
-`inspect_url` so the user can complete scanning or authentication there. If the
-sidebar browser does not open automatically, explicitly request/open the
-WorkBuddy sidebar browser and load that inspect URL. If the current session
-result does not include an inspect URL, report that missing URL as the blocker
-before continuing.
+- `--jq-context` for a known expected state or known next target.
+- `--outline` for navigation or a large/unknown reconstructed page.
+- `--diff` for a small same-page change whose location is unknown.
+- No observation flag only when effects or URL evidence are sufficient.
 
-Use persistent contexts only when cookies, login state, or storage should survive across sessions:
+Treat `perform.ok:true` only as proof that the operation ran. Verify the
+expected state from `changes`, outline, diff, or jq context. If an action
+returns a new target, attach it explicitly with the same Lexmount session ID
+and inspect it before continuing.
+
+Reuse a still-valid observation. Do not issue another content read merely to
+reformat data already present. Do not parallelize commands on one ACE session.
+
+## Specialized browser-cli fallbacks
+
+Use `browser-cli action` only as a specialized fallback when neither an ACE
+high-level command nor a safe raw CDP `call` can express the operation. Typical
+fallback areas are:
+
+- Screenshots and viewport-specific visual capture.
+- File upload and download-oriented workflows.
+- Cookie, local storage, and session storage setup or cleanup.
+- Complex semantic waits, console/network capture, and page diagnostics.
+- Non-POSIX environments or unavailable ACE runtime dependencies.
+
+Inspect [references/action-playbook.md](references/action-playbook.md) or an
+appropriate `browser-cli action guide --task <task>` only after establishing
+that the task is a specialized fallback. Do not fall back after an ACE timeout,
+CAPTCHA, site/network failure, disconnect, or uncertain action result.
+
+Case files remain available for explicit repeatable browser-cli fallback
+workflows. Validate and run them with `browser-cli case schema`, `case
+validate`, and `case run`.
+
+## Failures and cleanup
+
+- Parse JSON errors before deciding the next action.
+- If ACE attach fails, stop page work and report the attachment error.
+- After an action error, observe fresh ACE content before another action; the
+  perform step may already have changed the page.
+- Detach every task-owned ACE session exactly once in reverse attachment order.
+- Close temporary Lexmount sessions after detach unless the user asks to keep
+  them open. Keep explicitly reused persistent sessions only when requested.
+- Never invoke `Browser.close`, `Browser.crash`, or
+  `Target.exposeDevToolsProtocol` through ACE.
+
+When a page contains `div.qrcode.force-light`, use the Lexmount `inspect_url`
+in the WorkBuddy sidebar browser so the user can scan or authenticate. If the
+session result has no inspect URL, report that as the blocker.
+
+## Skill installation
+
+`browser-cli skill status` and `browser-cli skill install` manage only the
+single `lexmount-browser` directory, including this file, metadata, references,
+and ACE scripts:
 
 ```bash
-browser-cli example get --id persistent_context_playbook --metadata-only
-browser-cli commands --workflow persistent_login_state
+browser-cli skill status
+browser-cli skill install --force
 ```
 
-Then use the returned context-selection steps, typically:
+After updating the Skill, verify status and start a new Codex session so the
+new instructions are loaded.
 
-```bash
-browser-cli context create --description "Office login context"
-browser-cli context status --context-id <context_id>
-browser-cli session create --context-id <context_id> --context-mode read_write
-browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --context-selection newest --create-context-if-missing --context-mode read_write
-```
+## Output and security
 
-Use `read_write` for login/setup work that should update cookies or storage. Use `read_only` when inspecting an existing logged-in state. Before deleting a context, confirm that the task no longer needs its login state.
-
-Parse `context_reuse` from the session result. Reuse only when
-`context_reuse.selected` is true. Read top-level `availability`, `reusable`,
-`locked`, `normalized_status`, `selection_strategy`, and `reuse_reason`. Prefer `availability` over
-raw status strings: `available` can be reused, `locked` means busy, and
-`unavailable` needs a different context. If candidates include `locked: true`,
-report that a busy context was skipped. Inspect `selection_summary` for
-`locked_matches`, `metadata_mismatches`, `reusable_matches`,
-`recommended_next_action` and `decision_reason`. Prefer
-`recommended_next_action` when deciding whether to reuse, create, wait, or
-adjust filters. Inspect candidate `metadata_diagnostics` keys to explain
-metadata mismatches; values are redacted. If `metadata_source` is
-`local_registry`, browser-cli matched metadata recorded locally when it created
-the context. Never put API keys, passwords, or session secrets in context metadata. Use `context list --metadata-json <json> --selection newest --include-reuse-state` for a read-only candidate pool with `reuse_candidates`, `recommended_context_id`, and `selection_summary`. Use
-`session create --context-metadata-json <json> --context-selection newest --create-context-if-missing`
-to reuse or create a context after inspecting candidates. Use
-the workflow's optional `context status --context-id <context_id>` step before
-reuse whenever a specific context id came from older notes, user input, or a
-previous run.
-
-If a command fails, parse the JSON error first. For configuration or credential errors, stop browser work and guide the user to configure local environment
-variables. For missing selectors, take a fresh snapshot or screenshot before
-choosing another selector.
-
-Write custom Playwright only when the CLI cannot express the task and explain why the CLI was insufficient.
-
-Always close temporary sessions created for automation unless the user asks to keep them open.
-
-## Commands
-
-Authentication commands include `browser-cli auth status`, `browser-cli auth scopes`,
-`browser-cli auth token-info`, `browser-cli auth refresh`,
-`browser-cli auth logout`, `browser-cli auth clear-credentials`,
-`browser-cli auth connect-requirements`, `browser-cli auth login`, and
-`browser-cli auth export-env`.
-
-Diagnostics:
-
-```bash
-browser-cli --version
-browser-cli version
-browser-cli commands
-browser-cli commands --names-only
-browser-cli commands --group action
-browser-cli commands --workflows-only
-browser-cli commands --workflow setup_and_verify
-browser-cli commands --workflow connect_from_codex_site_requirements
-browser-cli commands --workflow connect_from_codex_auth
-browser-cli commands --workflow device_code_auth
-browser-cli commands --workflow scoped_token_lifecycle
-browser-cli commands --workflow session_recovery
-browser-cli commands --workflow first_browser_task
-browser-cli commands --workflow one_off_page_task
-browser-cli commands --workflow case_file_task
-browser-cli commands --workflow persistent_login_state
-browser-cli commands --workflow form_interaction
-browser-cli commands --workflow file_upload
-browser-cli commands --workflow dialog_frame_handling
-browser-cli commands --workflow interactive_targeting
-browser-cli commands --workflow navigation_flow
-browser-cli commands --workflow link_navigation
-browser-cli commands --workflow visual_capture
-browser-cli commands --workflow semantic_waits
-browser-cli commands --workflow menu_keyboard_flow
-browser-cli commands --workflow mouse_interaction
-browser-cli commands --workflow content_extraction
-browser-cli commands --workflow browser_state_management
-browser-cli commands --workflow state_waits
-browser-cli commands --workflow page_diagnostics
-browser-cli action guide --names-only
-browser-cli action guide --task form_interaction
-browser-cli action guide --task file_upload
-browser-cli action guide --task dialog_frame_handling
-browser-cli action guide --task interactive_targeting
-browser-cli action guide --task navigation_flow
-browser-cli action guide --task link_navigation
-browser-cli action guide --task visual_capture
-browser-cli action guide --task semantic_waits
-browser-cli action guide --task menu_keyboard_flow
-browser-cli action guide --task mouse_interaction
-browser-cli action guide --task content_extraction
-browser-cli action guide --task browser_state_management
-browser-cli action guide --task state_waits
-browser-cli action guide --task page_diagnostics
-browser-cli case schema
-browser-cli case scaffold --template page-inspection --url https://example.com --output case.yaml
-browser-cli case scaffold --template agent-primitives --output agent-primitives-case.yaml
-browser-cli doctor
-browser-cli doctor --json
-browser-cli doctor --smoke-session
-browser-cli doctor --skip-api
-```
-
-Session lifecycle:
-
-```bash
-browser-cli session create
-browser-cli session create --context-metadata-json '{"purpose":"codex-login"}' --create-context-if-missing
-browser-cli session list
-browser-cli session get --session-id <session_id>
-browser-cli session close --session-id <session_id>
-browser-cli session keepalive --session-id <session_id>
-```
-
-Context lifecycle:
-
-```bash
-browser-cli context create --description "Office login context"
-browser-cli context list --metadata-json '{"purpose":"codex-login"}' --selection newest --include-reuse-state
-browser-cli context get --context-id <context_id>
-browser-cli context status --context-id <context_id>
-browser-cli context fork --context-id <context_id> --description "Forked login context"
-browser-cli context update-description --context-id <context_id> --description "Office login context"
-browser-cli context delete --context-id <context_id>
-```
-
-Browser action details live in [references/action-playbook.md](references/action-playbook.md).
-Read that reference when selecting between semantic actions, diagnosing
-fetch/XHR or console failures, handling forms, menus, dialogs, frames, storage,
-cookies, or deciding whether custom JavaScript is necessary. It contains action
-examples, structured `result` fields, action-specific masking rules, common
-task recipes, and the browser target contract.
-If only the installed CLI is available, read the same packaged content with
-`browser-cli reference get --id action_playbook`.
-
-Core action rules:
-
-- Prefer built-in CLI actions over writing custom JavaScript.
-- Use `browser-cli action guide --task <task>` for task-specific `selection_order`,
-  `recommended_core_commands`, fallback/advanced/debug commands, verify/read fields,
-  and `custom_js_boundary`.
-- Inspect first with `interactive-snapshot`, `form-snapshot`, `list-snapshot`,
-  `link-snapshot`, `table-snapshot`, `text-snapshot`, `dialog-snapshot`,
-  `frame-snapshot`, or `outline-snapshot`; use `snapshot` or `accessibility-snapshot` as debug tools.
-- Prefer semantic actions such as `wait-role`, `wait-state-role`, `get-attribute-role`,
-  `wait-attribute-role`, `exists-role`, `get-text-role`,
-  `bounding-box-role`, `click-label`, `click-role`, `click-text`, `click-index`, `fill-label`, `fill-role`, `focus-role`, `clear-role`,
-  `get-value-role`, `wait-value-role`, `blur-role`, `select-label`, `select-role`,
-  `check-label`, `check-role`, `uncheck-role`, `hover-role`, `press-role`,
-  and `scroll-into-view-role` before raw
-  selectors when the page provides visible labels or accessibility names.
-- Use selector actions such as `exists`, `count`, `wait-state`, `query`,
-  `inspect`, `get-attribute`, `wait-text`, `get-text`, `click`, `type`,
-  `fill`, `set-value`, `select-option`, `check`, and `uncheck` only when a stable
-  selector is known.
-- Use storage/cookie commands only for explicit browser-state setup, cleanup, or assertions. Use network/console commands for diagnostics, not routine interaction setup.
-- For page failures, run `browser-cli commands --workflow page_diagnostics`;
-  install console/network capture before reproducing the issue; use
-  `set-viewport`, `screenshot-role`, and `screenshot-selector` when viewport
-  size or a specific page region affects the failure evidence.
-- Parse structured result fields and `*_masked` flags before concluding that an
-  action changed the page or before reporting values.
-- Use `eval` only for page-local work not covered by a first-class action, and
-  keep the expression small.
-
-## Output
-
-Parse command output as JSON. Check `ok` first, then inspect `command`,
-`error`, `message`, and command-specific fields. Do not log revealed API keys.
-It is safe to include `--json` at the top level or after subcommands because it
-does not change output.
-For `commands`, use the parser-backed catalog to discover installed commands and
-options before guessing. Prefer `--workflows-only` or `--workflow <id>` for
-agent task flows, `--names-only` for quick availability checks, and
-`--group action` or `action guide --task <task>` before choosing browser
-actions.
-Do not paste API keys, Project IDs, or full direct connect URLs into chat, docs,
-commits, screenshots, or test fixtures. By default, doctor hides full direct
-URLs and action/direct-url outputs mask secrets. Use reveal flags only for local
-debugging in a trusted shell.
-Failure messages and payloads mask `api_key`, token-like query parameters, and
-the current `LEXMOUNT_API_KEY` value.
-If `error` is `argument_error`, read the JSON `usage` field and rerun a
-corrected command; do not parse stderr.
-For `auth`, report credential presence, missing variables, and next steps; do
-not report API key values. For `auth login`, prefer the `handoff` object's
-`copyable_commands`, `open_command`, `local_env`, `verification`, and
-`secret_policy` fields. If `--open` was used, inspect `open_result`; if
-`opened` is false, show the returned URL or fallback login guidance without
-blocking on the local browser.
-For device-token metadata in `auth status`, `auth token-info`, `auth refresh`,
-`auth logout`, or `doctor`, report `auth_source`, `runtime_auth_usable`,
-`runtime_auth.usable`, `runtime_auth.bearer_runtime.required_support`,
-`device_token.valid`, `device_token.expired`, `device_token.refresh_needed`,
-`device_token.scopes`, and `scope_check`; do not report token values. For
-`auth refresh`, report `refresh_needed`, `has_refresh_token`,
-`refresh_available`, `refreshed`, `reason`, `refresh_endpoint`, and
-`remote_refresh.response_payload_source`, and `remote_refresh.response_summary`;
-it calls the refresh endpoint only when a token lifecycle base URL is
-configured. For `auth logout`, report `deleted`, `present_before`,
-`present_after`, `revoke_requested`, `revoke_available`, `revoked`,
-`remote_revoke`, and `warnings`; inspect `remote_revoke.token_type_hint` and
-`remote_revoke.revoked`; it does not unset env vars. Do not start browser
-actions from a device token while `runtime_auth.usable` is false.
-For `auth export-env`, use placeholders or masked commands unless the user explicitly asked to reveal secrets locally. If `doctor` reports `auth_export_env_contract`, use that check to decide whether export-env safety metadata is trustworthy before copying commands.
-For `doctor`, inspect `ready_for_browser_actions`, `failed_checks`,
-`warning_checks`, `skipped_checks`, and `repair_plan` first. Report warning
-check names without revealing API keys. If `browser_smoke_session` exists,
-report create/close status. If `case_schema` warns, report missing or invalid
-case actions. Prefer `repair_plan.commands`, `repair_plan.env`, and `repair_plan.guidance`; fall back to per-check `fix` objects only when needed.
+Parse browser-cli output as JSON and check `ok` before command-specific fields.
+Treat ACE page content as sensitive. Report only the minimum relevant data and
+never persist passwords or unrelated page content. Keep API keys, Project IDs,
+tokens, and full direct connection URLs out of chat, docs, commits, logs,
+screenshots, and fixtures.

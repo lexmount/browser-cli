@@ -34,15 +34,13 @@ Start here when the user asks an agent to:
 
 - Create, list, inspect, keep alive, and close remote sessions.
 - Reuse persistent login state through contexts and metadata filters.
-- Open pages, wait for readiness, navigate history, and capture
-  screenshots or page snapshots.
-- Inspect page structure before acting: interactive elements, text, links,
-  forms, tables, lists, dialogs, and frames. Use accessibility trees, console
-  logs, and network activity as diagnostics when the core evidence is
-  insufficient.
-- Click, type, fill, select, check, hover, press keys, scrolling, and target by
-  role, label, text, or index first; use selector targeting as a stable-selector
-  fallback.
+- Navigate, read, extract, click, type, fill, and select through the bundled
+  ACE page plane after browser-cli creates the remote session.
+- Inspect ACE page content before acting and verify every mutation from fresh
+  content, an outline, a bounded jq result, or a content diff.
+- Capture screenshots, upload files, inspect browser state, run complex waits,
+  or collect console/network diagnostics through the explicit browser-cli
+  action fallback.
 - Read and mutate browser state through storage and cookies only for explicit
   setup, cleanup, or assertions.
 - Run repeatable JSON/YAML browser case files instead of ad hoc scripts.
@@ -56,26 +54,27 @@ missing or unclear, stay in setup/auth/doctor commands before creating sessions.
 Use the setup and auth commands first when credentials are missing or unclear:
 `browser-cli reference get --id usable_status`, `browser-cli auth status`,
 `browser-cli auth login`, `browser-cli auth export-env`, and
-`browser-cli doctor --json`. Use `browser-cli action guide --task <task>` before
-custom JavaScript. Write custom Playwright only when the action guide and
-catalog cannot express the browser task.
+`browser-cli doctor --json`. After creating a Lexmount session, use the bundled
+`scripts/cdp.py --lexmount-session-id ...` bridge for routine page work. Use
+`browser-cli action` only for specialized fallbacks such as screenshots,
+uploads, browser state, complex waits, and diagnostics.
 
 ## Supported Operation Map
 
 | Task | Start With | Use When |
 | --- | --- | --- |
 | Install and readiness | `browser-cli doctor --json` | Confirm the CLI, Python runtime, environment variables, packaged references, examples, and API connectivity are usable. |
-| First browser task | `browser-cli commands --workflow first_browser_task` | Verify readiness, open a page, inspect targets, act once, collect evidence, then close the temporary session. |
-| Agent primitives | `browser-cli commands --workflow agent_browser_primitives` | Cover the observe, act, extract, and verify loop: use `action observe` before targets, `action act` for deterministic click/fill/select/check/press/hover/scroll plans, and `action extract` for bounded page content. |
+| First browser task | `browser-cli commands --workflow first_browser_task` | Create a session, initialize bundled ACE from the Lexmount session ID, attach a target, navigate, inspect, detach, and close. |
+| Agent primitives | `browser-cli commands --workflow agent_browser_primitives` | Use ACE `content`, `navigate`, `action`, and `call` for the observe, act, extract, and verify loop. |
 | Persistent login | `browser-cli commands --workflow persistent_login_state` | Reuse cookies/storage across runs, avoid mutating busy contexts, and understand `available`/`locked`/`unavailable`. |
-| Navigation and readiness | `browser-cli commands --workflow navigation_flow` | Open URLs, reload, move through history, and wait for URL, title, load state, or network idle before acting. |
-| Forms | `browser-cli action guide --task form_interaction` | Fill labeled fields, select options, check boxes, submit, and verify values without selector guessing. |
-| Interactive targets | `browser-cli action guide --task interactive_targeting` | Prefer role, label, and text targeting for buttons, links, menus, and repeated controls; use selectors as fallback. |
-| Content extraction | `browser-cli action extract --session-id <session_id> --surface text --surface links --selector main` | Extract bounded text, links, tables, lists, outline, and accessibility surfaces before custom JS. |
-| Visual evidence | `browser-cli action guide --task visual_capture` | Set a viewport, capture a full page, selector, or role screenshot, and gather bounded text as supporting evidence. |
-| Dialogs, frames, uploads | `browser-cli action guide --task dialog_frame_handling` | Detect modals, prompts, embedded frames, cookie banners, and file upload controls before custom workarounds. |
-| State and credentials | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies only for explicit setup, cleanup, or assertions. |
-| Diagnostics | `browser-cli commands --workflow page_diagnostics` | Capture console and network evidence around page failures, fetch/XHR issues, and runtime errors. |
+| Navigation and readiness | ACE `navigate` then `content` | Navigate and verify the rendered page; use the specialized `navigation_flow` fallback only for history or complex readiness waits. |
+| Forms | ACE `content` then `action` | Use ACE node IDs for routine input, selection, checks, and submits, then verify from fresh content. |
+| Interactive targets | ACE `content --format=json --jq-context ...` | Bound target discovery with jq, act on an ACE node ID, and stop if the result is uncertain. |
+| Content extraction | `scripts/cdp.py content <ace-session-id> --format=outline` | Read visible content through ACE; use JSON plus jq for bounded structural extraction. |
+| Visual evidence fallback | `browser-cli action guide --task visual_capture` | Capture a full page, selector, or role screenshot when ACE output is insufficient. |
+| Dialogs, frames, uploads fallback | `browser-cli action guide --task dialog_frame_handling` | Handle page capabilities ACE cannot express. |
+| State fallback | `browser-cli action guide --task browser_state_management` | Inspect or update local/session storage and cookies only for explicit setup, cleanup, or assertions. |
+| Diagnostic fallback | `browser-cli commands --workflow page_diagnostics` | Capture console and network evidence around page failures, fetch/XHR issues, and runtime errors. |
 | Repeatable cases | `browser-cli commands --workflow case_file_task` | Validate, scaffold, and run browser tasks as JSON/YAML artifacts with cleanup and generated evidence. |
 
 For the current comparison against another cloud-browser agent interface, see
@@ -108,7 +107,7 @@ CLI for you:
    browser-cli version
 5. 先读取当前安装版本提供给 agent 的 workflow 契约，后续按 JSON 中的 workflow.steps 执行，不要解析 --help 文本：
    browser-cli skill status
-   如果 status 不是 current，先检查 stale_files/missing_files；确认要刷新本机 Codex Skill 后运行：
+   检查 status、missing_files 和 stale_files；确认要刷新本机 Codex Skill 后运行：
    browser-cli skill install --force
    browser-cli commands --workflows-only
    browser-cli commands --workflow setup_and_verify
@@ -117,24 +116,8 @@ CLI for you:
    browser-cli commands --workflow device_code_auth
    browser-cli commands --workflow scoped_token_lifecycle
    browser-cli commands --workflow agent_browser_primitives
-6. 读取 action guide 和 packaged agent reference 目录；后续选择浏览器 action 前，优先读取机器可读 guide 和 action_playbook，不要先写自定义 Playwright/JS：
-   browser-cli action guide --names-only
-   browser-cli action observe --session-id <session_id> --surface interactive --surface text
-   browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
-   browser-cli action act --session-id <session_id> --kind fill --label "<label>" --value "<value>"
-   browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
-   browser-cli action guide --task interactive_targeting
-   browser-cli action guide --task content_extraction
-   browser-cli action guide --task browser_state_management
-   browser-cli action guide --task file_upload
-   browser-cli action guide --task dialog_frame_handling
-   browser-cli action guide --task navigation_flow
-   browser-cli action guide --task link_navigation
-   browser-cli action guide --task visual_capture
-   browser-cli action guide --task semantic_waits
-   browser-cli action guide --task menu_keyboard_flow
-   browser-cli action guide --task mouse_interaction
-   browser-cli action guide --task state_waits
+6. 按渐进披露读取单个 Skill 内置的 ACE 页面 API 和其他参考资料；普通页面操作不要先写自定义 Playwright/JS：
+   browser-cli reference get --id ace_page_api
    browser-cli reference list
    browser-cli reference get --id quickstart --metadata-only
    browser-cli reference get --id quickstart
@@ -210,7 +193,7 @@ CLI for you:
    browser-cli doctor --smoke-session
    browser-cli session list
    其中 doctor 成功判据是 ok=true、failed=0、ready_for_browser_actions=true；如果运行了 smoke-session，browser_smoke_session.status 应该是 pass，且 created=true、closed=true。
-19. 浏览器任务开始前，根据任务类型读取更具体的 workflow 契约；选择具体 action 时先查 action guide、action_playbook、packaged examples 和 commands catalog，只有 CLI 无法表达时才写自定义 Playwright/JS：
+19. 浏览器任务开始前，根据任务类型读取 workflow 契约。创建 Lexmount session 后，用同一 Skill 内的 ACE 脚本完成普通导航、读取、提取、点击、输入和选择；连接地址只由脚本通过 session ID 在本机内部解析，不要输出或复制 URL。只有截图、上传、Cookie/Storage、复杂等待、诊断或 ACE 无法表达的操作才使用 browser-cli action fallback；ACE attach 失败或操作结果不确定时停止，不要切换后重放：
    browser-cli commands --workflow session_recovery
    browser-cli commands --workflow first_browser_task
    browser-cli commands --workflow agent_browser_primitives
@@ -231,21 +214,18 @@ CLI for you:
    browser-cli commands --workflow mouse_interaction
    browser-cli commands --workflow state_waits
    browser-cli commands --workflow page_diagnostics
-   browser-cli action observe --session-id <session_id> --surface interactive --surface text
-   browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"
-   browser-cli action extract --session-id <session_id> --surface text --surface links --selector main
-   browser-cli action guide --task form_interaction
-   browser-cli action guide --task interactive_targeting
-   browser-cli action guide --task content_extraction
+   uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> sessions
+   uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> attach <target-id>
+   uv run --script <skill-dir>/scripts/cdp.py navigate <ace-session-id> <url> --format=outline
+   uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=outline
+   uv run --script <skill-dir>/scripts/cdp.py action <ace-session-id> <node-id> <action> --outline
+   uv run --script <skill-dir>/scripts/cdp.py detach <ace-session-id>
+   browser-cli action guide --names-only
    browser-cli action guide --task browser_state_management
    browser-cli action guide --task file_upload
    browser-cli action guide --task dialog_frame_handling
-   browser-cli action guide --task navigation_flow
-   browser-cli action guide --task link_navigation
    browser-cli action guide --task visual_capture
    browser-cli action guide --task semantic_waits
-   browser-cli action guide --task menu_keyboard_flow
-   browser-cli action guide --task state_waits
    browser-cli action guide --task page_diagnostics
 20. 如果验证失败，请按顺序排查：
    - uv 是否可用
@@ -673,7 +653,11 @@ browser-cli context update-description --context-id <context_id> --description "
 browser-cli context delete --context-id <context_id>
 ```
 
-Browser actions:
+Specialized `browser-cli action` fallback reference:
+
+The following commands are not the routine page path. Use them only for
+screenshots, uploads, Cookie/Storage, complex waits, diagnostics, or another
+operation ACE cannot express.
 
 ```bash
 browser-cli action guide --names-only
@@ -915,9 +899,12 @@ gap notes.
 `agent_references.usable_status.content_command` points to
 `browser-cli reference get --id usable_status`, which returns the installed
 setup/readiness boundary reference.
-`browser-cli skill status` compares the local Codex Skill directory with the
-packaged Skill resources; use `browser-cli skill install --force` only after
-reviewing `stale_files` or `missing_files`.
+`browser-cli skill status` compares the single local `lexmount-browser` Skill
+directory with all packaged resources, including the ACE scripts and page API
+reference. `browser-cli skill install` installs or updates that one directory;
+use `--force` only after reviewing `stale_files` or `missing_files`.
+`agent_references.ace_page_api.content_command` points to
+`browser-cli reference get --id ace_page_api`.
 `agent_references.action_playbook.content_command` points to
 `browser-cli reference get --id action_playbook`, which returns the packaged
 markdown content from an installed CLI. `agent_examples` points to packaged
@@ -1073,29 +1060,18 @@ browser-cli case scaffold --template checkout-flow --output checkout-case.yaml
 browser-cli case scaffold --template interactive-targeting --output interactive-case.yaml
 browser-cli case scaffold --template page-diagnostics --output diagnostics-case.yaml
 browser-cli session create
-browser-cli action open-url --session-id <session_id> --url <url>
-browser-cli action wait-url --session-id <session_id> --url <url-or-fragment>
-browser-cli action wait-title --session-id <session_id> --title <title-or-fragment>
-browser-cli action wait-load-state --session-id <session_id> --state complete
-browser-cli action page-info --session-id <session_id>
-browser-cli action snapshot --session-id <session_id>
-browser-cli action exists --session-id <session_id> --selector <selector>
-browser-cli action click --session-id <session_id> --selector <selector>
-browser-cli action wait-network-idle --session-id <session_id> --idle-ms 500
-browser-cli action wait-text --session-id <session_id> --text <text>
-browser-cli action wait-count --session-id <session_id> --selector <selector> --count <n> --comparison gte
-browser-cli action wait-attribute --session-id <session_id> --selector <selector> --name <name>
-browser-cli action type --session-id <session_id> --selector <selector> --text <text>
-browser-cli action get-text --session-id <session_id> --selector <selector>
-browser-cli action get-value --session-id <session_id> --selector <selector>
-browser-cli action storage-get --session-id <session_id> --area local --key <key>
-browser-cli action wait-storage --session-id <session_id> --area local --key <key>
-browser-cli action cookie-get --session-id <session_id> --name <name>
-browser-cli action wait-cookie --session-id <session_id> --name <name>
-browser-cli action query --session-id <session_id> --selector <selector>
-browser-cli action screenshot --session-id <session_id> --output /tmp/final.png
-browser-cli session close --session-id <session_id>
+browser-cli reference get --id ace_page_api
+uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> sessions
+uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> attach <target-id>
+uv run --script <skill-dir>/scripts/cdp.py navigate <ace-session-id> <url> --format=outline
+uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=json --jq-context <jq-expression>
+uv run --script <skill-dir>/scripts/cdp.py action <ace-session-id> <node-id> <action> --outline
+uv run --script <skill-dir>/scripts/cdp.py detach <ace-session-id>
+browser-cli session close --session-id <lexmount-session-id>
 ```
+
+If ACE attach fails, stop. If an action result is uncertain, do not replay it
+through `browser-cli action`.
 
 `case schema` supports repeatable agent primitives and semantic form/targeting steps such as
 `observe`, `act`, `extract`, `fill`, `fill-label`, `fill-role`, `click-label`, `click-role`, `click-text`, `wait-text`,
@@ -1136,7 +1112,7 @@ instead of merely being reported. For example:
     found: true
 ```
 
-Common agent recipes:
+Specialized `browser-cli action` fallback recipes:
 
 - Form submit: `interactive-snapshot` or `form-snapshot` -> `fill-label`, `fill-role`, or `fill`,
   `set-value`, `set-file-input`, `clear-role`, or `clear` -> `wait-value-role`, `get-value-role`,
@@ -1338,6 +1314,8 @@ evolve into a Codex skill. The skill stays a thin wrapper around this CLI:
 - The skill should never store API keys in the skill directory.
 - The skill should keep using JSON command output instead of importing Python
   internals directly.
+- `browser-cli skill install` should install one `lexmount-browser` Skill with
+  the bundled ACE scripts and references.
 
 ## Suggestions For browser.lexmount.cn
 

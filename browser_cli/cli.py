@@ -84,6 +84,25 @@ AGENT_USABLE_STATUS_METADATA_COMMAND = (
 AGENT_USABLE_STATUS_COMMAND = "browser-cli reference get --id usable_status"
 CODEX_HOME_ENV = "CODEX_HOME"
 DEFAULT_CODEX_SKILL_DIRECTORY_NAME = "lexmount-browser"
+PACKAGED_SKILL_EXECUTABLE_PATHS = frozenset(
+    {"scripts/cdp.py", "scripts/cdp_daemon.py"}
+)
+BROWSER_CLI_ACTION_FALLBACK_WORKFLOWS = (
+    "browser_state_management",
+    "content_extraction",
+    "dialog_frame_handling",
+    "file_upload",
+    "form_interaction",
+    "interactive_targeting",
+    "link_navigation",
+    "menu_keyboard_flow",
+    "mouse_interaction",
+    "navigation_flow",
+    "page_diagnostics",
+    "semantic_waits",
+    "state_waits",
+    "visual_capture",
+)
 DOCTOR_REQUIRED_AUTH_EXPORT_ENV_FIELDS = (
     "usable",
     "unusable_exports",
@@ -475,6 +494,7 @@ DOCTOR_REQUIRED_CASE_SCAFFOLD_TEMPLATES = (
     "page-diagnostics",
 )
 DOCTOR_REQUIRED_REFERENCES = (
+    "ace_page_api",
     "action_playbook",
     "connect_from_codex",
     "quickstart",
@@ -499,57 +519,21 @@ DOCTOR_REQUIRED_EXAMPLES = (
 )
 DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS = (
     "$browser-cli",
-    "version JSON",
-    "commands --workflow",
-    "connect_from_codex_site_requirements",
-    "device_code_auth",
-    "scoped_token_lifecycle",
-    "session_recovery",
-    "first_browser_task",
-    "agent_browser_primitives",
-    "case_file_task",
-    "form_interaction",
-    "interactive_targeting",
-    "content_extraction",
-    "browser_state_management",
-    "page_diagnostics",
-    "workflow read arrays",
-    "required_runtime_auth",
-    "connect_from_codex",
-    "quickstart",
-    "reference get",
-    "setup_verification_playbook",
-    "auth_lifecycle_playbook",
-    "example get",
-    "action guide",
-    "action observe",
-    "action act",
-    "action extract",
-    "webfetch-cli capabilities --json",
-    "click-label",
-    "fill before custom JavaScript",
-    "custom JavaScript",
-    "case schema",
-    "scaffold/validate/run case files",
-    "auth status",
-    "connect-requirements",
-    "device-code --wait only after approval instructions are visible",
-    "doctor --json",
-    "persistent contexts",
-    "local_registry metadata diagnostics",
-    "JSON output",
+    "bundled ACE",
+    "--lexmount-session-id",
+    "routine page work",
+    "specialized fallback",
     "secrets out of chat",
 )
 DOCTOR_REQUIRED_SKILL_PATTERNS = (
-    "Use When",
-    "Supported Operations",
-    "browser-cli reference get --id quickstart",
-    "browser-cli action observe --session-id <session_id>",
-    "browser-cli action act --session-id <session_id>",
-    "browser-cli action extract --session-id <session_id>",
+    "Control plane and page plane",
+    "--lexmount-session-id <lexmount-session-id> sessions",
+    "--lexmount-session-id <lexmount-session-id> attach <target-id>",
+    "references/ace-page-api.md",
+    "browser-cli reference get --id ace_page_api",
     "browser-cli doctor --json",
-    "webfetch-cli capabilities --json",
-    "Write custom Playwright only when the CLI cannot express the task",
+    "specialized fallback",
+    "Do not replay",
 )
 DOCTOR_REQUIRED_WORKFLOWS = (
     "setup_and_verify",
@@ -684,11 +668,13 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     "first_browser_task": (
         "check_readiness",
         "create_session",
-        "open_url",
-        "inspect_page",
+        "discover_targets",
+        "attach_target",
+        "navigate_page",
         "inspect_targets",
         "choose_first_action",
-        "verify_or_capture",
+        "verify_result",
+        "detach_ace",
         "close_session",
     ),
     "agent_browser_primitives": (
@@ -701,8 +687,11 @@ DOCTOR_REQUIRED_WORKFLOW_STEPS = {
     ),
     "one_off_page_task": (
         "create_session",
-        "open_url",
-        "find_targets",
+        "discover_targets",
+        "attach_target",
+        "navigate_page",
+        "inspect_page",
+        "detach_ace",
         "close_session",
     ),
     "navigation_flow": (
@@ -1258,6 +1247,41 @@ def _catalog_leaf_commands(
 
 def _agent_references() -> dict[str, Any]:
     return {
+        "ace_page_api": {
+            "path": "references/ace-page-api.md",
+            "content_command": "browser-cli reference get --id ace_page_api",
+            "metadata_command": "browser-cli reference list",
+            "package_resource": "browser_cli.agent_references:ace-page-api.md",
+            "format": "markdown",
+            "purpose": (
+                "Initialize the bundled ACE CDP client from a Lexmount session, "
+                "inspect page content, perform verified actions, and use raw CDP safely."
+            ),
+            "load_when": [
+                "Starting routine page work after creating a Lexmount browser session.",
+                "Choosing ACE content, navigate, action, or call arguments.",
+                "Diagnosing ACE transport, session, readiness, or action-result errors.",
+            ],
+            "related_workflows": [
+                "first_browser_task",
+                "agent_browser_primitives",
+                "one_off_page_task",
+            ],
+            "covers": [
+                "Lexmount session-id initialization",
+                "ACE target attach and detach",
+                "page navigation and content inspection",
+                "verified DOM actions",
+                "raw ACE Page methods",
+            ],
+            "grep_patterns": [
+                "Lexmount Session Initialization",
+                "High-level `navigate`",
+                "High-level `content`",
+                "High-level `action`",
+                "Page.getAIPageContent",
+            ],
+        },
         "action_playbook": {
             "path": "references/action-playbook.md",
             "content_command": "browser-cli reference get --id action_playbook",
@@ -1966,7 +1990,9 @@ def _agent_prompt_metadata() -> dict[str, Any]:
             "package_resource": "browser_cli.agent_metadata:openai.yaml",
             "format": "yaml",
             "expected_display_name": "Lexmount Browser CLI",
-            "expected_short_description": "Control Lexmount browsers from Codex",
+            "expected_short_description": (
+                "Control Lexmount sessions with bundled ACE page operations"
+            ),
             "grep_patterns": list(DOCTOR_REQUIRED_AGENT_PROMPT_PATTERNS),
         }
     }
@@ -1998,6 +2024,8 @@ def _packaged_skill_resources() -> dict[str, str]:
         "agents/openai.yaml": str(
             _agent_prompt_metadata()["openai"]["package_resource"]
         ),
+        "scripts/cdp.py": "browser_cli.agent_skill:scripts/cdp.py",
+        "scripts/cdp_daemon.py": "browser_cli.agent_skill:scripts/cdp_daemon.py",
     }
     for reference in _agent_references().values():
         resources[str(reference["path"])] = str(reference["package_resource"])
@@ -2040,12 +2068,13 @@ def _skill_status_command(skill_dir: Path) -> str:
     return " ".join(shlex.quote(part) for part in parts)
 
 
-def _packaged_skill_resource_items() -> tuple[
-    list[dict[str, Any]], list[dict[str, str]]
-]:
+def _packaged_skill_resource_items(
+    resources: dict[str, str] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     items: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
-    for relative_path, package_resource in _packaged_skill_resources().items():
+    selected_resources = resources or _packaged_skill_resources()
+    for relative_path, package_resource in selected_resources.items():
         try:
             content = _read_package_resource_text(package_resource)
         except Exception as exc:
@@ -2069,7 +2098,9 @@ def _packaged_skill_resource_items() -> tuple[
     return items, errors
 
 
-def _skill_status_payload(skill_dir: Path) -> dict[str, Any]:
+def _skill_status_payload(
+    skill_dir: Path,
+) -> dict[str, Any]:
     resource_items, package_errors = _packaged_skill_resource_items()
     checked_files: list[dict[str, Any]] = []
     missing_files: list[str] = []
@@ -2102,7 +2133,13 @@ def _skill_status_payload(skill_dir: Path) -> dict[str, Any]:
             else:
                 current_hash = _sha256_text(current)
                 file_payload["current_sha256"] = current_hash
-                if current_hash == item["sha256"]:
+                executable = (
+                    relative_path not in PACKAGED_SKILL_EXECUTABLE_PATHS
+                    or os.access(target, os.X_OK)
+                )
+                if relative_path in PACKAGED_SKILL_EXECUTABLE_PATHS:
+                    file_payload["executable"] = executable
+                if current_hash == item["sha256"] and executable:
                     file_payload["status"] = "current"
                 else:
                     file_payload["status"] = "stale"
@@ -2147,6 +2184,223 @@ def _skill_status_payload(skill_dir: Path) -> dict[str, Any]:
     }
 
 
+def _ace_first_workflow_overrides() -> dict[str, dict[str, Any]]:
+    cdp = "uv run --script <skill-dir>/scripts/cdp.py"
+    return {
+        "first_browser_task": {
+            "purpose": (
+                "Create a Lexmount session, initialize the bundled ACE page plane "
+                "from its session ID, perform verified page work, then clean up."
+            ),
+            "page_operation_plane": "ace",
+            "browser_cli_action_policy": "specialized_fallback_only",
+            "steps": [
+                {
+                    "id": "check_readiness",
+                    "command": "browser-cli doctor --json",
+                    "read": ["ok", "ready_for_browser_actions", "repair_plan"],
+                    "success_condition": (
+                        "ok=true and ready_for_browser_actions=true"
+                    ),
+                },
+                {
+                    "id": "create_session",
+                    "command": "browser-cli session create",
+                    "read": [
+                        "session_id",
+                        "session.session_id",
+                        "session.status",
+                        "context_reuse",
+                    ],
+                },
+                {
+                    "id": "discover_targets",
+                    "command": (
+                        f"{cdp} --lexmount-session-id "
+                        "<lexmount-session-id> sessions"
+                    ),
+                    "read": ["targets", "sessions"],
+                },
+                {
+                    "id": "attach_target",
+                    "command": (
+                        f"{cdp} --lexmount-session-id "
+                        "<lexmount-session-id> attach <target-id>"
+                    ),
+                    "read": ["session.sessionId", "session.targetId", "reused"],
+                },
+                {
+                    "id": "navigate_page",
+                    "command": (
+                        f"{cdp} navigate <ace-session-id> <url> --format=outline"
+                    ),
+                    "read": ["outline"],
+                },
+                {
+                    "id": "inspect_targets",
+                    "command": (
+                        f"{cdp} content <ace-session-id> --format=json "
+                        "--jq-context <jq-expression>"
+                    ),
+                    "read": ["contexts", "fullJsonBytes"],
+                },
+                {
+                    "id": "choose_first_action",
+                    "command": (
+                        f"{cdp} action <ace-session-id> <node-id> "
+                        "<action> --outline"
+                    ),
+                    "agent_action": True,
+                    "read": ["perform", "changes", "outline"],
+                    "selection_order": [
+                        "action with jq verification",
+                        "action with outline verification",
+                        "action with diff verification",
+                        "safe raw CDP call",
+                    ],
+                },
+                {
+                    "id": "verify_result",
+                    "command": (
+                        f"{cdp} content <ace-session-id> --format=outline"
+                    ),
+                    "read": ["outline"],
+                },
+                {
+                    "id": "detach_ace",
+                    "command": f"{cdp} detach <ace-session-id>",
+                    "cleanup": True,
+                    "cleanup_order": "detach task-owned ACE sessions in reverse attachment order",
+                },
+                {
+                    "id": "close_session",
+                    "command": (
+                        "browser-cli session close --session-id "
+                        "<lexmount-session-id>"
+                    ),
+                    "cleanup": True,
+                    "cleanup_order": "after every task-owned ACE session is detached",
+                },
+            ],
+        },
+        "agent_browser_primitives": {
+            "purpose": (
+                "Map observe, act, extract, and verify intents to the bundled "
+                "ACE page plane before specialized browser-cli fallbacks."
+            ),
+            "page_operation_plane": "ace",
+            "browser_cli_action_policy": "specialized_fallback_only",
+            "steps": [
+                {
+                    "id": "inspect_action_surface",
+                    "command": "browser-cli reference get --id ace_page_api",
+                    "read": ["content"],
+                },
+                {
+                    "id": "observe_page",
+                    "command": (
+                        f"{cdp} content <ace-session-id> --format=outline"
+                    ),
+                    "read": ["outline"],
+                },
+                {
+                    "id": "choose_primitive",
+                    "command": (
+                        "<choose ACE content, navigate, action, or call from "
+                        "the user intent and current observation>"
+                    ),
+                    "agent_action": True,
+                    "selection_order": ["content", "navigate", "action", "call"],
+                },
+                {
+                    "id": "act_semantically",
+                    "command": (
+                        f"{cdp} action <ace-session-id> <node-id> "
+                        "<action> --jq-context <jq-expression>"
+                    ),
+                    "agent_action": True,
+                    "read": ["perform", "changes", "contexts"],
+                },
+                {
+                    "id": "extract_content",
+                    "command": (
+                        f"{cdp} content <ace-session-id> --format=json "
+                        "--jq-context <jq-expression>"
+                    ),
+                    "read": ["contexts", "fullJsonBytes"],
+                },
+                {
+                    "id": "verify_result",
+                    "command": (
+                        f"{cdp} content <ace-session-id> --format=outline"
+                    ),
+                    "read": ["outline", "perform", "changes", "contexts"],
+                },
+            ],
+        },
+        "one_off_page_task": {
+            "purpose": (
+                "Create one temporary Lexmount session, operate its page through "
+                "ACE, detach, and close the remote session."
+            ),
+            "page_operation_plane": "ace",
+            "browser_cli_action_policy": "specialized_fallback_only",
+            "steps": [
+                {
+                    "id": "create_session",
+                    "command": "browser-cli session create",
+                    "read": ["session_id", "session.session_id", "session.status"],
+                },
+                {
+                    "id": "discover_targets",
+                    "command": (
+                        f"{cdp} --lexmount-session-id "
+                        "<lexmount-session-id> sessions"
+                    ),
+                    "read": ["targets", "sessions"],
+                },
+                {
+                    "id": "attach_target",
+                    "command": (
+                        f"{cdp} --lexmount-session-id "
+                        "<lexmount-session-id> attach <target-id>"
+                    ),
+                    "read": ["session.sessionId", "session.targetId", "reused"],
+                },
+                {
+                    "id": "navigate_page",
+                    "command": (
+                        f"{cdp} navigate <ace-session-id> <url> --format=outline"
+                    ),
+                    "read": ["outline"],
+                },
+                {
+                    "id": "inspect_page",
+                    "command": (
+                        f"{cdp} content <ace-session-id> --format=outline"
+                    ),
+                    "read": ["outline"],
+                },
+                {
+                    "id": "detach_ace",
+                    "command": f"{cdp} detach <ace-session-id>",
+                    "cleanup": True,
+                    "cleanup_order": "detach task-owned ACE sessions in reverse attachment order",
+                },
+                {
+                    "id": "close_session",
+                    "command": (
+                        "browser-cli session close --session-id "
+                        "<lexmount-session-id>"
+                    ),
+                    "cleanup": True,
+                    "cleanup_order": "after every task-owned ACE session is detached",
+                },
+            ],
+        },
+    }
+
+
 def _quoted_yaml_field(text: str, key: str) -> str | None:
     prefix = f"  {key}: "
     for line in text.splitlines():
@@ -2163,7 +2417,7 @@ def _command_catalog() -> dict[str, Any]:
     parser = build_parser()
     commands = _catalog_leaf_commands(parser)
     groups = _dedupe_preserving_order([str(command["group"]) for command in commands])
-    return {
+    catalog = {
         "schema_version": 1,
         "groups": groups,
         "command_count": len(commands),
@@ -2265,34 +2519,29 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli commands --workflow first_browser_task",
                 "browser-cli doctor --json",
                 "browser-cli session create",
-                "browser-cli action open-url --session-id <session_id> --url <url>",
-                "browser-cli action page-info --session-id <session_id>",
-                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action wait-text --session-id <session_id> --text <expected_text>",
-                "browser-cli action screenshot --session-id <session_id> --output <path>",
-                "browser-cli session close --session-id <session_id>",
+                "uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> sessions",
+                "uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> attach <target-id>",
+                "uv run --script <skill-dir>/scripts/cdp.py navigate <ace-session-id> <url> --format=outline",
+                "uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=outline",
+                "uv run --script <skill-dir>/scripts/cdp.py detach <ace-session-id>",
+                "browser-cli session close --session-id <lexmount-session-id>",
             ],
             "agent_browser_primitives": [
                 "browser-cli commands --workflow agent_browser_primitives",
-                "browser-cli action guide --names-only",
-                "browser-cli action observe --session-id <session_id> --surface interactive --surface text",
-                "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main",
-                "browser-cli action page-info --session-id <session_id>",
-                "browser-cli action interactive-snapshot --session-id <session_id> --max-nodes 80",
-                "browser-cli action text-snapshot --session-id <session_id> --selector main --max-chars 1000",
-                'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"',
-                'browser-cli action act --session-id <session_id> --kind fill --label "<label>" --value "<value>"',
-                'browser-cli action click-role --session-id <session_id> --role button --name "<name>"',
-                'browser-cli action fill-label --session-id <session_id> --label "<label>" --text "<text>"',
-                "browser-cli action link-snapshot --session-id <session_id> --selector main --max-nodes 80",
-                "browser-cli action screenshot --session-id <session_id> --output <path>",
+                "browser-cli reference get --id ace_page_api",
+                "uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=outline",
+                "uv run --script <skill-dir>/scripts/cdp.py content <ace-session-id> --format=json --jq-context <jq-expression>",
+                "uv run --script <skill-dir>/scripts/cdp.py action <ace-session-id> <node-id> click --outline",
+                "uv run --script <skill-dir>/scripts/cdp.py action <ace-session-id> <node-id> input --text <text> --jq-context <jq-expression>",
+                "uv run --script <skill-dir>/scripts/cdp.py call <ace-session-id> <cdp-method> --params <json>",
             ],
             "one_off_page_task": [
                 "browser-cli session create",
-                "browser-cli action open-url --session-id <session_id> --url <url>",
-                "browser-cli action page-info --session-id <session_id>",
-                "browser-cli action interactive-snapshot --session-id <session_id>",
-                "browser-cli session close --session-id <session_id>",
+                "uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> sessions",
+                "uv run --script <skill-dir>/scripts/cdp.py --lexmount-session-id <lexmount-session-id> attach <target-id>",
+                "uv run --script <skill-dir>/scripts/cdp.py navigate <ace-session-id> <url> --format=outline",
+                "uv run --script <skill-dir>/scripts/cdp.py detach <ace-session-id>",
+                "browser-cli session close --session-id <lexmount-session-id>",
             ],
             "navigation_flow": [
                 "browser-cli action guide --task navigation_flow",
@@ -5202,6 +5451,13 @@ def _command_catalog() -> dict[str, Any]:
             },
         },
     }
+    catalog["agent_workflows"].update(_ace_first_workflow_overrides())
+    for workflow_id in BROWSER_CLI_ACTION_FALLBACK_WORKFLOWS:
+        workflow = catalog["agent_workflows"].get(workflow_id)
+        if isinstance(workflow, dict):
+            workflow["page_operation_plane"] = "browser-cli"
+            workflow["browser_cli_action_policy"] = "specialized_fallback_only"
+    return catalog
 
 
 def _parse_metadata_json(raw: str | None) -> dict[str, Any] | None:
@@ -5850,13 +6106,23 @@ def _redact_connect_urls(
         redacted: dict[str, Any] = {}
         for key, item in value.items():
             if key == "connect_url" and isinstance(item, str):
-                redacted.update(
-                    _masked_connect_url_payload(
-                        item,
-                        reveal_connect_url=reveal_connect_url,
-                        reveal_command=reveal_command,
+                if reveal_connect_url:
+                    redacted.update(
+                        _masked_connect_url_payload(
+                            item,
+                            reveal_connect_url=True,
+                            reveal_command=reveal_command,
+                        )
                     )
-                )
+                else:
+                    redacted.update(
+                        {
+                            "connect_url_available": True,
+                            "connect_url_redacted": True,
+                            "connect_url_masked": True,
+                            "connect_url_reveal_command": reveal_command,
+                        }
+                    )
             else:
                 redacted[key] = _redact_connect_urls(
                     item,
@@ -11663,7 +11929,14 @@ def cmd_session_list(args: argparse.Namespace) -> None:
         result = LexmountBrowserAdmin().list_sessions(status=args.status)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, **_model_payload(result))
+    payload = _redact_connect_urls(
+        _model_payload(result),
+        reveal_connect_url=False,
+        reveal_command=(
+            "browser-cli session get --session-id <session_id> --reveal-connect-url"
+        ),
+    )
+    _success(command, **payload)
 
 
 def cmd_session_get(args: argparse.Namespace) -> None:
@@ -11672,7 +11945,15 @@ def cmd_session_get(args: argparse.Namespace) -> None:
         session = LexmountBrowserAdmin().get_session(args.session_id)
     except Exception as exc:
         _failure_from_exception(command, exc)
-    _success(command, session=_model_payload(session))
+    payload = _redact_connect_urls(
+        _model_payload(session),
+        reveal_connect_url=bool(args.reveal_connect_url),
+        reveal_command=(
+            "browser-cli session get --session-id "
+            f"{shlex.quote(str(args.session_id))} --reveal-connect-url"
+        ),
+    )
+    _success(command, session=payload)
 
 
 def cmd_session_close(args: argparse.Namespace) -> None:
@@ -25770,6 +26051,77 @@ def cmd_example_get(args: argparse.Namespace) -> None:
     )
 
 
+def _write_packaged_skill_resources(
+    *,
+    command: str,
+    skill_name: str,
+    skill_dir: Path,
+    before: dict[str, Any],
+    resources: dict[str, str],
+    executable_paths: frozenset[str] = frozenset(),
+) -> dict[str, Any]:
+    resource_items, _package_errors = _packaged_skill_resource_items(resources)
+    status_by_path = {
+        str(item["path"]): str(item["status"])
+        for item in before["checked_files"]
+        if isinstance(item, dict)
+    }
+    written_files: list[str] = []
+    updated_files: list[str] = []
+    skipped_current_files: list[str] = []
+    executable_files: list[str] = []
+    created_directories: list[str] = []
+
+    for item in resource_items:
+        relative_path = str(item["path"])
+        target = skill_dir / relative_path
+        parent = target.parent
+        if parent.exists() and not parent.is_dir():
+            _failure(
+                command,
+                "skill_parent_path_not_directory",
+                "A parent path for a Codex Skill resource is not a directory.",
+                skill_name=skill_name,
+                skill_dir=str(skill_dir),
+                path=relative_path,
+                parent=str(parent),
+            )
+        if not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
+            created_directories.append(str(parent))
+        if target.exists() and not target.is_file():
+            _failure(
+                command,
+                "skill_resource_path_not_file",
+                "A Codex Skill resource path exists but is not a file.",
+                skill_name=skill_name,
+                skill_dir=str(skill_dir),
+                path=relative_path,
+                target=str(target),
+            )
+        previous_status = status_by_path.get(relative_path)
+        if previous_status == "current":
+            skipped_current_files.append(relative_path)
+        else:
+            target.write_text(str(item["content"]), encoding="utf-8")
+            if previous_status == "missing":
+                written_files.append(relative_path)
+            else:
+                updated_files.append(relative_path)
+        if relative_path in executable_paths:
+            target.chmod(target.stat().st_mode | 0o111)
+            executable_files.append(relative_path)
+
+    return {
+        "skill_dir": str(skill_dir),
+        "written_files": written_files,
+        "updated_files": updated_files,
+        "skipped_current_files": skipped_current_files,
+        "executable_files": executable_files,
+        "created_directories": _dedupe_preserving_order(created_directories),
+    }
+
+
 def cmd_skill_status(args: argparse.Namespace) -> None:
     command = "skill.status"
     skill_dir = _skill_dir_from_args(args)
@@ -25822,61 +26174,24 @@ def cmd_skill_install(args: argparse.Namespace) -> None:
             ),
         )
 
-    resource_items, _package_errors = _packaged_skill_resource_items()
-    status_by_path = {
-        str(item["path"]): str(item["status"])
-        for item in before["checked_files"]
-        if isinstance(item, dict)
-    }
-    written_files: list[str] = []
-    updated_files: list[str] = []
-    skipped_current_files: list[str] = []
-    created_directories: list[str] = []
-
-    for item in resource_items:
-        relative_path = str(item["path"])
-        target = skill_dir / relative_path
-        parent = target.parent
-        if parent.exists() and not parent.is_dir():
-            _failure(
-                command,
-                "skill_parent_path_not_directory",
-                "A parent path for a Codex Skill resource is not a directory.",
-                skill_dir=str(skill_dir),
-                path=relative_path,
-                parent=str(parent),
-            )
-        if not parent.exists():
-            parent.mkdir(parents=True, exist_ok=True)
-            created_directories.append(str(parent))
-        if target.exists() and not target.is_file():
-            _failure(
-                command,
-                "skill_resource_path_not_file",
-                "A Codex Skill resource path exists but is not a file.",
-                skill_dir=str(skill_dir),
-                path=relative_path,
-                target=str(target),
-            )
-        previous_status = status_by_path.get(relative_path)
-        if previous_status == "current":
-            skipped_current_files.append(relative_path)
-            continue
-        target.write_text(str(item["content"]), encoding="utf-8")
-        if previous_status == "missing":
-            written_files.append(relative_path)
-        else:
-            updated_files.append(relative_path)
-
+    install_result = _write_packaged_skill_resources(
+        command=command,
+        skill_name=DEFAULT_CODEX_SKILL_DIRECTORY_NAME,
+        skill_dir=skill_dir,
+        before=before,
+        resources=_packaged_skill_resources(),
+        executable_paths=PACKAGED_SKILL_EXECUTABLE_PATHS,
+    )
     after = _skill_status_payload(skill_dir)
     _success(
         command,
         skill_dir=str(skill_dir),
         force=bool(args.force),
-        written_files=written_files,
-        updated_files=updated_files,
-        skipped_current_files=skipped_current_files,
-        created_directories=_dedupe_preserving_order(created_directories),
+        written_files=install_result["written_files"],
+        updated_files=install_result["updated_files"],
+        skipped_current_files=install_result["skipped_current_files"],
+        executable_files=install_result["executable_files"],
+        created_directories=install_result["created_directories"],
         before={
             "status": before["status"],
             "current": before["current"],
@@ -30782,6 +31097,14 @@ def _add_session_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
     session_get = session_subparsers.add_parser("get", help="Get one session")
     session_get.add_argument("--session-id", required=True)
+    session_get.add_argument(
+        "--reveal-connect-url",
+        action="store_true",
+        help=(
+            "Print the full session connect URL for trusted local consumers. "
+            "Default output fully redacts it."
+        ),
+    )
     session_get.set_defaults(func=cmd_session_get)
 
     session_close = session_subparsers.add_parser("close", help="Close a session")
@@ -33388,7 +33711,7 @@ def _add_example_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 def _add_skill_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     skill = subparsers.add_parser(
         "skill",
-        help="Inspect or install the packaged Codex Skill resources",
+        help="Inspect or install the packaged Codex Skill",
     )
     skill_subparsers = skill.add_subparsers(
         dest="skill_command",
@@ -33402,7 +33725,7 @@ def _add_skill_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
     skill_status.add_argument(
         "--skill-dir",
         help=(
-            "Codex Skill directory to inspect. Defaults to "
+            "Lexmount-browser Skill directory to inspect. Defaults to "
             "$CODEX_HOME/skills/lexmount-browser or ~/.codex/skills/lexmount-browser."
         ),
     )
@@ -33410,12 +33733,12 @@ def _add_skill_commands(subparsers: argparse._SubParsersAction[Any]) -> None:
 
     skill_install = skill_subparsers.add_parser(
         "install",
-        help="Install or update packaged Codex Skill resources",
+        help="Install or update the packaged Codex Skill",
     )
     skill_install.add_argument(
         "--skill-dir",
         help=(
-            "Codex Skill directory to write. Defaults to "
+            "Lexmount-browser Skill directory to write. Defaults to "
             "$CODEX_HOME/skills/lexmount-browser or ~/.codex/skills/lexmount-browser."
         ),
     )

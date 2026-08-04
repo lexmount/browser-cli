@@ -128,33 +128,21 @@ def test_codex_install_prompt_points_to_browser_console_and_auth_helpers() -> No
     assert "browser-cli commands --workflow mouse_interaction" in prompt
     assert "browser-cli commands --workflow state_waits" in prompt
     assert "browser-cli commands --workflow page_diagnostics" in prompt
+    assert "browser-cli reference get --id ace_page_api" in prompt
+    assert "--lexmount-session-id <lexmount-session-id> sessions" in prompt
+    assert "--lexmount-session-id <lexmount-session-id> attach <target-id>" in prompt
+    assert "scripts/cdp.py navigate <ace-session-id>" in prompt
+    assert "scripts/cdp.py content <ace-session-id>" in prompt
+    assert "scripts/cdp.py action <ace-session-id>" in prompt
+    assert "scripts/cdp.py detach <ace-session-id>" in prompt
     assert "browser-cli action guide --names-only" in prompt
-    assert (
-        "browser-cli action observe --session-id <session_id> --surface interactive --surface text"
-        in prompt
-    )
-    assert (
-        'browser-cli action act --session-id <session_id> --kind click --role button --name "<name>"'
-        in prompt
-    )
-    assert (
-        "browser-cli action extract --session-id <session_id> --surface text --surface links --selector main"
-        in prompt
-    )
-    assert "browser-cli action guide --task form_interaction" in prompt
-    assert "browser-cli action guide --task interactive_targeting" in prompt
-    assert "browser-cli action guide --task content_extraction" in prompt
     assert "browser-cli action guide --task browser_state_management" in prompt
     assert "browser-cli action guide --task file_upload" in prompt
     assert "browser-cli action guide --task dialog_frame_handling" in prompt
-    assert "browser-cli action guide --task navigation_flow" in prompt
-    assert "browser-cli action guide --task link_navigation" in prompt
     assert "browser-cli action guide --task visual_capture" in prompt
     assert "browser-cli action guide --task semantic_waits" in prompt
-    assert "browser-cli action guide --task menu_keyboard_flow" in prompt
-    assert "browser-cli action guide --task mouse_interaction" in prompt
-    assert "browser-cli action guide --task state_waits" in prompt
     assert "browser-cli action guide --task page_diagnostics" in prompt
+    assert "ACE attach 失败或操作结果不确定时停止" in prompt
     assert "workflow.steps" in prompt
     assert "connect_from_codex.url" in prompt
     assert "browser-cli reference get --id skill_positioning --metadata-only" in prompt
@@ -212,12 +200,10 @@ def test_readme_homepage_positions_skill_and_supported_operations() -> None:
     assert "navigation_flow" in text
     assert "agent_browser_primitives" in text
     assert "observe, act, extract, and verify" in text
-    assert (
-        "action act` for deterministic click/fill/select/check/press/hover/scroll plans"
-        in text
-    )
-    assert "browser-cli action act --session-id <session_id>" in text
-    assert "browser-cli action extract --session-id <session_id>" in text
+    assert "bundled ACE" in text
+    assert "ACE `content`, `navigate`, `action`, and `call`" in text
+    assert "--lexmount-session-id <lexmount-session-id> sessions" in text
+    assert "Specialized `browser-cli action` fallback" in text
     assert "interactive_targeting" in text
     assert "content_extraction" in text
     assert "visual_capture" in text

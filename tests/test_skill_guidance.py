@@ -6,97 +6,57 @@ from pathlib import Path
 SKILL_MD = Path(__file__).resolve().parents[1] / "SKILL.md"
 
 
-def _normalized_skill_text() -> str:
-    return " ".join(SKILL_MD.read_text().split())
-
-
-def test_skill_prefers_cli_workflow_over_custom_playwright() -> None:
+def test_skill_defines_browser_cli_control_and_ace_page_planes() -> None:
     text = SKILL_MD.read_text()
 
-    assert "Use `browser-cli` as the primary interface" in text
-    assert "Prefer CLI commands and JSON output" in text
-    assert "browser-cli commands --group action" in text
-    assert "browser-cli action guide --task <task>" in text
-    assert "browser-cli skill status" in text
-    assert "browser-cli skill install --force" in text
-    assert "before writing custom JavaScript" in text
-    assert "ad hoc Playwright scripts" in text
-    assert "Write custom Playwright only when the CLI cannot express the task" in text
+    assert "## Control plane and page plane" in text
+    assert "browser-cli` for setup, authentication, contexts" in text
+    assert "scripts/cdp.py` as the default page-operation plane" in text
+    assert "routine navigation, reading, extraction, clicking" in text
+    assert "Stop if ACE cannot attach" in text
+    assert "Do not replay" in text
 
 
-def test_skill_declares_when_to_use_and_supported_operations() -> None:
+def test_skill_fast_path_uses_internal_lexmount_bridge() -> None:
     text = SKILL_MD.read_text()
-    normalized = _normalized_skill_text()
+    fast_path = text.split("## Fast path", 1)[1].split("## Setup", 1)[0]
 
-    assert "## Use When" in text
-    assert "## Supported Operations" in text
-    assert "Lexmount remote browser" in text
-    assert "Use the Fast Path below" in text
-    assert (
-        "do not run reference, doctor, or action-guide discovery before every CLI command"
-        in text
-    )
-    assert "browser-cli reference get --id connect_from_codex" in text
-    assert "browser-cli reference get --id quickstart" in text
-    assert "browser-cli reference get --id usable_status" in text
-    assert "browser-cli action guide --task <task>" in text
-    assert "Setup and auth" in text
-    assert "Sessions: create, list, get, keepalive, close" in text
-    assert "Contexts: create, list, get, status, pick, delete" in text
-    assert "Navigation and readiness" in text
-    assert "Inspection and extraction" in text
-    assert "click-label, click-text, click-role" in text
-    assert "interactive-snapshot" in text
-    assert "Repeatable automation" in text
-    assert "optional companion `webfetch-cli`" in text
-    assert "not as a browser-cli dependency" in text
-    assert "webfetch-cli capabilities --json" in text
-    assert "webfetch-cli extract" in text
-    assert "webfetch-cli dump-dom" in text
-    assert "observe/act/extract planning" in text
-    assert "browser-cli action observe --session-id <session_id>" in text
-    assert "browser-cli action act --session-id <session_id>" in text
-    assert "browser-cli action extract --session-id <session_id>" in text
-    assert "browser-cli commands --workflow agent_browser_primitives" in text
-    assert "dialogs/frames" in text
-    assert "file uploads" in text
-    assert "Do not use this Skill for local desktop app control" in normalized
-    assert "already-open local browser tabs" in normalized
-    assert "Chrome" not in text
-    assert "chrome" not in text
-    assert "Chromium" not in text
-    assert "chromium" not in text
+    assert "browser-cli session create" in fast_path
+    assert "--lexmount-session-id <lexmount-session-id> sessions" in fast_path
+    assert "--lexmount-session-id <lexmount-session-id> attach <target-id>" in fast_path
+    assert "navigate <ace-session-id> <url> --format=outline" in fast_path
+    assert "browser-cli action" not in fast_path
 
 
-def test_skill_guides_safe_one_off_sessions() -> None:
-    text = SKILL_MD.read_text()
-    normalized = _normalized_skill_text()
-
-    assert "browser-cli session create" in text
-    assert "browser-cli action open-url --session-id <session_id> --url <url>" in text
-    assert "browser-cli action snapshot --session-id <session_id>" in text
-    assert "browser-cli action wait-role --session-id <session_id>" in text
-    assert "browser-cli session close --session-id <session_id>" in text
-    assert "Always close temporary sessions" in normalized
-
-
-def test_skill_guides_context_reuse_modes() -> None:
+def test_skill_distinguishes_all_three_session_identifiers() -> None:
     text = SKILL_MD.read_text()
 
-    assert "browser-cli context create" in text
-    assert "browser-cli session create --context-id <context_id>" in text
-    assert "`read_write` for login/setup work" in text
-    assert "`read_only` when inspecting an existing logged-in state" in text
-    assert "Before deleting a context" in text
+    assert "Lexmount `session_id`" in text
+    assert "CDP\n  `targetId`" in text
+    assert "daemon-local ACE `sessionId`" in text
+    assert "After `attach`, keep the returned ACE `sessionId`" in text
 
 
-def test_skill_guides_json_failures_and_secret_hygiene() -> None:
+def test_skill_routes_only_specialized_operations_to_browser_cli_action() -> None:
     text = SKILL_MD.read_text()
-    normalized = _normalized_skill_text()
+    fallback = text.split("## Specialized browser-cli fallbacks", 1)[1]
 
-    assert "parse the JSON error first" in text
-    assert "`error`, `message`, and command-specific fields" in text
-    assert "For `commands`, use the parser-backed catalog" in text
-    assert "safe to include `--json` at the top level or after subcommands" in text
-    assert "Do not paste API keys, Project IDs, or full direct" in text
-    assert "Use reveal flags only for local debugging in a trusted shell" in normalized
+    assert "Screenshots" in fallback
+    assert "File upload" in fallback
+    assert "Cookie" in fallback
+    assert "Complex semantic waits" in fallback
+    assert "page diagnostics" in fallback
+    assert "Do not fall back after an ACE timeout" in fallback
+
+
+def test_skill_documents_contexts_cleanup_and_secret_hygiene() -> None:
+    text = SKILL_MD.read_text()
+
+    assert "persistent_login_state" in text
+    assert "availability" in text
+    assert "locked" in text
+    assert "read_write" in text
+    assert "read_only" in text
+    assert "reverse attachment order" in text
+    assert "Never ask the user to paste API keys" in text
+    assert "Do not\nuse `--reveal-connect-url` manually" in text
