@@ -30,7 +30,7 @@ Run heavier checks only when they change the next action: first use in a new env
 If the CLI is not installed, install it with:
 
 ```bash
-uv tool install --force git+https://github.com/lexmount/browser-cli.git
+uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
 ```
 
 Authorize with the local loopback PKCE flow: run `browser-cli auth login --open`, then `browser-cli auth status` and `browser-cli doctor --json`.

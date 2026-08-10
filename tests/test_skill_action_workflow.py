@@ -48,6 +48,10 @@ PACKAGED_CONNECT_FROM_CODEX = (
     / "agent_references"
     / "connect-from-codex.md"
 )
+SOURCE_ARCHIVE_INSTALL = (
+    "uv tool install --force "
+    "https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
+)
 
 
 def _normalized_skill_text() -> str:
@@ -112,6 +116,18 @@ def test_packaged_quickstart_matches_skill_reference() -> None:
 
 def test_packaged_connect_from_codex_matches_skill_reference() -> None:
     assert PACKAGED_CONNECT_FROM_CODEX.read_text() == CONNECT_FROM_CODEX.read_text()
+
+
+def test_packaged_install_guidance_is_git_free() -> None:
+    for path in (
+        PACKAGED_SKILL_MD,
+        PACKAGED_QUICKSTART,
+        PACKAGED_USABLE_STATUS,
+        PACKAGED_CONNECT_FROM_CODEX,
+    ):
+        text = path.read_text()
+        assert SOURCE_ARCHIVE_INSTALL in text
+        assert "git+https://github.com/lexmount/browser-cli.git" not in text
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:

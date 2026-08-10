@@ -47,7 +47,7 @@ Recommended sections:
    - API host, normally `https://api.lexmount.cn`
    - Region indicator
 2. Install
-   - `uv tool install --force git+https://github.com/lexmount/browser-cli.git`
+   - `uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz`
    - `browser-cli --help`
    - `browser-cli --version`
 3. Authorize
