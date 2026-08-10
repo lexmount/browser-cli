@@ -6946,9 +6946,10 @@ def _doctor_auth_login_contract_check() -> dict[str, Any]:
         invalid_fields.append("setup_blocks")
 
     install_block = setup_by_id.get("install", {})
-    if "uv tool install git+https://github.com/lexmount/browser-cli.git" not in (
-        install_block.get("commands") or []
-    ):
+    archive_install_command = (
+        "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
+    )
+    if archive_install_command not in (install_block.get("commands") or []):
         invalid_fields.append("setup_blocks.install.commands")
     local_env_block = setup_by_id.get("local_env", {})
     if local_env_block.get("safe_to_paste_in_chat") is not False:
@@ -11103,7 +11104,7 @@ def _auth_login_setup_blocks(
             "id": "install",
             "label": "Install browser-cli",
             "commands": [
-                "uv tool install git+https://github.com/lexmount/browser-cli.git",
+                "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz",
                 "browser-cli --help",
                 "browser-cli --version",
                 AGENT_USABLE_STATUS_METADATA_COMMAND,
@@ -11177,7 +11178,7 @@ def _auth_login_handoff(
         "connect_from_codex_available": False,
         "open_command": open_command,
         "open_url": connect_url,
-        "install_command": "uv tool install git+https://github.com/lexmount/browser-cli.git",
+        "install_command": "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz",
         "setup_blocks": _auth_login_setup_blocks(
             project_id, connect_base_url=login_url
         ),

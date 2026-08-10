@@ -12320,7 +12320,7 @@ def test_auth_login_guides_manual_browser_flow(
     assert handoff["open_command"] == "browser-cli auth login --open"
     assert handoff["open_url"] == handoff["connect_from_codex_url"]
     assert handoff["install_command"] == (
-        "uv tool install git+https://github.com/lexmount/browser-cli.git"
+        "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
     )
     assert [block["id"] for block in handoff["setup_blocks"]] == [
         "install",
@@ -12329,7 +12329,7 @@ def test_auth_login_guides_manual_browser_flow(
         "verify",
     ]
     assert handoff["setup_blocks"][0]["commands"] == [
-        "uv tool install git+https://github.com/lexmount/browser-cli.git",
+        "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz",
         "browser-cli --help",
         "browser-cli --version",
         "browser-cli reference get --id usable_status --metadata-only",
