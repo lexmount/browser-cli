@@ -7837,6 +7837,9 @@ def test_doctor_checks_install_env_direct_url_and_api(
         "open_command",
         "open_url",
         "install_command",
+        "fallback_install_command",
+        "install_fallback",
+        "console_origin_policy",
         "setup_blocks",
         "copyable_commands",
         "local_env",
@@ -9222,8 +9225,11 @@ def test_doctor_warns_when_agent_reference_resource_is_unavailable(
         in payload["repair_plan"]["commands"]
     )
     assert (
-        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+        "uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
         in payload["repair_plan"]["commands"]
+    )
+    assert references["fix"]["install_fallback"]["command"] == (
+        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
     )
     assert "api_connectivity" in payload["skipped_checks"]
 
@@ -9302,8 +9308,11 @@ steps:
         in payload["repair_plan"]["commands"]
     )
     assert (
-        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+        "uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
         in payload["repair_plan"]["commands"]
+    )
+    assert examples["fix"]["install_fallback"]["command"] == (
+        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
     )
     assert "api_connectivity" in payload["skipped_checks"]
 
@@ -12320,8 +12329,26 @@ def test_auth_login_guides_manual_browser_flow(
     assert handoff["open_command"] == "browser-cli auth login --open"
     assert handoff["open_url"] == handoff["connect_from_codex_url"]
     assert handoff["install_command"] == (
-        "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
+        "uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
     )
+    assert handoff["fallback_install_command"] == (
+        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+    )
+    assert handoff["install_fallback"] == handoff["setup_blocks"][0]["fallback"]
+    assert handoff["install_fallback"]["prerequisite_commands"] == ["git --version"]
+    assert handoff["install_fallback"]["command_approval"] == {
+        "may_be_required": True,
+        "action": "show_exact_command_and_request_normal_user_approval",
+        "do_not_bypass": True,
+    }
+    assert handoff["install_fallback"]["terminal_failure"] == (
+        "stop_and_report_both_official_install_errors"
+    )
+    assert handoff["console_origin_policy"] == {
+        "origin": "https://browser.lexmount.cn",
+        "authoritative_for_current_setup": True,
+        "do_not_substitute": ["https://browser.lexmount.com"],
+    }
     assert [block["id"] for block in handoff["setup_blocks"]] == [
         "install",
         "open_connect",
@@ -12329,7 +12356,7 @@ def test_auth_login_guides_manual_browser_flow(
         "verify",
     ]
     assert handoff["setup_blocks"][0]["commands"] == [
-        "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz",
+        "uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz",
         "browser-cli --help",
         "browser-cli --version",
         "browser-cli reference get --id usable_status --metadata-only",

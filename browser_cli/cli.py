@@ -68,6 +68,13 @@ DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 INTERNAL_API_BASE_URL_REDACTION = "<internal-api-base-url-redacted>"
 LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
 LEXMOUNT_CODEX_CONNECT_URL = f"{LEXMOUNT_CONSOLE_URL}/connect/codex"
+BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND = (
+    "uv tool install --force "
+    "https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
+)
+BROWSER_CLI_GIT_FALLBACK_INSTALL_COMMAND = (
+    "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+)
 CODEX_CONNECT_BASE_URL_ENV = "LEXMOUNT_BROWSER_CONNECT_BASE_URL"
 DEFAULT_CODEX_CONNECT_SCOPES = (
     "browser:sessions",
@@ -104,6 +111,9 @@ DOCTOR_REQUIRED_AUTH_LOGIN_HANDOFF_FIELDS = (
     "open_command",
     "open_url",
     "install_command",
+    "fallback_install_command",
+    "install_fallback",
+    "console_origin_policy",
     "setup_blocks",
     "copyable_commands",
     "local_env",
@@ -5951,7 +5961,19 @@ def _doctor_fix(
 ) -> dict[str, Any]:
     fix: dict[str, Any] = {"code": code}
     if commands:
-        fix["commands"] = commands
+        legacy_git_install_commands = {
+            "uv tool install git+https://github.com/lexmount/browser-cli.git",
+            BROWSER_CLI_GIT_FALLBACK_INSTALL_COMMAND,
+        }
+        normalized_commands = [
+            BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND
+            if command in legacy_git_install_commands
+            else command
+            for command in commands
+        ]
+        fix["commands"] = normalized_commands
+        if BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND in normalized_commands:
+            fix["install_fallback"] = _browser_cli_install_fallback()
     if env:
         fix["env"] = env
     if guidance:
@@ -6946,11 +6968,29 @@ def _doctor_auth_login_contract_check() -> dict[str, Any]:
         invalid_fields.append("setup_blocks")
 
     install_block = setup_by_id.get("install", {})
-    archive_install_command = (
-        "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
-    )
-    if archive_install_command not in (install_block.get("commands") or []):
+    if BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND not in (
+        install_block.get("commands") or []
+    ):
         invalid_fields.append("setup_blocks.install.commands")
+    expected_install_fallback = _browser_cli_install_fallback()
+    if install_block.get("fallback") != expected_install_fallback:
+        invalid_fields.append("setup_blocks.install.fallback")
+    if handoff.get("install_command") != BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND:
+        invalid_fields.append("install_command")
+    if (
+        handoff.get("fallback_install_command")
+        != BROWSER_CLI_GIT_FALLBACK_INSTALL_COMMAND
+    ):
+        invalid_fields.append("fallback_install_command")
+    if handoff.get("install_fallback") != expected_install_fallback:
+        invalid_fields.append("install_fallback")
+    expected_console_origin_policy = {
+        "origin": handoff.get("login_url"),
+        "authoritative_for_current_setup": True,
+        "do_not_substitute": ["https://browser.lexmount.com"],
+    }
+    if handoff.get("console_origin_policy") != expected_console_origin_policy:
+        invalid_fields.append("console_origin_policy")
     local_env_block = setup_by_id.get("local_env", {})
     if local_env_block.get("safe_to_paste_in_chat") is not False:
         invalid_fields.append("setup_blocks.local_env.safe_to_paste_in_chat")
@@ -11087,6 +11127,26 @@ def _connect_from_codex_required_api_contract() -> dict[str, Any]:
     }
 
 
+def _browser_cli_install_fallback() -> dict[str, Any]:
+    return {
+        "condition": "source_archive_failed_due_to_github_archive_or_codeload_access",
+        "prerequisite_commands": ["git --version"],
+        "command": BROWSER_CLI_GIT_FALLBACK_INSTALL_COMMAND,
+        "downloads_and_executes_package_build_code": True,
+        "command_approval": {
+            "may_be_required": True,
+            "action": "show_exact_command_and_request_normal_user_approval",
+            "do_not_bypass": True,
+        },
+        "prohibited_recovery": [
+            "clone_then_install_from_local_path_to_bypass_approval",
+            "web_search_for_alternative_packages",
+            "guess_repository_or_download_host",
+        ],
+        "terminal_failure": "stop_and_report_both_official_install_errors",
+    }
+
+
 def _auth_login_setup_blocks(
     project_id: str | None,
     *,
@@ -11104,12 +11164,13 @@ def _auth_login_setup_blocks(
             "id": "install",
             "label": "Install browser-cli",
             "commands": [
-                "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz",
+                BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND,
                 "browser-cli --help",
                 "browser-cli --version",
                 AGENT_USABLE_STATUS_METADATA_COMMAND,
                 AGENT_USABLE_STATUS_COMMAND,
             ],
+            "fallback": _browser_cli_install_fallback(),
             "contains_secret_values": False,
             "contains_secret_placeholders": False,
             "safe_to_paste_in_chat": True,
@@ -11178,7 +11239,14 @@ def _auth_login_handoff(
         "connect_from_codex_available": False,
         "open_command": open_command,
         "open_url": connect_url,
-        "install_command": "uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz",
+        "install_command": BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND,
+        "fallback_install_command": BROWSER_CLI_GIT_FALLBACK_INSTALL_COMMAND,
+        "install_fallback": _browser_cli_install_fallback(),
+        "console_origin_policy": {
+            "origin": login_url,
+            "authoritative_for_current_setup": True,
+            "do_not_substitute": ["https://browser.lexmount.com"],
+        },
         "setup_blocks": _auth_login_setup_blocks(
             project_id, connect_base_url=login_url
         ),

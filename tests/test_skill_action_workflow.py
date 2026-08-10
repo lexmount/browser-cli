@@ -118,7 +118,7 @@ def test_packaged_connect_from_codex_matches_skill_reference() -> None:
     assert PACKAGED_CONNECT_FROM_CODEX.read_text() == CONNECT_FROM_CODEX.read_text()
 
 
-def test_packaged_install_guidance_is_git_free() -> None:
+def test_packaged_install_guidance_prefers_archive_with_guarded_git_fallback() -> None:
     for path in (
         PACKAGED_SKILL_MD,
         PACKAGED_QUICKSTART,
@@ -127,7 +127,13 @@ def test_packaged_install_guidance_is_git_free() -> None:
     ):
         text = path.read_text()
         assert SOURCE_ARCHIVE_INSTALL in text
-        assert "git+https://github.com/lexmount/browser-cli.git" not in text
+        git_fallback = "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+        assert git_fallback in text
+        assert text.index(SOURCE_ARCHIVE_INSTALL) < text.index(git_fallback)
+        assert "archive/codeload" in text
+        assert "git --version" in text
+        assert "approval" in text
+        assert "clone/local-path" in text
 
 
 def test_skill_prefers_semantic_actions_before_eval() -> None:

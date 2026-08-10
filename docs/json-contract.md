@@ -132,6 +132,8 @@ The Connect from Codex site requirements workflow includes
 `connect_from_codex.browser_site_acceptance_tests`,
 `required_device_code_endpoints`, `required_api_contract`,
 `required_token_lifecycle`, `required_runtime_auth`, `setup_blocks`,
+`install_command`, `fallback_install_command`, `install_fallback`,
+`console_origin_policy`,
 `browser_site_acceptance_tests`, and verification commands so agents can
 coordinate browser.lexmount.cn changes without pretending a user is logging in.
 The device-code auth workflow includes `auth login --device-code`,
@@ -139,6 +141,12 @@ The device-code auth workflow includes `auth login --device-code`,
 `connect_from_codex.site_capability_status.missing`, and `fallback_handoff`
 fields so agents can explain current browser.lexmount.cn gaps and fall back to
 manual env setup.
+The install handoff always makes the GitHub source archive primary. Its
+`install_fallback` records the archive/codeload-only trigger, `git --version`
+prerequisite, official git command, command-approval behavior, prohibited
+approval bypasses, and the terminal stop/report action. `console_origin_policy`
+locks agents to the exact current console origin instead of allowing a guessed
+or substituted host.
 The session recovery workflow includes active session listing, single-session
 inspection, keepalive status, stale-session close, and replacement session
 creation steps so agents can avoid leaking sessions or consuming quota.
