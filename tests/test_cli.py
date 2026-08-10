@@ -82,9 +82,9 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.22"
+    assert payload["version"] == "0.3.23"
     assert payload["version_source"] == "package_fallback"
-    assert payload["lex_browser_runtime_version"] == "0.3.22"
+    assert payload["lex_browser_runtime_version"] == "0.3.23"
     assert payload["lex_browser_runtime_version_known"] is True
     assert payload["lex_browser_runtime_version_source"] == "bundled"
 
@@ -3567,6 +3567,8 @@ def test_skill_install_writes_packaged_skill_resources(
     assert payload["after"]["status"] == "current"
     assert payload["after"]["current"] is True
     assert "SKILL.md" in payload["written_files"]
+    assert any("target coding agent" in step for step in payload["next_steps"])
+    assert all("Codex" not in step for step in payload["next_steps"])
     assert (skill_dir / "SKILL.md").is_file()
     assert (skill_dir / "agents" / "openai.yaml").is_file()
     assert (skill_dir / "references" / "action-playbook.md").is_file()
@@ -9945,10 +9947,10 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.22"
+    assert checks["browser_cli"]["version"] == "0.3.23"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
-    assert checks["lex_browser_runtime"]["version"] == "0.3.22"
+    assert checks["lex_browser_runtime"]["version"] == "0.3.23"
     assert checks["lex_browser_runtime"]["version_known"] is True
     assert checks["lex_browser_runtime"]["version_source"] == "bundled"
     assert checks["api_connectivity"]["status"] == "pass"

@@ -25784,7 +25784,7 @@ def cmd_skill_install(args: argparse.Namespace) -> None:
         _failure(
             command,
             "packaged_skill_unavailable",
-            "Packaged Codex Skill resources could not be read.",
+            "Packaged agent Skill resources could not be read.",
             skill_dir=str(skill_dir),
             package_errors=before["package_errors"],
             fix=_doctor_fix(
@@ -25794,7 +25794,7 @@ def cmd_skill_install(args: argparse.Namespace) -> None:
                     "browser-cli skill status",
                 ],
                 guidance=[
-                    "The installed package should include browser-cli Codex Skill resources.",
+                    "The installed package should include browser-cli agent Skill resources.",
                     "Reinstall browser-cli if packaged Skill resources are unavailable.",
                 ],
             ),
@@ -25808,7 +25808,7 @@ def cmd_skill_install(args: argparse.Namespace) -> None:
         _failure(
             command,
             "would_overwrite_skill_files",
-            "Codex Skill files already exist with different or unreadable content.",
+            "Agent Skill files already exist with different or unreadable content.",
             skill_dir=str(skill_dir),
             conflicting_files=conflicts,
             force_required=True,
@@ -25841,7 +25841,7 @@ def cmd_skill_install(args: argparse.Namespace) -> None:
             _failure(
                 command,
                 "skill_parent_path_not_directory",
-                "A parent path for a Codex Skill resource is not a directory.",
+                "A parent path for an agent Skill resource is not a directory.",
                 skill_dir=str(skill_dir),
                 path=relative_path,
                 parent=str(parent),
@@ -25853,7 +25853,7 @@ def cmd_skill_install(args: argparse.Namespace) -> None:
             _failure(
                 command,
                 "skill_resource_path_not_file",
-                "A Codex Skill resource path exists but is not a file.",
+                "An agent Skill resource path exists but is not a file.",
                 skill_dir=str(skill_dir),
                 path=relative_path,
                 target=str(target),
@@ -25892,7 +25892,7 @@ def cmd_skill_install(args: argparse.Namespace) -> None:
             "unreadable_files": after["unreadable_files"],
         },
         next_steps=[
-            "Restart or reload Codex so the updated Skill instructions are read.",
+            "Reload or restart the target coding agent if it does not detect the updated Skill instructions automatically.",
             "Run `browser-cli skill status` to verify the installed Skill remains current.",
         ],
     )

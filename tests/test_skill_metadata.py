@@ -109,6 +109,13 @@ def test_openai_yaml_stays_aligned_with_skill_name() -> None:
     assert "$browser-cli" in prompt
 
 
+def test_skill_description_is_coding_agent_neutral() -> None:
+    skill_text = SKILL_MD.read_text()
+
+    assert "Use when a coding agent needs" in skill_text
+    assert "Use when Codex or another agent needs" not in skill_text
+
+
 def test_packaged_openai_yaml_matches_repo_metadata() -> None:
     packaged = (
         importlib_resources.files("browser_cli.agent_metadata")
