@@ -10,7 +10,7 @@ chat, issues, commits, or PR descriptions.
 For mainline/default-branch usage, install from GitHub:
 
 ```bash
-uv tool install --force git+https://github.com/lexmount/browser-cli.git
+uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
 ```
 
 Verify that command discovery returns JSON:

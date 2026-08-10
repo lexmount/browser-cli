@@ -23,7 +23,7 @@ def test_quickstart_covers_minimum_usable_flow() -> None:
     text = QUICKSTART.read_text()
 
     assert (
-        "uv tool install --force git+https://github.com/lexmount/browser-cli.git"
+        "uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz"
         in text
     )
     assert "PR #69" not in text

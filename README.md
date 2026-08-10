@@ -102,7 +102,7 @@ CLI for you:
 2. 如果没有 uv，提示我先安装 uv：
    curl -LsSf https://astral.sh/uv/install.sh | sh
 3. 安装或升级 browser-cli：
-   uv tool install --force git+https://github.com/lexmount/browser-cli.git
+   uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
 4. 验证 CLI 版本输出是 JSON：
    browser-cli --version
    browser-cli version
@@ -269,7 +269,7 @@ CLI for you:
 ## Manual Install
 
 ```bash
-uv tool install git+https://github.com/lexmount/browser-cli.git
+uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
 browser-cli --help
 browser-cli --version
 browser-cli commands --names-only
@@ -1349,7 +1349,7 @@ The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
 2. Add a scoped API key wizard for agent use, with clear permissions, optional
    expiration, and one-click revoke.
 3. Provide a copyable install block:
-   `uv tool install git+https://github.com/lexmount/browser-cli.git`.
+   `uv tool install https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz`.
 4. Add a "Verify CLI" section that tells users to run
    `browser-cli doctor --json` and `browser-cli doctor --smoke-session` after
    setting env vars, then explains `ready_for_browser_actions` and
