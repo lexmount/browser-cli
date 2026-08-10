@@ -82,9 +82,9 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.23"
+    assert payload["version"] == "0.3.24"
     assert payload["version_source"] == "package_fallback"
-    assert payload["lex_browser_runtime_version"] == "0.3.23"
+    assert payload["lex_browser_runtime_version"] == "0.3.24"
     assert payload["lex_browser_runtime_version_known"] is True
     assert payload["lex_browser_runtime_version_source"] == "bundled"
 
@@ -9956,10 +9956,10 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.23"
+    assert checks["browser_cli"]["version"] == "0.3.24"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
-    assert checks["lex_browser_runtime"]["version"] == "0.3.23"
+    assert checks["lex_browser_runtime"]["version"] == "0.3.24"
     assert checks["lex_browser_runtime"]["version_known"] is True
     assert checks["lex_browser_runtime"]["version_source"] == "bundled"
     assert checks["api_connectivity"]["status"] == "pass"
@@ -12289,6 +12289,49 @@ def test_auth_connect_requirements_checklist_view(
     ]
     assert "browser-cli doctor --smoke-session" in checklist["verification_commands"]
     assert any("never safe to paste" in rule for rule in checklist["safe_copy_rules"])
+
+
+@pytest.mark.parametrize(
+    ("console_url", "expected_exclusions"),
+    [
+        ("https://browser.lexmount.cn/", ["https://browser.lexmount.com"]),
+        ("https://browser.lexmount.com", ["https://browser.lexmount.cn"]),
+        (
+            "https://preview.browser.lexmount.cn",
+            [
+                "https://browser.lexmount.cn",
+                "https://browser.lexmount.com",
+            ],
+        ),
+    ],
+)
+def test_auth_login_handoff_excludes_only_other_console_origins(
+    console_url: str,
+    expected_exclusions: list[str],
+) -> None:
+    normalized_console_url = console_url.rstrip("/")
+    handoff = cli_module._auth_login_handoff(
+        connect_url=f"{normalized_console_url}/connect/codex",
+        project_id=None,
+        project_id_source="unset",
+        scopes=list(cli_module.DEFAULT_CODEX_CONNECT_SCOPES),
+        expires_in=cli_module.DEFAULT_CODEX_CONNECT_EXPIRES_IN,
+        login_url=console_url,
+    )
+
+    policy = handoff["console_origin_policy"]
+    assert policy == {
+        "origin": normalized_console_url,
+        "authoritative_for_current_setup": True,
+        "do_not_substitute": expected_exclusions,
+    }
+    assert policy["do_not_substitute"]
+    assert policy["origin"] not in policy["do_not_substitute"]
+    console_host = urlsplit(normalized_console_url).netloc
+    assert [item["source"] for item in handoff["local_env"]] == [
+        f"{console_host} scoped API key",
+        f"{console_host} Project ID",
+    ]
 
 
 def test_auth_login_guides_manual_browser_flow(

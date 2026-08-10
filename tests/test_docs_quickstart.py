@@ -34,7 +34,8 @@ def test_quickstart_covers_minimum_usable_flow() -> None:
     assert "git --version" in text
     assert "normal\ncommand approval" in text
     assert "clone/local-path" in text
-    assert "browser.lexmount.com" in text
+    assert "substitute\nanother console origin" in text
+    assert "browser.lexmount.com" not in text
     assert "PR #69" not in text
     assert "codex/add-export-env-safety-metadata" not in text
     assert "LEXMOUNT_API_KEY" in text

@@ -67,6 +67,10 @@ from lex_browser_runtime.browser.models import (
 DEFAULT_LEXMOUNT_BASE_URL = "https://api.lexmount.cn"
 INTERNAL_API_BASE_URL_REDACTION = "<internal-api-base-url-redacted>"
 LEXMOUNT_CONSOLE_URL = "https://browser.lexmount.cn"
+LEXMOUNT_PRODUCTION_CONSOLE_URLS = (
+    LEXMOUNT_CONSOLE_URL,
+    "https://browser.lexmount.com",
+)
 LEXMOUNT_CODEX_CONNECT_URL = f"{LEXMOUNT_CONSOLE_URL}/connect/codex"
 BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND = (
     "uv tool install --force "
@@ -88,6 +92,21 @@ AGENT_DOCTOR_COMMAND = "browser-cli doctor --json"
 AGENT_USABLE_STATUS_METADATA_COMMAND = (
     "browser-cli reference get --id usable_status --metadata-only"
 )
+
+
+def _console_origin_policy(origin: str) -> dict[str, Any]:
+    normalized_origin = origin.rstrip("/")
+    return {
+        "origin": normalized_origin,
+        "authoritative_for_current_setup": True,
+        "do_not_substitute": [
+            candidate
+            for candidate in LEXMOUNT_PRODUCTION_CONSOLE_URLS
+            if candidate != normalized_origin
+        ],
+    }
+
+
 AGENT_USABLE_STATUS_COMMAND = "browser-cli reference get --id usable_status"
 CODEX_HOME_ENV = "CODEX_HOME"
 DEFAULT_CODEX_SKILL_DIRECTORY_NAME = "lexmount-browser"
@@ -6984,11 +7003,9 @@ def _doctor_auth_login_contract_check() -> dict[str, Any]:
         invalid_fields.append("fallback_install_command")
     if handoff.get("install_fallback") != expected_install_fallback:
         invalid_fields.append("install_fallback")
-    expected_console_origin_policy = {
-        "origin": handoff.get("login_url"),
-        "authoritative_for_current_setup": True,
-        "do_not_substitute": ["https://browser.lexmount.com"],
-    }
+    expected_console_origin_policy = _console_origin_policy(
+        str(handoff.get("login_url", ""))
+    )
     if handoff.get("console_origin_policy") != expected_console_origin_policy:
         invalid_fields.append("console_origin_policy")
     local_env_block = setup_by_id.get("local_env", {})
@@ -11226,15 +11243,17 @@ def _auth_login_handoff(
     expires_in: str,
     login_url: str = LEXMOUNT_CONSOLE_URL,
 ) -> dict[str, Any]:
+    normalized_login_url = login_url.rstrip("/")
+    console_host = urlsplit(normalized_login_url).netloc
     open_command = "browser-cli auth login --open"
-    if login_url.rstrip("/") != LEXMOUNT_CONSOLE_URL:
+    if normalized_login_url != LEXMOUNT_CONSOLE_URL:
         open_command = (
             "browser-cli auth login --open --connect-base-url "
-            f"{shlex.quote(login_url.rstrip('/'))}"
+            f"{shlex.quote(normalized_login_url)}"
         )
     return {
         "recommended_flow": "manual_env",
-        "login_url": login_url,
+        "login_url": normalized_login_url,
         "connect_from_codex_url": connect_url,
         "connect_from_codex_available": False,
         "open_command": open_command,
@@ -11242,13 +11261,9 @@ def _auth_login_handoff(
         "install_command": BROWSER_CLI_SOURCE_ARCHIVE_INSTALL_COMMAND,
         "fallback_install_command": BROWSER_CLI_GIT_FALLBACK_INSTALL_COMMAND,
         "install_fallback": _browser_cli_install_fallback(),
-        "console_origin_policy": {
-            "origin": login_url,
-            "authoritative_for_current_setup": True,
-            "do_not_substitute": ["https://browser.lexmount.com"],
-        },
+        "console_origin_policy": _console_origin_policy(normalized_login_url),
         "setup_blocks": _auth_login_setup_blocks(
-            project_id, connect_base_url=login_url
+            project_id, connect_base_url=normalized_login_url
         ),
         "copyable_commands": [
             AGENT_USABLE_STATUS_METADATA_COMMAND,
@@ -11263,13 +11278,13 @@ def _auth_login_handoff(
                 "name": "LEXMOUNT_API_KEY",
                 "secret": True,
                 "required": True,
-                "source": "browser.lexmount.cn scoped API key",
+                "source": f"{console_host} scoped API key",
             },
             {
                 "name": "LEXMOUNT_PROJECT_ID",
                 "secret": False,
                 "required": True,
-                "source": "browser.lexmount.cn Project ID",
+                "source": f"{console_host} Project ID",
                 "value": project_id,
                 "value_source": project_id_source,
             },

@@ -24,7 +24,7 @@ uv tool install --force git+https://github.com/lexmount/browser-cli.git
 
 Do not bypass an approval gate with clone/local-path tricks, web-search for an
 alternative package, guess another repository/download host, or substitute
-`browser.lexmount.com`. If both commands fail, stop and report both errors.
+another console origin. If both commands fail, stop and report both errors.
 
 Verify that command discovery returns JSON:
 

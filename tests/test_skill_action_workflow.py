@@ -114,6 +114,14 @@ def test_packaged_quickstart_matches_skill_reference() -> None:
     assert PACKAGED_QUICKSTART.read_text() == QUICKSTART.read_text()
 
 
+def test_agent_facing_origin_policy_does_not_hard_code_a_console_host() -> None:
+    for path in (PACKAGED_SKILL_MD, PACKAGED_QUICKSTART):
+        text = path.read_text()
+        normalized = " ".join(text.split())
+        assert "substitute `browser.lexmount.com`" not in text
+        assert "substitute another console" in normalized
+
+
 def test_packaged_connect_from_codex_matches_skill_reference() -> None:
     assert PACKAGED_CONNECT_FROM_CODEX.read_text() == CONNECT_FROM_CODEX.read_text()
 
