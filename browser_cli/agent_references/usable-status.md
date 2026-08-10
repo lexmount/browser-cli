@@ -7,7 +7,13 @@ depend on browser.lexmount.cn.
 ## Current Baseline
 
 - Mainline install is the supported trial path:
-  `uv tool install --force git+https://github.com/lexmount/browser-cli.git`
+  `uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz`
+- If and only if GitHub archive/codeload access blocks that exact command and
+  `git --version` succeeds, use the official fallback:
+  `uv tool install --force git+https://github.com/lexmount/browser-cli.git`.
+  Coding-agent command approval is expected when policy requires it; do not
+  bypass approval through a clone/local-path install or guess another package,
+  repository, download host, or console domain.
 - The current usable baseline starts at `browser-cli` version `0.2.0`.
 - Commands emit JSON for normal output and argument errors.
 - The short-term credential path is local shell environment variables:

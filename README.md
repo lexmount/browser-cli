@@ -102,7 +102,10 @@ CLI for you:
 2. 如果没有 uv，提示我先安装 uv：
    curl -LsSf https://astral.sh/uv/install.sh | sh
 3. 安装或升级 browser-cli：
+   uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
+   这条 source archive 命令是首选路径，不依赖系统 git。只有当 GitHub archive/codeload 访问被阻断、并且 git --version 成功时，才使用官方回退：
    uv tool install --force git+https://github.com/lexmount/browser-cli.git
+   两条命令都会下载并执行包构建代码；如果 coding agent 要求命令审批，展示原命令并申请正常审批，不要通过 clone/local-path 绕过，也不要搜索或猜测其他包、仓库、下载域名或控制台域名。两条都失败时停止并报告两个错误。
 4. 验证 CLI 版本输出是 JSON：
    browser-cli --version
    browser-cli version
@@ -269,7 +272,7 @@ CLI for you:
 ## Manual Install
 
 ```bash
-uv tool install git+https://github.com/lexmount/browser-cli.git
+uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
 browser-cli --help
 browser-cli --version
 browser-cli commands --names-only
@@ -277,6 +280,13 @@ browser-cli commands --workflows-only
 browser-cli reference list
 browser-cli example list
 ```
+
+The source archive is preferred and does not require system git. Only when
+GitHub archive/codeload access blocks it and `git --version` succeeds, use
+`uv tool install --force git+https://github.com/lexmount/browser-cli.git` as
+the official fallback. Request normal command approval when required; never
+bypass it with a clone/local-path install or guess another package, repository,
+download host, or console domain.
 
 For local development:
 
@@ -582,6 +592,13 @@ checklist on either auth path.
 `setup_blocks` groups install, Connect, local env, and verification commands
 with secret placeholder and chat-safety metadata so browser.lexmount.cn can
 render copy buttons without guessing which commands are local-shell-only.
+The install block makes the GitHub source archive primary and exposes a
+conditional `fallback_install_command` / `install_fallback` only for blocked
+archive/codeload access after `git --version` succeeds. The fallback metadata
+also states that normal coding-agent command approval may be required, forbids
+clone/local-path approval bypasses and guessed packages/repositories/hosts, and
+defines the terminal stop/report behavior. `console_origin_policy` locks the
+flow to the exact console origin supplied for the current setup.
 `requested_scope_details` gives browser.lexmount.cn labels, descriptions,
 permission names, risk levels, and destructive markers for known scopes, while
 unknown future scopes are marked with `known: false`. Capability ids currently include
@@ -1349,7 +1366,9 @@ The smoothest onboarding path would be a dedicated "Connect from Codex" flow:
 2. Add a scoped API key wizard for agent use, with clear permissions, optional
    expiration, and one-click revoke.
 3. Provide a copyable install block:
-   `uv tool install git+https://github.com/lexmount/browser-cli.git`.
+   `uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz`,
+   plus a conditional official git fallback with git-availability, normal
+   command-approval, no-bypass, and terminal-failure metadata.
 4. Add a "Verify CLI" section that tells users to run
    `browser-cli doctor --json` and `browser-cli doctor --smoke-session` after
    setting env vars, then explains `ready_for_browser_actions` and

@@ -1,6 +1,6 @@
 ---
 name: browser-cli
-description: "Operate Lexmount remote browsers with browser-cli. Use when Codex or another agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/clear-credentials/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, act/click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
+description: "Operate Lexmount remote browsers with browser-cli. Use when a coding agent needs to create, list, inspect, keep alive, or close browser sessions; manage persistent contexts, pick reusable contexts, or detect locked contexts; guide authentication with auth status/scopes/token-info/refresh/logout/clear-credentials/connect-requirements/export-env/login; verify installation, environment, and API connectivity with doctor; discover installed commands/workflows; read packaged references with reference list/get; inspect packaged playbooks and case examples with example list/get; validate/run JSON/YAML browser case files; open pages, read page info, wait for selectors/states/roles/URLs/load/network/text/forms/dialogs/frames/console/fetch-XHR, act/click/type/fill/select/check/hover/press/scroll, inspect interactive/accessibility/page diagnostics, manage storage/cookies, navigate, screenshot, eval, snapshot, or verify credentials without custom Playwright."
 ---
 
 # browser-cli
@@ -30,12 +30,12 @@ Run heavier checks only when they change the next action: first use in a new env
 If the CLI is not installed, install it with:
 
 ```bash
-uv tool install --force git+https://github.com/lexmount/browser-cli.git
+uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
 ```
-
+The source archive is the preferred official path because it does not require system git. If and only if that exact command fails because GitHub archive/codeload access is blocked, first confirm `git --version` succeeds, then use the official fallback `uv tool install --force git+https://github.com/lexmount/browser-cli.git`. Both commands download and execute package build code. A coding agent may require normal command approval; show the exact command and request approval instead of bypassing the gate with clone/local-path tricks. Do not web-search for alternative packages, guess another repository/download host, or substitute `browser.lexmount.com`. If both official commands fail, stop and report both errors.
 Authorize with the local loopback PKCE flow: run `browser-cli auth login --open`, then `browser-cli auth status` and `browser-cli doctor --json`.
 
-Do not ask the user to paste secrets into chat. Direct the user to `https://browser.lexmount.cn` for China region authorization. `auth login --open` starts a `127.0.0.1` callback, opens Connect from Codex, validates `state`, and exchanges a one-time code plus PKCE verifier for local credentials. API keys do not appear in the local callback URL. China defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
+Do not ask the user to paste secrets into chat. Direct the user to the exact console origin supplied by the current setup; for China region authorization the default is `https://browser.lexmount.cn`. Treat that origin as authoritative and do not substitute `browser.lexmount.com` or another host. `auth login --open` starts a `127.0.0.1` callback, opens Connect from Codex, validates `state`, and exchanges a one-time code plus PKCE verifier for local credentials. API keys do not appear in the local callback URL. China defaults to `https://api.lexmount.cn`; set `LEXMOUNT_BASE_URL` only for non-default APIs.
 
 Use local auth helpers instead of handling secrets in chat:
 ```bash

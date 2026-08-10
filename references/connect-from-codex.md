@@ -47,7 +47,14 @@ Recommended sections:
    - API host, normally `https://api.lexmount.cn`
    - Region indicator
 2. Install
-   - `uv tool install --force git+https://github.com/lexmount/browser-cli.git`
+   - `uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz`
+   - Treat the source archive as the preferred path. Only when GitHub
+     archive/codeload access blocks it and `git --version` succeeds, offer
+     `uv tool install --force git+https://github.com/lexmount/browser-cli.git`
+     as the official fallback.
+   - Mark both commands as downloading/executing package build code, explain
+     that normal coding-agent command approval may be required, and prohibit
+     clone/local-path approval bypasses or guessed packages/repositories/hosts.
    - `browser-cli --help`
    - `browser-cli --version`
 3. Authorize

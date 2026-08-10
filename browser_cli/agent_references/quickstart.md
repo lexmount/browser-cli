@@ -10,8 +10,21 @@ chat, issues, commits, or PR descriptions.
 For mainline/default-branch usage, install from GitHub:
 
 ```bash
+uv tool install --force https://github.com/lexmount/browser-cli/archive/refs/heads/main.tar.gz
+```
+
+That source archive is the preferred official path and does not require system
+git. If and only if it fails because GitHub archive/codeload access is blocked,
+confirm `git --version` succeeds, then use the official fallback (request normal
+command approval if the coding agent requires it):
+
+```bash
 uv tool install --force git+https://github.com/lexmount/browser-cli.git
 ```
+
+Do not bypass an approval gate with clone/local-path tricks, web-search for an
+alternative package, guess another repository/download host, or substitute
+`browser.lexmount.com`. If both commands fail, stop and report both errors.
 
 Verify that command discovery returns JSON:
 
