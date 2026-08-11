@@ -82,11 +82,48 @@ def test_version_command_falls_back_to_package_constant(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "version"
-    assert payload["version"] == "0.3.24"
+    assert payload["version"] == "0.3.25"
     assert payload["version_source"] == "package_fallback"
-    assert payload["lex_browser_runtime_version"] == "0.3.24"
+    assert payload["lex_browser_runtime_version"] == "0.3.25"
     assert payload["lex_browser_runtime_version_known"] is True
     assert payload["lex_browser_runtime_version_source"] == "bundled"
+
+
+def test_wait_text_match_flags_follow_documented_contract() -> None:
+    parser = cli_module.build_parser()
+
+    contains_args = parser.parse_args(
+        ["action", "wait-text", "--session-id", "s1", "--text", "Ready"]
+    )
+    exact_args = parser.parse_args(
+        [
+            "action",
+            "wait-text",
+            "--session-id",
+            "s1",
+            "--text",
+            "Ready",
+            "--exact",
+        ]
+    )
+
+    assert contains_args.exact is False
+    assert exact_args.exact is True
+    assert not hasattr(contains_args, "match")
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(
+            [
+                "action",
+                "wait-text",
+                "--session-id",
+                "s1",
+                "--text",
+                "Ready",
+                "--match",
+                "contains",
+            ]
+        )
+    assert exc_info.value.code == 2
 
 
 def test_json_dump_handles_broken_pipe_without_traceback(
@@ -726,8 +763,16 @@ def test_commands_catalog_lists_machine_readable_agent_entrypoints(
         in payload["agent_entrypoints"]["semantic_waits"]
     )
     assert (
-        'browser-cli action wait-text --session-id <session_id> --text "Saved" --match contains'
+        'browser-cli action wait-text --session-id <session_id> --text "Saved"'
         in payload["agent_entrypoints"]["semantic_waits"]
+    )
+    assert (
+        'browser-cli action wait-text --session-id <session_id> --text "Saved" --exact'
+        in payload["agent_entrypoints"]["semantic_waits"]
+    )
+    assert not any(
+        "action wait-text" in command and "--match" in command
+        for command in payload["agent_entrypoints"]["semantic_waits"]
     )
     assert (
         'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact'
@@ -2444,6 +2489,18 @@ def test_action_guide_lists_tasks_and_returns_task_guidance(
         "browser-cli action wait-role" in command
         for command in payload["guide"]["preferred_commands"]
     )
+    assert (
+        'browser-cli action wait-text --session-id <session_id> --text "<visible text>"'
+        in payload["guide"]["preferred_commands"]
+    )
+    assert (
+        'browser-cli action wait-text --session-id <session_id> --text "<exact text>" --exact'
+        in payload["guide"]["preferred_commands"]
+    )
+    assert not any(
+        "action wait-text" in command and "--match" in command
+        for command in payload["guide"]["preferred_commands"]
+    )
     assert any(
         "browser-cli action wait-attribute-role" in command
         for command in payload["guide"]["preferred_commands"]
@@ -3293,6 +3350,18 @@ def test_commands_catalog_returns_semantic_waits_workflow(
         "wait-attribute-role",
     ]
     assert "browser-cli action wait-role" in steps[2]["preferred_commands"][0]
+    assert (
+        'browser-cli action wait-text --session-id <session_id> --text "<visible text>"'
+        in steps[2]["preferred_commands"]
+    )
+    assert (
+        'browser-cli action wait-text --session-id <session_id> --text "<exact text>" --exact'
+        in steps[2]["preferred_commands"]
+    )
+    assert not any(
+        "action wait-text" in command and "--match" in command
+        for command in steps[2]["preferred_commands"]
+    )
     assert steps[3]["agent_action"] is True
     assert "result.waited_ms" in steps[3]["read"]
     assert "result.attribute_found" in steps[3]["read"]
@@ -9956,10 +10025,10 @@ def test_doctor_uses_package_version_fallback_when_metadata_is_missing(
     assert exc_info.value.code == 0
     payload = json.loads(capsys.readouterr().out)
     checks = _checks_by_name(payload)
-    assert checks["browser_cli"]["version"] == "0.3.24"
+    assert checks["browser_cli"]["version"] == "0.3.25"
     assert checks["browser_cli"]["version_known"] is True
     assert checks["browser_cli"]["version_source"] == "package_fallback"
-    assert checks["lex_browser_runtime"]["version"] == "0.3.24"
+    assert checks["lex_browser_runtime"]["version"] == "0.3.25"
     assert checks["lex_browser_runtime"]["version_known"] is True
     assert checks["lex_browser_runtime"]["version_source"] == "bundled"
     assert checks["api_connectivity"]["status"] == "pass"
