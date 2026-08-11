@@ -2464,7 +2464,8 @@ def _command_catalog() -> dict[str, Any]:
                 "browser-cli action guide --task semantic_waits",
                 "browser-cli action page-info --session-id <session_id>",
                 'browser-cli action wait-role --session-id <session_id> --role button --name "Submit" --state visible',
-                'browser-cli action wait-text --session-id <session_id> --text "Saved" --match contains',
+                'browser-cli action wait-text --session-id <session_id> --text "Saved"',
+                'browser-cli action wait-text --session-id <session_id> --text "Saved" --exact',
                 'browser-cli action wait-state-role --session-id <session_id> --role button --name "Submit" --state enabled',
                 'browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact',
                 'browser-cli action exists-role --session-id <session_id> --role button --name "Submit"',
@@ -4206,7 +4207,7 @@ def _command_catalog() -> dict[str, Any]:
                 ],
             },
             "semantic_waits": {
-                "purpose": "Wait for user-visible role, text, state, or attribute predicates with semantic verification before sleeps or custom JavaScript.",
+                "purpose": "Wait for user-visible role, text, state, or attribute predicates with semantic verification before sleeps or custom JavaScript. wait-text uses case-insensitive contains matching by default; add --exact only for exact normalized text.",
                 "steps": [
                     {
                         "id": "inspect_action_guide",
@@ -4245,7 +4246,8 @@ def _command_catalog() -> dict[str, Any]:
                         ],
                         "preferred_commands": [
                             'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>" --state visible',
-                            'browser-cli action wait-text --session-id <session_id> --text "<visible text>" --match contains',
+                            'browser-cli action wait-text --session-id <session_id> --text "<visible text>"',
+                            'browser-cli action wait-text --session-id <session_id> --text "<exact text>" --exact',
                             'browser-cli action wait-state-role --session-id <session_id> --role <role> --name "<name>" --state enabled',
                             'browser-cli action wait-attribute-role --session-id <session_id> --role <role> --name "<name>" --attribute aria-expanded --value true --match exact',
                         ],
@@ -21968,7 +21970,7 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ),
         },
         "semantic_waits": {
-            "purpose": "Wait for semantic role, text, state, attribute, or count predicates and verify the observed target before sleeps or custom JavaScript.",
+            "purpose": "Wait for semantic role, text, state, attribute, or count predicates and verify the observed target before sleeps or custom JavaScript. wait-text uses case-insensitive contains matching by default; add --exact only for exact normalized text.",
             "related_workflows": [
                 "semantic_waits",
                 "state_waits",
@@ -21996,7 +21998,8 @@ def _action_guide_tasks() -> dict[str, dict[str, Any]]:
             ],
             "preferred_commands": [
                 'browser-cli action wait-role --session-id <session_id> --role <role> --name "<name>" --state visible',
-                'browser-cli action wait-text --session-id <session_id> --text "<visible text>" --match contains',
+                'browser-cli action wait-text --session-id <session_id> --text "<visible text>"',
+                'browser-cli action wait-text --session-id <session_id> --text "<exact text>" --exact',
                 'browser-cli action wait-state-role --session-id <session_id> --role <role> --name "<name>" --state enabled',
                 'browser-cli action wait-attribute-role --session-id <session_id> --role <role> --name "<name>" --attribute aria-expanded --value true --match exact',
                 'browser-cli action wait-count --session-id <session_id> --selector "<selector>" --count 1 --comparison ge',

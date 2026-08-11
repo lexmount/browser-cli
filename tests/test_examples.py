@@ -172,6 +172,10 @@ def test_page_diagnostics_case_uses_console_and_network_actions() -> None:
 def test_agent_playbook_uses_current_context_and_doctor_contracts() -> None:
     text = (REPO_ROOT / "examples" / "agent-playbook.md").read_text()
 
+    assert 'action wait-text --session-id <session_id> --text "Saved"' in text
+    assert 'action wait-text --session-id <session_id> --text "Saved" --exact' in text
+    assert "uses case-insensitive contains matching by default" in text
+    assert "wait-text --session-id <session_id> --text \"Saved\" --match" not in text
     assert "browser-cli doctor --json" in text
     assert "browser-cli commands --names-only" in text
     assert "browser-cli commands --workflows-only" in text

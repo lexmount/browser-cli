@@ -722,6 +722,7 @@ browser-cli action wait-state-role --session-id <session_id> --role button --nam
 browser-cli action get-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded
 browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
 browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main"
+browser-cli action wait-text --session-id <session_id> --text "Ready" --selector "main" --exact
 browser-cli action wait-text --session-id <session_id> --text "Loading" --state absent
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit"
 browser-cli action focus-role --session-id <session_id> --role textbox --name "Search"

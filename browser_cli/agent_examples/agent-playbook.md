@@ -334,10 +334,14 @@ writing polling JavaScript:
 browser-cli commands --workflow semantic_waits
 browser-cli action guide --task semantic_waits
 browser-cli action wait-role --session-id <session_id> --role button --name "Submit" --state visible
-browser-cli action wait-text --session-id <session_id> --text "Saved" --match contains
+browser-cli action wait-text --session-id <session_id> --text "Saved"
+browser-cli action wait-text --session-id <session_id> --text "Saved" --exact
 browser-cli action wait-attribute-role --session-id <session_id> --role button --name "Menu" --attribute aria-expanded --value true --match exact
 browser-cli action exists-role --session-id <session_id> --role button --name "Submit"
 ```
+
+`wait-text` uses case-insensitive contains matching by default. Add `--exact`
+only when the normalized text must match exactly.
 
 For page navigation, refresh, or browser history, read navigation workflow
 contracts before writing custom JavaScript:
